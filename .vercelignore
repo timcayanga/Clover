@@ -1,0 +1,20 @@
+.toolchain
+node_modules
+web/node_modules
+web/.next
+web/.vercel
+web/.env.local
+.env.local
+pnpm-lock.yaml
+pnpm-workspace.yaml
+tmp
+*.log
+
+# Keep this file in the deployment graph so prod rebuilds when landing assets change.
+# Redeploy marker for production.
+# Native signing and generated bundles never belong in a web deployment.
+mobile/credentials.json
+mobile/node_modules
+mobile/dist
+mobile/.expo
+mascot-figma-upload.json

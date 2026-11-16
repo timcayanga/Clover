@@ -1,0 +1,21 @@
+DBS Bank Ltd POSB www.posb.com.sg
+As at 30 Sep 2026
+Page 1 of 2
+Details of Your POSB eEveryday Savings Account Account No.: 001-23456-7
+DATE DETAILS OF TRANSACTIONS WITHDRAWAL($) DEPOSIT($) BALANCE($)
+Balance Brought Forward 100.00
+01 Sep Salary 250.00 350.00
+02 Sep Cash Withdrawal 50.00 300.00
+02 Sep ATM Withdrawal Fee 2.00 298.00
+Balance Carried Forward 298.00
+Page 2 of 2
+Details of Your POSB eEveryday Savings Account Account No.: 001-23456-7
+DATE DETAILS OF TRANSACTIONS WITHDRAWAL($) DEPOSIT($) BALANCE($)
+Balance Brought Forward 298.00
+30 Sep Interest Earned 0.01 298.01
+Total 52.00 250.01
+Balance Carried Forward 298.01
+POSB_TXN | 01 Sep | incoming | 250.00 | 350.00 | Salary Invented Employer
+POSB_TXN | 02 Sep | outgoing | 50.00 | 300.00 | Cash Withdrawal Invented ATM
+POSB_TXN | 02 Sep | outgoing | 2.00 | 298.00 | ATM Withdrawal Fee
+POSB_TXN | 30 Sep | incoming | 0.01 | 298.01 | Interest Earned

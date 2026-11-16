@@ -1,0 +1,191 @@
+import { planName } from "../../../../shared/plan-catalog";
+import { prisma } from "@/lib/prisma";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
+import { syncClerkUser } from "@/lib/clerk";
+import { ensureStarterWorkspace, repairDuplicateStarterWorkspaces, seedWorkspaceDefaults } from "@/lib/starter-data";
+import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
+import { getEffectiveProfileLimit } from "@/lib/user-limits";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
+import { after, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+
+const orderWorkspaces = <T extends { type: string; createdAt: Date; updatedAt: Date }>(workspaces: T[]) =>
+  [...workspaces].sort((left, right) => {
+    if (left.type === "personal" && right.type !== "personal") {
+      return -1;
+    }
+    if (right.type === "personal" && left.type !== "personal") {
+      return 1;
+    }
+
+    return left.type === "personal" && right.type === "personal"
+      ? new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      : new Date(left.updatedAt).getTime() === new Date(right.updatedAt).getTime()
+        ? new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+        : new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+
+const findUserWithWorkspaces = (clerkUserId: string) =>
+  prisma.user.findUnique({
+    where: { clerkUserId },
+    include: { workspaces: { orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }] } },
+  });
+
+export async function GET() {
+  try {
+    if (await isLocalDevHost()) {
+      const user = await getOrCreateCurrentUser("local-admin");
+      await ensureStarterWorkspace(user, user.email, user.verified);
+      const workspaces = await prisma.workspace.findMany({ where: { userId: user.id } });
+      return NextResponse.json({ workspaces: orderWorkspaces(workspaces) });
+    }
+
+    const { userId } = await requireAuth();
+    const user = await findUserWithWorkspaces(userId);
+    const workspaces = user?.workspaces ?? [];
+    const hasPersonal = workspaces.some((workspace) => workspace.type === "personal");
+    const hasStarterDuplicates = workspaces.filter(
+      (workspace) => workspace.type === "personal" && workspace.name === "Personal"
+    ).length > 1;
+
+    if (!user || !workspaces.length) {
+      const clerkUser = await syncClerkUser(userId);
+      const starterWorkspace = await ensureStarterWorkspace(user ?? userId, clerkUser.email, clerkUser.verified);
+      return NextResponse.json({ workspaces: [starterWorkspace] });
+    }
+
+    if (!hasPersonal) {
+      const clerkUser = await syncClerkUser(userId);
+      await ensureStarterWorkspace(user, clerkUser.email, clerkUser.verified);
+    } else if (hasStarterDuplicates) {
+      await repairDuplicateStarterWorkspaces(user.id).catch((error) => {
+        console.warn("Unable to reconcile duplicate starter profiles", {
+          userId: user.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+
+    const refreshedUser = !hasPersonal || hasStarterDuplicates
+      ? await findUserWithWorkspaces(userId)
+      : user;
+
+    if (!refreshedUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!refreshedUser.workspaces.length) {
+      const starterWorkspace = await ensureStarterWorkspace(refreshedUser);
+      return NextResponse.json({ workspaces: [starterWorkspace] });
+    }
+
+    const orderedWorkspaces = orderWorkspaces(refreshedUser.workspaces);
+
+    // Keep background transactions alive until commit/rollback. An unowned
+    // promise can be frozen after the response while holding the defaults
+    // lock needed by an upload in another function instance.
+    after(async () => {
+      for (const workspace of orderedWorkspaces) {
+        await seedWorkspaceDefaults(workspace.id).catch((error) => {
+          console.warn("Unable to finish profile defaults", {
+            workspaceId: workspace.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+    });
+
+    return NextResponse.json({ workspaces: orderedWorkspaces });
+  } catch (error) {
+    if (isTransientDataError(error)) {
+      return createTransientDataUnavailableResponse("Clover is refreshing your profiles.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    assertTrustedRequestOrigin(request);
+    // Match GET's local principal so newly created Profiles remain visible.
+    const { userId } = await isLocalDevHost() ? { userId: "local-admin" } : await requireAuth();
+    const clerkUser = await syncClerkUser(userId);
+    const currentEnvironment = getCurrentUserEnvironment();
+    const existingUser = await prisma.user.findUnique({
+      where: { clerkUserId: clerkUser.clerkUserId },
+      select: { environment: true },
+    });
+    const body = await request.json();
+    const name = String(body?.name || "").trim();
+    const type = String(body?.type || "personal");
+
+    if (!name) {
+      return NextResponse.json({ error: "Workspace name is required" }, { status: 400 });
+    }
+
+    if (type !== "personal") {
+      return NextResponse.json({ error: "Only regular Profiles are available right now." }, { status: 400 });
+    }
+
+    const user = await getOrCreateCurrentUser(userId);
+    const profileLimit = getEffectiveProfileLimit(user);
+    if (profileLimit !== null) {
+      const profileCount = await prisma.workspace.count({ where: { userId: user.id } });
+      if (profileCount >= profileLimit) {
+        return NextResponse.json(
+          { error: `${planName(user.planTier)} includes up to ${profileLimit} Profiles, including Personal. Existing Profiles stay accessible. Creating another requires an available slot or an upgrade.` },
+          { status: 400 }
+        );
+      }
+    }
+    if (existingUser?.environment) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          environment: resolvePersistedUserEnvironment(currentEnvironment, existingUser.environment),
+        },
+      });
+    }
+
+    const workspace = await prisma.workspace.create({
+      data: {
+        userId: user.id,
+        name,
+        type: "personal",
+      },
+    });
+
+    void capturePostHogServerEvent("workspace_created", userId, {
+      workspace_id: workspace.id,
+      workspace_name: workspace.name,
+      workspace_type: workspace.type,
+    });
+
+    await seedWorkspaceDefaults(workspace.id);
+
+    const seededWorkspace = await prisma.workspace.findUnique({
+      where: { id: workspace.id },
+      include: {
+        accounts: true,
+        categories: true,
+      },
+    });
+
+    return NextResponse.json({ workspace: seededWorkspace ?? workspace });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Unable to create profile",
+      },
+      { status: 400 }
+    );
+  }
+}

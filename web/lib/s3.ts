@@ -1,0 +1,103 @@
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { getEnv } from "./env";
+
+let client: S3Client | null = null;
+
+const getLocalImportStorageRoot = () => {
+  const configuredRoot = process.env.CLOVER_IMPORT_STORAGE_DIR?.trim();
+  if (configuredRoot) {
+    return configuredRoot;
+  }
+
+  return join(process.cwd(), ".cache", "clover-import-objects");
+};
+
+const getLegacyLocalImportStorageRoot = () => join(tmpdir(), "clover-import-objects");
+
+const isLocalImportStorageFallback = () => process.env.NODE_ENV !== "production";
+
+const sanitizeStorageKey = (key: string) => key.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+export const getLocalImportObjectPath = (key: string) => join(getLocalImportStorageRoot(), sanitizeStorageKey(key));
+
+export const getLegacyLocalImportObjectPath = (key: string) => join(getLegacyLocalImportStorageRoot(), sanitizeStorageKey(key));
+
+export const getR2Client = () => {
+  if (isLocalImportStorageFallback()) {
+    throw new Error("Local import storage fallback active");
+  }
+  if (client) return client;
+  const env = getEnv();
+  if (!env.R2_ACCOUNT_ID || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY) {
+    throw new Error("Missing R2/S3 credentials");
+  }
+
+  client = new S3Client({
+    region: "auto",
+    endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    },
+  });
+
+  return client;
+};
+
+export const createUploadUrl = async (key: string, contentType: string) => {
+  if (isLocalImportStorageFallback()) {
+    return {
+      url: `file://${getLocalImportObjectPath(key)}`,
+      key,
+      bucket: "local",
+      expiresInSeconds: 300,
+    };
+  }
+
+  const env = getEnv();
+  if (!env.R2_BUCKET_NAME) {
+    throw new Error("Missing bucket name");
+  }
+
+  const command = new PutObjectCommand({
+    Bucket: env.R2_BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+  });
+
+  const url = await getSignedUrl(getR2Client(), command, { expiresIn: 60 * 5 });
+
+  return {
+    url,
+    key,
+    bucket: env.R2_BUCKET_NAME,
+    expiresInSeconds: 300,
+  };
+};
+
+export const uploadObject = async (key: string, body: Uint8Array | Buffer, contentType: string) => {
+  if (isLocalImportStorageFallback()) {
+    const filePath = getLocalImportObjectPath(key);
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, body);
+    return;
+  }
+
+  const env = getEnv();
+  if (!env.R2_BUCKET_NAME) {
+    throw new Error("Missing bucket name");
+  }
+
+  await getR2Client().send(
+    new PutObjectCommand({
+      Bucket: env.R2_BUCKET_NAME,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+  );
+};

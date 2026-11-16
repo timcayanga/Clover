@@ -1,0 +1,1041 @@
+"use client";
+
+import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, manualTransactionToday } from "../../shared/manual-transaction-defaults";
+import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
+import { useDraftCategorySuggestion } from "@/lib/use-draft-category-suggestion";
+import { getEntryMethodIconSrc } from "@/lib/entry-method-icons";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
+import { FinverseConnectButton } from "./finverse-connect-button";
+import { TransactionTableEntry } from "@/components/transaction-table-entry";
+import { UploadSourcePicker, UploadSecurityCopy } from "@/components/upload-source-buttons";
+
+import dynamic from "next/dynamic";
+const AdviserChat = dynamic(() => import("@/components/adviser-chat").then(module => module.AdviserChat), { loading: () => <div className="adviser-chat__loading" role="status">Opening Ask Clover…</div> });
+import { containDialogFocus } from "@/lib/dialog-focus";
+import { InterfaceIcon } from "@/components/interface-icon";
+
+import { createPortal } from "react-dom";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { ImportFilesModal } from "@/components/import-files-modal";
+import { AccountBrandMark } from "@/components/account-brand-mark";
+import { CurrencySelector } from "@/components/currency-selector";
+import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
+import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
+import { TransactionCategoryPicker, type TransactionPickerCategory } from "@/components/transaction-category-picker";
+import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/components/transaction-name-autocomplete";
+import { getAccountBrand } from "@/lib/account-brand";
+import { getAccountDisplayName } from "@/lib/account-display";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
+import { CategoryBrandMark } from "@/components/category-brand-mark";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
+import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
+import { clearAccountsWorkspaceCache } from "@/lib/workspace-cache";
+import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
+
+type DashboardTopActionsProps = {
+  workspaceId: string;
+  accounts: Array<{
+    id: string;
+    name: string;
+    institution: string | null;
+    type: string;
+    currency: string;
+    transactionCount?: number;
+  }>;
+};
+
+type DashboardCategory = TransactionPickerCategory;
+
+type ManualFormState = {
+  accountId: string;
+  amount: string;
+  currency: string;
+  date: string;
+  merchantRaw: string;
+  categoryId: string;
+  type: "debit" | "credit" | "transfer";
+  destinationAccountId: string;
+  feeAmount: string;
+  description: string;
+  tags: string[];
+  receiptLineItems: Array<{
+    description: string;
+    amount: string;
+  }>;
+};
+
+const formatToday = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const createEmptyReceiptLineItem = () => ({
+  description: "",
+  amount: "",
+});
+
+const normalizeName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+
+const getOtherCategoryId = (categories: DashboardCategory[]) =>
+  categories.find((category) => normalizeName(category.name) === "other")?.id ?? "";
+
+const getManualAccountOptionKey = (account: DashboardTopActionsProps["accounts"][number]) => {
+  if (account.type === "cash" || normalizeName(account.name) === "cash") {
+    return `cash:${formatCurrencyCode(account.currency || "PHP")}`;
+  }
+
+  return account.id;
+};
+
+const getManualAccountOptionLabel = (account: DashboardTopActionsProps["accounts"][number]) => {
+  return formatAccountOptionLabel(account, account.type === "cash" ? "Cash" : getAccountDisplayName(account));
+};
+
+export function DashboardManualTransactionModal({
+  workspaceId,
+  accounts,
+  initialAccountId,
+  initialType = "debit",
+  onClose,
+}: DashboardTopActionsProps & {
+  initialAccountId?: string;
+  initialType?: ManualFormState["type"];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const initialAccount = accounts.find((account) => account.id === initialAccountId) ?? mostUsedTransactionAccount(accounts) ?? null;
+  const [tableMode, setTableMode] = useState(false);
+  const [tableLocked, setTableLocked] = useState(false);
+  const [entryTab, setEntryTab] = useState<"manual" | "ask" | "upload" | "sync">("manual");
+  const [syncVisited, setSyncVisited] = useState(false);
+  const [askVisited, setAskVisited] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  const [entryUploadOpen, setEntryUploadOpen] = useState(false);
+  const [entryUploadFiles, setEntryUploadFiles] = useState<File[]>([]);
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/me").then(response => response.ok ? response.json() : null).then(data => { if (active) setIsPro((data?.user?.planTier === "pro" || data?.user?.planTier === "premium")); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+  const [categories, setCategories] = useState<DashboardCategory[]>([]);
+  const [form, setForm] = useState<ManualFormState>(() => ({
+    accountId: initialAccount?.id ?? "",
+    amount: "",
+    currency: formatCurrencyCode(initialAccount?.currency ?? "PHP"),
+    date: formatToday(),
+    merchantRaw: "",
+    categoryId: "",
+    type: initialType,
+    destinationAccountId: "",
+    feeAmount: "",
+    description: "",
+    tags: [],
+    receiptLineItems: [],
+  }));
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
+  const [manualMoreOpen, setManualMoreOpen] = useState(false);
+  const [manualSplitBillOpen, setManualSplitBillOpen] = useState(false);
+  const [manualSplitBillDraft, setManualSplitBillDraft] = useState<SplitBillTransactionLinkDraft>({
+    groupId: "",
+    participantNames: [],
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const categorySuggestion = useDraftCategorySuggestion({ workspaceId, merchantText: form.merchantRaw, categoryId: form.categoryId,
+    type: form.type === "credit" ? "income" : form.type === "debit" ? "expense" : "transfer", categories,
+    enabled: !isSaving && entryTab === "manual", manuallyChosen: manualCategoryTouched,
+    onApply: categoryId => setForm(current => ({ ...current, categoryId })),
+  });
+  useEffect(() => { if (!form.merchantRaw && !form.amount) setManualCategoryTouched(false); }, [form.merchantRaw, form.amount]);
+  const rootRef = useRef<HTMLElement | null>(null);
+  const categoryButtonRef = useRef<HTMLButtonElement | null>(null);
+  const manualModalStyle = useMemo<CSSProperties>(
+    () => ({
+      width: tableMode ? "min(1160px, calc(100vw - 24px))" : "min(640px, calc(100vw - 24px))",
+      maxHeight: "calc(100dvh - 24px)",
+      overflow: "auto",
+    }),
+    [tableMode]
+  );
+
+  useEffect(() => {
+    if (!entryUploadOpen && rootRef.current) return containDialogFocus(rootRef.current);
+  }, [entryUploadOpen]);
+  useLayoutEffect(() => {
+    document.body.classList.add("transactions-manual-open");
+    document.body.setAttribute("data-clover-page-modal", "true");
+    return () => {
+      document.body.classList.remove("transactions-manual-open");
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, []);
+
+  useEffect(() => {
+    const preferred = mostUsedTransactionAccount(accounts);
+    if (!form.accountId && preferred) {
+      setForm((current) => ({
+        ...current,
+        accountId: current.accountId || preferred.id,
+        currency: current.accountId ? current.currency : formatCurrencyCode(preferred.currency),
+      }));
+    }
+  }, [accounts, form.accountId]);
+
+  useEffect(() => {
+    const selectedAccount = accounts.find((account) => account.id === form.accountId);
+    if (!selectedAccount) {
+      return;
+    }
+
+    const nextCurrency = formatCurrencyCode(selectedAccount.currency);
+    if (form.currency !== nextCurrency) {
+      setForm((current) => ({
+        ...current,
+        currency: nextCurrency,
+      }));
+    }
+  }, [accounts, form.accountId, form.currency]);
+
+  useEffect(() => {
+    if (categories.length === 0) {
+      return;
+    }
+
+    const fallbackCategoryId = manualTransactionCategoryId(categories, form.type, form.categoryId) || categories[0]?.id || "";
+    if (form.categoryId !== fallbackCategoryId) {
+      setForm((current) => ({
+        ...current,
+        categoryId: fallbackCategoryId,
+      }));
+    }
+  }, [categories, form.categoryId, form.type]);
+
+  useEffect(() => {
+    if (!rootRef.current) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+        setCategoryMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAccountMenuOpen(false);
+        setCategoryMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCategories = async () => {
+      try {
+        const response = await fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`);
+        const payload = (await response.json().catch(() => ({}))) as { categories?: Array<{ id: string; name: string; type: string }>; error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to load categories.");
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setCategories(Array.isArray(payload.categories) ? payload.categories : []);
+      } catch {
+        if (active) {
+          setCategories([]);
+        }
+      }
+    };
+
+    void loadCategories();
+
+    return () => {
+      active = false;
+    };
+  }, [workspaceId]);
+
+  const defaultAccountId = mostUsedTransactionAccount(accounts)?.id ?? "";
+  const selectedAccount =
+    accounts.find((account) => account.id === form.accountId) ??
+    accounts.find((account) => account.id === defaultAccountId) ??
+    null;
+  const selectedAccountBrand = getAccountBrand({
+    institution: selectedAccount?.institution ?? null,
+    name: selectedAccount?.name ?? null,
+    type: selectedAccount?.type ?? null,
+  });
+  const selectedCategory =
+    categories.find((category) => category.id === form.categoryId) ??
+    categories.find((category) => normalizeName(category.name) === "other") ??
+    categories[0] ??
+    null;
+  const accountCurrencyCodes = useMemo(
+    () => Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))),
+    [accounts]
+  );
+  const manualAccountOptions = useMemo(() => {
+    const seenKeys = new Set<string>();
+
+    return accounts.flatMap((account) => {
+      const key = getManualAccountOptionKey(account);
+      if (seenKeys.has(key)) {
+        return [];
+      }
+
+      seenKeys.add(key);
+      return [{ account, label: getManualAccountOptionLabel(account) }];
+    });
+  }, [accounts]);
+  const transferDestinationOptions = useMemo(
+    () =>
+      manualAccountOptions.filter(
+        ({ account }) =>
+          account.id !== form.accountId &&
+          formatCurrencyCode(account.currency || "PHP") === formatCurrencyCode(form.currency || selectedAccount?.currency || "PHP")
+      ),
+    [form.accountId, form.currency, manualAccountOptions, selectedAccount?.currency]
+  );
+  const otherCategoryId = getOtherCategoryId(categories);
+  const previewLabel = formatCurrencyAmount(Number(form.amount || 0), form.currency || selectedAccount?.currency || "PHP");
+
+  const handleClose = () => {
+    if (tableLocked) return;
+    setAccountMenuOpen(false);
+    setCategoryMenuOpen(false);
+    setManualMoreOpen(false);
+    setManualSplitBillOpen(false);
+    setManualSplitBillDraft({
+      groupId: "",
+      participantNames: [],
+    });
+    onClose();
+  };
+
+  const ensureDefaultAccount = async () => {
+    const existingCashAccount =
+      accounts.find(
+        (account) =>
+          (normalizeName(account.type) === "cash" || normalizeName(account.name) === "cash") &&
+          formatCurrencyCode(account.currency || "PHP") === "PHP"
+      ) ??
+      accounts.find(
+        (account) => normalizeName(account.type) === "cash" || normalizeName(account.name) === "cash"
+      );
+    if (existingCashAccount) {
+      return existingCashAccount.id;
+    }
+
+    const response = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId,
+        name: "Cash",
+        institution: "Cash",
+        type: "cash",
+        currency: "PHP",
+        source: "manual",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to create a default account for this workspace.");
+    }
+
+    const payload = (await response.json().catch(() => ({}))) as { account?: { id?: string; currency?: string } };
+    const accountId = payload.account?.id ?? "";
+    if (!accountId) {
+      throw new Error("Default account was not created.");
+    }
+
+    return accountId;
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const entryDraft = { ...form,
+      merchantRaw: form.merchantRaw.trim() || manualTransactionName(form.type),
+      date: form.date.trim() || manualTransactionToday(),
+      amount: form.amount.trim() || "0",
+      categoryId: manualTransactionCategoryId(categories, form.type, form.categoryId),
+    };
+    const submitter = event.nativeEvent instanceof SubmitEvent ? event.nativeEvent.submitter : null;
+    const submitMode = submitter instanceof HTMLElement ? submitter.getAttribute("data-submit-mode") : null;
+    const keepOpenAfterSave = submitMode === "add-another";
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const accountId = entryDraft.accountId || (await ensureDefaultAccount());
+      const account = accounts.find((entry) => entry.id === accountId) ?? null;
+      const currency = formatCurrencyCode(entryDraft.currency || account?.currency || "PHP");
+      const categoryId = entryDraft.categoryId || otherCategoryId || null;
+
+      const isTransfer = entryDraft.type === "transfer";
+      if (isTransfer && !entryDraft.destinationAccountId) {
+        throw new Error("Choose where the money is going.");
+      }
+
+      const response = await fetch(isTransfer ? "/api/transactions/manual-transfer" : "/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isTransfer
+            ? {
+                workspaceId,
+                sourceAccountId: accountId,
+                destinationAccountId: entryDraft.destinationAccountId,
+                date: entryDraft.date,
+                amount: entryDraft.amount,
+                currency,
+                name: entryDraft.merchantRaw.trim() || null,
+                description: entryDraft.description.trim() || null,
+                feeAmount: entryDraft.feeAmount || null,
+                tags: sanitizeTransactionTagNames(entryDraft.tags),
+              }
+            : {
+                workspaceId,
+                accountId,
+                categoryId,
+                date: entryDraft.date,
+                amount: entryDraft.amount,
+                currency,
+                type: entryDraft.type === "credit" ? "income" : "expense",
+                merchantRaw: entryDraft.merchantRaw,
+                merchantClean: null,
+                description: entryDraft.description.trim() || null,
+                tags: sanitizeTransactionTagNames(entryDraft.tags),
+                receiptLineItems: entryDraft.receiptLineItems
+                  .filter((entry) => entry.description.trim() || entry.amount.trim())
+                  .map((entry) => ({ description: entry.description, amount: entry.amount })),
+                isTransfer: false,
+                isExcluded: false,
+              }
+        ),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { transaction?: { id?: string; merchantRaw?: string; date?: string; currency?: string; amount?: string }; error?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Unable to create transaction.");
+      }
+
+      clearAccountsWorkspaceCache(workspaceId);
+      window.dispatchEvent(new CustomEvent("clover:transaction-created"));
+      const createdTransaction = payload?.transaction ?? null;
+      const splitBillDraftHasContent = manualSplitBillOpen && (manualSplitBillDraft.groupId.trim() || manualSplitBillDraft.participantNames.length > 0);
+      if (splitBillDraftHasContent && createdTransaction?.id) {
+        try {
+          await createSplitBillFromTransaction({
+            workspaceId,
+            transactionId: createdTransaction.id,
+            transactionTitle: entryDraft.merchantRaw.trim() || createdTransaction.merchantRaw?.trim() || "Split Bill",
+            billDate: entryDraft.date,
+            currency,
+            amount: entryDraft.amount,
+            draft: manualSplitBillDraft,
+          });
+        } catch (splitBillError) {
+          console.error(splitBillError);
+        }
+      }
+
+      setError(null);
+      if (keepOpenAfterSave) {
+        setManualMoreOpen(false);
+        setManualSplitBillOpen(false);
+        setManualSplitBillDraft({
+          groupId: "",
+          participantNames: [],
+        });
+        setForm((current) => ({
+          ...current,
+          amount: "",
+          merchantRaw: "",
+          feeAmount: "",
+          description: "",
+          tags: [],
+          receiptLineItems: [],
+        }));
+        setCategoryMenuOpen(false);
+        setAccountMenuOpen(false);
+        return;
+      }
+
+      handleClose();
+      router.refresh();
+    } catch (submissionError) {
+      setError(submissionError instanceof Error ? submissionError.message : "Unable to create transaction.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={handleClose}>
+      <section
+        className="modal-card modal-card--manual transactions-entry--figma glass"
+        style={manualModalStyle}
+        ref={rootRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dashboard-manual-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <MobileSheetHandle onClose={handleClose} disabled={isSaving || tableLocked} />
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">Transactions</p>
+            <h4 id="dashboard-manual-title">Add transaction</h4>
+          </div>
+          <button className="icon-button" type="button" onClick={handleClose} aria-label="Close add transaction"><InterfaceIcon name="close" /></button>
+        </div>
+
+
+
+        <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions" style={{ "--entry-tab-index": ["manual", "ask", "upload", "sync"].indexOf(entryTab), "--entry-tab-count": 4, gridTemplateColumns: "repeat(4, minmax(0, 1fr))" } as CSSProperties}>
+          {(["manual", "ask", "upload", "sync"] as const).map((tab, index) => <button key={tab} type="button" disabled={isSaving || tableLocked} role="tab" id={`quick-entry-tab-${tab}`} aria-controls={`quick-entry-panel-${tab}`} aria-selected={entryTab === tab} tabIndex={entryTab === tab ? 0 : -1} onClick={() => { setEntryTab(tab); if (tab === "sync") setSyncVisited(true); if (tab === "ask") setAskVisited(true); }} onKeyDown={event => {
+            const tabs = ["manual", "ask", "upload", "sync"] as const;
+            const next = event.key === "ArrowRight" ? tabs[(index + 1) % 4] : event.key === "ArrowLeft" ? tabs[(index + 3) % 4] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[3] : null;
+            if (next) { event.preventDefault(); setEntryTab(next); if (next === "sync") setSyncVisited(true); if (next === "ask") setAskVisited(true); document.getElementById(`quick-entry-tab-${next}`)?.focus(); }
+          }}><img src={getEntryMethodIconSrc(tab)} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : tab === "sync" ? "Sync" : "Upload"}</button>)}
+        </div>
+        {(entryTab === "sync" || syncVisited) ? <div hidden={entryTab !== "sync"} id="quick-entry-panel-sync" role="tabpanel" aria-labelledby="quick-entry-tab-sync"><FinverseConnectButton workspaceId={workspaceId} mode="sync" /></div> : null}
+        <div id="quick-entry-panel-manual" role="tabpanel" aria-labelledby="quick-entry-tab-manual" hidden={entryTab !== "manual"}>
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary entry-table-toggle" type="button" aria-label={tableMode ? "Single entry" : "Table entry"} title={tableMode ? "Single entry" : "Table entry"} disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}><span aria-hidden="true">{tableMode ? "✎" : "▦"}</span></button></div>
+        <div hidden={!tableMode}><TransactionTableEntry workspaceId={workspaceId} accounts={accounts} categories={categories} onSaved={() => router.refresh()} onLockChange={setTableLocked} /></div>
+        <form onSubmit={handleSubmit} hidden={tableMode}>
+          <div className="manual-form-layout manual-form-layout--compact dashboard-manual-form" data-transaction-type={form.type}>
+            <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
+              <button
+                type="button"
+                className={`transactions-manual-type-toggle__button ${form.type === "debit" ? "is-active" : ""}`}
+                onClick={() => { setManualCategoryTouched(false); setForm((current) => ({ ...current, type: "debit", categoryId: "" })); }}
+                aria-pressed={form.type === "debit"}
+              >
+                <span className="transactions-manual-type-symbol" aria-hidden="true">
+                  −
+                </span>
+                <span>Expense</span>
+              </button>
+              <button
+                type="button"
+                className={`transactions-manual-type-toggle__button ${form.type === "credit" ? "is-active" : ""}`}
+                onClick={() => { setManualCategoryTouched(false); setForm((current) => ({ ...current, type: "credit", categoryId: "" })); }}
+                aria-pressed={form.type === "credit"}
+              >
+                <span className="transactions-manual-type-symbol" aria-hidden="true">
+                  +
+                </span>
+                <span>Income</span>
+              </button>
+              <button
+                type="button"
+                className={`transactions-manual-type-toggle__button ${form.type === "transfer" ? "is-active" : ""}`}
+                onClick={() => { setManualCategoryTouched(false); setForm((current) => ({ ...current, type: "transfer", categoryId: "" })); }}
+                aria-pressed={form.type === "transfer"}
+              >
+                <span className="transactions-manual-type-symbol" aria-hidden="true">↔</span>
+                <span>Transfer</span>
+              </button>
+            </div>
+
+            <div className="transactions-manual-row transactions-manual-row--money">
+              <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__currency">
+                <span className="transactions-manual-field__label">Currency</span>
+                <CurrencySelector
+                  value={form.currency}
+                  onChange={(value) => setForm((current) => ({ ...current, currency: value }))}
+                  options={accountCurrencyCodes}
+                  ariaLabel="Select transaction currency"
+                  className="transactions-manual-currency"
+                  buttonClassName="transactions-manual-currency__button"
+                  menuClassName="transactions-manual-currency__menu"
+                  optionClassName="transactions-manual-currency__option"
+                  menuAlignment="end"
+                  showCurrencyCode
+                  portalMenu
+                />
+              </label>
+              <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__amount">
+                <span className="transactions-manual-field__label">Amount</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.amount}
+                  onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
+                  placeholder="0.00"
+                />
+              </label>
+            </div>
+
+            <div className="transactions-manual-row transactions-manual-row--name">
+              <span className="transactions-manual-row-icon transactions-manual-row-icon--category" aria-hidden="true">
+                <CategoryBrandMark categoryName={selectedCategory?.name ?? "Other"} />
+              </span>
+              <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
+                <span className="transactions-manual-field__label">{form.type === "transfer" ? "What was it for? (optional)" : "What was it for?"}</span>
+                <TransactionNameAutocomplete
+                  workspaceId={workspaceId}
+                  value={form.merchantRaw}
+                  onChange={(merchantRaw) => setForm((current) => ({ ...current, merchantRaw }))}
+                  onSelect={(suggestion: TransactionNameSuggestion) => {
+                    setForm((current) => ({
+                      ...current,
+                      merchantRaw: suggestion.name,
+                      ...(!manualCategoryTouched && suggestion.categoryId ? { categoryId: suggestion.categoryId } : {}),
+                    }));
+                    categoryButtonRef.current?.focus();
+                  }}
+                  placeholder={manualTransactionPlaceholder(form.type)}
+                      required={false}
+
+                />
+              </label>
+            </div>
+
+            <div className="transactions-manual-inline-row transactions-manual-inline-row--account">
+              <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--account" aria-hidden="true">
+                <AccountBrandMark accountBrand={selectedAccountBrand} label={selectedAccount ? getAccountDisplayName(selectedAccount) : "Cash"} />
+              </span>
+              <div className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
+                <span className="transactions-manual-field__label">{form.type === "transfer" ? "From account" : "Account"}</span>
+                <div className="transactions-manual-picker">
+                  <div className="transactions-manual-picker__control">
+                    <button
+                      type="button"
+                      className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                      aria-expanded={accountMenuOpen}
+                      onClick={() => {
+                        setCategoryMenuOpen(false);
+                        setAccountMenuOpen((current) => !current);
+                      }}
+                    >
+                      <span className="transactions-manual-picker__text">{selectedAccount ? getAccountDisplayName(selectedAccount) : "Cash"}</span>
+                      <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                        ▾
+                      </span>
+                    </button>
+                    {accountMenuOpen ? (
+                      <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
+                        {manualAccountOptions.map(({ account, label }) => (
+                          <button
+                            key={account.id}
+                            type="button"
+                            className={`transactions-manual-picker__option ${account.id === form.accountId ? "is-selected" : ""}`}
+                            onClick={() => {
+                              setForm((current) => ({ ...current, accountId: account.id, currency: formatCurrencyCode(account.currency) }));
+                              setAccountMenuOpen(false);
+                            }}
+                          >
+                            <span className="transactions-manual-picker__brand" aria-hidden="true">
+                              <AccountBrandMark accountBrand={getAccountBrand(account)} label={label} />
+                            </span>
+                            <span className="transactions-manual-picker__option-text">
+                              <strong>{label}</strong>
+                              <span>{account.institution ?? account.type}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {form.type === "transfer" ? (
+              <div className="transactions-manual-field transactions-manual-field--embedded-label">
+                <span className="transactions-manual-field__label">To account</span>
+                <select
+                  value={form.destinationAccountId}
+                  onChange={(event) => setForm((current) => ({ ...current, destinationAccountId: event.target.value }))}
+                  required
+                >
+                  <option value="">Choose destination account</option>
+                  {transferDestinationOptions.map(({ account, label }) => (
+                    <option key={account.id} value={account.id}>{label}</option>
+                  ))}
+                </select>
+                {transferDestinationOptions.length === 0 ? (
+                  <small className="field-help">Add another account in {form.currency} to record an internal transfer.</small>
+                ) : null}
+              </div>
+            ) : null}
+
+            {form.type !== "transfer" ? <div className="transactions-manual-field transactions-manual-field--embedded-label">
+              <span className="transactions-manual-field__label">Category</span>
+              <TransactionCategoryPicker searchable={false}
+                categories={categories}
+                selectedId={form.categoryId}
+                buttonRef={categoryButtonRef}
+                onSelect={(category) => {
+                  setManualCategoryTouched(true);
+                  setForm((current) => ({ ...current, categoryId: category.id }));
+                }}
+              />
+              {categorySuggestion ? <small>Suggested: {categorySuggestion.categoryName} · {categorySuggestion.confidence}% confidence. Review before saving.</small> : null}
+            </div> : null}
+
+            <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-date">
+              <span className="transactions-manual-field__label"><InterfaceIcon name="date" /> Date</span>
+              <input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
+            </label>
+
+            {manualMoreOpen ? <div className="transactions-manual-field transactions-manual-field--embedded-label">
+              <span className="transactions-manual-field__label">Preview</span>
+              <div className="dashboard-manual-modal__preview">{previewLabel}</div>
+            </div> : null}
+
+            {error ? <p role="alert" className="dashboard-manual-modal__error">{error}</p> : null}
+
+            <div className={`transactions-manual-more-row ${manualMoreOpen ? "is-open" : ""}`}>
+              <button
+                type="button"
+                className="transactions-manual-more"
+                onClick={() => setManualMoreOpen((current) => !current)}
+                aria-expanded={manualMoreOpen}
+              >
+                <span>{manualMoreOpen ? "Fewer details" : "More details"}</span>
+                <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                  ▾
+                </span>
+              </button>
+              {!manualMoreOpen ? (
+                <div className="manual-form-actions manual-form-actions--closed">
+                  <div className="manual-form-actions__right">
+                    <button className="transactions-manual-add-another" type="submit" data-submit-mode="add-another" disabled={isSaving}>
+                      Add another
+                    </button>
+                    <button className="button button-primary button-small" type="submit" data-submit-mode="close" disabled={isSaving || !accounts.length}>
+                      {isSaving ? "Saving..." : "Add transaction"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            {manualMoreOpen ? (
+              <>
+                <div className="manual-more-panel manual-more-panel--compact">
+                  {form.type === "transfer" ? (
+                    <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                      <span className="transactions-manual-field__label">Transfer fee (optional)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.feeAmount}
+                        onChange={(event) => setForm((current) => ({ ...current, feeAmount: event.target.value }))}
+                        placeholder="0.00"
+                      />
+                    </label>
+                  ) : null}
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                    <span className="transactions-manual-field__label">Notes</span>
+                    <textarea
+                      value={form.description}
+                      onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                      placeholder="Optional note or review context"
+                    />
+                  </label>
+
+                  <div className="transactions-manual-field transactions-manual-field--embedded-label">
+                    <span className="transactions-manual-field__label">Tags</span>
+                    <TransactionTagsEditor
+                      tags={form.tags}
+                      onChange={(tags) => setForm((current) => ({ ...current, tags }))}
+                      placeholder="Examples: Bills, Work, Family"
+                      inputAriaLabel="Add tags to transaction"
+                    />
+                  </div>
+
+                  {form.type !== "transfer" ? <div className="transactions-split-bill-link-panel__toggle-row">
+                    <button
+                      type="button"
+                      className="transactions-manual-more"
+                      onClick={() => setManualSplitBillOpen((current) => !current)}
+                      aria-expanded={manualSplitBillOpen}
+                    >
+                      <span>{manualSplitBillOpen ? "Hide split bill" : "Add to Split Bills"}</span>
+                      <span className={`transactions-manual-more__chevron ${manualSplitBillOpen ? "is-open" : ""}`} aria-hidden="true">
+                        ▾
+                      </span>
+                    </button>
+                    {manualSplitBillOpen ? (
+                      <SplitBillTransactionLinkFields
+                        workspaceId={workspaceId}
+                        draft={manualSplitBillDraft}
+                        onChange={setManualSplitBillDraft}
+                        open={manualSplitBillOpen}
+                        title="Split bill details"
+                        helperText="This split bill will be created after you save the transaction."
+                      />
+                    ) : null}
+                  </div> : null}
+
+                  <div className="manual-more-panel__receipt-line-items">
+                    <div className="manual-more-panel__section-head">
+                      <span>Receipt line items</span>
+                    </div>
+
+                    {form.receiptLineItems.length === 0 ? (
+                      <p className="field-help field-help--compact">
+                        Optional. Add item lines if you want the receipt breakdown to follow the transaction.
+                      </p>
+                    ) : null}
+
+                    {form.receiptLineItems.length > 0 ? (
+                      <div className="manual-receipt-table" role="table" aria-label="Receipt line items">
+                        <div className="manual-receipt-table__header" role="row">
+                          <span role="columnheader">Item</span>
+                          <span role="columnheader">Price</span>
+                          <span aria-hidden="true" />
+                        </div>
+
+                        {form.receiptLineItems.map((lineItem, index) => (
+                          <div key={index} className="manual-receipt-table__row" role="row">
+                            <label className="manual-receipt-table__cell" role="cell">
+                              <span className="sr-only">Item</span>
+                              <input
+                                value={lineItem.description}
+                                onChange={(event) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, description: event.target.value } : entry
+                                    ),
+                                  }))
+                                }
+                                placeholder="Coffee"
+                              />
+                            </label>
+                            <label className="manual-receipt-table__cell manual-receipt-table__cell--price" role="cell">
+                              <span className="sr-only">Price</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={lineItem.amount}
+                                onChange={(event) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, amount: event.target.value } : entry
+                                    ),
+                                  }))
+                                }
+                                placeholder="0.00"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              className="manual-receipt-table__remove"
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  receiptLineItems: current.receiptLineItems.filter((_, entryIndex) => entryIndex !== index),
+                                }))
+                              }
+                              aria-label="Remove line item"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      className="manual-receipt-table__add-floater"
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
+                        }))
+                      }
+                      aria-label="Add receipt line item"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="manual-form-actions manual-form-actions--expanded">
+                  <div className="manual-form-actions__right">
+                    <button className="transactions-manual-add-another" type="submit" data-submit-mode="add-another" disabled={isSaving}>
+                      Add another
+                    </button>
+                    <button className="button button-primary button-small" type="submit" data-submit-mode="close" disabled={isSaving || !accounts.length}>
+                      {isSaving ? "Saving..." : "Add transaction"}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </form>
+        </div>
+        {askVisited ? <div id="quick-entry-panel-ask" role="tabpanel" aria-labelledby="quick-entry-tab-ask" hidden={entryTab !== "ask"} className="transaction-creation-panel">
+
+          <AdviserChat minimal formContext={{kind:"transaction",fields:{currency:form.currency,date:form.date,type:form.type === "credit" ? "income" : form.type === "debit" ? "expense" : "transfer",accountId:form.accountId}}} workspaceId={workspaceId} prompts={[]} isPro={isPro} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
+        </div> : null}
+        <div id="quick-entry-panel-upload" role="tabpanel" aria-labelledby="quick-entry-tab-upload" hidden={entryTab !== "upload"} className="transaction-creation-panel">
+
+          <UploadSourcePicker onSelect={files => { setEntryUploadFiles(files); setEntryUploadOpen(true); }} /><UploadSecurityCopy />
+        </div>
+      </section>
+      <ImportFilesModal initialFiles={entryUploadFiles} onInitialFilesConsumed={() => setEntryUploadFiles([])} open={entryUploadOpen} workspaceId={workspaceId} accounts={accounts} onClose={() => setEntryUploadOpen(false)} onImported={() => router.refresh()} />
+    </div>,
+    document.body
+  );
+}
+
+export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActionsProps) {
+  const router = useRouter();
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const defaultImportAccountId =
+    accounts.find((account) => normalizeName(account.type) !== "cash" && normalizeName(account.type) !== "other" && normalizeName(account.type) !== "investment")?.id ??
+    accounts[0]?.id ??
+    null;
+
+  useLayoutEffect(() => {
+    const active = manualOpen;
+    document.body.classList.toggle("dashboard-modal-open", active);
+    document.body.toggleAttribute("data-clover-page-modal", active);
+
+    return () => {
+      document.body.classList.remove("dashboard-modal-open");
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, [manualOpen]);
+
+  useEffect(() => {
+    const manualParam = new URLSearchParams(window.location.search).get("manual");
+    const importParam = new URLSearchParams(window.location.search).get("import");
+
+    if (manualParam === "1") {
+      setImportOpen(false);
+      setManualOpen(true);
+      return;
+    }
+
+    if (importParam === "1") {
+      setManualOpen(false);
+      setImportOpen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleOpenManual = () => {
+      setImportOpen(false);
+      setManualOpen(true);
+    };
+    const handleOpenImport = () => {
+      setManualOpen(false);
+      setImportOpen(true);
+    };
+
+    window.addEventListener("clover:open-transaction-add", handleOpenManual);
+    window.addEventListener("clover:open-dashboard-import", handleOpenImport);
+    return () => {
+      window.removeEventListener("clover:open-transaction-add", handleOpenManual);
+      window.removeEventListener("clover:open-dashboard-import", handleOpenImport);
+    };
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY);
+    const updateViewport = () => setIsCompactViewport(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateViewport);
+    };
+  }, []);
+
+  const closeManual = () => {
+    setManualOpen(false);
+    window.history.replaceState({}, "", "/home");
+  };
+
+  const closeImport = () => {
+    setImportOpen(false);
+    window.history.replaceState({}, "", "/home");
+  };
+
+  const openManualAdd = () => {
+    setImportOpen(false);
+    setManualOpen(true);
+  };
+
+  const openImportFiles = () => {
+    setManualOpen(false);
+    setImportOpen(true);
+  };
+
+  return (
+    <>
+      <div className="dashboard-top-actions" hidden={isCompactViewport}>
+        <button
+          className="button button-primary button-small transactions-action-button transactions-toolbar-add dashboard-top-actions__button"
+          type="button"
+          onClick={openManualAdd}
+          aria-label="Add transaction"
+          title="Add transaction"
+        >
+          <span className="button-icon dashboard-top-actions__icon" aria-hidden="true">
+            +
+          </span>
+          <span>Add transaction</span>
+        </button>
+      </div>
+
+      {manualOpen ? (
+        <DashboardManualTransactionModal
+          workspaceId={workspaceId}
+          accounts={accounts}
+          onClose={closeManual}
+        />
+      ) : null}
+
+      <ImportFilesModal
+        open={importOpen}
+        workspaceId={workspaceId}
+        accounts={accounts}
+        defaultAccountId={defaultImportAccountId}
+        onClose={closeImport}
+        onImported={async () => {
+          router.refresh();
+        }}
+      />
+    </>
+  );
+}

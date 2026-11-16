@@ -1,0 +1,24 @@
+"use client";
+import "./transaction-selection-toolbar.css";
+
+type Props = {
+  compact?: boolean; warningCount?: number; activeFilterCount?: number; count: number; query: string; onQueryChange: (query: string) => void;
+  onAddTo?: () => void; filterOpen: boolean; onFilter: () => void; onEdit: () => void; onTags: () => void; onDelete: () => void; onClear: () => void;
+};
+export function TransactionSelectionToolbar({ compact, warningCount = 0, activeFilterCount = 0, count, query, onQueryChange, filterOpen, onFilter, onAddTo, onEdit, onTags, onDelete, onClear }: Props) {
+  return <div className={`transaction-selection-toolbar${compact ? " transaction-selection-toolbar--compact" : ""}${count ? " transaction-selection-toolbar--selected" : ""}`}>
+    {count ? <>
+      <span className="transaction-selection-toolbar__count" role="status">{count} selected</span>
+      <div className="transaction-selection-toolbar__actions" role="group" aria-label="Selected transaction actions">
+        {onAddTo ? <button className="button button-primary button-small" type="button" onClick={onAddTo}>Add to</button> : null}
+        <button className="button button-secondary button-small transactions-action-button" type="button" onClick={onEdit}>Edit</button>
+        <button className="button button-secondary button-small transactions-action-button" type="button" onClick={onTags}>Tags</button>
+        <button className="button button-secondary button-small transactions-action-button transaction-selection-toolbar__delete" type="button" onClick={onDelete}>Delete</button>
+        <button className="button button-ghost button-small" type="button" onClick={onClear}>Clear</button>
+      </div>
+    </> : <>
+      <input type="search" aria-label="Search" placeholder="Search" value={query} onChange={(event) => onQueryChange(event.target.value)} />
+      <button type="button" className={`button button-secondary button-small transactions-action-button transaction-selection-toolbar__filter${compact ? " icon-button" : ""}`} onClick={onFilter} aria-label="Filter transactions" aria-expanded={filterOpen}><img src="/assets/organize/filter.svg" alt="" width="16" height="16" /><span className="transaction-filter-label">Filters</span>{activeFilterCount > 0 ? <span className="transaction-filter-count" aria-label={`${activeFilterCount} active filters`}>{activeFilterCount}</span> : null}{compact && warningCount > 0 ? <span className="transaction-filter-warning" aria-label={`${warningCount} warnings`}><span className="warning-mark warning-mark--small" aria-hidden="true" /><span className="transaction-filter-warning__count">{warningCount}</span></span> : null}</button>
+    </>}
+  </div>;
+}

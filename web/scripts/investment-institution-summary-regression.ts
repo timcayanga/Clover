@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { getInvestmentInstitutionSnapshotSummary as summarize } from '../lib/investment-institution-summary';
+const date='2026-09-19',container={id:'portfolio',name:'My custom portfolio',balance:'10000',updatedAt:date};
+const holding=(name:string,value:string)=>({id:name,assetName:name,assetSymbol:null,assetType:'stock',currentValue:value,marketValue:null,updatedAt:date});
+const snapshot={id:'snapshot',portfolioName:'Broker',currency:'PHP',updatedAt:date,account:{id:'portfolio',institution:'Broker'},documentImport:null,holdings:[holding('Stock A','6000'),holding('Stock B','4000')]};
+const before=JSON.stringify([container,snapshot]);
+assert.deepEqual(summarize('Broker','PHP',[container],[snapshot]),{balance:'10000.00',assetCount:2},'Custom-named portfolio container must not be a third position');
+assert.deepEqual(summarize('Broker','PHP',[container,{id:'manual',name:'Stock C',balance:'1000',updatedAt:date}],[snapshot]),{balance:'11000.00',assetCount:3},'Unrelated manual position remains included');
+assert.deepEqual(summarize('Broker','PHP',[container,{id:'linked',name:'Stock A',balance:'6500',updatedAt:date}],[snapshot]),{balance:'10500.00',assetCount:2},'Current account-backed value overrides matching immutable holding');
+assert.deepEqual(summarize('Broker','PHP',[container],[]),{balance:'10000.00',assetCount:1},'Account without holdings stays visible');
+assert.deepEqual(summarize('Broker','PHP',[container],[{...snapshot,currency:'USD'}]),{balance:'10000.00',assetCount:1},'Foreign holdings do not suppress this currency account');
+assert.deepEqual(summarize('Broker','PHP',[container],[{...snapshot,holdings:[]}]),{balance:'10000.00',assetCount:1},'Empty snapshot cannot hide an account');
+assert.equal(JSON.stringify([container,snapshot]),before,'Projection cannot change records');
+console.log('Investment institution summary regression passed.');

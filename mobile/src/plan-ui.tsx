@@ -1,0 +1,398 @@
+import { ApiError } from "./api";
+import { splitBillReadRequiresAction } from "../../shared/split-bill-read";
+import { createScreenDataLoader, registerScreenRefresh } from "./screen-refresh";
+import { Text } from "./app-text";
+import { LinearGradient } from "expo-linear-gradient";
+import { useEffect, useState, useCallback, useRef, type ComponentProps, type ReactNode } from "react";
+import { router, useFocusEffect, usePathname } from "expo-router";
+import { Alert, Platform, Pressable, View, ScrollView } from "react-native";
+import { useSession } from "./session";
+import { AppHeader, AddNavigationMark, Icon, useTheme } from "./ui";
+/** Square at normal text size, but grows rather than clipping larger text. */
+export function PlanDirectoryCard({
+  children,
+  color,
+  onPress,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  color: string;
+}) {
+  const { dark, colors } = useTheme();
+  const [width, setWidth] = useState(0);
+  const tint = /^#[0-9a-f]{6}$/i.test(color) ? color : "#35b875";
+  return (
+    <Pressable onPress={onPress}>
+    <LinearGradient
+      colors={dark ? [colors.white, `${tint}24`] : [`${tint}38`, `${tint}0a`]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      style={{
+        minHeight: Math.min(width, 360),
+        padding: 20,
+        gap: 16,
+        justifyContent: "space-between",
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: `${tint}88`,
+      }}
+    >
+      {children}
+    </LinearGradient>
+    </Pressable>
+  );
+}
+export function PlanAmount({ children }: { children: ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <Text
+      style={{
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 24,
+        color: colors.ink,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+export function PlanHeader({
+  title,
+  back,
+  add,
+  leading,
+  trailing,
+  stackedTitle = false,
+  titleInset = 76,
+}: {
+  title: string;
+  back?: () => void;
+  add?: () => void;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  stackedTitle?: boolean;
+  titleInset?: number;
+}) {
+  return (
+    <View>
+      <AppHeader
+        title={title}
+        onClose={back}
+        leading={leading}
+        trailing={
+          trailing ??
+          (back && /^(Add|Edit|New|Create|Upload|Review Suggestion)/i.test(title) ? <View style={{ width: 44 }} /> : back ? undefined : add ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${title}`}
+              onPress={add}
+              style={{
+                width: 44,
+                height: 44,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <AddNavigationMark size={36} />
+            </Pressable>
+          ) : undefined)
+        }
+      />
+    </View>
+  );
+}
+
+PlanHeader.screenHeader = true;
+
+const tabIcons: Record<string, ComponentProps<typeof Icon>["name"]> = {
+  Recurring: "repeat-outline", Expenses: "receipt-outline", Budgets: "wallet-outline", Goals: "flag-outline", Commitments: "calendar-outline", Contributions: "gift-outline", Reports: "bar-chart-outline", Transactions: "swap-horizontal-outline", Roadmap: "map-outline", Progress: "trending-up-outline",
+  Overview: "apps-outline", Bills: "receipt-outline", Groups: "people-outline",
+  People: "person-outline", Payments: "card-outline", Spending: "bar-chart-outline",
+  Trends: "trending-up-outline", Insights: "sparkles-outline", Portfolio: "briefcase-outline",
+  Planner: "calendar-outline", Markets: "trending-up-outline", Analysis: "analytics-outline",
+  "Planned Payments": "calendar-outline", "Debt & Loans": "briefcase-outline",
+  "Money Owed": "swap-horizontal-outline", Installments: "list-outline",
+  Settle: "swap-horizontal-outline", Receipts: "documents-outline", Activity: "time-outline",
+  History: "time-outline", "Payment options": "card-outline",
+};
+
+/** Compact page subtabs with the selected label on one line. */
+export function PlanTabs({
+  items,
+  value,
+  onChange,
+}: {
+  compact?: boolean;
+  items: string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { colors, dark } = useTheme();
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled"
+      accessibilityRole="tablist">
+      {items.map((item, index) => {
+        const label = item.replace(" · Plus", "");
+        const selected = item === value;
+        const premium = item.includes(" · Plus");
+        const color = premium ? (dark ? "#7DE3B0" : "#287C52") : selected ? colors.teal : colors.muted;
+        return (
+          <Pressable key={item} accessibilityRole="tab" accessibilityLabel={premium ? `${label}, Plus and Pro` : label}
+            accessibilityState={{ selected }} aria-selected={selected}
+            onPress={() => onChange(item)}
+            style={{
+              flexGrow: 1, flexShrink: 0, minWidth: 44,
+              minHeight: 44, paddingVertical: 8, paddingHorizontal: selected ? 10 : 6,
+              flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4,
+              borderWidth: 1, borderColor: selected ? colors.line : "transparent",
+              borderBottomColor: selected ? colors.white : colors.line,
+              borderTopLeftRadius: 10, borderTopRightRadius: 10,
+              backgroundColor: selected ? colors.white : "transparent",
+            }}>
+            <Icon line name={tabIcons[label] ?? (index === 0 ? "apps-outline" : /history|activity/i.test(label) ? "time-outline" : /goal/i.test(label) ? "flag-outline" : "list-outline")} size={17} color={color} />
+            {selected ? <Text numberOfLines={1} style={{ fontSize: 12, fontFamily: "Poppins-Medium", color }}>{label}</Text> : null}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+export function PlanAction({
+  title,
+  onPress,
+  tone = "view",
+  disabled = false,
+  fullWidth = false,
+}: {
+  title: string;
+  onPress: () => void;
+  tone?: "view" | "edit" | "ask" | "delete" | "primary";
+  disabled?: boolean;
+  fullWidth?: boolean;
+}) {
+  const { dark, colors } = useTheme();
+  const palette = {
+    view: [colors.white, colors.ink],
+    edit: [colors.white, colors.ink],
+    ask: ["#008fa3", "#fff"],
+    delete: dark ? ["#49292d", "#ffb6ba"] : ["#fdeaea", "#b83a3a"],
+    primary: ["#008fa3", "#fff"],
+  }[tone];
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      hitSlop={4}
+      disabled={disabled}
+      onPress={onPress}
+      style={{
+        backgroundColor: palette[0],
+        borderWidth: 1,
+        borderColor:
+          tone === "view" || tone === "edit" ? colors.line : "transparent",
+        borderRadius: 24,
+        overflow: "hidden",
+        alignItems: "stretch",
+        alignSelf: fullWidth ? "stretch" : "flex-start",
+        maxWidth: "100%",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <LinearGradient
+        colors={
+          tone === "primary" || tone === "ask"
+            ? ["#03a8c0", "#2ccfca"]
+            : [palette[0], palette[0]]
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{
+          minHeight: 38,
+          paddingVertical: 8,
+          paddingHorizontal: 14,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text
+          style={{
+            color: palette[1],
+            fontFamily: "Poppins-Medium",
+            fontSize: 15,
+            lineHeight: 22,
+          }}
+        >
+          {title}
+        </Text>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+export function Progress({ value }: { value: number }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityValue={{
+        min: 0,
+        max: 100,
+        now: Math.max(0, Math.min(100, value)),
+        text: `${Math.round(value)}%`,
+      }}
+      style={{
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: colors.line,
+        overflow: "hidden",
+      }}
+    >
+      <LinearGradient
+        colors={["#00AEC4", "#68E3BD"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{
+          height: 10,
+          width: `${Math.max(0, Math.min(100, value))}%`,
+        }}
+      />
+    </View>
+  );
+}
+export function usePlanData<T>(path: string, sample: T) {
+  const screenPath = usePathname();
+  const session = useSession();
+  const resource = `${path}${path.includes("?") ? "&" : "?"}workspaceId=${encodeURIComponent(session.profileId)}`;
+  const [loadedResource, setLoadedResource] = useState(resource);
+  const [data, setData] = useState<T | null>(() => session.demo ? sample : session.cached<T>(resource));
+  const [error, setError] = useState("");
+  const [version, setVersion] = useState(0);
+  const splitBillsRead = path.split("?")[0] === "split-bills";
+  const blockedRead = useRef<{ resource: string; message: string } | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (splitBillsRead && !session.demo && !session.profileId) return;
+      if (blockedRead.current?.resource !== resource) blockedRead.current = null;
+      setError(blockedRead.current?.message ?? "");
+      setLoadedResource(resource);
+      setData(session.demo ? sample : blockedRead.current ? null : session.cached<T>(resource));
+      const refresh = createScreenDataLoader({
+        load: () => session.demo ? Promise.resolve(sample) : session.request<T>(resource),
+        active: () => active,
+        apply: result => { blockedRead.current = null; setData(result); setError(""); },
+        error: e => {
+          const message = (e as Error).message;
+          if (splitBillsRead && e instanceof ApiError && splitBillReadRequiresAction(e.status)) {
+            blockedRead.current = { resource, message };
+            setData(null);
+          }
+          setError(message);
+        },
+      });
+      if (!blockedRead.current) void refresh();
+      const unregister = registerScreenRefresh(screenPath, refresh);
+      return () => {
+        active = false; unregister();
+      };
+    }, [
+      screenPath,
+      splitBillsRead,
+      session.demo,
+      session.profileId,
+      session.request,
+      session.offlineStatus.online,
+      path,
+      sample,
+      version,
+    ]),
+  );
+  return { data: loadedResource === resource ? data : session.cached<T>(resource), setData, error, reload: () => { blockedRead.current = null; setVersion((v) => v + 1); } };
+}
+
+export function SummaryCard({
+  help,
+  alignTop = false,
+  title,
+  value,
+  detail,
+  color,
+  detailColor,
+}: {
+  title: string;
+  value: string;
+  detail?: string;
+  color?: string;
+  detailColor?: string;
+  help?: string;
+  alignTop?: boolean;
+}) {
+  const { colors } = useTheme();
+  const [cardWidth, setCardWidth] = useState(0);
+  const [showHelp, setShowHelp] = useState(false);
+  const valueSize =
+    Platform.OS === "web" && cardWidth > 0
+      ? Math.max(
+          13.2,
+          Math.min(22, (cardWidth - 10) / (Math.max(value.length, 1) * 0.68)),
+        )
+      : 22;
+  return (
+    <View
+      onLayout={
+        Platform.OS === "web"
+          ? (event) => setCardWidth(event.nativeEvent.layout.width)
+          : undefined
+      }
+      style={{
+        flex: 1,
+        minWidth: 0,
+        borderWidth: 1,
+        borderColor: colors.line,
+        backgroundColor: colors.white,
+        borderRadius: 16,
+        paddingVertical: 18,
+        paddingHorizontal: 8,
+        gap: 6,
+        minHeight: 94,
+        justifyContent: alignTop ? "flex-start" : "center",
+        alignItems: "center",
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 14 }}>
+        <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 12, lineHeight: 18, textAlign: "center", color: "#7A879C", flexShrink: 1 }}>{title}</Text>
+
+      </View>
+        {help ? <Pressable accessibilityRole="button" accessibilityLabel={help} onPress={() => Platform.OS === "web" ? setShowHelp(value => !value) : Alert.alert(title, help)} hitSlop={6} style={{ position: "absolute", right: 5, top: 5, width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}><Icon name="information" size={11} color={colors.muted}/></Pressable> : null}
+      {showHelp && help ? <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", paddingHorizontal: 8 }}>{help}</Text> : null}
+      <Text
+        style={{
+          fontFamily: "Poppins-SemiBold",
+          fontSize: valueSize,
+          lineHeight: 33,
+          textAlign: "center",
+          color: color ?? colors.ink,
+        }}
+        adjustsFontSizeToFit
+        numberOfLines={Platform.OS === "web" ? undefined : 1}
+        minimumFontScale={0.6}
+      >
+        {value}
+      </Text>
+      {detail ? (
+        <Text
+          style={{
+            fontFamily: "Poppins-Regular",
+            fontSize: 13,
+            lineHeight: 20,
+            textAlign: "center",
+            color: detailColor ?? colors.muted,
+          }}
+        >
+          {detail}
+        </Text>
+      ) : null}
+    </View>
+  );
+}

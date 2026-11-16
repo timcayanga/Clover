@@ -1,0 +1,34 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { AdminPageChrome } from "@/components/admin-page-chrome";
+import { AdminDataQaSummary } from "@/components/admin-data-qa-summary";
+import { getCachedAdminDataQaBankSummary } from "@/lib/admin-page-data";
+import { requireAdminAuth } from "@/lib/admin";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminDataQaSummaryPage() {
+  try {
+    await requireAdminAuth();
+  } catch {
+    redirect("/dashboard");
+  }
+
+  const data = await getCachedAdminDataQaBankSummary();
+
+  return (
+    <AdminPageChrome
+      active="data-qa"
+      title="Data QA summary"
+      kicker="Internal tools"
+      subtitle="See which banks Clover has tested, how many unique files were used, and whether they are ready at a glance."
+      actions={
+        <Link className="button button-secondary button-small" href="/admin/data-qa">
+          Back to QA list
+        </Link>
+      }
+    >
+      <AdminDataQaSummary data={data} />
+    </AdminPageChrome>
+  );
+}

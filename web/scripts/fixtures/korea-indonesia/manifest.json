@@ -1,0 +1,101 @@
+{
+  "version": "2026.10.01.1",
+  "files": [
+    {
+      "file": "id-foreign.csv",
+      "country": "ID",
+      "kind": "ledger",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "f904278b82b1c094c2f9a9dacc75946c8d3050f416364f3e5eabcdb6f482085b",
+      "expectedRecords": 2
+    },
+    {
+      "file": "id-holdings.csv",
+      "country": "ID",
+      "kind": "holdings",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "fd12a80182f0bd86773541d37b70e100632f78caa5280ffd43a15659147070a3",
+      "expectedRecords": 2
+    },
+    {
+      "file": "id-ledger.csv",
+      "country": "ID",
+      "kind": "ledger",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "22892413ee46147fea723026e46c5a34e1f57ac05cd8930e1c1b2bbb31529c80",
+      "expectedRecords": 8
+    },
+    {
+      "file": "id-receipt.txt",
+      "country": "ID",
+      "kind": "receipt-text",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "4fe640bd00aa6dc807a22bac48a957db9cd5b8912d1690e8eb2dbe6b050c33dd",
+      "expectedRecords": 1
+    },
+    {
+      "file": "id-unsafe.csv",
+      "country": "ID",
+      "kind": "rejected-ledger",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "289f45dc517cd4779f85a816bdb64a78742821f99fb9586ea5f1bc4d89b7dba3",
+      "expectedRecords": 0
+    },
+    {
+      "file": "id-workbook.xlsx",
+      "country": "ID",
+      "kind": "workbook",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "5f82f4c002e2c12081fbc92f7a76d4828471f6539208548a5232251b59ef83c4",
+      "expectedRecords": 10
+    },
+    {
+      "file": "kr-foreign.csv",
+      "country": "KR",
+      "kind": "ledger",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "5b1da830db87f9b5c3552538f7c223eafc6ebc8b5cb7de1d743a3c99da970dfa",
+      "expectedRecords": 2
+    },
+    {
+      "file": "kr-holdings.csv",
+      "country": "KR",
+      "kind": "holdings",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "766be233ced06bed79f694a843072facfe218e5108ac1bee843f159fa762bd65",
+      "expectedRecords": 2
+    },
+    {
+      "file": "kr-ledger.csv",
+      "country": "KR",
+      "kind": "ledger",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "f950ace7788b8c07de0e1ae69d3184e12042a0a9770b41eddf11abfe331156d1",
+      "expectedRecords": 8
+    },
+    {
+      "file": "kr-receipt.txt",
+      "country": "KR",
+      "kind": "receipt-text",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "1e2926ba5475a34eb0de8a06402bfad4f103c476b47425ab7ca29cf58188282c",
+      "expectedRecords": 1
+    },
+    {
+      "file": "kr-unsafe.csv",
+      "country": "KR",
+      "kind": "rejected-ledger",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "110d8baedc08632bd6328ffce2950a2a151e2f7ad40aa109c34bd3a7fc46aeca",
+      "expectedRecords": 0
+    },
+    {
+      "file": "kr-workbook.xlsx",
+      "country": "KR",
+      "kind": "workbook",
+      "provenance": "Clover-authored synthetic; not a real bank export or customer record",
+      "sha256": "2c8b2507a5d2c8d5b2b426fcec64c40ff73d11845b8f28b3cd706db751fd7509",
+      "expectedRecords": 10
+    }
+  ]
+}

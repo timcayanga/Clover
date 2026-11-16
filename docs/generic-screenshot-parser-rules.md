@@ -1,0 +1,136 @@
+# Generic Screenshot Parser Rules
+
+These rules apply when an uploaded screenshot does not match a trained institution parser.
+
+## Account and product overviews
+
+- Recognize repeated account cards only when the screen has account/product overview signals such as `Your products`, `My accounts`, or `Balances`.
+- Emit one `account_snapshot_marker` per visible account card when an account identity and balance are present.
+- Keep the row review-required and preserve the OCR source text in `rawPayload`.
+- Do not infer an institution, account type, currency, or investment units beyond what the screenshot explicitly supports.
+
+## Mobile activity screens
+
+- Recognize a generic activity/transaction screen only when it contains both transaction-history signals and signed monetary values or explicit direction labels such as Expense paid.
+- Pair a date header, following description lines, and the next amount conservatively. OCR may omit whitespace after the comma in a full date (for example, Sep 07,2026); it must still start a new transaction block.
+- Emit low-confidence, review-required rows with `rawPayload.kind = generic_mobile_screenshot_transaction`.
+- Never let the generic fallback override a trained parser, a deterministic statement parser, or confirmed financial data.
+
+## Cold and untrained visual layouts
+
+- Before any AI fallback, score extracted local text, deterministic rows, financial metadata, filename hints, currency-and-amount evidence, and table headers. A confidently non-financial document must stop before the model call.
+- For images, a hard non-financial rejection requires affirmative document evidence such as a coupon title with redemption terms, a template with placeholders, or a résumé title with employment sections. Blank or sparse OCR, unfamiliar language, blur, missing dates, and long text without recognizable financial fields leave the image eligible for extraction or review. Keep the original image available.
+- Treat a coupon, voucher, promotion, menu, or advertisement as non-financial when it lacks evidence of a completed purchase. Prices and expiry dates alone are not proof of payment. Surface a friendly, non-retryable message asking for the full receipt with its purchase date and total.
+- A receipt that contains a coupon or discount line remains eligible when the image also shows completed-purchase evidence such as a grand total, amount paid, payment method, receipt number, or transaction ID.
+- For photos, treat a clear menu or price-list heading with listed prices, or a cart heading with a checkout action, as pre-purchase evidence. Tax, estimated totals, and a selected payment method do not establish settlement. Preserve eligibility when the same image contains credible evidence of tender or change, payment approval, an issued receipt identifier, or a recognizable financial document. Sparse or conflicting images remain eligible for review.
+- Treat clearly marked ads, loyalty offers, reward QR codes, and survey invitations after an evidenced receipt settlement as a separate footer. Preserve the full source text and exclude the promotional section from extraction. Keep discounts applied to the sale, payment QR codes, and subsequent source documents available to the parser.
+- Use the deterministic parser first. The cold-layout path only applies when a statement image or rendered PDF has no usable local rows and weak or unknown identity.
+- When a bounded PDF with readable neighboring pages has one unreadable interior text layer, send only that page image to the consented backup reader. Include the preceding page's last lines and the following page's first lines as context. Insert the new transcript in physical page order and preserve the original PDF. Candidates that lose any previously readable row are ineligible. Stage the recovered statement for user review before confirmation.
+- Send at most two representative pages to the fast backup model for the first decision. This keeps a new layout from paying the full multi-page vision cost when the compact result is already complete.
+- Require visible evidence for every extracted row. A usable fast result needs account or institution identity, dated rows, finite amounts, transaction names, and parser evidence.
+- Escalate automatically to the strong backup model with the available representative pages when the fast result is empty, under-counted, undated, unsupported, or missing account identity.
+- Prefer the stronger result only when its candidate-quality score exceeds the fast result. Never replace a more complete result merely because a stronger model was called.
+- Keep inferred or low-confidence fields review-required. Backup parsing must not overwrite confirmed financial records.
+- Record backup model, decision duration, schema validation, quality score, and routing outcome in import metadata for QA and Admin diagnostics.
+- When source OCR text is blank, derive the reusable statement-family signature from validated rows and resolved account metadata so the successful import can contribute to future routing history.
+
+- If an image routed as a statement has no local or backup rows and its transcript contains clear receipt evidence, run the receipt parser on that transcript from the same upload. Exclude transaction-history screenshots and imports that already have staged or saved rows. Use the regular receipt draft to collect missing fields and retain the original image.
+
+## Receipt time to usable
+
+- Publish a receipt transaction as soon as merchant, total, date, currency, and the best supported account are safely persisted. The user must not wait for data QA, merchant cleanup, category refinement, duplicate analysis, recurring analysis, or learning before the transaction becomes visible.
+- Use the same visible-first handoff for transaction-bearing digital notes. Structured statements, spreadsheets, PDFs, screenshots, and delimited files also publish core rows before post-visible QA and enrichment.
+- Queue post-visible cleanup through the durable import enrichment job. Enrichment must update the existing transaction in place and must never create a second transaction for the same receipt.
+- Start enrichment immediately for imports of 25 rows or fewer and within one second for larger imports. Resume from the durable row cursor after a timeout instead of rescanning completed batches.
+- Load merchant rules, account rules, training signals, and negative feedback in parallel once per job. Reuse that snapshot across batches, evaluate only suggested or review-pending rows, and batch transaction updates.
+- Scope post-enrichment transfer reconciliation to the imported date window rather than scanning unrelated workspace history.
+- Background work may refine only suggested or review-pending data. Never overwrite a transaction that the user edited, confirmed, or rejected.
+- A failure in optional receipt-detail linking, Split Bills creation, QA, or enrichment must not retroactively mark an already-visible core transaction as failed.
+- Record time-to-usable separately from background completion time so Clover can monitor both the immediate experience and eventual enrichment health.
+
+## Persistent import visibility
+
+- Persist the import record, raw source reference, parser phase, parsed-row count, and confirmed-row count before reporting progress to the browser.
+- Keep routine progress polling read-only and limited to the import record. Load full settlement and account projections only at visibility, failure, or a stale recovery checkpoint.
+- A navigation or browser remount must restore active progress from durable server state. Long-running parsing remains visible and can resume from its last checkpoint without re-uploading the source file.
+- Do not run parsing inside a status `GET`. Recovery uses a separate resumable request with the same regional placement and execution window as normal import processing.
+- Report success only after persisted transactions and account projections settle. Then invalidate Home, Accounts, Transactions, Adviser, and other dependent views so the imported result appears without a manual refresh.
+- A server-owned recovery sweep must claim stale imports atomically and resume from persisted parsed rows before repeating OCR or AI extraction.
+- Scheduled recovery must also drain bounded enrichment batches so cleanup continues when every browser is closed. On Hobby infrastructure, keep a nightly fallback while immediate requests and resumable browser activity remain the fast paths.
+
+## Unfamiliar institution and currency identity
+
+- Run trained institution parsers first. Generic identity detection must never override a dedicated parser result.
+- Prefer explicit labels such as `Bank name`, `Financial institution`, `Account provider`, `Statement currency`, and `Account currency`.
+- An unfamiliar institution name may be accepted from the statement header only when the document also has statement/account signals. Do not infer the user's institution from beneficiary, recipient, intermediary, payee, merchant, or transfer text.
+- Support ISO currency codes and unambiguous regional symbols worldwide. Prefix-qualified symbols such as `A$`, `C$`, `S$`, `HK$`, `R$`, `CN¥`, and `JP¥` are stronger than bare symbols.
+- Bare `$` and `¥` are ambiguous. Leave currency unset and retain the ambiguity evidence for review unless an explicit code, currency name, or labeled statement field resolves it.
+- Statement-level currency labels outrank transaction-level foreign/original-currency amounts. Conflicting high-confidence labels must remain unresolved instead of selecting the first match.
+- Preserve institution/currency confidence and evidence in detected metadata so cold-layout QA and Admin diagnostics can explain the decision.
+- Treat explicit product labels such as `Account Type: Wallet`, `Wallet Account`, or `E-wallet Statement` as stronger account-type evidence than the generic `bank` fallback. A transaction description that merely mentions a wallet or wallet transfer is not enough to reclassify the account.
+
+## Investment semantics
+
+- Shares, units, and principal are optional fields and must only be emitted when the screenshot labels them.
+- Time deposits should carry deposit, maturity, interest-rate, tenure, and maturity-date metadata when visible, but must not be represented as share/unit holdings.
+- Ambiguous values belong in the review queue rather than being auto-confirmed.
+
+### Timestamped activity lists
+
+A transaction-history screen with multiple signed amounts represents separate events, not receipt line items. Keep date/time headings out of descriptions and retain repeated same-day purchases when timestamps differ. Generic layout rows remain pending review with raw source evidence.
+
+Unsigned activity amounts with explicit direction labels (for example Expense paid PHP 25.00) and multiple full dates are transaction history, not a single receipt. Support a date and merchant on the same line; retain review-required status for generic fallback rows.
+
+### Investment summary tables
+
+- A table headed Investment, Platform, Contrib/ Month, Units/ Shares, Market Value and Valuation Date is a holdings inventory, not a transaction ledger.
+- Preserve each named investment and its own platform. BPI Invest maps to BPI; GFunds funds stay separate. Do not assign every row to the last recognized provider.
+- Use Market Value as the snapshot balance, Units/ Shares as quantity when present, and Valuation Date as the snapshot date. Monthly contributions are neither expenses nor total cost basis.
+- Keep uncertain currency and classification review-required. A COOP entry without units must not acquire invented shares.
+- Require every non-total row to parse safely; incomplete or unfamiliar OCR column layouts fail closed with an actionable message.
+- Generic amount extraction must remove the date before looking for money, so a trailing year cannot become an amount.
+- Deterministic investment inventories remain separate account groups during confirmation and cannot be replaced by an AI-generated expense ledger.
+
+## Holdings-only portfolios
+
+- A schema-validated portfolio with holdings and no ledger rows is a complete source type. Do not reject its institution/currency metadata using statement transaction-count scoring.
+- Persist the original document, snapshot, holding evidence and confidence. Normalize fractional confidence to the 0–100 scale.
+- Finalize holdings into per-asset investment account links and derived snapshots in one transaction. Create no expense, income or transfer transactions. Keep holdings pending review.
+- Preserve all existing account fields and reviewed holdings. Reject ambiguous matches, unresolved currency/provider, duplicate assets, and deleted-account recreation with actionable errors. Enforce the account allowance across Profiles; any failure rolls back the whole portfolio.
+- Retry completed imports without recreating assets or duplicating snapshots. Refresh Investments when the active Profile’s import completes.
+
+## Indonesian documents
+
+Follow [Indonesian import rules](indonesian-import-parser-rules.md) for Bahasa Indonesia headers, Rupiah separators, statement columns, receipt reconciliation and investment valuations. Preserve source evidence and route unsupported layouts to backup/review.
+
+### Receipt benchmark safeguards
+
+- Raw missing currency remains unset/MIXED. The normalized receipt uses the user's default currency, marks its origin as `user_default`, and requires review; this is a user-setting suggestion, not evidence that PHP or any other currency was printed.
+- Missing currency alone must not trigger another OCR/model request. Among OCR candidates, a printed settlement total takes precedence over a total inferred only by summing surviving menu lines. Keep the selected source transcript intact; do not splice digits from different passes.
+- Regional text-parser benchmarks and original-image OCR benchmarks are separate gates. A passing post-OCR corpus does not establish image, cloud fallback, or end-to-end import accuracy.
+- A schema-valid partial receipt with no transaction rows and missing merchant, date, currency or positive total must retain its source and extracted ReceiptDocument for review. Use the terminal `receipt_review_required` phase, identify the missing fields, and do not confirm, promote template learning, or retry the same unreadable source automatically. Existing confirmed transactions remain protected. A partial receipt document alone must not count as a visible transaction in the global upload indicator.
+- Native OCR is accepted through a complete, bounded one-page envelope and is checked before cloud routing. Complete local receipt cores remain review-required; incomplete cores offer editable saved drafts, even at the cloud quota limit. See [native receipt intake](local-receipt-ocr.md#native-receipt-intake-october-2026).
+
+## October 2026 import incident safeguards
+
+- Standalone RECEIPT, INVOICE and EXPENSE RECORD headings with settlement evidence route camera uploads to receipt processing before generic statement extraction. Bank balance tables still take precedence over incidental receipt words.
+- Adjacent TOTAL PAID / amount and TOTAL / AMOUNT / amount cells may be rejoined for parsing without modifying digits or the retained raw receipt text. Item counts, dates, references and unrelated intervening labels do not qualify.
+- A zero-row local statement must be eligible for the consented, metered backup reader. An explicit routing quality decision cannot be vetoed by a second metadata-confidence heuristic. Non-financial scope, consent and quota checks remain enforced.
+- Empty statement results stop in a durable source-review state before confirmation. A parser's confirmation cannot recover rows by re-entering itself; explicit confirmation gets at most one recovery pass. Existing confirmed data, raw files, audit records and learning remain protected.
+
+## Column-order POS receipts and progress safety
+
+When OCR reads a separate label column before monetary cells, only rejoin the exact Sub Total / TOTAL / Tendered / CASH / Change layout with its VAT disclosures and contiguous tax-coded item amounts. Require exact cents agreement between item sum, subtotal, total, and cash minus change. Keep the original source independently; conflicting, repeated, missing or differently paid layouts remain unresolved. Currency absence still uses the established editable user-default/location suggestion, never fabricated printed evidence.
+
+Purchase dates must outrank printer accreditation, permit issuance and validity dates. A printer-context Date Issued or a Valid Until field does not establish a purchase date; an ordinary invoice issue date remains eligible.
+
+Cosmetic progress writes must test persisted completion, source/receipt review and pause/cancel phases atomically. A delayed update cannot reopen those states or change their timestamps. Incomplete receipts drain the pending reconciliation write before publishing their terminal review state.
+
+Printed Philippine BIR accreditation labels include Accr., Accred., and Accreditation. Recognize those bounded variants as location evidence for the existing editable PHP suggestion; a bare BIR acronym or conflicting countries is insufficient. Keep a distinct source for this suggestion instead of relabeling it as a printed currency.
+
+
+## Completed merchant-payment confirmations
+
+A single Transaction Details screen may be a merchant purchase rather than an account history. Require one Payment to merchant, one Amount heading with exactly one signed negative monetary value, one valid full purchase date/time and a labeled reference number. A following merchant code is not a funding-account suffix. Keep the source debit intact and normalize its magnitude to one pending-review expense; do not invent itemization, subtotal, issuer or payment method. Unknown currency uses the established editable receipt suggestion, with its provenance retained.
+
+Use existing institution aliases to keep bank/credit/wallet payments out of this purchase path. Transfers, incoming/refunded/failed/pending payments, account histories, additional charges, malformed dates/amounts and explicit funding-account fields remain outside the narrow rule. Generic parsing and review remain available for those sources; the rule must never relabel a transfer as spending or overwrite confirmed finance.

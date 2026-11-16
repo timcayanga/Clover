@@ -1,0 +1,729 @@
+import { matchesDurableImportedAccountIdentity } from "@/lib/workspace-cache";
+import { cardReplacementSchema } from "@/lib/card-replacement-input";
+import { CardReplacementError, replaceAccountCard } from "@/lib/card-replacement";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { publicCardHistory, readCardReplacements } from "../../../../../shared/card-replacement";
+import { after } from "next/server";
+import { enqueueLearningJob, processPendingLearningJobs } from "@/lib/learning-jobs";
+import { finverseBalances } from "@/lib/finverse-balances";
+import { prisma } from "@/lib/prisma";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
+import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
+import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
+import { ACCOUNT_TYPES } from "@/lib/account-types";
+import { normalizeInstitutionCurrency } from "@/lib/import-parser";
+import { deleteAccountsAndImportArtifacts } from "@/lib/account-deletion";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
+import { hasCompatibleTable } from "@/lib/data-engine";
+import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
+import { compareAccountCheckpointFreshness, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
+import { isValidAccountLogoUrl } from "@/lib/account-logo";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
+
+export const dynamic = "force-dynamic";
+
+const resolveAccountRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
+
+let accountColumnCache: Set<string> | null = null;
+
+const getCompatibleAccountColumns = async () => {
+  if (accountColumnCache) {
+    return accountColumnCache;
+  }
+
+  try {
+    const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'Account'
+    `;
+
+    accountColumnCache = new Set(columns.map((column) => column.column_name));
+  } catch {
+    accountColumnCache = new Set();
+  }
+
+  return accountColumnCache;
+};
+
+const getCompatibleAccountSelect = (columns: Set<string>) => ({
+  id: true,
+  workspaceId: true,
+  name: true,
+  institution: true,
+  ...(columns.has("logoUrl") ? { logoUrl: true } : {}),
+  ...(columns.has("importIdentityName") ? { importIdentityName: true } : {}),
+  ...(columns.has("importIdentityInstitution") ? { importIdentityInstitution: true } : {}),
+  ...(columns.has("importIdentityAccountNumber") ? { importIdentityAccountNumber: true } : {}),
+  ...(columns.has("nameCustomized") ? { nameCustomized: true } : {}),
+  ...(columns.has("institutionCustomized") ? { institutionCustomized: true } : {}),
+  ...(columns.has("logoCustomized") ? { logoCustomized: true } : {}),
+  ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
+  ...(columns.has("cardNumberHistory") ? { cardNumberHistory: true } : {}),
+  ...(columns.has("favorite") ? { favorite: true } : {}),
+  investmentSubtype: true,
+  investmentSymbol: true,
+  investmentQuantity: true,
+  investmentCostBasis: true,
+  investmentPrincipal: true,
+  investmentStartDate: true,
+  investmentMaturityDate: true,
+  investmentInterestRate: true,
+  investmentMaturityValue: true,
+  type: true,
+  currency: true,
+  source: true,
+  balance: true,
+  ...(columns.has("creditLimit") ? { creditLimit: true } : {}),
+  ...(columns.has("creditLimitSource") ? { creditLimitSource: true } : {}),
+  ...(columns.has("creditLimitUpdatedAt") ? { creditLimitUpdatedAt: true } : {}),
+  ...(columns.has("creditPeriodStart") ? { creditPeriodStart: true } : {}),
+  ...(columns.has("creditPeriodEnd") ? { creditPeriodEnd: true } : {}),
+  updatedAt: true,
+  createdAt: true,
+});
+
+const normalizeAccountCurrency = (account: {
+  institution?: string | null;
+  currency?: string | null;
+  name?: string | null;
+}) =>
+  normalizeInstitutionCurrency(account.institution ?? null, account.currency ?? null, account.name ?? null) ??
+  account.currency ??
+  "PHP";
+
+const normalizeUploadBankName = (value?: string | null) => {
+  const normalized = normalizeBankName(value ?? null);
+  if (normalized === "Unknown") {
+    return null;
+  }
+
+  const normalizedKey = normalized.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const looksBankLike =
+    BANK_PRIORITY.some((bankName) => bankName.toLowerCase().replace(/[^a-z0-9]+/g, "") === normalizedKey) ||
+    /\b(bank|banking|bpi|bdo|rcbc|psbank|cimb|gcash|maya|gotyme|landbank|chinabank|eastwest|unionbank|security|aub|pnb|wise)\b/i.test(
+      normalized
+    );
+
+  return looksBankLike ? normalized : null;
+};
+
+const resolveUploadedAccountInstitution = (
+  currentInstitution?: string | null,
+  checkpointBankHint?: string | null,
+  checkpointInstitution?: string | null
+) =>
+  normalizeUploadBankName(currentInstitution) ??
+  normalizeUploadBankName(checkpointBankHint) ??
+  normalizeUploadBankName(checkpointInstitution) ??
+  null;
+
+const accountPatchSchema = z.object({
+  workspaceId: z.string().min(1),
+  name: z.string().min(1).optional(),
+  institution: z.string().nullable().optional(),
+  logoUrl: z.string().nullable().optional().refine((value) => value === undefined || isValidAccountLogoUrl(value), {
+    message: "Choose a supported account logo.",
+  }),
+  accountNumber: z.string().nullable().optional(),
+  replacement: cardReplacementSchema.optional(),
+  favorite: z.boolean().optional(),
+  creditLimit: z.union([z.string(), z.number(), z.null()]).optional(),
+  creditPeriodStart: z.union([z.string(), z.number(), z.null()]).optional(),
+  creditPeriodEnd: z.union([z.string(), z.number(), z.null()]).optional(),
+  investmentSubtype: z.string().nullable().optional(),
+  investmentSymbol: z.string().nullable().optional(),
+  investmentQuantity: z.union([z.string(), z.number(), z.null()]).optional(),
+  investmentCostBasis: z.union([z.string(), z.number(), z.null()]).optional(),
+  investmentPrincipal: z.union([z.string(), z.number(), z.null()]).optional(),
+  investmentStartDate: z.union([z.string(), z.number(), z.null()]).optional(),
+  investmentMaturityDate: z.union([z.string(), z.number(), z.null()]).optional(),
+  investmentInterestRate: z.union([z.string(), z.number(), z.null()]).optional(),
+  investmentMaturityValue: z.union([z.string(), z.number(), z.null()]).optional(),
+  type: z.enum(ACCOUNT_TYPES).optional(),
+  currency: z.string().optional(),
+  source: z.string().optional(),
+  balance: z.union([z.string(), z.number(), z.null()]).optional(),
+});
+
+const serializeAccount = <T extends {
+  accountNumber?: string | null;
+  currency?: string | null;
+  institution?: string | null;
+  name?: string | null;
+  favorite?: boolean;
+  creditLimit?: { toString: () => string } | null;
+  creditLimitSource?: string | null;
+  creditLimitUpdatedAt?: Date | null;
+  creditPeriodStart?: Date | null;
+  creditPeriodEnd?: Date | null;
+  transactionCount?: number | null;
+  balance: { toString: () => string } | null;
+  investmentQuantity: { toString: () => string } | null;
+  investmentCostBasis: { toString: () => string } | null;
+  investmentPrincipal: { toString: () => string } | null;
+  investmentInterestRate: { toString: () => string } | null;
+  investmentMaturityValue: { toString: () => string } | null;
+  createdAt: Date;
+  updatedAt: Date;
+  investmentStartDate: Date | null;
+  investmentMaturityDate: Date | null;
+}>(account: T) => ({
+  ...account,
+  accountNumber: account.accountNumber ?? null,
+  cardNumberHistory: publicCardHistory((account as { cardNumberHistory?: unknown }).cardNumberHistory),
+  favorite: account.favorite ?? false,
+  transactionCount: Number(account.transactionCount ?? 0),
+  currency: normalizeAccountCurrency(account),
+  balance: account.balance?.toString() ?? null,
+  creditLimit: account.creditLimit?.toString() ?? null,
+  creditLimitSource: account.creditLimitSource ?? null,
+  creditLimitUpdatedAt: account.creditLimitUpdatedAt?.toISOString() ?? null,
+  creditPeriodStart: account.creditPeriodStart?.toISOString() ?? null,
+  creditPeriodEnd: account.creditPeriodEnd?.toISOString() ?? null,
+  investmentQuantity: account.investmentQuantity?.toString() ?? null,
+  investmentCostBasis: account.investmentCostBasis?.toString() ?? null,
+  investmentPrincipal: account.investmentPrincipal?.toString() ?? null,
+  investmentInterestRate: account.investmentInterestRate?.toString() ?? null,
+  investmentMaturityValue: account.investmentMaturityValue?.toString() ?? null,
+  investmentStartDate: account.investmentStartDate?.toISOString() ?? null,
+  investmentMaturityDate: account.investmentMaturityDate?.toISOString() ?? null,
+  createdAt: account.createdAt.toISOString(),
+  updatedAt: account.updatedAt.toISOString(),
+});
+
+const parseNullableDecimal = (value: unknown) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue.toString() : null;
+};
+
+const parseNullableDate = (value: unknown) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const normalizeInvestmentSubtype = (value: unknown): InvestmentSubtype | null => {
+  const subtype = typeof value === "string" ? value.trim() : "";
+  return INVESTMENT_SUBTYPES.includes(subtype as InvestmentSubtype) ? (subtype as InvestmentSubtype) : null;
+};
+
+const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+const extractLastFourDigits = (value?: string | null) => {
+  if (!value) return null;
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
+const normalizeAccountKey = (accountName?: string | null, institution?: string | null, accountNumber?: string | null) =>
+  normalizeWhitespace(`${institution ?? ""} ${extractLastFourDigits(accountNumber) ?? normalizeWhitespace(String(accountName ?? ""))}`)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildCurrencyScopedAccountKey = (account: {
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  type?: string | null;
+  currency?: string | null;
+}) => {
+  const baseKey = normalizeAccountKey(account.name, account.institution, account.accountNumber);
+  if (!baseKey) {
+    return "";
+  }
+
+  const currencyScope = isWiseWalletWithoutVisibleAccountNumber(account) ? normalizeImportedCurrencyCode(account.currency) : null;
+  return `${baseKey} ${currencyScope ?? ""}`.trim();
+};
+
+const accountNumbersMayMatch = (left?: string | null, right?: string | null, requireExactMatch = false) => {
+  const leftDigits = String(left ?? "").replace(/\D/g, "");
+  const rightDigits = String(right ?? "").replace(/\D/g, "");
+  if (!leftDigits || !rightDigits) {
+    return false;
+  }
+
+  if (leftDigits === rightDigits) {
+    return true;
+  }
+
+  if (requireExactMatch) {
+    return false;
+  }
+
+  const leftIsSuffixOnly = leftDigits.length === 4;
+  const rightIsSuffixOnly = rightDigits.length === 4;
+  if (leftIsSuffixOnly !== rightIsSuffixOnly) {
+    return false;
+  }
+
+  return leftIsSuffixOnly && rightIsSuffixOnly && leftDigits === rightDigits;
+};
+
+const findPublishedSummaryForAccount = (
+  account: {
+    id: string;
+    name?: string | null;
+    institution?: string | null;
+    accountNumber?: string | null;
+    type?: string | null;
+    currency?: string | null;
+  },
+  summaries: Array<Record<string, unknown>>
+) => {
+  const accountKey = buildCurrencyScopedAccountKey({
+    name: account.name ?? null,
+    institution: account.institution ?? null,
+    accountNumber: account.accountNumber ?? null,
+    type: account.type ?? null,
+    currency: account.currency ?? null,
+  });
+  const accountNumber = account.accountNumber ?? null;
+
+  return (
+    summaries.find((summary) => String(summary.accountId ?? "").trim() === account.id) ??
+    summaries.find((summary) => {
+      const summaryKey = buildCurrencyScopedAccountKey({
+        name: typeof summary.accountName === "string" ? summary.accountName : null,
+        institution: typeof summary.institution === "string" ? summary.institution : null,
+        accountNumber: typeof summary.accountNumber === "string" ? summary.accountNumber : null,
+        type: typeof summary.accountType === "string" ? summary.accountType : null,
+        currency: typeof summary.currency === "string" ? summary.currency : null,
+      });
+      const summaryNumber = typeof summary.accountNumber === "string" ? summary.accountNumber : null;
+      return (
+        (accountKey !== "" && summaryKey === accountKey) ||
+        accountNumbersMayMatch(accountNumber, summaryNumber)
+      );
+    }) ??
+    null
+  );
+};
+
+export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
+  try {
+    const userId = await resolveAccountRouteUserId();
+    const { accountId } = await params;
+    const compatibleColumns = await getCompatibleAccountColumns();
+
+    const account = await prisma.account.findUnique({
+      where: { id: accountId },
+      select: getCompatibleAccountSelect(compatibleColumns),
+    });
+    if (!account) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    await assertWorkspaceAccess(userId, account.workspaceId);
+
+    let latestCheckpoint:
+      | {
+          accountId: string | null;
+          statementEndDate: Date | null;
+          createdAt: Date;
+          endingBalance: { toString: () => string } | null;
+          status: string;
+          sourceMetadata: unknown;
+        }
+      | null = null;
+    if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+      const checkpoints = await prisma.accountStatementCheckpoint.findMany({
+        where: { workspaceId: account.workspaceId },
+        orderBy: [
+          { statementEndDate: "desc" },
+          { createdAt: "desc" },
+        ],
+      });
+      const accountNumber = typeof account.accountNumber === "string" ? account.accountNumber : null;
+      const accountKey = buildCurrencyScopedAccountKey({
+        name: account.name,
+        institution: account.institution,
+        accountNumber,
+        type: account.type,
+        currency: account.currency ?? null,
+      });
+      for (const checkpoint of checkpoints) {
+        const sourceMetadata =
+          checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+            ? (checkpoint.sourceMetadata as Record<string, unknown>)
+            : null;
+        const checkpointKey = buildCurrencyScopedAccountKey({
+          name: typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+          institution: typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+          accountNumber: typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null,
+          type: typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null,
+          currency:
+            typeof sourceMetadata?.currency === "string"
+              ? sourceMetadata.currency
+              : typeof sourceMetadata?.accountCurrency === "string"
+                ? sourceMetadata.accountCurrency
+                : null,
+        });
+        const checkpointNumber = typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
+        const matchesAccount =
+          checkpoint.accountId === accountId ||
+          (readCardReplacements(account.cardNumberHistory).length
+            ? !checkpoint.accountId && matchesDurableImportedAccountIdentity(account, {
+                name: typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+                institution: typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+                accountNumber: checkpointNumber,
+                type: typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null,
+                currency: typeof sourceMetadata?.currency === "string" ? sourceMetadata.currency : null,
+              })
+            : (accountKey !== "" && checkpointKey === accountKey) || accountNumbersMayMatch(accountNumber, checkpointNumber));
+
+        if (!matchesAccount) {
+          continue;
+        }
+
+        if (!latestCheckpoint || compareAccountCheckpointFreshness(checkpoint, latestCheckpoint) >= 0) {
+          latestCheckpoint = checkpoint;
+        }
+      }
+    }
+
+    const transactionCount = await prisma.transaction.count({
+      where: {
+        accountId,
+        workspaceId: account.workspaceId,
+        deletedAt: null,
+      },
+    });
+
+    const latestCheckpointPublishedSummary =
+      latestCheckpoint?.sourceMetadata &&
+      typeof latestCheckpoint.sourceMetadata === "object" &&
+      !Array.isArray(latestCheckpoint.sourceMetadata) &&
+      Array.isArray((latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries)
+        ? findPublishedSummaryForAccount(
+            account,
+            (latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries as Array<Record<string, unknown>>
+          )
+        : null;
+    const latestCheckpointAccountNumber =
+      latestCheckpointPublishedSummary && typeof latestCheckpointPublishedSummary.accountNumber === "string"
+        ? String(latestCheckpointPublishedSummary.accountNumber).trim()
+        :
+      latestCheckpoint?.sourceMetadata &&
+      typeof latestCheckpoint.sourceMetadata === "object" &&
+      !Array.isArray(latestCheckpoint.sourceMetadata) &&
+      typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber === "string"
+        ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber).trim()
+        : null;
+    const latestCheckpointAccountName =
+      latestCheckpointPublishedSummary && typeof latestCheckpointPublishedSummary.accountName === "string"
+        ? String(latestCheckpointPublishedSummary.accountName).trim()
+        :
+      latestCheckpoint?.sourceMetadata &&
+      typeof latestCheckpoint.sourceMetadata === "object" &&
+      !Array.isArray(latestCheckpoint.sourceMetadata) &&
+      typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountName === "string"
+        ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountName).trim()
+        : null;
+    const latestCheckpointInstitution =
+      latestCheckpointPublishedSummary && typeof latestCheckpointPublishedSummary.institution === "string"
+        ? String(latestCheckpointPublishedSummary.institution).trim()
+        :
+      latestCheckpoint?.sourceMetadata &&
+      typeof latestCheckpoint.sourceMetadata === "object" &&
+      !Array.isArray(latestCheckpoint.sourceMetadata) &&
+      typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).institution === "string"
+        ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).institution).trim()
+        : null;
+    const latestCheckpointBankHint =
+      latestCheckpoint?.sourceMetadata &&
+      typeof latestCheckpoint.sourceMetadata === "object" &&
+      !Array.isArray(latestCheckpoint.sourceMetadata) &&
+      typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).uploadBankHint === "string"
+        ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).uploadBankHint).trim()
+        : null;
+    const latestCheckpointBalance =
+      latestCheckpointPublishedSummary && typeof latestCheckpointPublishedSummary.balance === "string"
+        ? latestCheckpointPublishedSummary.balance
+        :
+      latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+        ? latestCheckpoint.endingBalance.toString()
+        : null;
+    const effectiveAccountNumber = account.accountNumber ?? latestCheckpointAccountNumber ?? null;
+    const uploadedInstitution = resolveUploadedAccountInstitution(
+      account.institution,
+      latestCheckpointBankHint,
+      latestCheckpointInstitution
+    );
+    const effectiveInstitution = uploadedInstitution ?? account.institution ?? latestCheckpointInstitution ?? null;
+    const effectiveSource =
+      account.source === "upload"
+        ? "upload"
+        : latestCheckpoint && uploadedInstitution && effectiveAccountNumber
+          ? "upload"
+          : account.source;
+    const effectiveAccountName =
+      effectiveSource === "upload"
+        ? account.nameCustomized
+          ? account.name
+          : formatUploadAccountDisplayName(
+              latestCheckpointAccountName ?? account.name,
+              effectiveInstitution,
+              effectiveAccountNumber,
+              account.type
+            )
+        : account.name;
+    const bankSnapshot = (await finverseBalances(account.workspaceId, [account.id])).get(account.id);
+    const effectiveBalance = bankSnapshot?.bankBalance ?? resolveEffectiveAccountBalance({
+      accountType: account.type,
+      liveBalance: account.balance,
+      checkpointStatus: latestCheckpoint?.status ?? null,
+      checkpointBalance: latestCheckpointBalance,
+    });
+
+    return NextResponse.json({
+      account: serializeAccount({
+        ...account,
+        source: effectiveSource,
+        name: effectiveAccountName,
+        institution: effectiveInstitution,
+        accountNumber: effectiveAccountNumber,
+        balance: effectiveBalance,
+        ...bankSnapshot,
+        transactionCount,
+      }),
+    });
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
+  try {
+    const userId = await resolveAccountRouteUserId();
+    const { accountId } = await params;
+    const payload = accountPatchSchema.parse(await request.json());
+    const compatibleColumns = await getCompatibleAccountColumns();
+    const normalizedCurrency = payload.currency
+      ? normalizeInstitutionCurrency(
+          payload.institution ?? payload.name ?? null,
+          payload.currency.trim().toUpperCase(),
+          payload.name ?? null
+        ) ?? payload.currency.trim().toUpperCase()
+      : undefined;
+    const inferredInstitutionFromName =
+      payload.name !== undefined && payload.institution === undefined
+        ? normalizeUploadBankName(payload.name)
+        : null;
+
+    await assertWorkspaceAccess(userId, payload.workspaceId);
+    const existingAccount = await prisma.account.findUnique({
+      where: { id: accountId },
+      select: getCompatibleAccountSelect(compatibleColumns),
+    });
+    if (!existingAccount || existingAccount.workspaceId !== payload.workspaceId) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+    if (payload.replacement) {
+      assertTrustedRequestOrigin(request);
+      if (Object.keys(payload).some(key => !["workspaceId", "replacement"].includes(key))) return NextResponse.json({ error: "Save card replacement separately from other account edits." }, { status: 400 });
+      if (!compatibleColumns.has("cardNumberHistory")) return NextResponse.json({ error: "Card replacement is temporarily unavailable. Please try again shortly." }, { status: 503 });
+      try {
+        const saved = await replaceAccountCard(accountId, payload.workspaceId, userId, payload.replacement);
+        invalidateWorkspaceSummaryCache(saved.workspaceId);
+        // Return the same balance/checkpoint/count projection as opening the
+        // account normally; replacing a number must not reset its visible total.
+        const response = await GET(request, { params: Promise.resolve({ accountId: saved.id }) });
+        if (!response.ok) throw new Error("Replacement projection unavailable");
+        return response;
+      } catch (error) {
+        if (error instanceof CardReplacementError) return NextResponse.json({ error: error.message }, { status: error.status });
+        console.error("Card replacement could not complete", error instanceof Error ? error.name : "Unknown error");
+        return NextResponse.json({ error: "Unable to save the replacement. Please retry with the same details." }, { status: 503 });
+      }
+    }
+    if (payload.accountNumber !== undefined && readCardReplacements(existingAccount.cardNumberHistory).length && payload.accountNumber !== existingAccount.accountNumber) return NextResponse.json({ error: "Use Replace Card to change this number and retain its history." }, { status: 409 });
+    const nextInstitution =
+      payload.institution === undefined
+        ? inferredInstitutionFromName ?? existingAccount.institution
+        : payload.institution?.trim() || null;
+    const userChangedName = payload.name !== undefined && payload.name.trim() !== existingAccount.name.trim();
+    const userChangedInstitution =
+      (payload.institution !== undefined || inferredInstitutionFromName !== null) &&
+      (nextInstitution ?? null) !== (existingAccount.institution ?? null);
+
+    const accountUpdateData = {
+        name: payload.name?.trim() ?? undefined,
+        institution:
+          payload.institution === undefined
+            ? inferredInstitutionFromName ?? undefined
+            : payload.institution?.trim() || null,
+        ...(compatibleColumns.has("logoUrl")
+          ? { logoUrl: payload.logoUrl === undefined ? undefined : payload.logoUrl }
+          : {}),
+        ...(compatibleColumns.has("nameCustomized") && userChangedName ? { nameCustomized: true } : {}),
+        ...(compatibleColumns.has("institutionCustomized") && userChangedInstitution ? { institutionCustomized: true } : {}),
+        ...(compatibleColumns.has("logoCustomized") && payload.logoUrl !== undefined
+          ? { logoCustomized: payload.logoUrl !== null }
+          : {}),
+        ...(compatibleColumns.has("importIdentityName") && userChangedInstitution && payload.name?.trim()
+          ? { importIdentityName: payload.name.trim() }
+          : {}),
+        ...(compatibleColumns.has("importIdentityInstitution") && userChangedInstitution
+          ? { importIdentityInstitution: nextInstitution }
+          : {}),
+        ...(compatibleColumns.has("accountNumber")
+          ? { accountNumber: payload.accountNumber === undefined ? undefined : payload.accountNumber?.trim() || null }
+          : {}),
+        favorite: payload.favorite === undefined ? undefined : payload.favorite,
+        ...(compatibleColumns.has("creditLimit")
+          ? {
+              creditLimit:
+                payload.creditLimit === undefined
+                  ? undefined
+                  : payload.creditLimit === null || payload.creditLimit === ""
+                    ? null
+                    : payload.creditLimit.toString(),
+            }
+          : {}),
+        ...(compatibleColumns.has("creditLimitSource") && payload.creditLimit !== undefined
+          ? { creditLimitSource: payload.creditLimit === null || payload.creditLimit === "" ? null : "manual" }
+          : {}),
+        ...(compatibleColumns.has("creditLimitUpdatedAt") && payload.creditLimit !== undefined
+          ? { creditLimitUpdatedAt: new Date() }
+          : {}),
+        ...(compatibleColumns.has("creditPeriodStart")
+          ? { creditPeriodStart: payload.creditPeriodStart === undefined ? undefined : parseNullableDate(payload.creditPeriodStart) }
+          : {}),
+        ...(compatibleColumns.has("creditPeriodEnd")
+          ? { creditPeriodEnd: payload.creditPeriodEnd === undefined ? undefined : parseNullableDate(payload.creditPeriodEnd) }
+          : {}),
+        investmentSubtype:
+          payload.investmentSubtype === undefined ? undefined : normalizeInvestmentSubtype(payload.investmentSubtype),
+        investmentSymbol: payload.investmentSymbol === undefined ? undefined : payload.investmentSymbol?.trim() || null,
+        investmentQuantity:
+          payload.investmentQuantity === undefined ? undefined : parseNullableDecimal(payload.investmentQuantity),
+        investmentCostBasis:
+          payload.investmentCostBasis === undefined
+            ? undefined
+            : payload.investmentCostBasis === null || payload.investmentCostBasis === ""
+              ? null
+              : payload.investmentCostBasis.toString(),
+        investmentPrincipal:
+          payload.investmentPrincipal === undefined ? undefined : parseNullableDecimal(payload.investmentPrincipal),
+        investmentStartDate:
+          payload.investmentStartDate === undefined ? undefined : parseNullableDate(payload.investmentStartDate),
+        investmentMaturityDate:
+          payload.investmentMaturityDate === undefined ? undefined : parseNullableDate(payload.investmentMaturityDate),
+        investmentInterestRate:
+          payload.investmentInterestRate === undefined ? undefined : parseNullableDecimal(payload.investmentInterestRate),
+        investmentMaturityValue:
+          payload.investmentMaturityValue === undefined ? undefined : parseNullableDecimal(payload.investmentMaturityValue),
+        type: payload.type,
+        currency: normalizedCurrency,
+        source: payload.source,
+        balance: payload.balance === undefined ? undefined : payload.balance === null || payload.balance === "" ? null : payload.balance.toString(),
+      };
+
+    const saveAccount = (data: Parameters<typeof prisma.account.update>[0]["data"]) => prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`card-replacement:${payload.workspaceId}`}, 0))`;
+      if (compatibleColumns.has("cardNumberHistory") && payload.accountNumber !== undefined) {
+        const latest = await tx.account.findUniqueOrThrow({ where: { id: accountId }, select: { accountNumber: true, cardNumberHistory: true } });
+        if (readCardReplacements(latest.cardNumberHistory).length && payload.accountNumber !== latest.accountNumber) throw new CardReplacementError("Use Replace Card to change this number and retain its history.");
+      }
+      const saved = await tx.account.update({
+        where: { id: accountId },
+        data, select: getCompatibleAccountSelect(compatibleColumns),
+      });
+      await enqueueLearningJob({ workspaceId: saved.workspaceId, source: "manual_account_update", sourceId: saved.id, actions: [{ kind: "account", input: {
+        workspaceId: saved.workspaceId, accountId: saved.id, accountName: saved.name, institution: saved.institution, accountType: saved.type, source: "manual_account_update", confidence: 100,
+      } }] }, tx);
+      return saved;
+    });
+    let account;
+    try {
+      account = await saveAccount(accountUpdateData);
+    } catch (error) {
+      if (!isMissingAccountNumberColumnError(error)) {
+        throw error;
+      }
+
+      account = await saveAccount(omitAccountNumberField(accountUpdateData));
+    }
+
+    void capturePostHogServerEvent("account_updated", userId, {
+      workspace_id: account.workspaceId,
+      account_id: account.id,
+      account_name: account.name,
+      account_institution: account.institution,
+      account_type: account.type,
+      account_currency: account.currency,
+      account_source: account.source,
+      is_cash: account.type === "cash",
+    });
+
+    after(async () => { await processPendingLearningJobs({ workspaceId: account.workspaceId, limit: 1 }); });
+
+    invalidateWorkspaceSummaryCache(account.workspaceId);
+    const bankSnapshot=(await finverseBalances(account.workspaceId,[account.id])).get(account.id);
+    return NextResponse.json({ account: serializeAccount({...account,...bankSnapshot,balance:bankSnapshot?.bankBalance ?? account.balance}) });
+  } catch (error) {
+    if (error instanceof CardReplacementError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof z.ZodError) return NextResponse.json({ error: "Please check the entered account details." }, { status: 400 });
+    if (error instanceof Error && error.message === "Untrusted request origin.") return NextResponse.json({ error: "Untrusted request origin." }, { status: 403 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
+  try {
+    const userId = await resolveAccountRouteUserId();
+    const { accountId } = await params;
+    const compatibleColumns = await getCompatibleAccountColumns();
+
+    const existingAccount = await prisma.account.findUnique({
+      where: { id: accountId },
+      select: getCompatibleAccountSelect(compatibleColumns),
+    });
+
+    if (!existingAccount) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    await assertWorkspaceAccess(userId, existingAccount.workspaceId);
+
+    const deletionResult = await prisma.$transaction(async (tx) => {
+      return deleteAccountsAndImportArtifacts(tx, {
+        workspaceId: existingAccount.workspaceId,
+        accountIds: [accountId],
+      });
+    });
+
+    invalidateWorkspaceSummaryCache(existingAccount.workspaceId);
+    return NextResponse.json({ account: serializeAccount(existingAccount), deletedTransactions: deletionResult.transactionsDeleted });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Unable to delete account.",
+      },
+      { status: 400 }
+    );
+  }
+}

@@ -1,0 +1,88 @@
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { CloverShell } from "@/components/clover-shell";
+import { RecurringPageClient } from "@/components/recurring-page-client";
+import { getPageSessionContext } from "@/lib/page-auth";
+import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { getCachedRecurringPageData, getRecurringWorkspaceId } from "@/lib/recurring-page";
+import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
+import { isTransientDataError } from "@/lib/transient-data";
+import { selectedWorkspaceKey } from "@/lib/workspace-selection";
+import { TransientDataRecovery } from "@/components/transient-data-recovery";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
+
+export const dynamic = "force-dynamic";
+
+export const metadata = {
+  title: "Recurring",
+};
+
+function RecurringUnavailableState() {
+  return (
+    <CloverShell
+      active="recurring"
+      title="Recurring"
+      mobileLeadingAction={<ContextualAskClover context="recurring" />}
+      actions={<span className="recurring-desktop-adviser"><ContextualAskClover context="recurring" /></span>}
+    >
+      <section className="recurring-page">
+        <TransientDataRecovery eyebrow="Recurring" pageLabel="Recurring" transactionHref="/transactions?manual=1" transactionLabel="Add a transaction" />
+      </section>
+    </CloverShell>
+  );
+}
+
+export default async function RecurringPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ add?: string; tab?: string; commitment?: string }>;
+}) {
+  try {
+    const session = await getPageSessionContext();
+    const user = await getOrCreateCurrentUser(session.userId);
+    if (!session.isGuest && !hasCompletedOnboarding(user)) {
+      redirect("/onboarding");
+    }
+
+    const params = await searchParams;
+    const showAddModal = params.add === "1" || params.add === "true";
+    const initialTab = ["overview", "planned", "debt", "owed", "installments"].includes(params.tab ?? "")
+      ? (params.tab as "overview" | "planned" | "debt" | "owed" | "installments")
+      : "overview";
+    const cookieStore = await cookies();
+    const selectedWorkspaceId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+    const workspaceId = await getRecurringWorkspaceId(user.clerkUserId, user.email, user.verified, selectedWorkspaceId);
+    const recurringData = await getCachedRecurringPageData(workspaceId);
+    const { accounts: workspaceAccounts, categoryOptions, transactions: recentTransactions, commitments, recurringPatterns, plannedPaymentSuggestions } = recurringData;
+
+    return (
+      <RecurringPageClient
+        workspaceId={workspaceId}
+        commitments={commitments}
+        recurringPatterns={recurringPatterns}
+        plannedPaymentSuggestions={plannedPaymentSuggestions}
+        accounts={workspaceAccounts}
+        categoryOptions={categoryOptions}
+        transactions={recentTransactions}
+        planTier={user.planTier}
+        initialTab={initialTab}
+        initialAddOpen={showAddModal}
+        initialCommitmentId={params.commitment}
+      />
+    );
+  } catch (error) {
+    if (isNextNavigationSignal(error)) {
+      throw error;
+    }
+
+    await recordServerPageError({
+      error,
+      source: "recurring-page",
+      route: "/recurring",
+      metadata: {
+        transient: isTransientDataError(error),
+      },
+    });
+    return <RecurringUnavailableState />;
+  }
+}

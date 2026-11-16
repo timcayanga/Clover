@@ -1,0 +1,27 @@
+klikbcabisnis@klikbca.com
+KlikBCA Bisnis
+Tanggal : 15/01/2026
+Jam : 13:09:37
+Jenis Transaksi : TRANSFER DANA
+Dari Rekening : 123-0001234
+Ke Rekening : 234-0002345
+Nominal : Rp 150.00
+Jenis Transfer : Sekarang
+No Referensi : 000000000001234567
+Status : Berhasil
+Catatan:
+Biaya Termasuk PPN (Bila ada)
+PT. BANK CENTRAL ASIA TBK.
+Thank you for using KlikBCA Bisnis.
+Date : 15/01/2026
+Time : 13:09:37
+Transaction Type : FUND TRANSFER
+From Account : 123-0001234
+To Account : 234-0002345
+Amount : Rp 150.00
+Transfer Type : Immediate
+Reference No : 000000000001234567
+Status : Success
+[Kutipan teks disembunyikan]
+https://mail.google.com/mail/u/0/?view=pt&example=synthetic 1/1
+BCA_NATIVE_PAGES 1

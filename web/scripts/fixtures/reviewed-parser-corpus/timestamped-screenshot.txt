@@ -1,0 +1,11 @@
+WALLET - TRANSACTION HISTORY
+15 Sep 2026 10:01:00
+Grocery purchase
+-PHP 25.00
+15 Sep 2026 10:02:00
+Grocery purchase
+-PHP 25.00
+15 Sep 2026 10:03:00
+Grocery purchase
+-PHP 25.00
+3 transactions

@@ -1,0 +1,414 @@
+import { getUploadRejectionDetails, NonFinancialUploadError } from "@/lib/financial-upload-scope";
+import { hasActiveImportAttempt } from "@/lib/import-attempts";
+import { coerceVisualImportAttempt } from "@/lib/import-visual-recovery";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
+import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
+import { SOURCE_REVIEW_PHASE, SOURCE_REVIEW_CODE } from "@/lib/import-source-review";
+import { recoverFailedImportResume } from "@/lib/import-resume-recovery";
+import { isUnauthorizedDataError } from "@/lib/transient-data";
+import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
+import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
+import { readCheckpointImportMode, readCheckpointWorkflowStage } from "@/lib/import-workflow";
+import { enqueueImportProcessing } from "@/lib/import-queue";
+import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
+import { getImportEnrichmentJobByImportFileId } from "@/lib/import-enrichment-jobs";
+import { prisma } from "@/lib/prisma";
+import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
+import { importProcessingLooksActive } from "@/lib/import-resume-policy";
+import { NextResponse } from "next/server";
+import { getImportUserControl } from "@/lib/import-user-control";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+export const preferredRegion = "sin1";
+
+export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
+  let authorizedImportId: string | null = null;
+  try {
+    const { importId } = await params;
+    const localDev = await isLocalDevHost();
+    const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
+    const importFile = await fetchImportFileCompat(importId);
+    if (!importFile) {
+      return NextResponse.json({ error: "Import not found" }, { status: 404 });
+    }
+
+    if (!localDev) {
+      await assertWorkspaceAccess(userId, importFile.workspaceId as string);
+    }
+    authorizedImportId = importId;
+
+    const control = await getImportUserControl(importId, String(importFile.workspaceId));
+    if (control !== "running") return NextResponse.json({ error: control === "paused" ? "Resume this paused import using its play icon." : "This import was cancelled.", control }, { status: 409 });
+
+    if (importFile.processingPhase === "non_financial") {
+      return NextResponse.json({ error: importFile.processingMessage, code: "I-108", retryable: false, importFileId: importId }, { status: 422 });
+    }
+
+    const alreadyProcessing = () => NextResponse.json({
+      ok: true, queued: true, skipped: true, alreadyProcessing: true,
+      telemetryPhase: "reading_account_details", telemetryLabel: "Reading file details",
+      canResume: false, resumeReason: "processing_active", importFileId: importId,
+      accountId: importFile.accountId ?? null,
+    });
+    if (await hasActiveImportAttempt(String(importFile.workspaceId), importId)) return alreadyProcessing();
+
+    if (importFile.processingPhase === "password_required" || importFile.processingPhase === "account_match_needs_confirmation") {
+      const needsPassword = importFile.processingPhase === "password_required";
+      return NextResponse.json({ error: needsPassword ? "Enter the statement password to continue." : "Confirm the account for this import before continuing.",
+        code: needsPassword ? "IMPORT_PASSWORD_REQUIRED" : "IMPORT_ACCOUNT_CONFIRMATION_REQUIRED",
+        retryable: false, importFileId: importId }, { status: 409 });
+    }
+
+    const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
+      ? await prisma.accountStatementCheckpoint.findUnique({
+          where: { importFileId: importId },
+        })
+      : null;
+    const parsedRowsCount = Math.max(Number(importFile.parsedRowsCount ?? 0), Number(statementCheckpoint?.rowCount ?? 0));
+    const savedTransactionsLookup = await countTransactionsByImportFileCompat(importId).catch(() => null);
+    const savedTransactionsCount = savedTransactionsLookup ?? 0;
+    const confirmedTransactionsCount = Math.max(Number(importFile.confirmedTransactionsCount ?? 0), savedTransactionsCount);
+    if (importFile.processingPhase === SOURCE_REVIEW_PHASE && savedTransactionsLookup === 0) {
+      return NextResponse.json({ error: importFile.processingMessage, code: SOURCE_REVIEW_CODE,
+        stage: "source_review", retryable: false, requiresSourceReview: true, importFileId: importId }, { status: 422 });
+    }
+    if (savedTransactionsCount > 0 && !importFile.confirmedAt &&
+        readCheckpointImportMode(statementCheckpoint?.sourceMetadata) === "receipt") {
+      // Older saves could stop after inserting the ledger row. Complete its
+      // source link and status atomically before reporting it as recovered.
+      const { confirmImportFile } = await import("@/workers/import-processor");
+      await confirmImportFile(importId, importFile.accountId ?? null, { recoverMissingRows: false });
+      return NextResponse.json({
+        ok: true, queued: false, skipped: true, resumedFromCheckpoint: true,
+        resumeStrategy: "existing_receipt_link", importFileId: importId, accountId: importFile.accountId ?? null,
+        telemetryPhase: "complete", canResume: false, resumeReason: "already_complete",
+      });
+    }
+    if (importFile.confirmedAt && savedTransactionsLookup === 0) {
+      return NextResponse.json({
+        ok: true, queued: false, skipped: true, importFileId: importId, accountId: importFile.accountId ?? null,
+        telemetryPhase: "complete", canResume: false, resumeReason: "already_complete",
+      });
+    }
+    const hasVisibleImportData = confirmedTransactionsCount > 0;
+    if (importFile.status === "failed" && hasVisibleImportData) {
+      await updateImportFileCompat(importId, {
+        status: "done",
+        processingPhase: "complete",
+        processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+        confirmedTransactionsCount,
+      });
+      importFile.status = "done";
+      importFile.processingPhase = "complete";
+      importFile.processingMessage = "Transactions are visible. Clover is cleaning up names and categories in the background.";
+      importFile.confirmedTransactionsCount = confirmedTransactionsCount;
+    }
+    const checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
+    const checkpointWorkflowStage = readCheckpointWorkflowStage(statementCheckpoint?.sourceMetadata);
+    const confirmationStatus =
+      confirmedTransactionsCount > 0
+        ? "confirmed"
+        : importFile.status === "failed"
+          ? "failed"
+          : importFile.status === "done"
+            ? parsedRowsCount > 0
+              ? "staged"
+              : "done"
+            : parsedRowsCount > 0
+              ? "staged"
+              : "processing";
+    const telemetry = buildImportTelemetrySnapshot({
+      status: importFile.status,
+      processingPhase: importFile.processingPhase,
+      processingMessage: importFile.processingMessage,
+      parsedRowsCount,
+      confirmedTransactionsCount,
+      confirmationStatus,
+      checkpointStatus: statementCheckpoint?.status ?? null,
+      workflowStage: checkpointWorkflowStage,
+    });
+
+    const enrichmentJob = await getImportEnrichmentJobByImportFileId(importId).catch(() => null);
+    const alreadyComplete =
+      telemetry.phase === "complete" &&
+      confirmedTransactionsCount > 0 &&
+      (!enrichmentJob || enrichmentJob.status === "done");
+    if (alreadyComplete) {
+      return NextResponse.json({
+        ok: true,
+        queued: false,
+        skipped: true,
+        telemetryPhase: telemetry.phase,
+        telemetryLabel: telemetry.phaseLabel,
+        telemetryMessage: telemetry.message,
+        canResume: telemetry.canResume,
+        resumeReason: telemetry.resumeReason,
+        importFileId: importId,
+        accountId: importFile.accountId ?? null,
+      });
+    }
+
+    if (
+      importProcessingLooksActive({
+        status: importFile.status,
+        processingPhase: importFile.processingPhase,
+        updatedAt: importFile.updatedAt,
+      })
+    ) {
+      return NextResponse.json({
+        ok: true,
+        queued: true,
+        skipped: true,
+        alreadyProcessing: true,
+        telemetryPhase: telemetry.phase,
+        telemetryLabel: telemetry.phaseLabel,
+        telemetryMessage: telemetry.message,
+        canResume: false,
+        resumeReason: "processing_active",
+        importFileId: importId,
+        accountId: importFile.accountId ?? null,
+      });
+    }
+
+    if (telemetry.phase === "complete" && confirmedTransactionsCount > 0 && enrichmentJob && enrichmentJob.status !== "done") {
+      return NextResponse.json({
+        ok: true,
+        queued: false,
+        skipped: true,
+        resumedFromCheckpoint: true,
+        resumeStrategy: "visible_import_background_enrichment",
+        importFileId: importId,
+        accountId: importFile.accountId ?? null,
+        telemetryPhase: telemetry.phase,
+        telemetryLabel: telemetry.phaseLabel,
+        telemetryMessage: "Accounts and transactions are already visible. Clover will keep cleaning names and categories in the background.",
+        canResume: false,
+        resumeReason: "background_enrichment",
+      });
+    }
+
+    if (!telemetry.canResume) {
+      return NextResponse.json(
+        {
+          error: "This import cannot be resumed right now.",
+          telemetryPhase: telemetry.phase,
+          telemetryLabel: telemetry.phaseLabel,
+          telemetryMessage: telemetry.message,
+          canResume: telemetry.canResume,
+          resumeReason: telemetry.resumeReason,
+        },
+        { status: 400 }
+      );
+    }
+
+    const hasCheckpointedRows = parsedRowsCount > 0 || checkpointRowCount > 0 || statementCheckpoint?.status === "reconciled";
+    const processInline = async (resumeStrategy: string) => {
+      const { processImportFileText } = await import("@/workers/import-processor");
+      const result = await processImportFileText(importId, {
+        actorUserId: userId,
+        autoRerunAttempt: coerceVisualImportAttempt(importFile.processingAttempt),
+        qaSource: "import_processing",
+        pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
+      });
+      if (result.status === "staged" && !result.imported &&
+          await hasActiveImportAttempt(String(importFile.workspaceId), importId)) return alreadyProcessing();
+      if (result.requiresInput) {
+        const saved = await fetchImportFileCompat(importId);
+        const review = buildImportTelemetrySnapshot({
+          status: saved?.status, processingPhase: saved?.processingPhase,
+          processingMessage: saved?.processingMessage, confirmedTransactionsCount: 0,
+        });
+        return NextResponse.json({ ok: true, queued: false, importFileId: importId,
+          importedRows: 0, confirmedTransactionsCount: 0, visibleImportComplete: false,
+          telemetryPhase: review.phase, telemetryLabel: review.phaseLabel,
+          telemetryMessage: review.message, canResume: false, resumeReason: review.resumeReason });
+      }
+      const visibleRows =
+        result.status === "done"
+          ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
+          : Number(result.confirmedTransactionsCount ?? 0);
+      const nextTelemetry = buildImportTelemetrySnapshot({
+        status: result.status ?? "processing",
+        workflowStage: result.status === "done" ? "complete" : "reading_account_details",
+        processingPhase: result.status === "done" ? "complete" : "reading_account_details",
+        processingMessage:
+          result.status === "done"
+            ? `Resumed ${importFile.fileName}.`
+            : `Clover is resuming ${importFile.fileName}.`,
+        parsedRowsCount: Math.max(parsedRowsCount, Number(result.imported ?? 0)),
+        confirmedTransactionsCount: Math.max(confirmedTransactionsCount, visibleRows),
+        confirmationStatus: result.status === "done" && visibleRows > 0 ? "confirmed" : "processing",
+        checkpointStatus: statementCheckpoint?.status ?? null,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        queued: false,
+        skipped: false,
+        resumedFromCheckpoint: hasCheckpointedRows,
+        resumeStrategy,
+        importFileId: importId,
+        accountId: result.accountId ?? importFile.accountId ?? null,
+        importedRows: result.imported ?? 0,
+        confirmedTransactionsCount: result.confirmedTransactionsCount ?? visibleRows,
+        telemetryPhase: nextTelemetry.phase,
+        telemetryLabel: nextTelemetry.phaseLabel,
+        telemetryMessage: nextTelemetry.message,
+        canResume: nextTelemetry.canResume,
+        resumeReason: nextTelemetry.resumeReason,
+      });
+    };
+
+    if (hasCheckpointedRows) {
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "reconciling",
+        processingMessage: `Resuming ${importFile.fileName} from checkpoint...`,
+        processingCurrentScore: null,
+      });
+
+      const { confirmImportFile } = await import("@/workers/import-processor");
+      const confirmationResult = (await confirmImportFile(importId, importFile.accountId ?? null)) as {
+        imported: number;
+        status?: string;
+        accountId?: string | null;
+        confirmedTransactionsCount?: number | null;
+      };
+
+      if (confirmationResult.status === "staged" && confirmationResult.imported === 0) {
+        if (!localDev) {
+          return await processInline("checkpoint_processed_inline");
+        }
+
+        await updateImportFileCompat(importId, {
+          status: "processing",
+          processingPhase: "queued_retry",
+          processingMessage: `Clover is re-reading ${importFile.fileName} from the saved checkpoint...`,
+          processingCurrentScore: null,
+        });
+
+        await ensureImportProcessingWorker();
+        await enqueueImportProcessing({
+          importFileId: importId,
+          actorUserId: userId,
+          pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
+        });
+      }
+
+      const nextTelemetry = buildImportTelemetrySnapshot({
+        status: confirmationResult.status ?? "processing",
+        workflowStage: confirmationResult.status === "done" ? "complete" : "reconciling",
+        processingPhase: confirmationResult.status === "done" ? "complete" : "reconciling",
+        processingMessage:
+          confirmationResult.status === "done"
+            ? `Resumed ${importFile.fileName} from the saved checkpoint.`
+            : `Clover is reconciling the saved checkpoint for ${importFile.fileName}.`,
+        parsedRowsCount,
+        confirmedTransactionsCount: Math.max(confirmedTransactionsCount, confirmationResult.confirmedTransactionsCount ?? 0),
+        confirmationStatus: confirmationResult.status === "done" ? "confirmed" : "staged",
+        checkpointStatus: statementCheckpoint?.status ?? null,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        queued: false,
+        skipped: false,
+        resumedFromCheckpoint: true,
+        resumeStrategy: confirmationResult.status === "done" ? "checkpoint_confirmed" : "checkpoint_requeued",
+        importFileId: importId,
+        accountId: confirmationResult.accountId ?? importFile.accountId ?? null,
+        telemetryPhase: nextTelemetry.phase,
+        telemetryLabel: nextTelemetry.phaseLabel,
+        telemetryMessage: nextTelemetry.message,
+        canResume: nextTelemetry.canResume,
+        resumeReason: nextTelemetry.resumeReason,
+      });
+    }
+
+    if (!localDev) {
+      return await processInline("processed_inline");
+    }
+
+    await updateImportFileCompat(importId, {
+      status: "processing",
+      processingPhase: "queued_retry",
+      processingMessage: `Resuming ${importFile.fileName}...`,
+      processingCurrentScore: null,
+    });
+
+    if (localDev) {
+      await ensureImportProcessingWorker();
+    }
+    await enqueueImportProcessing({
+      importFileId: importId,
+      actorUserId: userId,
+      pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
+    });
+
+    const nextTelemetry = buildImportTelemetrySnapshot({
+      status: "processing",
+      processingPhase: "queued_retry",
+      processingMessage: `Resuming ${importFile.fileName}...`,
+      parsedRowsCount,
+      confirmedTransactionsCount,
+      confirmationStatus: "processing",
+      checkpointStatus: statementCheckpoint?.status ?? null,
+      workflowStage: checkpointWorkflowStage,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      queued: true,
+      skipped: false,
+      importFileId: importId,
+      accountId: importFile.accountId ?? null,
+      telemetryPhase: nextTelemetry.phase,
+      telemetryLabel: nextTelemetry.phaseLabel,
+      telemetryMessage: nextTelemetry.message,
+      canResume: nextTelemetry.canResume,
+      resumeReason: nextTelemetry.resumeReason,
+    });
+  } catch (error) {
+    // A failed sign-in/ownership check must never mutate the requested import.
+    if (!authorizedImportId) {
+      if (isUnauthorizedDataError(error)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      if (error instanceof Error && error.message === "WORKSPACE_NOT_FOUND") {
+        return NextResponse.json({ error: "Import not found" }, { status: 404 });
+      }
+      return NextResponse.json({ error: "Unable to resume import yet", retryable: true }, { status: 503 });
+    }
+    if (error instanceof NonFinancialUploadError) {
+      return NextResponse.json({ error: error.message, code: "I-108", ...getUploadRejectionDetails(error),
+        retryable: false, importFileId: authorizedImportId }, { status: 422 });
+    }
+    if (authorizedImportId) {
+      const sourceReview = await persistSourceReviewFailure(authorizedImportId, error);
+      if (sourceReview?.kind === "user_control") {
+        return NextResponse.json({ error: sourceReview.control === "paused" ? "Import paused" : "Import cancelled",
+          retryable: false, control: sourceReview.control, importFileId: authorizedImportId }, { status: 409 });
+      }
+      if (sourceReview?.kind === "unavailable") {
+        return NextResponse.json({ error: "Clover could not verify this import's existing rows. Existing records were not changed.",
+          retryable: true, importFileId: authorizedImportId }, { status: 503 });
+      }
+      if (sourceReview?.kind === "missing_import") return NextResponse.json({ error: "Import not found" }, { status: 404 });
+      if (sourceReview?.kind === "review") {
+        return NextResponse.json({ error: sourceReview.message, diagnosticReason: sourceReview.diagnosticReason, code: SOURCE_REVIEW_CODE, stage: "source_review",
+          retryable: false, requiresSourceReview: true, importFileId: authorizedImportId }, { status: 422 });
+      }
+    }
+    const recovery = await recoverFailedImportResume(authorizedImportId).catch(() => null);
+    if (recovery?.kind === "user_control") {
+      return NextResponse.json({ error: recovery.control === "paused" ? "Import paused" : "Import cancelled",
+        control: recovery.control, retryable: false, importFileId: authorizedImportId }, { status: 409 });
+    }
+    if (recovery?.kind === "missing_import") return NextResponse.json({ error: "Import not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: recovery?.kind === "preserved" ? "This import's current state was preserved. Refresh to see its status." : "Unable to resume import yet",
+        retryable: recovery?.kind !== "preserved", importFileId: authorizedImportId },
+      { status: 503 }
+    );
+  }
+}

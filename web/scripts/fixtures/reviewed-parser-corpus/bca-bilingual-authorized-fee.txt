@@ -1,0 +1,30 @@
+Notification
+klikbcabisnis@klikbca.com
+Date: Friday, February 14, 2025 at 03:15 PM GMT+8
+KlikBCA Bisnis
+Tanggal : 14/02/2025
+Jam : 13:54:38
+Jenis Transaksi : TRANSFER DANA
+Dari Rekening : 001-1234567
+Ke Rekening : 0019876543
+Nominal : Rp 100.00
+Biaya : Rp 2.90
+Jenis Transfer : Transfer Diproses Saat Diotorisasi
+No Referensi : 20250214999999
+Status : Berhasil
+PT. BANK CENTRAL ASIA TBK.
+Thank you for using KlikBCA Bisnis.
+Date : 14/02/2025
+Time : 13:54:38
+Transaction Type : FUND TRANSFER
+From Account : 001-1234567
+To Account : 0019876543
+Amount : Rp 100.00
+Charges : Rp 2.90
+Transfer Type : Immediate Transfer on Authorization
+Reference No : 20250214999999
+Status : Success
+Notes:
+Charges VAT Inclusive (If any)
+PT. BANK CENTRAL ASIA TBK.
+BCA_NATIVE_PAGES 2

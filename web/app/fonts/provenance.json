@@ -1,0 +1,62 @@
+{
+  "source": "Google Fonts CSS API, full character sets; re-encoded losslessly as WOFF2 with FontTools",
+  "retrieved": "2026-11-05",
+  "fonts": [
+    {
+      "family": "Poppins",
+      "weight": "400",
+      "source": "https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrFJA.ttf",
+      "sourceSha256": "cdedb1729acac414ed01744a11da7badb86adf13108e7bd3fa161b9323f7fe54",
+      "file": "Poppins-400.woff2",
+      "sha256": "85bf49abc0466923bb298e218ac85049776f23923ef338ffc39359333050c701"
+    },
+    {
+      "family": "Poppins",
+      "weight": "500",
+      "source": "https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLGT9V1s.ttf",
+      "sourceSha256": "fcff04f4bec2b3636f05ed894dc1f9a752c4cb587ee49857ec7a82abaf6ca016",
+      "file": "Poppins-500.woff2",
+      "sha256": "ccef5422e6b2cb3381e2d833e67d077a97154704d2db2f486e6677207cf930a2"
+    },
+    {
+      "family": "Poppins",
+      "weight": "600",
+      "source": "https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLEj6V1s.ttf",
+      "sourceSha256": "dae40ca7b35fe7501bda2e4140a6860b1db47330be5d3c8ab6971fd83a70e9a5",
+      "file": "Poppins-600.woff2",
+      "sha256": "8ef9dc6f1fd8033b17071ecae7f663818f4a3ba9b016f8472d8d3d3efd3a2229"
+    },
+    {
+      "family": "Poppins",
+      "weight": "700",
+      "source": "https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLCz7V1s.ttf",
+      "sourceSha256": "1984efdda0fbe207d7ac20feac2ba7c2768c92a90094b02a206c9d58cc30ff2e",
+      "file": "Poppins-700.woff2",
+      "sha256": "be446426badc5e1a2c3553cefa689a206777c7440a77c37dea245b7b45779eff"
+    },
+    {
+      "family": "Raleway",
+      "weight": "500",
+      "source": "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvoooCP.ttf",
+      "sourceSha256": "c2f3b7985c385221ae1c9d3482d2b7d292c240cfe92dd55c2784d3f3cbc2afff",
+      "file": "Raleway-500.woff2",
+      "sha256": "0a0300f038b8d241a61dc941bbf2f8837e68430a647f55c7d2cdc84fe599f273"
+    },
+    {
+      "family": "Raleway",
+      "weight": "600",
+      "source": "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVsEpYCP.ttf",
+      "sourceSha256": "85ad6f6d9c2737c93ee3f1c2e420f46fe5da289914aec32a11666801b34780a3",
+      "file": "Raleway-600.woff2",
+      "sha256": "4ad8d97004192fa4b783fa0118d88f43a4285b35be8b13ac7d084630c3193628"
+    },
+    {
+      "family": "Raleway",
+      "weight": "700",
+      "source": "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pYCP.ttf",
+      "sourceSha256": "6cd34aa42be80b5ae85cc8c816f241d46a6d77a3a3277a6a20962b134b567cea",
+      "file": "Raleway-700.woff2",
+      "sha256": "9f4e054cf3103cdec193f8484462ada754c4f426a4475fc932b0acde4cd17d91"
+    }
+  ]
+}

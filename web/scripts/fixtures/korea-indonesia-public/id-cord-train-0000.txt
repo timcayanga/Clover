@@ -1,0 +1,27 @@
+1 x Nasi Campur Bali 75,000
+1 x Bbk Bengil Nasi 125,000
+1 x MilkShake Starwb 37,000
+1 x Ice Lemon Tea 24,000
+1 x Nasi Ayam Dewata 70,000
+3 x Free Ice Tea 0
+1 x Organic Green Sa 65,000
+1 x Ice Tea 18,000
+1 x Ice Orange 29,000
+1 x Ayam Suir Bali 85,000
+2 x Tahu Goreng 36,000
+2 x Tempe Goreng 36,000
+1 x Tahu Telor Asin 40,000.
+1 x Nasi Goreng Samb 70,000
+3 x Bbk Panggang Sam 366,000
+1 x Ayam Sambal Hija 92,000
+2 x Hot Tea 44,000
+1 x Ice Kopi 32,000
+1 x Tahu Telor Asin 40,000
+1 x Free Ice Tea 0
+1 x Bebek Street 44,000
+1 x Ice Tea Tawar 18,000
+Sub-Total 1,346,000
+Service 100,950
+PB1 144,695
+Rounding -45
+Grand Total 1,591,600

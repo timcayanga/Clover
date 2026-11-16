@@ -1,0 +1,968 @@
+{
+  "version": "ledger-20261017",
+  "entries": [
+    {
+      "entryId": "brunos-barbers:ledger",
+      "brandId": "brunos-barbers",
+      "name": "Bruno's Barbers",
+      "kind": "company",
+      "industry": "health-and-personal-care",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Bruno's Barbers",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.brunosbarbers.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Brunos Barbers",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.brunosbarbers.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "brunosbarbers.com"
+      ],
+      "iconPath": "/assets/merchant-logos/brunos-barbers.png",
+      "artworkHash": "7395df083fd2044934899b788eee75db68a1c6ecf3f7a23083464fa6f317d40b",
+      "sourceUrl": "https://www.brunosbarbers.com",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "bos-coffee:ledger",
+      "brandId": "bos-coffee",
+      "name": "Bo’s Coffee",
+      "kind": "company",
+      "industry": "food",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Bo’s Coffee",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.boscoffee.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Bo's Coffee",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.boscoffee.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "BOS Coffee",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.boscoffee.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "boscoffee.com"
+      ],
+      "iconPath": "/assets/merchant-logos/bos-coffee.png",
+      "artworkHash": "5cbfc4df4f84cc85a0449d50c625be877abc2ae55c6cdf95a6c8575b816f5e2e",
+      "sourceUrl": "https://www.boscoffee.com",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "chatramue:ledger",
+      "brandId": "chatramue",
+      "name": "ChaTraMue",
+      "kind": "company",
+      "industry": "food",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "ChaTraMue",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.cha-thai.com/en/",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "cha-thai.com"
+      ],
+      "iconPath": "/assets/merchant-logos/chatramue.png",
+      "artworkHash": "1522dee420520f26ce20cb57c62c08e70092eb227854fa5665fdbd45389688e4",
+      "sourceUrl": "https://www.cha-thai.com/en/",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "big-c:ledger",
+      "brandId": "big-c",
+      "name": "Big C",
+      "kind": "company",
+      "industry": "shopping",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Big C",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/big-c-plus/id1423112528?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "BIG C Pure ONE",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/big-c-plus/id1423112528?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [],
+      "iconPath": "/assets/merchant-logos/big-c.png",
+      "artworkHash": "9be600d5f25482e9ac9efd4e3f2e3c35830714d127719b70a18a0d1befd11a66",
+      "sourceUrl": "https://apps.apple.com/ph/app/big-c-plus/id1423112528?uo=4",
+      "publisher": "Big C Supercenter Public Company Limited",
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "the-marketplace:ledger",
+      "brandId": "the-marketplace",
+      "name": "The Marketplace",
+      "kind": "company",
+      "industry": "shopping",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "The Marketplace",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://themarketplace.com.ph",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "themarketplace.com.ph"
+      ],
+      "iconPath": "/assets/merchant-logos/the-marketplace.png",
+      "artworkHash": "5dfcc571aca3301a4ca414cc075ce0ce9d57b98fd452c5907abe4a9e6b0b7fda",
+      "sourceUrl": "https://themarketplace.com.ph",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "ippudo:ledger",
+      "brandId": "ippudo",
+      "name": "Ippudo",
+      "kind": "company",
+      "industry": "food",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Ippudo",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.ippudo.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "ippudo.com"
+      ],
+      "iconPath": "/assets/merchant-logos/ippudo.png",
+      "artworkHash": "a7e18d1dfd51a5b7e68c31ac01232968d8ab5359d0ad0a441e364339f0ae23bf",
+      "sourceUrl": "https://www.ippudo.com",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "tsujiri:ledger",
+      "brandId": "tsujiri",
+      "name": "Tsujiri",
+      "kind": "company",
+      "industry": "food",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Tsujiri",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.tsujiri-global.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "tsujiri-global.com"
+      ],
+      "iconPath": "/assets/merchant-logos/tsujiri.png",
+      "artworkHash": "c489568276fd0f094dd59d43c2e09a513fd7ca916af76f55732a2856db36fb55",
+      "sourceUrl": "https://www.tsujiri-global.com",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "linkedin:ledger",
+      "brandId": "linkedin",
+      "name": "LinkedIn",
+      "kind": "company",
+      "industry": "subscriptions",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "LinkedIn",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/linkedin-community-career/id288429040?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [],
+      "iconPath": "/assets/merchant-logos/linkedin.png",
+      "artworkHash": "b2a5b5e1720de655b622537b1420ee4a7f5d6a6cf8ebc931d2afd5c539c48d60",
+      "sourceUrl": "https://apps.apple.com/ph/app/linkedin-community-career/id288429040?uo=4",
+      "publisher": "LinkedIn Corporation",
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "harlan-holden:ledger",
+      "brandId": "harlan-holden",
+      "name": "Harlan Holden",
+      "kind": "company",
+      "industry": "food",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Harlan Holden",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/harlan-holden/id1489956374?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Harlan Coffee",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/harlan-holden/id1489956374?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [],
+      "iconPath": "/assets/merchant-logos/harlan-holden.png",
+      "artworkHash": "42ce287b04cbb294593c9aad9d6ea30f8b84cec264a9adb5e812e302a3818fd5",
+      "sourceUrl": "https://apps.apple.com/ph/app/harlan-holden/id1489956374?uo=4",
+      "publisher": "Republic Apparel Retailers, Inc.",
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "estancia:ledger",
+      "brandId": "estancia",
+      "name": "Estancia",
+      "kind": "company",
+      "industry": "shopping",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Estancia",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.ortigasmalls.com/estancia",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "OCC Estancia Parking",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.ortigasmalls.com/estancia",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "ortigasmalls.com"
+      ],
+      "iconPath": "/assets/merchant-logos/estancia.png",
+      "artworkHash": "45c8854cfd811a4348dcd8e1b7b277da054d18e9127df88badbfcf013a32eb53",
+      "sourceUrl": "https://www.ortigas.com.ph/malls/estancia-mall",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "wildflour:ledger",
+      "brandId": "wildflour",
+      "name": "Wildflour",
+      "kind": "company",
+      "industry": "food",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Wildflour",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://wildflour.com.ph",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Wild Flour",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://wildflour.com.ph",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "wildflour.com.ph"
+      ],
+      "iconPath": "/assets/merchant-logos/wildflour.png",
+      "artworkHash": "951506405c91fe2a7b1d1969d3989d39ab9b8d285002c6d07dbd0e63744a6c89",
+      "sourceUrl": "https://wildflour.com.ph",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "yardstick:ledger",
+      "brandId": "yardstick",
+      "name": "Yardstick",
+      "kind": "company",
+      "industry": "food",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Yardstick",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://yardstickcoffee.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "yardstickcoffee.com"
+      ],
+      "iconPath": "/assets/merchant-logos/yardstick.png",
+      "artworkHash": "c1b49dfb2986c0e7f21dc6d134e09b9f2a7f9f6d7b64762ba81a407adea80aff",
+      "sourceUrl": "https://yardstickcoffee.com",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "hertz:ledger",
+      "brandId": "hertz",
+      "name": "Hertz",
+      "kind": "company",
+      "industry": "travel",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Hertz",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.hertz.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "hertz.com"
+      ],
+      "iconPath": "/assets/merchant-logos/hertz.png",
+      "artworkHash": "c063673ed9b84c1b89c611c4f55713f5fd1f61d75e9e68e06326c8dc7dddc15c",
+      "sourceUrl": "https://www.hertz.com",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "fruitas:ledger",
+      "brandId": "fruitas",
+      "name": "Fruitas",
+      "kind": "company",
+      "industry": "food",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Fruitas",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://fruitasholdings.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "fruitasholdings.com"
+      ],
+      "iconPath": "/assets/merchant-logos/fruitas.png",
+      "artworkHash": "59f4af22ba1d6ad2fc4d285d2c2e3593dbcfdf828d848cac4aa185675b671b97",
+      "sourceUrl": "https://fruitasholdings.com",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "priority-pass:ledger",
+      "brandId": "priority-pass",
+      "name": "Priority Pass",
+      "kind": "company",
+      "industry": "travel",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Priority Pass",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.prioritypass.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "15 Ppass Lounge Visit",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.prioritypass.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Ppass Lounge Visit",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.prioritypass.com",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "prioritypass.com"
+      ],
+      "iconPath": "/assets/merchant-logos/priority-pass.png",
+      "artworkHash": "564bba7d0fe055c08a8a3165aa5a4bd47b3f439a3d625d6eaca2fd0fe9f24ead",
+      "sourceUrl": "https://www.prioritypass.com",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "viator:ledger",
+      "brandId": "viator",
+      "name": "Viator",
+      "kind": "company",
+      "industry": "travel",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Viator",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/viator-top-travel-experiences/id434832826?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Viatortripadvisor",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/viator-top-travel-experiences/id434832826?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [],
+      "iconPath": "/assets/merchant-logos/viator.png",
+      "artworkHash": "3f567b2bea3bde7106c032e708b27bf932554487289d3bde9fc7533b0bd1f3ce",
+      "sourceUrl": "https://apps.apple.com/ph/app/viator-top-travel-experiences/id434832826?uo=4",
+      "publisher": "VIATOR SYSTEMS PTY LIMITED",
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "mitsukoshi:ledger",
+      "brandId": "mitsukoshi",
+      "name": "Mitsukoshi",
+      "kind": "company",
+      "industry": "shopping",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Mitsukoshi",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.imhds.co.jp/corporate/news-release/article18.html",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Mitsukoshi BGC",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.imhds.co.jp/corporate/news-release/article18.html",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "imhds.co.jp"
+      ],
+      "iconPath": "/assets/merchant-logos/mitsukoshi.png",
+      "artworkHash": "b0d81f1dd3bace7d9798b9f43e5d63a31c09f589065855d05d421086c5e1af7f",
+      "sourceUrl": "https://www.imhds.co.jp/corporate/news-release/article18.html",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "airalo:ledger",
+      "brandId": "airalo",
+      "name": "Airalo",
+      "kind": "company",
+      "industry": "subscriptions",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Airalo",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/airalo-esim-for-travel-data/id1475911720?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [],
+      "iconPath": "/assets/merchant-logos/airalo.png",
+      "artworkHash": "4f5ab11eafdf51b758659cd025733a26fd9515d2a4c04481aa4ed22107d07537",
+      "sourceUrl": "https://apps.apple.com/ph/app/airalo-esim-for-travel-data/id1475911720?uo=4",
+      "publisher": "Airgsm Pte. Ltd.",
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "now-serving:ledger",
+      "brandId": "now-serving",
+      "name": "NowServing",
+      "kind": "company",
+      "industry": "health-and-personal-care",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "NowServing",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/nowserving-by-seriousmd/id1490833154?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [],
+      "iconPath": "/assets/merchant-logos/now-serving.png",
+      "artworkHash": "f75fb7ceec6034311f0bdd687e78b10ee1498046c627f302e0d973a0bf3cd921",
+      "sourceUrl": "https://apps.apple.com/ph/app/nowserving-by-seriousmd/id1490833154?uo=4",
+      "publisher": "LeapFroggr Inc.",
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "mystery-manila:ledger",
+      "brandId": "mystery-manila",
+      "name": "Mystery Manila",
+      "kind": "company",
+      "industry": "entertainment",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Mystery Manila",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.mysterymanila.com/",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "mysterymanila.com"
+      ],
+      "iconPath": "/assets/merchant-logos/mystery-manila.png",
+      "artworkHash": "08f2a58d985688caa646e22bebad3ac04c543e1cfea546f8f3048c3971b637c0",
+      "sourceUrl": "https://www.mysterymanila.com/",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "key-coffee:ledger",
+      "brandId": "key-coffee",
+      "name": "Key Coffee",
+      "kind": "company",
+      "industry": "food",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Key Coffee",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.keycoffee.co.jp",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "KEY Coffee Kissaten",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.keycoffee.co.jp",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "keycoffee.co.jp"
+      ],
+      "iconPath": "/assets/merchant-logos/key-coffee.png",
+      "artworkHash": "4f0cf646bf46289dea2d6b56096c0a14ca5243f01a5e86abb5e16ad1ba02e534",
+      "sourceUrl": "https://www.keycoffee.co.jp",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "scribd:ledger",
+      "brandId": "scribd",
+      "name": "Scribd",
+      "kind": "company",
+      "industry": "subscriptions",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Scribd",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://apps.apple.com/ph/app/scribd-170m-documents/id6448807714?uo=4",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [],
+      "iconPath": "/assets/merchant-logos/scribd.png",
+      "artworkHash": "77ea7dd3d597e32f4801abc190872b83f5475e5c6276e62f515012d0adee8403",
+      "sourceUrl": "https://apps.apple.com/ph/app/scribd-170m-documents/id6448807714?uo=4",
+      "publisher": "Scribd",
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "bancnet:ledger",
+      "brandId": "bancnet",
+      "name": "BancNet",
+      "kind": "company",
+      "industry": "financial-services",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "BancNet",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://bancnet.com.ph/",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Bancnet P 2 M",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://bancnet.com.ph/",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Bancnet P2M",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://bancnet.com.ph/",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "bancnet.com.ph"
+      ],
+      "iconPath": "/assets/merchant-logos/bancnet.png",
+      "artworkHash": "335673b9d69082b630ac6919db73d86f1f015f4756e3108fd41a0d264ae67f81",
+      "sourceUrl": "https://bancnet.com.ph/",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "mrt-3:ledger",
+      "brandId": "mrt-3",
+      "name": "MRT-3",
+      "kind": "company",
+      "industry": "transportation",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "MRT-3",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://dotrmrt3.gov.ph",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "DOTR MRT 3 QR",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://dotrmrt3.gov.ph",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "dotrmrt3.gov.ph"
+      ],
+      "iconPath": "/assets/merchant-logos/mrt-3.png",
+      "artworkHash": "5cd19846b3b407d4c775c4d4da8cc5a0397d18fb1776d14bb45da5db1ca715da",
+      "sourceUrl": "https://dotrmrt3.gov.ph",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "mrt-bangkok:ledger",
+      "brandId": "mrt-bangkok",
+      "name": "MRT Bangkok",
+      "kind": "company",
+      "industry": "transportation",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "MRT Bangkok",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://metro.bemplc.co.th",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "MRT BEM",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://metro.bemplc.co.th",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "metro.bemplc.co.th"
+      ],
+      "iconPath": "/assets/merchant-logos/mrt-bangkok.png",
+      "artworkHash": "47ba8a4733bdd29a367ee5ecc6d70a93786176abc173ec95a5b058e810c10eb1",
+      "sourceUrl": "https://metro.bemplc.co.th",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "glorietta:ledger",
+      "brandId": "ayala-malls",
+      "name": "Ayala Malls",
+      "kind": "company",
+      "industry": "shopping",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "Ayala Malls",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.ayalamalls.com/main/malls/ayala-glorietta",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Glorietta",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.ayalamalls.com/main/malls/ayala-glorietta",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Greenbelt",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.ayalamalls.com/main/malls/ayala-glorietta",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        },
+        {
+          "value": "Bonifacio High Street",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://www.ayalamalls.com/main/malls/ayala-glorietta",
+          "primarySourceVerified": true,
+          "merchantPosition": true
+        }
+      ],
+      "domains": [
+        "ayalamalls.com"
+      ],
+      "iconPath": "/assets/merchant-logos/glorietta.png",
+      "artworkHash": "072dfdd7e91f1b33dd9ec55706303e912ebd4255a33eb77f9af2de05585d4599",
+      "sourceUrl": "https://www.ayalamalls.com/main/malls/ayala-glorietta",
+      "publisher": null,
+      "scope": "unspecified"
+    },
+    {
+      "entryId": "instapay:ledger",
+      "brandId": "instapay",
+      "name": "InstaPay",
+      "kind": "company",
+      "industry": "financial-services",
+      "countryCodes": [],
+      "locality": null,
+      "aliases": [
+        {
+          "value": "InstaPay",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://rbap.org/wp-content/uploads/2018/10/BancNet-Presentation_InstaPay-Onboarding-and-Settlement-Process.pdf",
+          "merchantPosition": true,
+          "primarySourceVerified": true
+        },
+        {
+          "value": "Insta Pay",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://rbap.org/wp-content/uploads/2018/10/BancNet-Presentation_InstaPay-Onboarding-and-Settlement-Process.pdf",
+          "merchantPosition": true,
+          "primarySourceVerified": true
+        },
+        {
+          "value": "Online InstaPay",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://rbap.org/wp-content/uploads/2018/10/BancNet-Presentation_InstaPay-Onboarding-and-Settlement-Process.pdf",
+          "merchantPosition": true,
+          "primarySourceVerified": true
+        },
+        {
+          "value": "Online Insta Pay",
+          "kind": "trade_name",
+          "countryCodes": [],
+          "sourceUrl": "https://rbap.org/wp-content/uploads/2018/10/BancNet-Presentation_InstaPay-Onboarding-and-Settlement-Process.pdf",
+          "merchantPosition": true,
+          "primarySourceVerified": true
+        }
+      ],
+      "domains": [],
+      "iconPath": "/assets/merchant-logos/instapay.png",
+      "artworkHash": "45715ef8a6ac63115486f759eddc3dbb291348f40990ed42114cc120dca11a71",
+      "sourceUrl": "https://rbap.org/wp-content/uploads/2018/10/BancNet-Presentation_InstaPay-Onboarding-and-Settlement-Process.pdf",
+      "publisher": "BancNet presentation published by RBAP",
+      "scope": "regional"
+    }
+  ],
+  "aliases": {
+    "mary-grace:food": [
+      {
+        "value": "Mary Grace",
+        "kind": "trade_name",
+        "countryCodes": [],
+        "sourceUrl": "https://www.marygracecafe.com/",
+        "primarySourceVerified": true,
+        "merchantPosition": true
+      }
+    ],
+    "woolworths-south-africa:shopping": [
+      {
+        "value": "Woolworth Maun",
+        "kind": "trade_name",
+        "countryCodes": [],
+        "sourceUrl": "https://www.woolworthsholdings.co.za/wp-content/uploads/2024/09/whlfy24.pdf",
+        "primarySourceVerified": true,
+        "merchantPosition": true
+      }
+    ],
+    "rcbc:philippines": [
+      {
+        "value": "Bills Payment to Bankard RCBC",
+        "kind": "trade_name",
+        "countryCodes": [],
+        "sourceUrl": "https://www.rcbc.com/",
+        "primarySourceVerified": true,
+        "merchantPosition": true
+      },
+      {
+        "value": "Bills Payment to RCBC",
+        "kind": "trade_name",
+        "countryCodes": [],
+        "sourceUrl": "https://www.rcbc.com/",
+        "primarySourceVerified": true,
+        "merchantPosition": true
+      },
+      {
+        "value": "Bankard RCBC Credit Card Payment",
+        "kind": "trade_name",
+        "countryCodes": [],
+        "sourceUrl": "https://www.rcbc.com/",
+        "primarySourceVerified": true,
+        "merchantPosition": true
+      }
+    ],
+    "maya:philippines": [
+      {
+        "value": "Received from Maya",
+        "kind": "trade_name",
+        "countryCodes": [],
+        "sourceUrl": null,
+        "primarySourceVerified": true,
+        "merchantPosition": true
+      },
+      {
+        "value": "Sent to Maya user",
+        "kind": "trade_name",
+        "countryCodes": [],
+        "sourceUrl": null,
+        "primarySourceVerified": true,
+        "merchantPosition": true
+      },
+      {
+        "value": "Paymaya ADD Money",
+        "kind": "trade_name",
+        "countryCodes": [],
+        "sourceUrl": null,
+        "primarySourceVerified": true,
+        "merchantPosition": true
+      }
+    ]
+  }
+}

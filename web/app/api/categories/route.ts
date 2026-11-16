@@ -1,0 +1,291 @@
+import { prisma } from "@/lib/prisma";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
+import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
+import type { TransactionType } from "@/lib/domain-types";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
+
+export const dynamic = "force-dynamic";
+
+const resolveCategoriesRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
+
+const createCategorySchema = z.object({
+  workspaceId: z.string().min(1),
+  name: z.string().min(1),
+  type: z.enum(["income", "expense", "transfer"]),
+  parentCategoryId: z.string().optional().nullable(),
+});
+
+const updateCategorySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).optional(),
+  type: z.enum(["income", "expense", "transfer"]).optional(),
+  isArchived: z.boolean().optional(),
+  parentCategoryId: z.string().optional().nullable(),
+});
+
+const normalizeCategoryName = (value: string) => value.trim().toLowerCase();
+
+const assertValidParentCategory = async (workspaceId: string, parentCategoryId: string | null | undefined, categoryId?: string) => {
+  if (!parentCategoryId) return;
+  if (parentCategoryId === categoryId) throw new Error("A category cannot be its own group.");
+
+  const parent = await prisma.category.findFirst({
+    where: { id: parentCategoryId, workspaceId, isArchived: false },
+    select: { id: true, parentCategoryId: true },
+  });
+  if (!parent || parent.parentCategoryId) throw new Error("Choose an active top-level category group.");
+};
+
+export async function GET(request: Request) {
+  try {
+    const userId = await resolveCategoriesRouteUserId();
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get("workspaceId");
+    const includeArchived = searchParams.get("includeArchived") === "true";
+
+    if (!workspaceId) {
+      return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
+    }
+
+    await assertWorkspaceAccess(userId, workspaceId);
+
+    const categoriesForSeeding = await prisma.category.findMany({
+      where: { workspaceId },
+      select: { id: true, name: true, type: true, isArchived: true, isSystem: true },
+    });
+    if (categoriesForSeeding.length === 0) {
+      await prisma.category.createMany({
+        data: DEFAULT_CATEGORY_ROWS.map((category: { name: string; type: TransactionType }) => ({
+          workspaceId,
+          name: category.name,
+          type: category.type,
+          isSystem: true,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    const categories = await prisma.category.findMany({
+      where: {
+        workspaceId,
+        ...(includeArchived ? {} : { isArchived: false }),
+      },
+      orderBy: [
+        { isSystem: "desc" },
+        { isArchived: "asc" },
+        { name: "asc" },
+      ],
+    });
+
+    const orderedCategories = [...categories].sort((left, right) => {
+      const leftOther = normalizeCategoryName(left.name) === "other";
+      const rightOther = normalizeCategoryName(right.name) === "other";
+      if (leftOther !== rightOther) return leftOther ? 1 : -1;
+      if (left.parentCategoryId !== right.parentCategoryId) {
+        if (!left.parentCategoryId) return -1;
+        if (!right.parentCategoryId) return 1;
+      }
+      return left.name.localeCompare(right.name);
+    });
+
+    return NextResponse.json({ categories: orderedCategories });
+  } catch {
+    return NextResponse.json({ error: "Unable to load categories" }, { status: 400 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    assertTrustedRequestOrigin(request);
+    const userId = await resolveCategoriesRouteUserId();
+    const payload = createCategorySchema.parse(await request.json());
+
+    await assertWorkspaceAccess(userId, payload.workspaceId);
+    await assertValidParentCategory(payload.workspaceId, payload.parentCategoryId);
+
+    const normalizedName = normalizeCategoryName(payload.name);
+    const existingCategories = await prisma.category.findMany({
+      where: { workspaceId: payload.workspaceId },
+      select: { id: true, name: true, type: true, isArchived: true, isSystem: true },
+    });
+    const existingCategory = existingCategories.find((category) => normalizeCategoryName(category.name) === normalizedName);
+
+    if (existingCategory) {
+      if (existingCategory.isArchived) {
+        const restoredCategory = await prisma.category.update({
+          where: { id: existingCategory.id },
+          data: {
+            name: payload.name.trim(),
+            type: payload.type,
+            parentCategoryId: payload.parentCategoryId ?? null,
+            isArchived: false,
+          },
+        });
+
+        void capturePostHogServerEvent("category_created", userId, {
+          workspace_id: payload.workspaceId,
+          category_id: restoredCategory.id,
+          category_name: restoredCategory.name,
+          category_type: restoredCategory.type,
+          parent_category_id: restoredCategory.parentCategoryId,
+        });
+
+        void capturePostHogServerEvent("category_rule_created", userId, {
+          workspace_id: payload.workspaceId,
+          category_id: restoredCategory.id,
+          category_name: restoredCategory.name,
+          category_type: restoredCategory.type,
+          parent_category_id: restoredCategory.parentCategoryId,
+        });
+
+        return NextResponse.json({ category: restoredCategory }, { status: 200 });
+      }
+
+      return NextResponse.json({ error: "Category already exists" }, { status: 409 });
+    }
+
+    const category = await prisma.category.create({
+      data: {
+        workspaceId: payload.workspaceId,
+        name: payload.name.trim(),
+        type: payload.type,
+        parentCategoryId: payload.parentCategoryId ?? null,
+        isSystem: false,
+      },
+    });
+
+    void capturePostHogServerEvent("category_created", userId, {
+      workspace_id: payload.workspaceId,
+      category_id: category.id,
+      category_name: category.name,
+      category_type: category.type,
+      parent_category_id: category.parentCategoryId,
+    });
+
+    void capturePostHogServerEvent("category_rule_created", userId, {
+      workspace_id: payload.workspaceId,
+      category_id: category.id,
+      category_name: category.name,
+      category_type: category.type,
+      parent_category_id: category.parentCategoryId,
+    });
+
+    return NextResponse.json({ category }, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: "Unable to create category" }, { status: 400 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    assertTrustedRequestOrigin(request);
+    const userId = await resolveCategoriesRouteUserId();
+    const payload = updateCategorySchema.parse(await request.json());
+
+    const existingCategory = await prisma.category.findUnique({
+      where: { id: payload.id },
+      select: { id: true, workspaceId: true, isSystem: true, isArchived: true, name: true, type: true, parentCategoryId: true },
+    });
+
+    if (!existingCategory) {
+      return NextResponse.json({ error: "Category not found" }, { status: 404 });
+    }
+
+    await assertWorkspaceAccess(userId, existingCategory.workspaceId);
+    await assertValidParentCategory(existingCategory.workspaceId, payload.parentCategoryId, existingCategory.id);
+
+    const category = await prisma.category.update({
+      where: { id: payload.id },
+      data: {
+        ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
+        ...(payload.type !== undefined ? { type: payload.type } : {}),
+        ...(payload.isArchived !== undefined ? { isArchived: payload.isArchived } : {}),
+        ...(payload.parentCategoryId !== undefined ? { parentCategoryId: payload.parentCategoryId } : {}),
+      },
+    });
+
+    const categoryChanged =
+      (payload.name !== undefined && payload.name.trim() !== existingCategory.name) ||
+      (payload.type !== undefined && payload.type !== existingCategory.type) ||
+      (payload.isArchived !== undefined && payload.isArchived !== existingCategory.isArchived) ||
+      (payload.parentCategoryId !== undefined && payload.parentCategoryId !== existingCategory.parentCategoryId);
+
+    if (categoryChanged) {
+      void capturePostHogServerEvent("category_updated", userId, {
+        workspace_id: existingCategory.workspaceId,
+        category_id: category.id,
+        category_name: category.name,
+        category_type: category.type,
+        is_archived: category.isArchived,
+      });
+
+      void capturePostHogServerEvent("category_rule_updated", userId, {
+        workspace_id: existingCategory.workspaceId,
+        category_id: category.id,
+        category_name: category.name,
+        category_type: category.type,
+        is_archived: category.isArchived,
+      });
+    }
+
+    return NextResponse.json({ category });
+  } catch {
+    return NextResponse.json({ error: "Unable to update category" }, { status: 400 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    assertTrustedRequestOrigin(request);
+    const userId = await resolveCategoriesRouteUserId();
+    const body = (await request.json().catch(() => ({}))) as { id?: string };
+    const id = typeof body.id === "string" ? body.id : "";
+
+    if (!id) {
+      return NextResponse.json({ error: "Category id is required" }, { status: 400 });
+    }
+
+    const existingCategory = await prisma.category.findUnique({
+      where: { id },
+      select: { id: true, workspaceId: true, isSystem: true },
+    });
+
+    if (!existingCategory) {
+      return NextResponse.json({ error: "Category not found" }, { status: 404 });
+    }
+
+    await assertWorkspaceAccess(userId, existingCategory.workspaceId);
+
+    const category = await prisma.category.update({
+      where: { id },
+      data: {
+        isArchived: true,
+      },
+    });
+
+    void capturePostHogServerEvent("category_deleted", userId, {
+      workspace_id: existingCategory.workspaceId,
+      category_id: category.id,
+    });
+
+    void capturePostHogServerEvent("category_rule_deleted", userId, {
+      workspace_id: existingCategory.workspaceId,
+      category_id: category.id,
+    });
+
+    return NextResponse.json({ category });
+  } catch {
+    return NextResponse.json({ error: "Unable to delete category" }, { status: 400 });
+  }
+}

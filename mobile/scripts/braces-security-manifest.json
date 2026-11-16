@@ -1,0 +1,54 @@
+{
+  "parse.js": {
+    "original": "e572166565f15fa6ad9865ae49d678218e32aabfd1b3720f6d0d43d39800d310",
+    "patched": "3f70aaf6efd36a2e121d73473811ff7cf7b645d47e4b4023ff997210d0e009f9",
+    "replacements": [
+      [
+        "      stack.push(block);",
+        "      if (stack.length >= 128) throw new SyntaxError(\"Brace nesting exceeds 128 levels\");\n      stack.push(block);"
+      ]
+    ]
+  },
+  "compile.js": {
+    "original": "dc98f22eee3d511785d92a00758d5f0d48efed5f5813bdecc2de430c529b5c9f",
+    "patched": "55ed506a1f9b007c56b7ea3047489043c89702a9c2f73b1e75f0f189506dac98",
+    "replacements": [
+      [
+        "const walk = (node, parent = {}) => {",
+        "const walk = (node, parent = {}, depth = 0) => {\n    if (depth > 128) throw new SyntaxError(\"Brace nesting exceeds 128 levels\");"
+      ],
+      [
+        "walk(child, node)",
+        "walk(child, node, depth + 1)"
+      ]
+    ]
+  },
+  "expand.js": {
+    "original": "41ccc196ebfa7b7781a634e721eb744e4e7bcb54cba427a7e3d6806a1b9e58f7",
+    "patched": "bb2dd79d68a859a39c4750d4c06ccc0cfc693f58aebedd3214a62d8746f4225b",
+    "replacements": [
+      [
+        "const walk = (node, parent = {}) => {",
+        "const walk = (node, parent = {}, depth = 0) => {\n    if (depth > 128) throw new SyntaxError(\"Brace nesting exceeds 128 levels\");"
+      ],
+      [
+        "walk(child, node)",
+        "walk(child, node, depth + 1)"
+      ]
+    ]
+  },
+  "stringify.js": {
+    "original": "379f22d77bfa1478341ccd49c5e4267464aabcbba03558bab332aac23fc6f23a",
+    "patched": "38f0f45afa87df4ddfbfb65c2d848d0a9c709a8f013c0cbea1a1b01d4630875e",
+    "replacements": [
+      [
+        "const stringify = (node, parent = {}) => {",
+        "const stringify = (node, parent = {}, depth = 0) => {\n    if (depth > 128) throw new SyntaxError(\"Brace nesting exceeds 128 levels\");"
+      ],
+      [
+        "stringify(child)",
+        "stringify(child, node, depth + 1)"
+      ]
+    ]
+  }
+}

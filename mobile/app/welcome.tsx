@@ -1,0 +1,106 @@
+import { Text } from "../src/app-text";
+import { useEffect, useRef, useState } from "react";
+import { Image, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, View, useWindowDimensions } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAccess } from "../src/access";
+import { OpeningSpendingPreview, OpeningChatPreview } from "../src/opening-previews";
+import { CloverMascot } from "../src/clover-mascot";
+
+const slides = [
+  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), mascot: "accounts" as const, cropTop: 0, description: "BPI savings, UnionBank credit card and GCash wallet account previews." },
+  { title: "Bring your accounts\ninto Clover.", accent: "into Clover.", image: require("../assets/tutorial/connect-v2.png"), mascot: "receipt" as const, cropTop: 0, description: "Clover connection preview with Philippine banks." },
+  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), mascot: "reports" as const, cropTop: 0, description: "Where It Went report with Housing, Food and Dining, Groceries and Transport." },
+  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), mascot: "chat" as const, cropTop: 0, description: "A sample Ask Clover conversation showing a spending report and a transaction ready for review." },
+];
+
+export default function Welcome() {
+  const access = useAccess();
+  const { width, height, fontScale } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const pager = useRef<ScrollViewInstance>(null);
+  const [index, setIndex] = useState(0);
+  const [pageWidth, setPageWidth] = useState(width);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const compact = height < 750;
+  const landscape = width >= 600 && height < 500;
+  // Show a focused glimpse of the app, with room for Clover beside it. Large
+  // text can scroll independently while the authentication actions stay usable.
+  const artworkHeight = landscape ? 150 : Math.max(180, Math.min(width >= 600 ? 460 : 330, height - insets.top - insets.bottom - 370 - Math.max(0, fontScale - 1) * 80));
+  const artworkWidth = Math.min(pageWidth - 64, 342);
+  useEffect(() => { pager.current?.scrollTo({ x: pageWidth * index, animated: false }); }, [pageWidth, index]);
+  const authenticate = async (signup: boolean) => {
+    if (busy || !access.loaded || !access.configured) return;
+    setBusy(true);
+    setError("");
+    try { await (signup ? access.signUp() : access.signIn()); }
+    catch (e) { setError(e instanceof Error ? e.message : "Unable to open secure sign-in. Please try again."); }
+    finally { setBusy(false); }
+  };
+  if (access.active) return null;
+  const disabled = busy || !access.loaded || !access.configured;
+  return (
+    <LinearGradient colors={["#ffffff", "#ffffff"]} style={s.page}>
+      <View style={[s.brand, compact && { paddingVertical: 8 }]}>
+        <Image source={require("../assets/welcome-clover.png")} style={{ width: 28, height: 28 }} />
+        <Image source={require("../assets/clover-wordmark.png")} accessibilityLabel="Clover" resizeMode="contain" style={{ width: 99, height: 24 }} />
+      </View>
+      <View style={{ flex: 1, flexDirection: landscape ? "row" : "column" }}>
+      <ScrollView ref={pager} onLayout={event => setPageWidth(event.nativeEvent.layout.width)} horizontal pagingEnabled style={{ flex: 1 }} showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={event => setIndex(Math.max(0, Math.min(slides.length - 1, Math.round(event.nativeEvent.contentOffset.x / pageWidth))))}>
+        {slides.map((slide, i) => {
+          const start = slide.title.indexOf(slide.accent);
+          return <ScrollView key={slide.title} style={{ width: pageWidth }} contentContainerStyle={s.slide}
+            aria-hidden={i !== index} accessibilityElementsHidden={i !== index} importantForAccessibility={i === index ? "auto" : "no-hide-descendants"}>
+            <Text accessibilityRole="header" style={[s.title, compact && { fontSize: 23, lineHeight: 29 }]}>
+              {slide.title.slice(0, start)}<Text style={{ color: "#00aabe" }}>{slide.accent}</Text>{slide.title.slice(start + slide.accent.length)}
+            </Text>
+            <View style={{ width: artworkWidth, alignItems: "center", gap: 12 }}>
+              <View style={[s.preview, { width: artworkWidth, minHeight: artworkHeight }]}>
+                {i === 2 ? <OpeningSpendingPreview /> : i === 3 ? <OpeningChatPreview /> : <Image source={slide.image} accessibilityLabel={slide.description} resizeMode="contain" style={{ width: artworkWidth, height: artworkHeight }} />}
+              </View>
+              <CloverMascot pose={slide.mascot} size={landscape ? 128 : 216} />
+            </View>
+          </ScrollView>;
+        })}
+      </ScrollView>
+      <View style={[s.footer, landscape && { width: 280 }, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <View style={s.pagination}>
+          {slides.map((slide, i) => <Pressable key={slide.title} accessibilityRole="button" accessibilityLabel={`Tutorial ${i + 1}: ${slide.title.replace("\n", " ")}`}
+            accessibilityState={{ selected: i === index }} onPress={() => setIndex(i)} style={s.dotTarget}>
+            <View style={[s.dot, i === index && { width: 24, backgroundColor: "#03a8c0" }]} />
+          </Pressable>)}
+        </View>
+        <Text accessibilityLiveRegion="polite" style={s.progress}>{index + 1} of 4 · Swipe to explore</Text>
+        {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
+        {!access.configured ? <Text style={s.error}>Account connection isn’t configured in this build.</Text> : null}
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void authenticate(true)} style={{ opacity: disabled ? 0.5 : 1 }}>
+          <LinearGradient colors={["#03a8c0", "#34d3d0"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.button}>
+            <Text style={[s.buttonText, { color: "white" }]}>{busy ? "Opening…" : "Sign up"}</Text>
+          </LinearGradient>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void authenticate(false)} style={[s.button, s.secondary, { opacity: disabled ? 0.5 : 1 }]}>
+          <Text style={s.buttonText}>Log in</Text>
+        </Pressable>
+      </View>
+      </View>
+    </LinearGradient>
+  );
+}
+const s = StyleSheet.create({
+  page: { flex: 1 },
+  brand: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12 },
+  preview: { overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "#d5e8eb", backgroundColor: "white" },
+  slide: { flexGrow: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 16, paddingBottom: 6 },
+  title: { color: "#17363d", fontSize: 26, lineHeight: 33, textAlign: "center", fontFamily: "Poppins-SemiBold", maxWidth: 430 },
+  footer: { width: "100%", maxWidth: 560, alignSelf: "center", paddingHorizontal: 24, gap: 10, flexShrink: 0 },
+  pagination: { flexDirection: "row", justifyContent: "center", height: 36 },
+  dotTarget: { width: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#c6dfe1" },
+  progress: { textAlign: "center", color: "#596e78", fontSize: 11, marginBottom: 2 },
+  button: { minHeight: 50, borderRadius: 25, alignItems: "center", justifyContent: "center", padding: 12 },
+  secondary: { backgroundColor: "white", borderColor: "#cce5e8", borderWidth: 1 },
+  buttonText: { color: "#17363d", fontSize: 16, fontFamily: "Poppins-Medium" },
+  error: { color: "#ae303b", fontSize: 12, textAlign: "center" },
+});

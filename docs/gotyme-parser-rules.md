@@ -1,0 +1,56 @@
+# GoTyme Parser Rules
+
+This document captures the GoTyme parsing rules learned from the synthetic training bundle and should be used as a reference for future GoTyme import work.
+
+## Scope
+
+- Applies to GoTyme savings statement PDFs.
+- Preserve raw and normalized records separately.
+- Treat the savings ledger as a running-balance statement.
+
+## Savings Rules
+
+- Keep `Salary Credit` as `Income`.
+- Keep `Fund Transfer` as `Transfers`.
+- Keep `Outbound Transfer` as `Transfers` with an `Expense` type, unless Clover can prove the destination is another account owned by the user.
+- Keep `Inbound Transfer` as `Transfers` with an `Income` type when it is from an external counterparty.
+- Keep `Transfer Fee` as `Financial`.
+- Keep card-payment refunds and reversals as `Financial` with an `Income` type; they are reversals of a financial charge, not transfers.
+- Keep `Meralco` as `Bills & Utilities`.
+- Keep `Debit Card Purchase` as spend with merchant/category learning.
+- Keep `ATM Withdrawal` and `ATM Fee` as separate rows.
+- Preserve `Interest Earned` and `Tax Withheld` separately.
+- Treat `Adjustment Reversal` as a review-worthy adjustment entry.
+- Classify `QR Payment` as `Shopping` with an `Expense` type.
+- Classify person-to-person `Transfer to/from ... Go Tyme Bank Account` rows as `Expense` or `Income` when the counterparty account is not owned by the user.
+- Keep `Transfer Fee` as `Financial` with an `Expense` type.
+- Normalize Tacloban location-coded rows like `PVB Building`, `GSIS Tacloban`, and `SM City Tacloban` to explicit merchants so they do not fall through to `Other`.
+- Treat bare Tacloban location descriptors as `Cash & ATM` when they are debit-only rows and no better merchant match exists.
+
+## Review Gating
+
+- Review adjustment reversals when the intent is unclear.
+- Do not flatten housekeeping or adjustment entries into normal spend.
+
+## Expected Outcome
+
+- GoTyme savings should import as a clean running-balance ledger with standard income, transfer, fee, and adjustment handling.
+
+## Parsing Guidance
+
+- Prefer deterministic parsing from the statement text before any AI fallback.
+- Let an explicit GoTyme document shell and GoTyme running-balance ledger win over bank names found inside transaction details. A BPI, GCash, or other counterparty mention is not evidence that the statement belongs to that institution.
+- Prefer the GoTyme parser before any BDO-style savings fallback, because both layouts can look similar at a glance but GoTyme uses its own credits/debits/running-balance semantics.
+- Keep raw statement data, parsed rows, and normalized transactions separate.
+- Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
+- The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable GoTyme simplifications such as `Grab`, `Move It`, `Lazada`, `Shopee`, `Transfer to Go Save`, `Transfer from Go Save`, `Transfer Fee`, and the interbank transfer variants.
+- The code-level title lookup also covers `Pay Maya Load Purchase` and `GCash Received` variants so these titles stay normalized across statement families.
+
+## Notes Handling
+
+- Keep transaction notes human-readable and concise.
+- If there is no useful note, leave notes empty instead of writing raw import payloads.
+
+## Review
+
+- Unexpected `Other` categories or statement-housekeeping rows should be treated as parser review candidates.

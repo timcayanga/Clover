@@ -1,0 +1,37 @@
+.transaction-creation-tabs > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.adviser-experience--entry .adviser-chat__composer textarea {
+  padding-top: 36px;
+  padding-bottom: 36px;
+  text-align: center;
+}
+
+.adviser-sample {
+  width: min(100%, 34rem);
+  margin: 0 auto;
+  padding: 12px 16px;
+  border: 1px solid #d6e6e8;
+  border-radius: 16px;
+  text-align: left;
+}
+
+.adviser-sample summary { cursor: pointer; color: #006d76; }
+.adviser-sample__content { display: grid; gap: 8px; margin-top: 12px; }
+.adviser-sample__content p { margin: 0; }
+.adviser-sample__content ul { margin: 0; padding: 0; list-style: none; }
+.adviser-sample__content li {
+  display: grid;
+  grid-template-columns: minmax(5rem, auto) 1fr minmax(4rem, auto);
+  align-items: center;
+  gap: 8px;
+}
+.adviser-sample__content li strong { text-align: right; }
+.adviser-sample__track { background: #e6f7f5; border-radius: 6px; }
+.adviser-sample__track i { display: block; height: 7px; border-radius: inherit; background: #008a98; }
+.adviser-sample__actions { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.adviser-sample__actions a { color: #006d76; text-decoration: underline; }

@@ -1,0 +1,193 @@
+{
+  "checkedAt": "2026-10-17",
+  "notes": "Presentation artwork only. Primary business sources and publisher-verified store artwork. Geographic/company identity is separate from the displayed logo. No financial labels or confirmed records changed.",
+  "assets": [
+    {
+      "id": "bos-coffee",
+      "source": "https://www.boscoffee.com",
+      "artwork": "https://www.boscoffee.com/cdn/shop/files/1-2024-06-27_BOS_Primary_Logo_Colors-1_3d7717f1-4bda-43a2-ae55-27499a9c8d0e_32x32.png?v=1764066175",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "id": "big-c",
+      "source": "https://apps.apple.com/ph/app/big-c-plus/id1423112528?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/24/c5/b3/24c5b321-1c29-158c-1681-a5b42eacc61c/AppIcon-prod-0-0-1x_U007emarketing-0-11-0-85-220.png/512x512bb.jpg",
+      "seller": "Big C Supercenter Public Company Limited",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "the-marketplace",
+      "source": "https://themarketplace.com.ph",
+      "artwork": "https://themarketplace.com.ph/logo.svg",
+      "width": 235,
+      "height": 38
+    },
+    {
+      "id": "tsujiri",
+      "source": "https://www.tsujiri-global.com",
+      "artwork": "https://www.tsujiri-global.com/splash-logo.svg"
+    },
+    {
+      "id": "brunos-barbers",
+      "source": "https://www.brunosbarbers.com",
+      "artwork": "https://cdn.shopify.com/s/files/1/0685/9885/7788/files/Brunos_Primary_Logo.webp?v=1774247106",
+      "width": 694,
+      "height": 180
+    },
+    {
+      "id": "ippudo",
+      "source": "https://www.ippudo.com",
+      "artwork": "https://storage.googleapis.com/production-os-assets/assets/7df3f8e1-9a21-49a2-8742-1af6a04fdaae",
+      "width": 48,
+      "height": 48
+    },
+    {
+      "id": "linkedin",
+      "source": "https://apps.apple.com/ph/app/linkedin-community-career/id288429040?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/c7/c3/65/c7c365d3-80e4-662a-4fc3-1b8268bdb32a/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
+      "seller": "LinkedIn Corporation",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "wildflour",
+      "source": "https://wildflour.com.ph",
+      "artwork": "https://wildflour.com.ph/favicon.ico",
+      "width": 180,
+      "height": 180
+    },
+    {
+      "id": "chatramue",
+      "source": "https://www.cha-thai.com/en/",
+      "artwork": "https://image.makewebeasy.net/makeweb/0/vaQzGnSlA/attach_file/favicon/favicon_20210316100255-0.ico?v=202604291000",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "id": "harlan-holden",
+      "source": "https://apps.apple.com/ph/app/harlan-holden/id1489956374?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/a7/1f/e7/a71fe785-5736-cf9f-3a6a-4a852b9814f9/AppIcon-0-0-1x_U007emarketing-0-7-0-85-220.jpeg/512x512bb.jpg",
+      "seller": "Republic Apparel Retailers, Inc.",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "estancia",
+      "source": "https://www.ortigas.com.ph/malls/estancia-mall",
+      "artwork": "https://assets.ortigas.com.ph/data/uploads/2019/02/Estancia_Logo.png"
+    },
+    {
+      "id": "viator",
+      "source": "https://apps.apple.com/ph/app/viator-top-travel-experiences/id434832826?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/6c/f2/c1/6cf2c193-a06c-4614-ea67-b19fc2d66849/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg",
+      "seller": "VIATOR SYSTEMS PTY LIMITED",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "mitsukoshi",
+      "source": "https://www.imhds.co.jp/corporate/news-release/article18.html",
+      "artwork": "https://upload.wikimedia.org/wikipedia/en/0/01/Mitsukoshi_BGC_logo.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original"
+    },
+    {
+      "id": "yardstick",
+      "source": "https://yardstickcoffee.com",
+      "artwork": "https://yardstickcoffee.com/cdn/shop/files/YS2_LogoFavicon.png?crop=center&height=32&v=1711435964&width=32",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "id": "now-serving",
+      "source": "https://apps.apple.com/ph/app/nowserving-by-seriousmd/id1490833154?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/26/5f/b5/265fb589-36b1-34bb-f03d-59e96514165e/logo-0-0-1x_U007epad-0-1-sRGB-85-220.png/512x512bb.jpg",
+      "seller": "LeapFroggr Inc.",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "fruitas",
+      "source": "https://fruitasholdings.com",
+      "artwork": "https://fruitasholdings.com/wp/wp-content/uploads/2024/10/cropped-favicon-32x32.png",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "id": "priority-pass",
+      "source": "https://www.prioritypass.com",
+      "artwork": "https://www.prioritypass.com/icon.png?icon.1k7202wk2zqql.png?dpl=693a94f5-0872-4c3a-8136-90274d4c7d53",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "id": "mystery-manila",
+      "source": "https://www.mysterymanila.com/",
+      "artwork": "https://www.mysterymanila.com/images/mm-logo-hero.gif"
+    },
+    {
+      "id": "key-coffee",
+      "source": "https://www.keycoffee.co.jp",
+      "artwork": "https://www.keycoffee.co.jp/cms/img/header/sb/sitelogo.png",
+      "width": 210,
+      "height": 168
+    },
+    {
+      "id": "scribd",
+      "source": "https://apps.apple.com/ph/app/scribd-170m-documents/id6448807714?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/c1/2c/03/c12c03d6-3cce-1c42-790e-1b7f1696673a/Scribd-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg",
+      "seller": "Scribd",
+      "width": 512,
+      "height": 512,
+      "presentationProcessing": "Official white artwork placed on a contrasting background; resized to 128px."
+    },
+    {
+      "id": "bancnet",
+      "source": "https://bancnet.com.ph/",
+      "artwork": "https://upload.wikimedia.org/wikipedia/commons/5/57/BancNet_logo.svg?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original"
+    },
+    {
+      "id": "mrt-3",
+      "source": "https://dotrmrt3.gov.ph",
+      "artwork": "https://dotrmrt3.gov.ph/apple-touch-icon.png",
+      "width": 180,
+      "height": 180
+    },
+    {
+      "id": "hertz",
+      "source": "https://www.hertz.com",
+      "artwork": "https://www.hertz.com/rentacar/assets/images/favicon.ico?v=2",
+      "width": 144,
+      "height": 144
+    },
+    {
+      "id": "mrt-bangkok",
+      "source": "https://metro.bemplc.co.th",
+      "artwork": "https://metro.bemplc.co.th/Images/logos/logo.svg",
+      "width": 170,
+      "height": 50
+    },
+    {
+      "id": "glorietta",
+      "source": "https://www.ayalamalls.com/main/malls/ayala-glorietta",
+      "artwork": "https://www.ayalamalls.com/static/media/Ayala%20Malls-new-logo-mobile.ec158e65.png",
+      "width": 3820,
+      "height": 1974,
+      "presentationProcessing": "Official white artwork placed on a contrasting background; resized to 128px."
+    },
+    {
+      "id": "airalo",
+      "source": "https://apps.apple.com/ph/app/airalo-esim-for-travel-data/id1475911720?uo=4",
+      "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/1c/e8/98/1ce898fb-0174-3321-a7b8-6a9521eb2651/AppIcon-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg",
+      "seller": "Airgsm Pte. Ltd.",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "id": "instapay",
+      "source": "https://rbap.org/wp-content/uploads/2018/10/BancNet-Presentation_InstaPay-Onboarding-and-Settlement-Process.pdf",
+      "artwork": "Embedded image 12, page 1",
+      "sourceSha256": "399c9c25f385fba95d6f741583cc5328986f66e41aae01721313fcd0e596431c"
+    }
+  ]
+}

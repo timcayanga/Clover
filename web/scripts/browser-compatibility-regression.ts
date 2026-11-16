@@ -1,0 +1,699 @@
+import { cloverPhoneScreens, connectPlatformDesigns } from "../lib/connect-platform-designs";
+import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
+import path from "node:path";
+import sharp from "sharp";
+import { getVerifiedSpendingMerchantName } from "../lib/transaction-display";
+import { PLAN_COMPARISON_KEYS, PLAN_COMPARISON_ROWS, plannedProPrices } from "../lib/public-plan-comparison";
+import { SOCIAL_LINKS } from "../lib/public-site";
+
+const root = process.cwd();
+const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
+
+async function main() {
+  assert.deepEqual(SOCIAL_LINKS, [
+    { label: "Facebook", href: "https://www.facebook.com/cloverpersonalfinance" },
+    { label: "Instagram", href: "https://www.instagram.com/cloverpersonalfinance/" },
+  ]);
+  const footer = await readSource("components/public-footer.tsx");
+  assert.match(footer, /aria-label="Follow Clover"[\s\S]*?SOCIAL_LINKS\.map/);
+  assert.match(footer, /aria-label=\{link.label\}/, "Icon-only social links need accessible names.");
+  assert.match(footer, /Money looks better from here<\/p>/);
+  assert.match(footer, /Help &amp; Support/);
+  assert.match(footer, /Other Resources[\s\S]*?>Pro<[\s\S]*?>Security<[\s\S]*?Privacy Policy[\s\S]*?Terms and Conditions/);
+  assert.doesNotMatch(footer, />Home<|Explore Clover|Here to help/);
+  assert.match(await readSource("components/marketing-footer.tsx"), /PublicFooter as MarketingFooter/, "Every public layout must use the same footer.");
+  const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
+  assert.doesNotMatch(landingJourneySource, /Planned Pro:|Planned limits\. Not enforced during beta\.|Statement and receipt uploads included in both plans\./, "Landing Pro comparisons should use concise Pro messaging.");
+  const landingJourneyStyles = await readSource("app/landing-preview/landing-preview.module.css");
+  const landingPreviewPageSource = await readSource("app/landing-preview/page.tsx");
+  const mainLandingPageSource = await readSource("app/page.tsx");
+  assert.equal(PLAN_COMPARISON_KEYS.landing.length, 5);
+  assert.equal(PLAN_COMPARISON_KEYS.feature.length, 7);
+  assert.equal(PLAN_COMPARISON_KEYS.full.length, 12);
+  assert.deepEqual(plannedProPrices("ph"), { monthly: "₱169", annual: "₱1,259" });
+  assert.deepEqual(plannedProPrices("global"), { monthly: "US$7.99", annual: "US$59.99" });
+  assert.deepEqual(PLAN_COMPARISON_ROWS.accounts, ["Non-cash financial accounts", "10", "20", "40"]);
+  assert.deepEqual(PLAN_COMPARISON_ROWS.daily, ["AI tokens per rolling 24 hours", "30,000", "250,000", "1 million"]);
+  assert.deepEqual(PLAN_COMPARISON_ROWS.linkedBanks, ["Linked bank accounts", "0", "2", "5"]);
+  const pricingPageSource = await readSource("app/pricing/page.tsx");
+  assert.match(pricingPageSource, /x-vercel-ip-country[\s\S]*?country === "PH"/, "Pricing must select the market from the visitor country.");
+  assert.match(pricingPageSource, /variant="full"/, "Pricing must display the full shared comparison.");
+  assert.doesNotMatch(pricingPageSource, /not enforced during beta/, "The plan table must not claim that active limits are disabled.");
+  assert.match(await readSource("components/public-footer.tsx"), /Pricing[\s\S]*?Privacy Policy[\s\S]*?Terms and Conditions/, "Pricing and legal links must remain available in the footer.");
+  assert.match(mainLandingPageSource, /import \{ Showcase \} from "\.\/landing-showcase\/showcase"/, "The homepage must reuse the approved showcase implementation.");
+  assert.match(mainLandingPageSource, /homeHref="\/" featureBasePath="\/features"/, "The released homepage must link to existing production feature pages.");
+  assert.match(mainLandingPageSource, /robots: \{ index: true, follow: true \}/, "The production homepage must remain indexable.");
+  assert.match(await readSource("app/landing-showcase/features/[slug]/page.tsx"), /process\.env\.VERCEL_ENV === "production"\) notFound\(\)/, "Experimental feature pages must remain unavailable in production.");
+  assert.match(landingPreviewPageSource, /window.location.pathname === "\/" \|\| window.location.pathname === "\/landing-preview"/, "Both public landing routes must retain their light appearance regardless of the saved app theme.");
+  assert.match(landingJourneyStyles, /\.journey \.chapter\[data-active=false\]\{overflow:hidden\}/, "Inactive mobile chapters must not leak nested scrollbars over the current scene.");
+  assert.match(landingJourneyStyles, /\.comparisonChapter,\.proChapter\{scrollbar-width:none\}/, "Scrollable mobile tables must not paint an extra scrollbar.");
+  assert.match(landingJourneyStyles, /\.comparisonChapter::-webkit-scrollbar,\.proChapter::-webkit-scrollbar\{display:none;width:0;height:0\}/, "Mobile Safari must also hide nested table scrollbars.");
+  assert.match(landingJourneyStyles, /\.markers\{gap:4px;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border:0;box-shadow:none;border-radius:0\}/, "Mobile chapter dots must remain frameless like desktop.");
+  assert.equal(Object.keys(connectPlatformDesigns).length, 76, "Every approved public chapter has a composition.");
+  for (const [name, design] of Object.entries(connectPlatformDesigns)) {
+    const image = await sharp(path.join(root, "..", design.background.replace("/assets/", "assets/"))).metadata();
+    assert.equal(image.width, name.includes("-mobile-") ? 390 : 1440);
+    assert.equal(image.height, name.includes("-mobile-") ? 844 : 1000);
+    if (design.screen) {
+      const screen = await sharp(path.join(root, "..", design.screen.replace("/assets/", "assets/"))).metadata();
+      assert.ok((screen.width ?? 0) >= 1170, "Current screens must remain sharp at 3× phone resolution");
+      assert.ok((screen.height ?? 0) >= 2298, "Export complete content without forcing a fixed screenshot ratio");
+    }
+  }
+  const approvedPhones = new Set(Object.values(connectPlatformDesigns).flatMap(design => design.screen ? [design.screen] : []));
+  for (const screen of Object.values(cloverPhoneScreens)) {
+    assert.ok(approvedPhones.has(screen), "Fallback phone previews must reuse an approved current Figma viewport.");
+  }
+  const landingSceneNames = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"];
+
+  await Promise.all(
+    landingSceneNames.flatMap((scene) =>
+      ["", "-mobile"].map((suffix) => access(path.join(root, `../assets/landing-story-v2/${scene}${suffix}.webp`))),
+    ),
+  );
+  await Promise.all(
+    [...landingSceneNames.slice(0, -1), "07-records-away"].flatMap((scene) =>
+      ["", "-mobile"].map((suffix) => access(path.join(root, `../assets/landing-story-v3/${scene}${suffix}.webp`))),
+    ),
+  );
+  const mobileSceneMetadata = await Promise.all(
+    [...landingSceneNames, "07-records-away"].map((scene) => sharp(path.join(root, `../assets/${scene === "06-life" ? "landing-story-v2" : "landing-story-v3"}/${scene}-mobile.webp`)).metadata()),
+  );
+  assert.ok(
+    mobileSceneMetadata.every((metadata) => (metadata.height ?? 0) > (metadata.width ?? 0)),
+    "Every mobile landing scene must use a portrait source so full-viewport cover does not crop out the cast.",
+  );
+  assert.match(landingJourneySource, /const chapterLayouts = \[0, 0, 5, 2, 3, 4, 6, 7\]/);
+  assert.match(landingJourneySource, /const productChapters = \[0, 3, 4, 5\]/);
+  assert.doesNotMatch(landingJourneySource, /rebuilding\.<\/em>|Once your records are organized|Clover Adviser helps turn your financial history/);
+  assert.match(landingJourneySource, /Connect supported banks\. Upload statements, receipts, screenshots, or spreadsheets\. Add details manually\./, "The landing story must present connected banks, uploads, and manual entry together.");
+  assert.match(landingJourneyStyles, /background:transparent!important;border-radius:0!important;backdrop-filter:none;-webkit-backdrop-filter:none;text-align:center/, "Mobile table sections must have centered copy without an enclosing frosted panel.");
+  assert.doesNotMatch(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Each scene must use one photo layer rather than offset duplicates of the cast.");
+  assert.match(landingJourneyStyles, /\.journey \.scene \.sceneSubject\{width:100%;mask-image:none;-webkit-mask-image:none\}/, "The single scene photo must cover the full stage without a duplicate backdrop.");
+  assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.markers\{right:8px;top:50%;bottom:auto;flex-direction:column;/, "The landing-story chapter tracker must remain on the right on mobile.");
+  assert.match(landingPreviewPageSource, /x-vercel-ip-country/, "The landing preview must choose localized finance examples from the visitor country.");
+  assert.match(landingJourneySource, /BPI STATEMENT[\s\S]*GCASH EXPORT[\s\S]*CHASE STATEMENT[\s\S]*PAYPAL EXPORT/, "The landing preview must keep Philippine and global document examples.");
+  assert.match(landingJourneySource, /data-market=\{market\}/, "The selected landing market must remain observable for browser verification.");
+  assert.match(landingJourneyStyles, /Keep the cast in a clear, unfiltered scene plane/, "The landing composition must preserve an unobstructed people layer.");
+  assert.match(landingJourneySource, /progress \* \(chapters\.length - 1\)/, "Landing chapters must advance continuously with scroll progress.");
+  assert.doesNotMatch(landingJourneySource, /data-story-visual="evidence"/, "The refreshed Figma hero must remain free of the retired document overlay.");
+  assert.match(landingJourneySource, /LandingTransactionPhone\(\{ market, style, screen = "transactions", screenSource \}/, "The main landing phone must default to the actual Transactions capture.");
+  assert.match(landingJourneySource, /landing-screens\/\$\{screen\}-\$\{market\}/, "Shared phones must select a localized real capture.");
+  for (const page of ["accounts", "recurring", "reports", "adviser", "investments", "budget", "goal", "circles", "split"]) {
+    for (const market of ["ph", "global"]) {
+      const capture = await sharp(path.join(root, `../assets/landing-screens/${page}-${market}.webp`)).metadata();
+      assert.equal(capture.width, 1206, "Real mobile screens must retain sharp 3x resolution.");
+      assert.equal(capture.height, 2334, "Feature captures must match the real mobile viewport without stretching.");
+    }
+  }
+  for (const market of ["ph", "global"]) {
+    const screen = await sharp(path.join(root, `../assets/landing-screens/transactions-${market}.webp`)).metadata();
+    assert.equal(screen.width, 1206, "Screenshots must retain 3x mobile resolution.");
+    assert.equal(screen.height, 2334, "The app viewport must fit between the iPhone safe areas without cropping.");
+  }
+  assert.match(landingJourneySource, /LandingTransactionPhone market=\{market\} screen="accounts"/, "Accounts must use a real localized Clover capture.");
+  assert.match(landingJourneySource, /LandingTransactionPhone market=\{market\} screen="adviser"/, "Adviser must use a real localized Clover capture.");
+  assert.match(landingJourneySource, /LandingTransactionPhone market=\{market\} screen="split"/, "Shared money must use a real localized Split Bills capture.");
+  assert.match(landingJourneySource, /const displayedChapter = chapterPhase < 0\.5/, "Landing copy must switch quickly without disappearing between chapters.");
+  assert.match(landingJourneySource, /const productMotion = \(index: number, direction = 1\)/, "Product evidence must move with the scroll while remaining fully opaque.");
+  assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");
+  assert.doesNotMatch(landingJourneySource, /chapterMotion[\s\S]{0,500}filter:/, "Landing copy must not blur during chapter transitions.");
+  assert.match(landingJourneySource, /Organize my finances for free[\s\S]*?→[\s\S]*?href="\/sign-in"/, "The landing actions must lead with the arrow-led organization CTA before Log in.");
+  assert.match(landingJourneySource, /FEATURE_LINKS\.map[\s\S]*?href="\/pricing"/, "The public header must expose Features and Pricing.");
+  const publicHeaderSource = landingJourneySource.split("export function JourneyHeader(")[1]?.split("export function LandingJourney")[0];
+  assert.ok(publicHeaderSource, "The shared public header must exist, including when it accepts preview destinations.");
+  assert.doesNotMatch(publicHeaderSource, /href="\/(privacy-policy|terms-of-service)"/, "Legal links belong in the footer, not the journey header.");
+  assert.match(landingJourneySource, /aria-expanded=\{featuresOpen\}[\s\S]*?preview-features-menu/, "The preview Features dropdown must expose its expanded state to assistive technology.");
+  assert.match(landingJourneySource, /aria-label=\{mobileMenuOpen \? "Close menu" : "Open menu"\}[\s\S]*?role="dialog"[\s\S]*?Clover navigation/, "Mobile navigation must use an accessible burger-triggered drawer.");
+  assert.match(landingJourneyStyles, /\.featuresDropdown,\.mobileDropdown\{[\s\S]*?background:#fff/, "Preview navigation menus must remain opaque over the landing photography.");
+  assert.match(landingJourneyStyles, /Continuous story engine:[\s\S]*?\.journey\{height:520svh\}/, "The landing journey must avoid long inactive scroll intervals.");
+  assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.sceneStack\{inset:0;height:100%\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Mobile scenes must fill the viewport from portrait-safe sources.");
+  assert.match(landingJourneyStyles, /Frameless matched-motion story[\s\S]*?\.supportStage\{border:0!important[\s\S]*?background:transparent!important/, "Supporting objects must not be cropped inside a visible parent rail.");
+  assert.match(landingJourneyStyles, /\.evidenceDocument\{[\s\S]{0,600}background:#fff/, "Individual document objects must remain opaque and readable.");
+  assert.match(landingJourneyStyles, /\.evidenceDestination\{[\s\S]{0,600}background:#fff/, "The Clover import result must remain opaque and readable.");
+  assert.match(landingJourneyStyles, /\.iphoneFrame\{[\s\S]{0,220}aspect-ratio:71\.9\/150/, "The phone body must retain iPhone 17 Pro dimensions.");
+  assert.match(landingJourneyStyles, /@keyframes cta-attention[\s\S]*?@keyframes cta-shimmer/, "The primary landing CTA must receive a restrained attention animation.");
+  assert.doesNotMatch(landingJourneySource, /clipPath:/, "Scene transitions must use matched movement instead of directional wipes.");
+  assert.match(landingJourneyStyles, /@media\(min-width:901px\)[\s\S]*?\.sceneStack\{inset:0;width:100%;height:100%;background:#eef8f6\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Desktop photographs must cover the complete stage.");
+  assert.match(landingJourneyStyles, /@media\(max-width:900px\)[\s\S]*?\.world>\.worldWash[\s\S]*?linear-gradient\(180deg[\s\S]*?\.supportStage\{display:none\}/, "Mobile must let the portrait photography drive the story and protect its lower copy with a bottom fade.");
+  assert.match(landingJourneyStyles, /Mobile landing navigation and portrait composition[\s\S]*?\.mobileDrawer\{position:fixed;z-index:102;top:0;bottom:0;left:0/, "The mobile menu must open as a partial-width, full-height left drawer.");
+
+  assert.equal(
+    getVerifiedSpendingMerchantName({
+      merchantClean: "PayPal",
+      merchantRaw: "PAYPAL*SPOTIFY*P 402 EBB",
+      institution: "BPI",
+    }),
+    "Spotify",
+    "Biggest Merchants must resolve the payee behind a payment intermediary when the raw evidence identifies it.",
+  );
+  assert.equal(
+    getVerifiedSpendingMerchantName({
+      merchantClean: "Pymt - Credit Card",
+      merchantRaw: "PYMT - CREDIT CARD",
+      institution: "BPI",
+    }),
+    null,
+    "Generic card payments must not be presented as verified merchants.",
+  );
+  assert.equal(
+    getVerifiedSpendingMerchantName({
+      merchantRaw: "Cebu AIR IN 0 Jozti Https://Www.cph",
+      institution: "BPI",
+    }),
+    "Cebu Pacific",
+    "Cebu Air descriptors must resolve to the customer-facing Cebu Pacific merchant.",
+  );
+  const [
+    shellSource,
+    dashboardSource,
+    workspaceSelectionSource,
+    onboardingSource,
+    circlesSource,
+    pageAuthSource,
+    middlewareSource,
+    globalStyles,
+    transactionsSource,
+    accountDetailsSource,
+    responsiveLayoutSource,
+    dashboardActionsSource,
+    dashboardActionsLazySource,
+    settingsHubSource,
+    postHogSource,
+    modalKeyboardSource,
+    rootLayoutSource,
+    commitmentsSource,
+    investmentsSource,
+    investmentMarketSource,
+    accountsSource,
+    reportsSource,
+    reportsPeriodChartSource,
+    importModalSource,
+    transientRecoverySource,
+    notificationsSource,
+    publicAccountActionsSource,
+  ] = await Promise.all([
+    readSource("components/clover-shell.tsx"),
+    readSource("components/dashboard-page-content.tsx"),
+    readSource("lib/workspace-selection.ts"),
+    readSource("components/onboarding-form.tsx"),
+    readSource("components/circles-page-client.tsx"),
+    readSource("lib/page-auth.ts"),
+    readSource("middleware.ts"),
+    readSource("app/globals.css"),
+    readSource("app/transactions/page.tsx"),
+    readSource("app/accounts/[accountId]/page.tsx"),
+    readSource("lib/responsive-layout.ts"),
+    readSource("components/dashboard-top-actions.tsx"),
+    readSource("components/dashboard-top-actions-lazy.tsx"),
+    readSource("components/settings-hub.tsx"),
+    readSource("components/posthog-analytics.tsx"),
+    readSource("components/modal-keyboard-controller.tsx"),
+    readSource("app/layout.tsx"),
+    readSource("components/commitments-panel.tsx"),
+    readSource("app/investments/page.tsx"),
+    readSource("components/investment-market-chart.tsx"),
+    readSource("app/accounts/page.tsx"),
+    readSource("app/reports/reports-page-content.tsx"),
+    readSource("components/reports-period-comparison-chart.tsx"),
+    readSource("components/import-files-modal.tsx"),
+    readSource("components/transient-data-recovery.tsx"),
+    readSource("app/notifications/notifications-client.tsx"),
+    readSource("components/public-account-actions.tsx"),
+  ]);
+
+  assert.match(importModalSource, /role="dialog"[\s\S]{0,180}aria-label="Upload files"/, "The upload overlay must expose dialog semantics while filling the viewport.");
+  assert.match(importModalSource, /containDialogFocus\(dialog\)/, "Upload overlay must contain and restore keyboard focus.");
+  assert.match(importModalSource, /capture="environment"/, "The full-page upload flow must expose the device camera directly.");
+  assert.match(importModalSource, /<UploadSourceButtons[\s\S]{0,240}onCamera=\{\(\) => cameraInputRef.current\?\.click\(\)\}/, "The upload camera CTA must connect to the device input through the shared source buttons.");
+  assert.match(await readSource("components/upload-source-buttons.tsx"), /"camera", "Take photo", onCamera/, "The shared upload controls must include a directly actionable camera choice.");
+  assert.match(globalStyles, /Final responsive overrides[\s\S]*\.modal-backdrop--import-fullscreen \.accounts-import-modal \{[\s\S]{0,240}height: 100dvh;/, "The upload surface must fill the viewport.");
+  assert.match(globalStyles, /@media \(max-width: 360px\), \(max-height: 560px\)/, "Clover must support narrow effective viewports and enlarged device text.");
+  assert.match(
+    globalStyles,
+    /html:has\(\.landing-page\) \{[\s\S]{0,100}overflow-y: auto;[\s\S]{0,100}body:has\(\.landing-page\) \{[\s\S]{0,80}overflow: visible !important;/,
+    "Every public landing and feature page must use one document scroll root on mobile.",
+  );
+  assert.doesNotMatch(
+    globalStyles,
+    /html:has\(\.landing-page--snap\)/,
+    "Landing-page scrolling must not be limited to the home-page variant.",
+  );
+  assert.match(globalStyles, /\.content--notifications \.content-body \{[\s\S]{0,120}margin-inline: -18px;/, "Notifications must use the full mobile content width.");
+  assert.match(transientRecoverySource, /MAX_AUTOMATIC_RETRIES = 3/, "Transient Home failures must retry before presenting a persistent recovery state.");
+  assert.match(transientRecoverySource, /addEventListener\("online", retryWhenAvailable\)/, "Home recovery must resume when a mobile connection returns.");
+  assert.match(notificationsSource, /className="notifications-layout"/, "The Notifications route must retain its shared full-width layout hook.");
+  assert.match(rootLayoutSource, /<head>[\s\S]{0,240}<script[\s\S]{0,160}id="clover-theme-bootstrap"/, "The theme bootstrap must remain inside the document head.");
+  assert.doesNotMatch(rootLayoutSource, /<\/body>[\s\S]{0,200}<Script/, "Root scripts must not render outside the document body.");
+  assert.match(publicAccountActionsSource, /if \(!accountState\?\.signedIn\)[\s\S]{0,900}return <SignedInPublicAccountActions/, "Signed-out public pages must not call Clerk hooks without a provider.");
+
+  assert.match(reportsSource, /report-list--merchant-table/, "Biggest Merchants must use compact table-style rows.");
+  assert.match(reportsSource, /report-list__item--ranked-merchant report-list__item--merchant-table/, "Merchant ranks must remain in the left-hand grid column.");
+  assert.match(reportsSource, /CategoryBrandMark categoryName=\{merchant\.categoryName\}/, "Biggest Merchants must show the dominant category icon.");
+  assert.match(globalStyles, /\.report-list__item--merchant-table \{[\s\S]*grid-template-columns: 30px minmax\(0, 1fr\)/, "Merchant rows must keep a compact rank and detail layout.");
+
+  assert.match(
+    reportsSource,
+    /const weeklyTrendBuckets = getRollingWeekBuckets\(currentWindowEnd\)/,
+    "Reports Trends must prepare recent weekly comparison periods without another data request.",
+  );
+  assert.match(
+    reportsSource,
+    /points=\{weeklyTrendPoints\}[\s\S]{0,160}label="Recent weekly summary"/,
+    "The Weekly Summary must render its recent income and expense chart.",
+  );
+  assert.match(
+    reportsSource,
+    /points=\{monthlyTrendPoints\}[\s\S]{0,160}label="Recent monthly summary"/,
+    "The Monthly Summary must render its recent income and expense chart.",
+  );
+  assert.equal(
+    reportsSource.match(/className="button button-primary button-small reports-trend-open-button"/g)?.length,
+    2,
+    "Weekly and Monthly Summary links must use the shared compact blue button treatment.",
+  );
+  assert.match(
+    reportsPeriodChartSource,
+    /reports-period-chart__bar--income[\s\S]{0,500}reports-period-chart__bar--expense/,
+    "Report period charts must keep income and expense in separate bars.",
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 700px\) \{[\s\S]{0,900}\.reports-period-chart__plot/,
+    "Report period charts must have a compact mobile layout.",
+  );
+  const protectedPageSources = await Promise.all(
+    [
+      "app/adviser/page.tsx",
+      "app/budgeting/page.tsx",
+      "app/goals/page.tsx",
+      "app/profile/page.tsx",
+      "app/recurring/page.tsx",
+      "app/reports/reports-page-content.tsx",
+      "app/review/page.tsx",
+      "app/settings/page.tsx",
+      "app/split-bill/page.tsx",
+    ].map(readSource),
+  );
+
+  assert.match(
+    workspaceSelectionSource,
+    /selectedWorkspaceEventName = "clover:selected-workspace"/,
+    "Workspace selection must expose a same-tab synchronization event."
+  );
+  assert.match(
+    workspaceSelectionSource,
+    /dispatchEvent\(new CustomEvent\(selectedWorkspaceEventName,\s*\{\s*detail:\s*\{\s*workspaceId/,
+    "Workspace changes must notify the shell in the same browser tab."
+  );
+  assert.match(
+    shellSource,
+    /workspaceId\?: string/,
+    "The shared shell must accept a server-resolved workspace fallback."
+  );
+  assert.match(
+    shellSource,
+    /readSelectedWorkspaceId\(\) \|\| workspaceId \|\| ""/,
+    "Quick add must hydrate from the server workspace when browser storage is empty."
+  );
+  assert.match(
+    shellSource,
+    /addEventListener\(selectedWorkspaceEventName, handleSameTabWorkspaceChange\)/,
+    "Quick add must react to workspace selection performed by the current page."
+  );
+  assert.match(
+    shellSource,
+    /className=\{`shell-mobile-more-link[\s\S]{0,500}aria-expanded=\{isSidebarOpen\}[\s\S]{0,160}aria-controls="primary-navigation"/,
+    "Mobile headers must expose the vertical primary navigation from a stable leading burger control."
+  );
+  assert.match(
+    dashboardSource,
+    /<CloverShell[\s\S]{0,180}workspaceId=\{workspaceSummary\.id\}/,
+    "Home must provide its resolved workspace to camera and file quick-add actions."
+  );
+  assert.match(
+    onboardingSource,
+    /\{importOpen \? \(\s*<ImportFilesModal\s+open/,
+    "Onboarding must not download the parser-heavy import modal before the user starts an upload."
+  );
+  assert.match(
+    circlesSource,
+    /accounts-toolbar-add circles-topbar-action/,
+    "Create Circle must use the shared Add control, not the mobile-hidden Upload control."
+  );
+  assert.match(
+    pageAuthSource,
+    /error\.message === "UNAUTHORIZED"[\s\S]{0,100}redirect\("\/sign-in"\)/,
+    "Protected Server Component pages must redirect signed-out production visitors instead of rendering an error."
+  );
+  assert.ok(
+    protectedPageSources.every((source) => source.includes("getPageSessionContext")),
+    "Every protected Server Component page must use the shared page authentication boundary."
+  );
+  assert.match(
+    middlewareSource,
+    /"\/investments\(\.\*\)"[\s\S]{0,180}"\/notifications\(\.\*\)"/,
+    "Client-only authenticated pages must be protected before their empty shells can render."
+  );
+  assert.match(
+    middlewareSource,
+    /if \(isProtectedAppRoute\(request\) && !isPublicPaymentRequest\) \{[\s\S]{0,120}await auth\.protect\(\{[\s\S]{0,120}unauthenticatedUrl:/,
+    "Protected app routes must require Clerk authentication in every deployed environment."
+  );
+  const publicRequestMatcher = middlewareSource.match(/const isPublicPaymentRequest = (\/[^\n]+?\/)\.test\(request\.nextUrl\.pathname\);/);
+  assert.ok(publicRequestMatcher, "Guest access must use a bounded payment-token path matcher.");
+  const guestPath = new RegExp(publicRequestMatcher[1].slice(1, -1));
+  assert.ok(guestPath.test(`/split-bill/request/${"a".repeat(32)}`));
+  for (const pathname of ["/split-bill", "/split-bill/private-id", "/accounts", "/split-bill/request/short", `/split-bill/request/${"a".repeat(101)}`, `/split-bill/request/${"a".repeat(32)}/edit`]) {
+    assert.equal(guestPath.test(pathname), false, `${pathname} must remain protected.`);
+  }
+  assert.doesNotMatch(
+    middlewareSource,
+    /isGuestEnabledEnvironment|VERCEL_ENV === "preview"|staging\.clover\.ph/,
+    "Staging and preview deployments must not bypass Clerk authentication for protected app routes."
+  );
+
+  assert.match(
+    globalStyles,
+    /\.contact-page__header p \{[\s\S]{0,160}white-space: normal;/,
+    "Contact copy must wrap in tablet and narrow laptop windows."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]*?\.content--has-mobile-leading-action \.shell-topbar-leading__actions \{[\s\S]{0,80}display: none !important;/,
+    "Phone headers must remove duplicate leading actions before positioning the title."
+  );
+  assert.match(
+    globalStyles,
+    /\.topbar:has\(\.shell-back-button\) \.topbar__title-wrap[\s\S]{0,500}position: static !important;[\s\S]{0,500}grid-column: 2 !important;/,
+    "Phone page titles must occupy the grid space between navigation and actions."
+  );
+  assert.match(
+    globalStyles,
+    /\.topbar:has\(\.shell-back-button\) \.topbar__title-row h1[\s\S]{0,260}text-overflow: ellipsis;/,
+    "Long phone page titles must truncate instead of overlapping actions."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--plain-title > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,160}grid-template-columns: 40px minmax\(0, 1fr\) auto !important;/,
+    "Plain phone headers must reserve the real action width instead of overlaying it."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,180}position: static;[\s\S]{0,180}grid-column: 2 !important;/,
+    "Plain phone titles must stay in the collision-free middle column."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,180}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,180}grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);[\s\S]{0,120}gap: 8px;/,
+    "Desktop account cards must follow the same responsive four-column width as the summary cards."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-card-grid--desktop \.accounts-card-drag-shell \{[\s\S]{0,80}max-width: none;/,
+    "Desktop account card wrappers must fill their responsive grid columns."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--accounts \.accounts-overview-grid \{[\s\S]{0,180}top: calc\(var\(--accounts-sticky-header-height\) \+ var\(--accounts-sticky-page-gap\)\);[\s\S]{0,220}width: calc\(100% \+ \(var\(--content-inline-gutter\) \* 2\)\);/,
+    "The desktop Accounts summary must remain at its initial header offset and span both content gutters."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--accounts \.accounts-group,[\s\S]{0,180}\.accounts-group--drop-target\.is-drag-over \{[\s\S]{0,80}border-radius: 0 !important;/,
+    "Desktop account section dividers must keep straight edges in every drag state."
+  );
+  const creditDetailLayout = accountDetailsSource.slice(
+    accountDetailsSource.indexOf('<div className={`accounts-detail__hero-layout'),
+    accountDetailsSource.indexOf("{account.type !== \"investment\" && accountIdentityEditorOpen")
+  );
+  assert.ok(
+    creditDetailLayout.indexOf('className="accounts-detail__hero-card-row"') <
+      creditDetailLayout.indexOf('className="accounts-detail__credit-inline"'),
+    "Credit-card details must render below the centered account card."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-detail__hero-layout\.is-credit-account \{[\s\S]{0,100}grid-template-columns: 1fr;[\s\S]{0,100}width: min\(100%, 320px\);/,
+    "Credit-card detail headers must use one centered column at desktop widths."
+  );
+  assert.match(
+    accountDetailsSource,
+    /editableName=\{account\.type === "investment" \? undefined : account\.name\}[\s\S]{0,500}onNameCommit=/,
+    "Account identity fields must be editable directly on the account card."
+  );
+  assert.doesNotMatch(
+    accountDetailsSource,
+    /className="accounts-detail__account-identity-editor--inline"|className="accounts-detail__account-identity-close"/,
+    "Account identity editing must not restore the redundant editor container or Close action."
+  );
+  assert.match(
+    responsiveLayoutSource,
+    /MOBILE_LAYOUT_MAX_WIDTH = 1100[\s\S]{0,120}DESKTOP_LAYOUT_MIN_WIDTH = MOBILE_LAYOUT_MAX_WIDTH \+ 1[\s\S]{0,120}MOBILE_LAYOUT_MEDIA_QUERY/,
+    "Clover must publish one shared mobile/desktop viewport contract."
+  );
+  assert.ok(
+    [transactionsSource, accountDetailsSource, dashboardActionsSource, dashboardActionsLazySource, settingsHubSource].every(
+      (source) => source.includes("MOBILE_LAYOUT_MEDIA_QUERY")
+    ),
+    "Every React-rendered mobile page variant must use the shared layout query."
+  );
+  assert.match(
+    postHogSource,
+    /viewport_class: getCloverViewportLayout\(window\.innerWidth\)/,
+    "Analytics must report the same two viewport layouts that the interface renders."
+  );
+  assert.doesNotMatch(
+    postHogSource,
+    /viewport_class:[^\n]*tablet/,
+    "Analytics must not retain a third tablet layout class."
+  );
+  assert.match(
+    rootLayoutSource,
+    /<ModalKeyboardController \/>/,
+    "Every route must mount the shared modal keyboard controller."
+  );
+  assert.match(
+    modalKeyboardSource,
+    /event\.key === "Escape"[\s\S]{0,300}findDismissControl\(modal\)[\s\S]{0,300}closeControl\.click\(\)/,
+    "Escape must dismiss the topmost modal through its own close action."
+  );
+  assert.match(
+    modalKeyboardSource,
+    /event\.key !== "Enter" && event\.key !== " "[\s\S]{0,500}\[role="button"\][\s\S]{0,500}customButton\.click\(\)/,
+    "Enter and Space must activate custom modal buttons just like native buttons."
+  );
+  assert.match(
+    commitmentsSource,
+    /className="panel glass recurring-add-modal__card recurring-suggestion-review-modal"[\s\S]{0,300}role="dialog"[\s\S]{0,500}data-modal-close/,
+    "Recurring suggestion review must use Clover's visible, keyboard-dismissible modal structure."
+  );
+  assert.match(
+    investmentsSource,
+    /mobileSubheader=\{renderInvestmentTabs\(true\)\}[\s\S]{0,1200}ariaLabel="Select investment currency"/,
+    "The shared Investments mobile header must keep an accessible currency selector and a separate sub-header."
+  );
+  assert.match(
+    investmentMarketSource,
+    /className="investments-market__range-select"[\s\S]{0,240}<select value=\{range\}/,
+    "Mobile Markets must expose one compact time-period selector."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--investments \.investments-portfolio-table__header \{[\s\S]{0,140}position: sticky;[\s\S]{0,180}background: var\(--surface\);/,
+    "Mobile portfolio filters must stay sticky with an opaque theme-aware background."
+  );
+  const transactionDesktopColumns =
+    "28px 40px minmax(0, 1.8fr) minmax(110px, 0.85fr) minmax(170px, 1.55fr) minmax(140px, 0.9fr) minmax(110px, 0.8fr) 40px 40px";
+  assert.equal(
+    globalStyles.split(transactionDesktopColumns).length - 1,
+    2,
+    "Desktop transaction headers and rows must share the wider Category column layout."
+  );
+  assert.match(
+    globalStyles,
+    /\.dashboard-home--figma \.dashboard-home__report-flow-track \{[^}]*flex-direction: row;[^}]*align-items: flex-end;/,
+    "Home must show income and expense side by side from the same baseline."
+  );
+  assert.match(
+    dashboardSource,
+    /Math\.max\(1, \.\.\.days\.flatMap\(\(day\) => \[day\.income, day\.expense\]\)\)/,
+    "Paired Home bars must share a scale based on the largest individual amount, with a nonzero floor."
+  );
+  assert.match(
+    dashboardSource,
+    /kind: "income", value: day\.income[\s\S]{0,120}kind: "expense", value: day\.expense[\s\S]{0,80}\];/,
+    "Keep both category positions even on days with only income or only expenses."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,100}\.app-shell > \.sidebar \{[\s\S]{0,100}position: sticky !important;[\s\S]{0,100}top: 0 !important;/,
+    "The desktop sidebar must remain anchored while the document scrolls."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,1000}\.topbar__title-wrap,[\s\S]{0,120}order: 0 !important;[\s\S]{0,80}grid-column: 1 !important;[\s\S]{0,180}\.topbar-actions,[\s\S]{0,120}grid-column: 2 !important;/,
+    "Desktop headers must keep titles before actions at every desktop width."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,100}\.shell-bottom-nav \{[\s\S]{0,80}display: grid !important;/,
+    "The complete mobile layout must include bottom navigation at every mobile width."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,220}\.transactions-table-wrap \{[\s\S]{0,80}display: none !important;[\s\S]{0,160}\.transactions-mobile-view \{[\s\S]{0,80}display: grid !important;/,
+    "Transactions must switch its list and table together at the shared mobile breakpoint."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,500}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,80}display: none !important;[\s\S]{0,240}\.accounts-mobile-list,[\s\S]{0,120}display: grid !important;/,
+    "Accounts must switch its desktop cards and mobile list together at the shared mobile breakpoint."
+  );
+  assert.match(
+    accountsSource,
+    /className="accounts-mobile-card-grid"/,
+    "Mobile Accounts must render always-visible account cards in each section."
+  );
+  assert.doesNotMatch(
+    accountsSource,
+    /AccountWalletPocket|MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY/,
+    "Mobile account details must open directly instead of expanding a wallet pocket first."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--accounts \.accounts-mobile-card-grid \{[\s\S]{0,100}grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/,
+    "Mobile Accounts must retain two equal columns without horizontal overflow."
+  );
+  assert.doesNotMatch(
+    accountsSource,
+    /favoriteKey|leftFavorite|rightFavorite/,
+    "Accounts must use value-based ordering rather than a separate favorites hierarchy."
+  );
+  assert.match(
+    accountsSource,
+    /comparableValue[\s\S]{0,700}valueDifference/,
+    "Desktop and mobile account sections must place their highest-value cards first."
+  );
+  assert.match(
+    await readFile(path.join(process.cwd(), "components/account-wallet.tsx"), "utf8"),
+    /stepWalletSpring[\s\S]*requestAnimationFrame/ ,
+    "Mobile account drawers must animate between collapsed and expanded states."
+  );
+  assert.doesNotMatch(
+    accountsSource,
+    /Favorite accounts carousel/,
+    "Mobile Accounts must not restore the duplicate horizontal favorites carousel."
+  );
+  assert.doesNotMatch(
+    globalStyles,
+    /@media \(max-width: 1180px\) \{[\s\S]{0,120}\.(?:app-shell|sidebar|transactions-table-wrap|transactions-mobile-view|split-bill-mobile-home)/,
+    "No legacy 1,180px rule may activate a third application layout."
+  );
+  assert.match(
+    globalStyles,
+    /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,100}position: sticky !important;[\s\S]{0,80}top: 0;/,
+    "Shared page headers must remain anchored across desktop and compact layouts."
+  );
+  assert.match(
+    globalStyles,
+    /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,240}background: var\(--surface\) !important;[\s\S]{0,100}box-shadow: none !important;/,
+    "Sticky page headers must use an opaque page-matched background without a container shadow."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,520}\.nav-link \{[\s\S]{0,140}font-size: 13px;[\s\S]{0,180}\.nav-link__icon \{[\s\S]{0,80}width: 20px;[\s\S]{0,80}height: 20px;/,
+    "Desktop sidebar labels and icon slots must retain their readable sizing."
+  );
+  assert.match(
+    globalStyles,
+    /\.settings-hub__menu-item \{[\s\S]{0,260}font-family: var\(--font-body\);[\s\S]{0,100}font-size: 14px;[\s\S]{0,80}font-weight: 400;/,
+    "Settings navigation must inherit the primary menu's font family and regular weight."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,220}\.settings-hub__menu-item \{[\s\S]{0,180}min-height: 32px;[\s\S]{0,80}height: 32px;[\s\S]{0,100}padding: 0 5px;[\s\S]{0,80}gap: 8px;[\s\S]{0,80}font-size: 13px;/,
+    "Desktop Settings rows must share the primary sidebar's size, padding, and spacing."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,140}\.content > :is\(\.topbar, \.shell-compact-bar\):has\(\.shell-back-button\) \{[\s\S]{0,100}grid-template-columns: auto minmax\(0, 1fr\) auto !important;/,
+    "Compact headers must reserve separate columns for leading controls, titles, and actions."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,140}\.content--has-mobile-leading-action \.shell-topbar-leading__actions \{[\s\S]{0,80}display: inline-flex !important;/,
+    "Mobile Accounts, Transactions, and Recurring headers must expose their Ask Clover action."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--has-mobile-leading-action[\s\S]{0,160}> :is\(\.topbar, \.shell-compact-bar\):has\(\.shell-back-button\)[\s\S]{0,100}\.topbar__title-row[\s\S]{0,300}h1 \{[\s\S]{0,100}flex: 1 1 auto;[\s\S]{0,160}text-overflow: ellipsis;/,
+    "Very narrow mobile headers must shrink and ellipsize titles inside the center column."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]*?\.transactions-mobile-simple-row \{[\s\S]{0,180}min-height: 40px;[\s\S]{0,120}padding: 6px 4px 6px 6px;/,
+    "Mobile transaction lists must keep their compact row sizing."
+  );
+  assert.match(
+    globalStyles,
+    /\.transactions-mobile-simple-row__name-main,[\s\S]{0,100}\.transactions-mobile-simple-row__amount \{[\s\S]{0,100}font-size: 0\.82rem;/,
+    "Mobile transaction names and amounts must use the compact shared type scale."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-detail__transactions \.accounts-detail__mobile-transaction-name \{[\s\S]{0,120}grid-template-columns: 20px minmax\(0, 1fr\) !important;/,
+    "Account Details must retain its compact single-badge mobile transaction layout."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-detail__transactions \.accounts-detail__mobile-transaction-name \.transactions-mobile-simple-row__name-main \{[\s\S]{0,180}white-space: normal;[\s\S]{0,80}overflow-wrap: anywhere;/,
+    "Account Details must show complete mobile transaction names instead of truncating them."
+  );
+  assert.match(
+    globalStyles,
+    /\.transactions-mobile-date-divider::before,[\s\S]{0,100}\.transactions-mobile-date-divider::after \{[\s\S]{0,120}border-top: 1px dashed currentColor;/,
+    "Mobile transaction dates must use equal flexible divider lines instead of typed hyphens."
+  );
+  assert.match(
+    globalStyles,
+    /\.transactions-mobile-date-divider,[\s\S]{0,80}\.transactions-mobile-date-divider span \{[\s\S]{0,80}min-height: 18px;/,
+    "Mobile transaction date dividers must keep their compact vertical rhythm."
+  );
+  assert.match(
+    globalStyles,
+    /Final mobile shell alignment[\s\S]{0,1800}\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,700}grid-column: 2 !important;[\s\S]{0,260}justify-self: center !important;/,
+    "Plain mobile page names must remain centered in the header's middle grid column despite asymmetric controls."
+  );
+  assert.match(
+    globalStyles,
+    /Mobile pages with subtabs[\s\S]{0,2400}\.content--has-title-addon > :is\(\.topbar, \.shell-compact-bar\) \.topbar__title-row \{[\s\S]{0,320}align-items: center !important;[\s\S]{0,180}flex-wrap: nowrap !important;/,
+    "Tabbed mobile headers must keep the page title and subtabs aligned in one row."
+  );
+  assert.match(
+    globalStyles,
+    /Mobile pages with subtabs[\s\S]{0,4200}\.content--has-title-addon \.topbar__title-addon :is\([\s\S]{0,220}\.circles-title-tabs[\s\S]{0,500}overflow-x: auto !important;[\s\S]{0,180}flex-wrap: nowrap !important;[\s\S]{0,180}-webkit-mask-image: none !important;/,
+    "Tabbed mobile headers must expose every available subtab in an unfaded horizontal scroller."
+  );
+  assert.match(
+    globalStyles,
+    /\.transactions-mobile-simple-row \{[\s\S]{0,100}border-top: 0\.5px solid rgba\(148, 163, 184, 0\.24\);/,
+    "Mobile transaction separators must use a light hairline treatment."
+  );
+  assert.ok(
+    [transactionsSource, accountDetailsSource].every(
+      (source) =>
+        /className="transactions-mobile-date-divider">\s*<span>\{group\.label\}<\/span>/.test(source) &&
+        /size=\{20\}[\s\S]{0,100}className="transactions-mobile-simple-row__category-icon"/.test(source)
+    ),
+    "Transactions and Account Details must use centered date labels and equal 20px mobile badges."
+  );
+
+  console.log("Browser compatibility regression passed.");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

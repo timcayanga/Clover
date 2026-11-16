@@ -1,0 +1,52 @@
+import { usePageAskClover } from "./page-ask-context";
+import type { AskPageContext } from "../../shared/ask-clover-page";
+import { useState } from "react";
+import { CloverEmptyState } from "./clover-mascot";
+import { router } from "expo-router";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import type { HomeInsight } from "../../shared/home-adviser-insights";
+import { Text } from "./app-text";
+import { Body, Card, money, useTheme } from "./ui";
+
+function openInsight(item: HomeInsight, askClover: (context: AskPageContext) => void) {
+  if (item.kind === "reminder") {
+    router.push({ pathname: "/add-transaction", params: { entry: "manual" } });
+  } else if (item.href.startsWith("/recurring")) {
+    router.navigate("/recurring");
+  } else if (item.href.startsWith("/transactions")) {
+    const category = item.href.split("?category=")[1];
+    router.navigate({ pathname: "/(tabs)/transactions", params: { query: category ? decodeURIComponent(category) : "" } });
+  } else {
+    askClover({page:"home",title:"Home"});
+  }
+}
+
+export function HomeAdviser({ insights, hidden }: { insights: HomeInsight[]; hidden: boolean }) {
+  const askClover = usePageAskClover();
+  const { colors, styles, dark } = useTheme();
+  const { width } = useWindowDimensions();
+  const [containerWidth, setContainerWidth] = useState(0);
+  const cardWidth = Math.min(340, Math.max(1, (containerWidth || width - 66) - 18));
+  const reminder = insights.find(item => item.kind === "reminder");
+  const advice = insights.filter(item => item.kind !== "reminder" && item.actionLabel !== "Upload now");
+  return <Card>
+    <Text style={styles.sectionTitle}>Ask Clover</Text>
+    {advice.length ? <ScrollView onLayout={event => setContainerWidth(event.nativeEvent.layout.width)} horizontal showsHorizontalScrollIndicator={false} snapToInterval={cardWidth + 12} decelerationRate="fast" contentContainerStyle={{ gap: 12 }}>
+      {advice.map((item) => <View key={item.label} style={{ width: cardWidth, padding: 12, borderRadius: 12, gap: 8, backgroundColor: dark ? colors.pale : item.tone === "positive" ? "#E5F8EB" : item.tone === "warning" ? "#FFF0EB" : "#E7F7F6" }}>
+        <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{item.emoji} {item.label}</Text>
+        <Text style={{ color: colors.ink, fontSize: 13, lineHeight: 20 }}>{item.parts.map((part) => typeof part === "string" ? part : hidden ? "••••" : money(String(part.amount), part.currency)).join("")}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={item.actionLabel} onPress={() => openInsight(item, askClover)} style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }}>
+          <Text style={{ color: colors.teal, fontSize: 13, fontFamily: "Poppins-SemiBold" }}>{item.actionLabel} →</Text>
+        </Pressable>
+      </View>)}
+    </ScrollView> : <CloverEmptyState compact pose="resting">No new suggestions right now. Clover will surface helpful next steps here.</CloverEmptyState>}
+    {advice.length > 1 ? <Text style={{ color: colors.muted, fontSize: 11 }}>Swipe left or right for more advice</Text> : null}
+    {reminder ? <View style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 10, gap: 4 }}>
+      <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{reminder.emoji} {reminder.label}</Text>
+      <Body>{reminder.parts.join("")}</Body>
+      <Pressable accessibilityRole="button" onPress={() => openInsight(reminder, askClover)} style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }}>
+        <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{reminder.actionLabel} →</Text>
+      </Pressable>
+    </View> : null}
+  </Card>;
+}

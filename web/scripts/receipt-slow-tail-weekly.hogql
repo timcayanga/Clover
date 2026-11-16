@@ -1,0 +1,60 @@
+-- Seven complete 24-hour cohorts, delayed one day for outcome maturation.
+-- Keep unresolved and pre-upload failures even when no server event can join.
+WITH scans AS (
+  SELECT toString(properties.platform) AS platform, toString(properties.operation_id) AS scan_id,
+    minIf(timestamp, properties.outcome = 'accepted') AS accepted_at,
+    countIf(properties.outcome = 'accepted') AS accepted,
+    countIf(properties.outcome != 'accepted') AS terminal,
+    argMinIf(tuple(
+      toString(properties.outcome),
+      toFloat64OrNull(toString(properties.duration_ms)),
+      coalesce(toString(properties.import_file_id), ''),
+      coalesce(toString(properties.reason_code), 'unspecified')
+    ), timestamp, properties.outcome != 'accepted') AS first_result
+  FROM events
+  WHERE event = 'receipt_first_attempt'
+    AND timestamp >= now() - INTERVAL 8 DAY
+    AND properties.analytics_environment = 'production'
+    AND properties.analytics_audience = 'customer'
+    AND coalesce(toString(properties.analytics_excluded), 'false') NOT IN ('true', '1')
+    AND properties.platform IN ('ios', 'android', 'desktop_web', 'mobile_web')
+    AND properties.operation_id IS NOT NULL
+  GROUP BY platform, scan_id
+  HAVING accepted > 0 AND accepted_at <= now() - INTERVAL 1 DAY
+), worker AS (
+  SELECT toString(properties.import_file_id) AS import_key,
+    argMin(tuple(
+      coalesce(toString(properties.receipt_route), 'unknown'),
+      coalesce(toString(properties.receipt_ocr_quality), 'unknown'),
+      coalesce(toString(properties.receipt_slowest_server_stage), 'unknown'),
+      toFloat64OrNull(toString(properties.receipt_slowest_server_stage_ms))
+    ), timestamp) AS first_worker
+  FROM events
+  WHERE event = 'import_attempt_finished'
+    AND timestamp >= now() - INTERVAL 8 DAY
+    AND properties.analytics_environment = 'production'
+    AND properties.analytics_audience = 'customer'
+    AND coalesce(toString(properties.analytics_excluded), 'false') NOT IN ('true', '1')
+    AND properties.import_format = 'image' AND properties.first_attempt = true
+    AND properties.import_file_id IS NOT NULL
+  GROUP BY import_key
+), results AS (
+  SELECT platform,
+    if(terminal = 0, 'no_outcome_24h', tupleElement(first_result, 1)) AS outcome,
+    tupleElement(first_result, 2) AS duration_ms,
+    ifNull(nullIf(tupleElement(first_worker, 1), ''), 'unknown') AS route,
+    ifNull(nullIf(tupleElement(first_worker, 2), ''), 'unknown') AS ocr_quality,
+    ifNull(nullIf(tupleElement(first_worker, 3), ''), 'unknown') AS slowest_server_stage,
+    tupleElement(first_worker, 4) AS server_stage_ms,
+    if(terminal = 0, 'no_client_outcome', tupleElement(first_result, 4)) AS reason_code
+  FROM scans
+  LEFT JOIN worker ON tupleElement(first_result, 3) = worker.import_key
+)
+SELECT platform, route, ocr_quality, slowest_server_stage, outcome, reason_code, count() AS attempts,
+  countIf(outcome = 'visible' AND duration_ms >= 0 AND duration_ms <= 10000) AS visible_within_10s,
+  countIf(outcome = 'visible' AND duration_ms > 10000) AS visible_over_10s,
+  quantileIf(0.9)(duration_ms, duration_ms >= 0) AS p90_client_ms,
+  quantileIf(0.9)(server_stage_ms, server_stage_ms >= 0) AS p90_server_stage_ms
+FROM results
+GROUP BY platform, route, ocr_quality, slowest_server_stage, outcome, reason_code
+ORDER BY visible_over_10s DESC, attempts DESC

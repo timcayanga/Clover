@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { spendingRoomChart,spendingRoomReply } from '../lib/adviser-spending-room';
+import { parseAdviserChart } from '../../shared/adviser-chart';
+import { adviserHistoryInput } from '../lib/adviser-history';
+const estimate={currency:'PHP',asOf:'2026-10-09T00:00:00Z',through:'2026-11-08T00:00:00Z',horizonDays:30,availableCash:50000,expectedIncome:0,knownObligations:10000,everydaySpendingBuffer:5000,goalContribution:5000,additionalBuffer:5000,safeToSpend:25000,roomAfterProtection:25000,confidence:{label:'medium',score:65},caveats:['Confirm missing bills.']};
+const chart=spendingRoomChart(estimate);
+assert.equal(parseAdviserChart(chart)?.spendingPlan?.safeToSpend,25000);
+const saved=adviserHistoryInput.parse({id:'c0f1943a-0123-4567-8123-0123456789ab',revision:0,messages:[{role:'user',content:'How much can I spend?'},{role:'assistant',content:spendingRoomReply(estimate),visualization:chart}]});
+assert.deepEqual(saved.messages[1].visualization?.spendingPlan,chart.spendingPlan);
+assert.match(spendingRoomReply(estimate),/Confidence/);
+for(const invalid of [{safeToSpend:50000},{availableCash:Infinity},{additionalBuffer:-1},{confidence:{label:'certain',score:101}}])assert.equal(parseAdviserChart({...chart,spendingPlan:{...chart.spendingPlan,...invalid}}),null);
+assert.equal(parseAdviserChart(spendingRoomChart({...estimate,availableCash:10000,roomAfterProtection:-15000,safeToSpend:0}))?.spendingPlan?.roomAfterProtection,-15000);
+assert.ok(parseAdviserChart({...chart,spendingPlan:undefined}));
+console.log('Spending visual: positive room, deficit, validation, text fallback, and history passed.');

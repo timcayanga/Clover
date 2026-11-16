@@ -1,0 +1,241 @@
+import { shutdownImportOcrWorkers } from "@/lib/import-file-text.server";
+import { claimAdminRetry } from "@/lib/admin-import-retry";
+import { prisma } from "@/lib/prisma";
+import { Worker, type Job } from "bullmq";
+import { enqueueImportProcessing, getImportQueueName, getAdminImportQueueName, getRedisConnection } from "@/lib/import-queue";
+import {
+  countParsedTransactionRows,
+  countTransactionsByImportFileCompat,
+  fetchImportFileCompat,
+  updateImportFileCompat,
+} from "@/lib/data-engine";
+import { getConfiguredPdfJsBaseUrl, isPdfPasswordError } from "@/lib/import-file-text.server";
+import {
+  getNextVisualImportAttempt,
+  getVisualImportRetryMessage,
+  shouldKeepFailedVisualImportRecoverable,
+  type VisualImportRecoveryMode,
+} from "@/lib/import-visual-recovery";
+import { processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
+import { summarizeErrorForLog } from "@/lib/security-logging";
+import { purgeExpiredImportFiles } from "@/lib/import-retention";
+import { isNonFinancialUploadError } from "@/lib/financial-upload-scope";
+import { isSourceReviewRequiredError } from "@/lib/import-source-review";
+import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
+
+void purgeExpiredImportFiles({ limit: 50 }).catch((error) => {
+  console.warn("Unable to purge expired raw import files at worker startup", { error: summarizeErrorForLog(error) });
+});
+
+const connection = getRedisConnection();
+const passwordRequiredMessage = "This file is password-protected. Enter the password to continue.";
+const isMissingImportFileError = (error: unknown) =>
+  error instanceof Error && error.message === "Import file not found";
+
+const processJob = async (job: Job) => {
+    const { importFileId, actorUserId, password, allowDuplicateStatement, bankName, importMode, pdfJsBaseUrl } = job.data;
+    if (job.data.adminRetry && !await claimAdminRetry(importFileId, job.data.adminRetry.version)) return { skipped: true, reason: "admin_retry_conflict" };
+    try {
+      return await processImportFileText(importFileId, {
+        actorUserId: actorUserId ?? null,
+        queueJobId: job.id,
+        dispatch: job.data.dispatchId ? { id: job.data.dispatchId, source: "bullmq" } : undefined,
+        queueWaitMs: job.attemptsMade === 0 && job.processedOn !== undefined && job.processedOn >= job.timestamp
+          ? job.processedOn - job.timestamp
+          : null,
+        password,
+        allowDuplicateStatement,
+        importMode,
+        qaSource: "import_processing",
+        pdfJsBaseUrl: pdfJsBaseUrl ?? getConfiguredPdfJsBaseUrl(),
+        statementMetadataOverride: bankName
+          ? {
+              institution: bankName,
+            }
+          : null,
+      });
+    } catch (error) {
+      if (isSourceReviewRequiredError(error)) {
+        const review = await persistSourceReviewFailure(importFileId, error);
+        if (review?.kind === "review" || review?.kind === "missing_import") job.discard();
+        throw error;
+      }
+      // The user or an idempotent QA cleanup can remove an import after it was
+      // queued. Treat that as successful cancellation so BullMQ does not retry
+      // a source that no longer exists or emit a misleading processing error.
+      if (isMissingImportFileError(error)) {
+        job.discard();
+        return { skipped: true, reason: "import_deleted" };
+      }
+      if (isNonFinancialUploadError(error)) {
+        job.discard();
+        await updateImportFileCompat(importFileId, {
+          status: "failed",
+          processingPhase: "non_financial",
+          processingMessage: error instanceof Error ? error.message : String(error),
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        }).catch(() => null);
+      }
+      if (isPdfPasswordError(error)) {
+        job.discard();
+        await updateImportFileCompat(importFileId, {
+          status: "failed",
+          processingPhase: "password_required",
+          processingMessage: passwordRequiredMessage,
+        }).catch(() => null);
+      }
+      throw error;
+    }
+};
+const worker = new Worker(getImportQueueName(), processJob, { connection, concurrency: 2 });
+// A separate queue prevents older workers from consuming jobs without the guard.
+const adminWorker = new Worker(getAdminImportQueueName(), processJob, { connection, concurrency: 1 });
+
+const workers = [worker, adminWorker];
+for (const worker of workers) {
+worker.on("completed", (job, result) => {
+  if (result && "skipped" in result && result.skipped) return;
+  console.log(`Import job completed: ${job.id}`);
+  const importFileId = job.data?.importFileId;
+  if (importFileId) {
+    void processImportEnrichmentJobs({
+      importFileId,
+      limit: 1,
+      workerId: `bullmq-import-enrichment-${job.id}`,
+    }).catch((error) => {
+      console.warn("Unable to continue import enrichment after import job completed", {
+        importFileId,
+        error: summarizeErrorForLog(error),
+      });
+    });
+  }
+});
+
+worker.on("failed", async (job, error) => {
+  console.error("Import job failed", { jobId: job?.id ?? null, error: summarizeErrorForLog(error) });
+  const importFileId = job?.data?.importFileId;
+  if (importFileId) {
+    if (isSourceReviewRequiredError(error)) {
+      const review = await persistSourceReviewFailure(importFileId, error);
+      if (review?.kind !== "existing_rows") return;
+    }
+    if (job?.data?.adminRetry) {
+      await prisma.importFile.updateMany({ where: { id: importFileId, status: "processing", confirmedAt: null, confirmedTransactionsCount: 0, transactions: { none: { reviewStatus: { in: ["confirmed", "edited"] } } } }, data: { status: "failed", processingPhase: "failed", processingMessage: "Support retry failed. Review the import before retrying again." } }).catch(() => null);
+      return;
+    }
+    if (isNonFinancialUploadError(error)) {
+      await updateImportFileCompat(importFileId, {
+        status: "failed",
+        processingPhase: "non_financial",
+        processingMessage: error.message,
+        parsedRowsCount: 0,
+        confirmedTransactionsCount: 0,
+      }).catch(() => null);
+      return;
+    }
+    if (isPdfPasswordError(error)) {
+      await updateImportFileCompat(importFileId, {
+        status: "failed",
+        processingPhase: "password_required",
+        processingMessage: passwordRequiredMessage,
+      }).catch(() => null);
+      return;
+    }
+
+    const latestImportFile = await fetchImportFileCompat(importFileId).catch(() => null);
+    const fileName = String(latestImportFile?.fileName ?? "");
+    const fileType = String(latestImportFile?.fileType ?? "");
+    const isVisualImport =
+      fileType.toLowerCase().startsWith("image/") ||
+      fileType.toLowerCase() === "application/pdf" ||
+      /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif|pdf)$/i.test(fileName);
+    const importMode: VisualImportRecoveryMode =
+      job.data?.importMode === "receipt" ? "receipt" : "statement";
+    const [savedTransactionsCount, parsedRowsCount] = await Promise.all([
+      countTransactionsByImportFileCompat(importFileId).catch(() => 0),
+      countParsedTransactionRows(importFileId).catch(() => 0),
+    ]);
+    if (savedTransactionsCount > 0) {
+      await updateImportFileCompat(importFileId, {
+        status: "done",
+        processingPhase: "complete",
+        processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+        confirmedTransactionsCount: savedTransactionsCount,
+      });
+      return;
+    }
+    if (parsedRowsCount > 0 && isVisualImport) {
+      await updateImportFileCompat(importFileId, {
+        status: "processing",
+        processingPhase: "reconciling",
+        processingMessage: "Clover parsed rows from this file and is retrying the final save step.",
+        confirmedTransactionsCount: 0,
+      });
+      return;
+    }
+    if (
+      shouldKeepFailedVisualImportRecoverable({
+        importMode,
+        isVisualImport,
+        processingAttempt: latestImportFile?.processingAttempt,
+      })
+    ) {
+      const nextAttempt = getNextVisualImportAttempt(latestImportFile?.processingAttempt);
+      await updateImportFileCompat(importFileId, {
+        status: "processing",
+        processingPhase: "queued_retry",
+        processingAttempt: nextAttempt,
+        processingMessage: getVisualImportRetryMessage(importMode, nextAttempt),
+        parsedRowsCount: 0,
+        confirmedTransactionsCount: 0,
+      });
+
+      const configuredAttempts = Number(job?.opts.attempts ?? 1);
+      const attemptsExhausted = Boolean(job) && Number(job?.attemptsMade ?? 0) >= Math.max(1, configuredAttempts);
+      if (attemptsExhausted && job) {
+        try {
+          await enqueueImportProcessing(
+            {
+              ...job.data,
+              importFileId,
+            },
+            { jobId: `${importFileId}:visual-retry:${nextAttempt}` }
+          );
+        } catch (queueError) {
+          console.error("Visual import recovery requeue failed", {
+            importFileId,
+            nextAttempt,
+            error: summarizeErrorForLog(queueError),
+          });
+          await updateImportFileCompat(importFileId, {
+            processingMessage: "Clover will retry this file when the import queue is available again.",
+          }).catch(() => null);
+        }
+      }
+      return;
+    }
+
+    const errorMessage =
+      error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : "Import failed. Waiting for the recovery loop to retry this file.";
+    await updateImportFileCompat(importFileId, {
+      status: "failed",
+      processingPhase: "failed",
+      processingMessage: errorMessage,
+    });
+  }
+});
+
+}
+
+const shutdown = async () => {
+  await Promise.all(workers.map(worker => worker.close()));
+  await shutdownImportOcrWorkers();
+  await connection.quit();
+  process.exit(0);
+};
+
+process.on("SIGINT", () => void shutdown());
+process.on("SIGTERM", () => void shutdown());

@@ -1,0 +1,37 @@
+import { prisma } from "./prisma";
+import { headers } from "next/headers";
+import { after } from "next/server";
+import { browserContext } from "../../shared/analytics";
+import { type AnalyticsEventName, type AnalyticsProperties } from "./analytics";
+import { capturePostHogServerEvent as capture } from "./analytics-capture";
+import { getAnalyticsAudience } from "./analytics-audience";
+export async function capturePostHogServerEvent(event: AnalyticsEventName, distinctId: string, properties: AnalyticsProperties = {}, timestamp?: Date) {
+  let context: AnalyticsProperties = { event_source: "server", platform: "server" };
+  try {
+    const h = await headers();
+    const operationId = h.get("x-clover-operation-id");
+    if (operationId && /^[a-z0-9-]{8,80}$/.test(operationId)) context.operation_id = operationId;
+    const platform = h.get("x-clover-platform");
+    const browser = browserContext(h.get("user-agent") ?? "");
+    if (browser.browser !== "unknown") context = { ...context, ...browser };
+    if (platform === "ios" || platform === "android") {
+      context.platform = platform;
+      context.os = platform === "ios" ? "iOS" : "Android";
+      context.browser = null;
+      for (const field of ["device-type", "device-model", "os-version", "app-version", "app-build"])
+        context[field.replaceAll("-", "_")] = h.get(`x-clover-${field}`)?.slice(0, 80) ?? null;
+    }
+  } catch { /* Workers have no request; keep explicit server attribution. */ }
+  const send = async () => {
+    let identity = distinctId;
+    if (/^(plan_|billing_|trial_to_paid)/.test(event) && !distinctId.startsWith("user_")) {
+      try { identity = (await prisma.user.findUnique({ where: { id: distinctId }, select: { clerkUserId: true } }))?.clerkUserId ?? distinctId; } catch { /* Delivery must not affect billing. */ }
+    }
+    try {
+      if (identity.startsWith("user_") && await prisma.clerkIdentityDeletion.findUnique({ where: { clerkUserId: identity }, select: { clerkUserId: true } })) return;
+    } catch { return; /* Analytics must not block billing or capture an unverified deleted identity. */ }
+    const audience = await getAnalyticsAudience(identity);
+    await capture(event, identity, { ...context, ...properties, ...audience, event_source: "server" }, timestamp);
+  };
+  try { after(send); } catch { await send(); }
+}

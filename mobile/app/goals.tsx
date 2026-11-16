@@ -1,0 +1,582 @@
+import { usePageAskClover, usePageAskScope } from "../src/page-ask-context";
+import { ResourceUpgradeNotice } from "../src/contextual-upgrade";
+import { AdaptiveGrid } from "../src/adaptive";
+import { CloverEmptyState } from "../src/clover-mascot";
+import { EntryOverlay } from "../src/entry-overlay";
+import { ChoiceField } from "../src/transaction-entry";
+import { CreateDirectoryCard } from "../src/create-directory-card";
+import { Icon } from "../src/ui";
+import { Text } from "../src/app-text";
+import { useEffect, useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { View } from "react-native";
+import { useSession } from "../src/session";
+import {
+  Body,
+  Card,
+  CategoryMark,
+  Field,
+  Notice,
+  Screen,
+  money,
+  useTheme,
+} from "../src/ui";
+import {
+  PlanAction,
+  PlanHeader,
+  PlanDirectoryCard,
+  PlanAmount,
+  PlanTabs,
+  Progress,
+  usePlanData,
+} from "../src/plan-ui";
+type Goal = {
+  id: string;
+  goal: string;
+  name: string;
+  category: string;
+  targetAmount: number | null;
+  currency: string;
+  cadence: string;
+  purpose: string;
+  legacy: boolean;
+  progress?: {
+    currentAmount: number;
+    targetAmount: number | null;
+    progressPercent: number | null;
+    currentLabel: string;
+    nextAction: string;
+  };
+  activity?: { income: number; spending: number; start: string; end: string };
+};
+const sample = { goals: [] as Goal[] };
+const presets = [
+  { name: "Save More", key: "save_more", icon: "Income" },
+  {
+    name: "Emergency Fund",
+    key: "build_emergency_fund",
+    icon: "Health & Wellness",
+  },
+  { name: "Invest Better", key: "invest_better", icon: "Investments" },
+];
+export default function Goals() {
+  const session = useSession();
+  const params = useLocalSearchParams<{ goalId?: string }>();
+  const opened = useRef("");
+  const { colors, dark } = useTheme();
+  const { data, setData, error, reload } = usePlanData("goals", sample);
+  const [deleteState, setDeleteState] = useState<"idle" | "confirm" | "busy">(
+    "idle",
+  );
+  const [deleteError, setDeleteError] = useState("");
+  const [selected, setSelected] = useState<Goal | null>(null);
+  const askClover = usePageAskClover();
+  usePageAskScope({page:"goals",title:selected?.name || "Goals",goalId:selected?.id,currency:selected?.currency});
+  const [editor, setEditor] = useState<{
+    goal: Goal | null;
+    preset?: string;
+  } | null>(null);
+  const [tab, setTab] = useState("Overview");
+  useEffect(() => {
+    setSelected(null);
+    setEditor(null);
+    setDeleteState("idle");
+    setDeleteError("");
+  }, [session.profileId]);
+  useEffect(() => {
+    const id = params.goalId;
+    const token = `${session.profileId}:${id}`;
+    if (id && data && opened.current !== token) {
+      const found = data.goals.find((item) => item.id === id);
+      if (found) {
+        opened.current = token;
+        setSelected(found);
+      }
+    }
+  }, [params.goalId, data, session.profileId]);
+  const entryOverlay = editor ? (
+    <EntryOverlay onClose={() => setEditor(null)}>
+      <GoalEditor
+        key={session.profileId}
+        goal={editor.goal}
+        preset={editor.preset}
+        onClose={() => setEditor(null)}
+        onSaved={(goal) => {
+          setEditor(null);
+          setSelected(null);
+          if (session.demo)
+            setData((current) => ({
+              goals: [
+                ...(current?.goals ?? []).filter((g) => g.id !== goal.id),
+                goal,
+              ],
+            }));
+          else reload();
+        }}
+      />
+    </EntryOverlay>
+  ) : null;
+  const icon = (goal: Goal) =>
+    goal.goal === "invest_better"
+      ? "Investments"
+      : goal.goal === "build_emergency_fund"
+        ? "Health & Wellness"
+        : "Income";
+  return (
+    <Screen layout="dashboard" gap={20}>
+      {entryOverlay}
+      <PlanHeader
+        title={selected ? selected.name : "Goals"}
+        back={selected ? () => setSelected(null) : undefined}
+        add={() => setEditor({ goal: null })}
+      />
+      {error ? (
+        <>
+          <Notice>{error}</Notice>
+          <PlanAction title="Try again" onPress={reload} />
+        </>
+      ) : !data ? (
+        <Body>Loading goals…</Body>
+      ) : selected ? (
+        <>
+          <PlanTabs
+            items={["Overview", "Roadmap", "Progress", "History"]}
+            value={tab}
+            onChange={setTab}
+          />
+          {tab === "Overview" ? (
+            <>
+              <Card>
+                <Body>{selected.cadence[0].toUpperCase() + selected.cadence.slice(1)} Target</Body>
+                <Body muted={false}>
+                  {selected.targetAmount === null
+                    ? "Set a target"
+                    : money(String(selected.targetAmount), selected.currency)}
+                </Body>
+                {selected.progress ? (
+                  <>
+                    <Body muted={false}>
+                      {money(
+                        String(selected.progress.currentAmount),
+                        selected.currency,
+                      )}
+                    </Body>
+                    <Body>{selected.progress.currentLabel}</Body>
+                    <Progress value={selected.progress.progressPercent ?? 0} />
+                    <Body>
+                      {Math.round(selected.progress.progressPercent ?? 0)}% of{" "}
+                      {selected.cadence === "annual"
+                        ? "monthly pace"
+                        : "target"}
+                    </Body>
+                  </>
+                ) : (
+                  <Body>
+                    Existing account goal. Progress is not available in this
+                    native view yet.
+                  </Body>
+                )}
+              </Card>
+              <Body>
+                Progress reflects the last 30 days in this Profile and currency.
+                It is not money reserved separately. Annual targets are shown as
+                a monthly pace.
+              </Body>
+              {selected.legacy ? (
+                <>
+                  <Body>
+                    This is your account-wide goal. Create a separate Profile
+                    goal to customize it without changing the original.
+                  </Body>
+                  <PlanAction
+                    title="Create Profile goal from this"
+                    onPress={() =>
+                      setEditor({
+                        goal: { ...selected, id: "", legacy: false },
+                      })
+                    }
+                  />
+                </>
+              ) : null}
+              {!selected.legacy ? (
+                <PlanAction
+                  title="Edit goal"
+                  tone="edit"
+                  onPress={() => setEditor({ goal: selected })}
+                />
+              ) : null}
+              {!selected.legacy ? (
+                <>
+                  {deleteError ? <Notice>{deleteError}</Notice> : null}
+                  {deleteState !== "idle" ? (
+                    <>
+                      <Body>
+                        Delete this goal? Your accounts and transactions stay
+                        unchanged.
+                      </Body>
+                      <PlanAction
+                        title="Cancel deletion"
+                        disabled={deleteState === "busy"}
+                        onPress={() => setDeleteState("idle")}
+                      />
+                    </>
+                  ) : null}
+                  <PlanAction
+                    title={
+                      deleteState === "idle" ? "Delete Goal" : "Confirm delete"
+                    }
+                    tone="delete"
+                    disabled={deleteState === "busy"}
+                    onPress={async () => {
+                      if (deleteState === "idle") {
+                        setDeleteState("confirm");
+                        return;
+                      }
+                      setDeleteState("busy");
+                      setDeleteError("");
+                      try {
+                        if (!session.demo)
+                          await session.request(
+                            `goals?workspaceId=${encodeURIComponent(session.profileId)}`,
+                            {
+                              method: "DELETE",
+                              body: JSON.stringify({ id: selected.id }),
+                            },
+                          );
+                        setData((current) => ({
+                          goals: (current?.goals ?? []).filter(
+                            (g) => g.id !== selected.id,
+                          ),
+                        }));
+                        setSelected(null);
+                        reload();
+                        setDeleteState("idle");
+                      } catch (e) {
+                        setDeleteError(
+                          e instanceof Error
+                            ? e.message
+                            : "Unable to delete goal.",
+                        );
+                        setDeleteState("confirm");
+                      }
+                    }}
+                  />
+                </>
+              ) : null}
+              <PlanAction
+                title="Ask Clover about this goal"
+                tone="ask"
+                onPress={() =>
+                  askClover({page:"goals",title:selected.name,goalId:selected.id,prompt:"How is this goal progressing?"})
+                }
+              />
+            </>
+          ) : tab === "Roadmap" ? (
+            <>
+              {selected.progress && selected.progress.targetAmount ? (
+                <>
+                  <Body>
+                    {money(
+                      String(selected.progress.currentAmount),
+                      selected.currency,
+                    )}{" "}
+                    of{" "}
+                    {money(
+                      String(selected.progress.targetAmount),
+                      selected.currency,
+                    )}
+                  </Body>
+                  <Progress value={selected.progress.progressPercent ?? 0} />
+                  {[35, 65, 90, 100].map((threshold, index) => {
+                    const target =
+                      (selected.progress!.targetAmount! * threshold) / 100;
+                    const remaining = Math.max(
+                      0,
+                      target - selected.progress!.currentAmount,
+                    );
+                    return (
+                      <Card key={threshold}>
+                        <CategoryMark
+                          name={
+                            [
+                              "Income",
+                              "Investments",
+                              "Health & Wellness",
+                              "Income",
+                            ][index]
+                          }
+                          size={40}
+                        />
+                        <Body muted={false}>
+                          {
+                            [
+                              "Getting started",
+                              "Building momentum",
+                              "Almost there",
+                              "Monthly target",
+                            ][index]
+                          }
+                        </Body>
+                        <Body>
+                          {money(String(target), selected.currency)} ·{" "}
+                          {threshold}%
+                        </Body>
+                        <Body>
+                          {remaining === 0
+                            ? "✓ Reached"
+                            : `${money(String(remaining), selected.currency)} to go`}
+                        </Body>
+                      </Card>
+                    );
+                  })}
+                </>
+              ) : (
+                <Notice>Set a target to build your roadmap.</Notice>
+              )}
+            </>
+          ) : tab === "Progress" ? (
+            <Card>
+              {selected.activity ? (
+                <>
+                  <Body>
+                    {selected.activity.start.slice(0, 10)} –{" "}
+                    {selected.activity.end.slice(0, 10)}
+                  </Body>
+                  <Body muted={false}>
+                    Income{" "}
+                    {money(String(selected.activity.income), selected.currency)}
+                  </Body>
+                  <Body muted={false}>
+                    Spending{" "}
+                    {money(
+                      String(selected.activity.spending),
+                      selected.currency,
+                    )}
+                  </Body>
+                  <Body>{selected.progress?.nextAction}</Body>
+                </>
+              ) : (
+                <Body>No progress data available.</Body>
+              )}
+            </Card>
+          ) : (
+            <Card>
+              <Body muted={false}>{selected.name}</Body>
+              <Body>
+                {selected.targetAmount === null
+                  ? "No amount target"
+                  : money(
+                      String(selected.targetAmount),
+                      selected.currency,
+                    )}{" "}
+                · {selected.cadence}
+              </Body>
+              <Body>
+                {selected.legacy
+                  ? "Existing account-wide goal; kept separately from Profile goals."
+                  : "Current saved goal. Earlier revisions are not recorded for this goal."}
+              </Body>
+            </Card>
+          )}
+        </>
+      ) : (
+        <>
+          {!data.goals.length ? (
+            <>
+              <CloverEmptyState pose="savings">What would you like to work toward? Set your target and start working toward it.</CloverEmptyState>
+            </>
+          ) : (
+            <AdaptiveGrid>{data.goals.map((goal) => (
+              <PlanDirectoryCard
+                key={goal.id}
+                onPress={() => { setSelected(goal); setTab("Overview"); }}
+                color={
+                  goal.goal === "build_emergency_fund"
+                    ? "#ef8e99"
+                    : goal.goal === "invest_better"
+                      ? "#27845c"
+                      : "#4ade80"
+                }
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 10,
+                    alignItems: "center",
+                  }}
+                >
+                  <CategoryMark name={icon(goal)} size={32} />
+                  <Text
+                    style={{
+                      color: colors.ink,
+                      fontFamily: "Poppins-SemiBold",
+                      fontSize: 16,
+                      flex: 1,
+                    }}
+                  >
+                    {goal.name}
+                  </Text>
+                </View>
+                <Body>
+                  {goal.targetAmount === null
+                    ? "Set a target"
+                    : money(String(goal.targetAmount), goal.currency)}{" "}
+                  · {goal.cadence}
+                  {goal.legacy ? " · Account goal" : ""}
+                </Body>
+                {goal.progress ? (
+                  <>
+                    <PlanAmount>
+                      {money(
+                        String(goal.progress.currentAmount),
+                        goal.currency,
+                      )}
+                    </PlanAmount>
+                    <Body>{goal.progress.currentLabel}</Body>
+                    <Progress value={goal.progress.progressPercent ?? 0} />
+                    <Body>
+                      {Math.round(goal.progress.progressPercent ?? 0)}% of{" "}
+                      {goal.cadence === "annual" ? "monthly pace" : "target"}
+                    </Body>
+                  </>
+                ) : null}
+                <PlanAction
+                  title="Open goal"
+                  onPress={() => {
+                    setSelected(goal);
+                    setTab("Overview");
+                  }}
+                />
+              </PlanDirectoryCard>
+            ))}</AdaptiveGrid>
+          )}
+          <CreateDirectoryCard
+            title="Create goal"
+            subtitle="Make room for another plan"
+            onPress={() => setEditor({ goal: null })}
+          />
+        </>
+      )}
+    </Screen>
+  );
+}
+function GoalEditor({
+  goal,
+  preset,
+  onClose,
+  onSaved,
+}: {
+  goal: Goal | null;
+  preset?: string;
+  onClose: () => void;
+  onSaved: (goal: Goal) => void;
+}) {
+  const session = useSession();
+  const [kind, setKind] = useState(goal?.goal ?? preset ?? "save_more");
+  const [name, setName] = useState(goal?.purpose ?? "");
+  const [amount, setAmount] = useState(
+    goal?.targetAmount ? String(goal.targetAmount) : "",
+  );
+  const [currency, setCurrency] = useState(goal?.currency ?? "PHP");
+  const [cadence, setCadence] = useState(goal?.cadence ?? "monthly");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const inFlight = useRef(false);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const save = async () => {
+    if (inFlight.current) return;
+    const targetAmount = Number(amount);
+    if (
+      !Number.isFinite(targetAmount) ||
+      targetAmount <= 0 ||
+      !/^[A-Z]{3}$/.test(currency)
+    ) {
+      setError("Enter a positive target amount and three-letter currency.");
+      return;
+    }
+    inFlight.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      const payload = {
+        ...(goal?.id ? { id: goal.id } : {}),
+        goal: kind,
+        targetAmount,
+        currency,
+        goalPlan: { cadence, purpose: name.trim() || null },
+      };
+      const result = session.demo
+        ? { id: goal?.id ?? `demo-${Date.now()}` }
+        : await session.request<{ id: string }>(
+            `goals?workspaceId=${encodeURIComponent(session.profileId)}`,
+            { method: "POST", body: JSON.stringify(payload) },
+          );
+      if (!alive.current) return;
+      onSaved({
+        id: result.id,
+        goal: kind,
+        name: name.trim() || presets.find((p) => p.key === kind)?.name || kind,
+        category: kind,
+        targetAmount,
+        currency,
+        cadence,
+        purpose: name.trim(),
+        legacy: false,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to save goal.");
+    } finally {
+      inFlight.current = false;
+      setSaving(false);
+    }
+  };
+  return (
+    <Screen sheet onDismiss={() => { if (!saving) onClose(); }}>
+      { !goal ? <ResourceUpgradeNotice resource="goals" /> : null}
+      <PlanHeader
+        title={goal ? "Edit Goal" : "Add Goal"}
+        back={() => {
+          if (!saving) onClose();
+        }}
+      />
+      <ChoiceField label="Goal Type" value={kind} onChange={setKind} options={[...presets, {name:"Pay Down Debt",key:"pay_down_debt"}, {name:"Track Spending",key:"track_spending"}].map(p=>({value:p.key,label:p.name}))}/>
+      <Field
+        label="Goal name (optional)"
+        value={name}
+        onChangeText={setName}
+        maxLength={120}
+      />
+      <Field
+        label="Target amount"
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="decimal-pad"
+      />
+      <Field
+        label="Currency"
+        value={currency}
+        onChangeText={(v) => setCurrency(v.toUpperCase())}
+        maxLength={3}
+      />
+      <ChoiceField label="Cadence" value={cadence} onChange={setCadence} options={[{value:"monthly",label:"Monthly"},{value:"annual",label:"Annual"}]}/>
+      <Body>
+        This creates an independent goal in the selected Profile. Progress uses
+        matching-currency activity.
+      </Body>
+      {error ? <Notice>{error}</Notice> : null}
+
+      <PlanAction
+        title={saving ? "Saving…" : goal ? "Save changes" : "Create Goal"}
+        tone="primary"
+        disabled={saving}
+        onPress={() => void save()}
+      />
+    </Screen>
+  );
+}

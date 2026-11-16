@@ -1,0 +1,15 @@
+export const investmentIcons: Record<string, number> = {
+  stock: require("../assets/investment-types/stock.png"),
+  etf: require("../assets/investment-types/etf.png"),
+  mutual_fund: require("../assets/investment-types/mutual_fund.png"),
+  money_market_fund: require("../assets/investment-types/money_market_fund.png"),
+  uitf: require("../assets/investment-types/uitf.png"),
+  reit: require("../assets/investment-types/reit.png"),
+  crypto: require("../assets/investment-types/crypto.png"),
+  real_world_asset: require("../assets/investment-types/real_world_asset.png"),
+  bond: require("../assets/investment-types/bond.png"),
+  time_deposit: require("../assets/investment-types/time_deposit.png"),
+  savings: require("../assets/investment-types/savings.png"),
+  other: require("../assets/investment-types/other.png"),
+  institution: require("../assets/investment-types/institution.png"),
+};

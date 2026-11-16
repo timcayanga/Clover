@@ -1,0 +1,352 @@
+import { cardLastFour, matchesConfirmedCardNumber, readCardReplacements } from "../../../../../../shared/card-replacement";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
+import { recordBankLinkStage } from "@/lib/bank-link-journey";
+import { finverseDataReadiness } from "@/lib/finverse-data-readiness";
+import { enrichFinverseTransactions, canRefreshFinverseCategory, type BankCategorySuggestion } from "@/lib/finverse-enrichment";
+import { bankInstitutionsMatch } from "@/lib/finverse-matching";
+import { reserveBankRefresh, BankRefreshLimitError } from "@/lib/finverse-refresh-limit";
+import { PLAN_CATALOG } from "../../../../../../shared/plan-catalog";
+import { hasUnlimitedPlanLimits } from "@/lib/user-limits";
+import { enforceBankAllowance } from "@/lib/finverse-lifecycle";
+import { refreshProAccess } from "@/lib/pro-access";
+import { getActiveFinverseToken } from "@/lib/finverse-access-token";
+import { bankLinkAllowance } from "@/lib/bank-link-usage";
+import { matchingBankAccounts, bankTransactionMatches, bankTransactionsNeedReview, bankLinkUsageIdentity, cleanBankNumber } from "@/lib/finverse-matching";
+import { randomBytes } from "node:crypto";
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
+import { PlanQuotaError } from "@/lib/plan-quota";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { countNonCashAccounts } from "@/lib/account-limit-count";
+import { AccountType, Prisma, TransactionType } from "@prisma/client";
+import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import {
+  createFinverseRefresh,
+  hashFinverseState,
+  getAllFinverseTransactions,
+  getFinverseAccounts,
+  getFinverseAccountNumber,
+  getFinverseLoginIdentity,
+  isFinverseEnabled,
+  normalizeFinverseAccount,
+  normalizeFinverseTransaction,
+  type FinverseAccount,
+  type FinverseTransaction,
+} from "@/lib/finverse";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+const json = (value: unknown) => value as Prisma.InputJsonValue;
+
+const importAccount = async (connectionId: string, workspaceId: string, account: FinverseAccount, institutionName?: string, explicitlySelected = false, targetAccountId?: string) => {
+  const normalized = normalizeFinverseAccount(account, institutionName);
+  return prisma.$transaction(async tx => {
+    const workspace = await tx.workspace.findUniqueOrThrow({ where: { id: workspaceId }, include: { user: true } });
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${workspace.userId}`}, 0))`;
+    const connection = await tx.finverseConnection.findUniqueOrThrow({ where: { id: connectionId } });
+    if (connection.status === "disconnected" || connection.disconnectRequestedAt) throw new Error("FINVERSE_RELINK_REQUIRED");
+    const sameIdentity = await tx.finverseAccountLink.findFirst({ where: { workspaceId, externalAccountId: account.account_id }, orderBy: { createdAt: "asc" } });
+    if (sameIdentity && !explicitlySelected && (sameIdentity.unlinkedAt || sameIdentity.connectionId !== connectionId)) return null;
+    // A deletion is deliberate; do not silently recreate the deleted account.
+    if (sameIdentity && !sameIdentity.accountId && !explicitlySelected) return null;
+    const allowance = await bankLinkAllowance(tx, workspace.userId);
+    if (allowance.limit === 0) throw new PlanQuotaError("Bank syncing requires current Plus or Pro access. Your imported history stays available.");
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`card-replacement:${workspaceId}`}, 0))`;
+    const candidates = await tx.account.findMany({ where: { workspaceId }, include: { finverseAccountLink: true } });
+    const matches = matchingBankAccounts(candidates, normalized);
+    if (!targetAccountId && !sameIdentity && matches.length > 1) throw new PlanQuotaError("More than one Clover account matches this bank account. Review the duplicate accounts before linking; no records have been changed.");
+    const target = targetAccountId ? candidates.find(a => a.id === targetAccountId && a.currency === normalized.currency && a.type === normalized.type && bankInstitutionsMatch(a.institution||a.name,normalized.institution)) : undefined;
+    if(targetAccountId && !target) throw new PlanQuotaError("Choose an existing account in this Profile with the same bank, currency and account type.");
+    const match = target ?? (sameIdentity?.accountId ? candidates.find(a => a.id === sameIdentity.accountId) : matches[0]);
+    const priorLink = sameIdentity ?? match?.finverseAccountLink;
+    if (match && readCardReplacements(match.cardNumberHistory).length && ((normalized.accountNumber && !matchesConfirmedCardNumber(match, normalized.accountNumber)) || match.currency !== normalized.currency || match.type !== normalized.type || !bankInstitutionsMatch(match.institution, normalized.institution))) throw new PlanQuotaError("Confirm the new card in Account Details → Replace Card before linking it to this account.");
+    if (priorLink && !explicitlySelected && (priorLink.unlinkedAt || priorLink.connectionId !== connectionId)) return null;
+    if (priorLink && priorLink.externalAccountId !== account.account_id && !matchesConfirmedCardNumber(match ?? {}, normalized.accountNumber) && (!/^\d+$/.test(cleanBankNumber(normalized.accountNumber)) || cleanBankNumber(match?.accountNumber) !== cleanBankNumber(normalized.accountNumber))) throw new PlanQuotaError("This Clover account is already linked to a different bank account. Review its link first.");
+    const quotaIdentity = priorLink ? bankLinkUsageIdentity(priorLink) : account.account_id;
+    if (!allowance.usedIds.has(quotaIdentity) && allowance.remaining === 0) throw new PlanQuotaError("Your bank-account allowance is full for this allocation period. You can reconnect an account already used this period.");
+    const activeCount=await tx.finverseAccountLink.count({where:{workspace:{userId:workspace.userId},accountId:{not:null},unlinkedAt:null,connection:{status:{not:'disconnected'},disconnectRequestedAt:null},NOT:{id:priorLink?.id??''}}});
+    if(!hasUnlimitedPlanLimits(workspace.user) && activeCount>=allowance.limit) throw new PlanQuotaError("Your plan's active linked-account allowance is full. Choose which accounts to keep before reconnecting.");
+    let accountId = match?.id;
+    if (!accountId) {
+      const limit = getEffectiveUserLimits(workspace.user).accountLimit;
+      const ownerAccounts = await tx.account.findMany({ where: { workspace: { userId: workspace.userId } }, select: { type: true, name: true, institution: true } });
+      if (limit !== null && countNonCashAccounts(ownerAccounts) >= limit) throw new PlanQuotaError("Your financial account allowance is full. Link an existing Clover account or upgrade your plan.");
+      const created = await tx.account.create({ data: { workspaceId, name: normalized.name, institution: normalized.institution, accountNumber: normalized.accountNumber, type: normalized.type as AccountType, currency: normalized.currency, source: "finverse", balance: normalized.balance } });
+      accountId = created.id;
+    }
+    // Never replace a saved full number with a provider mask or change confirmed metadata.
+    if (match && !readCardReplacements(match.cardNumberHistory).length && normalized.accountNumber && (!match.accountNumber || (match.source === "finverse" && /[*x•]/i.test(match.accountNumber) && /^\d+$/.test(normalized.accountNumber) && cardLastFour(match.accountNumber) === cardLastFour(normalized.accountNumber)))) await tx.account.update({ where: { id: match.id }, data: { accountNumber: normalized.accountNumber } });
+    const payload = { connectionId, workspaceId, externalAccountId: account.account_id, accountId, rawPayload: json(account), normalizedPayload: json({ ...normalized, quotaIdentity }), lastSeenAt: new Date(), unlinkedAt: null };
+    if (priorLink) await tx.finverseAccountLink.update({ where: { id: priorLink.id }, data: payload });
+    else await tx.finverseAccountLink.create({ data: payload });
+    await tx.bankLinkUsage.createMany({ data: [{ userId: workspace.userId, externalAccountId: quotaIdentity, periodStart: allowance.periodStart, periodEnd: allowance.periodEnd }], skipDuplicates: true });
+    return accountId;
+  });
+};
+
+const importTransaction = async (connectionId: string, workspaceId: string, transaction: FinverseTransaction, claimedTransactionIds = new Set<string>(), suggestion?: BankCategorySuggestion) => {
+  const normalized = normalizeFinverseTransaction(transaction);
+  // Pending entries can change ID or amount when posted. Import only booked movements.
+  if (!normalized || normalized.isPending) return "skipped" as const;
+  return prisma.$transaction(async tx => {
+    const workspace = await tx.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${workspace.userId}`}, 0))`;
+    const link = await tx.finverseAccountLink.findFirst({ where: { connectionId, externalAccountId: transaction.account_id, unlinkedAt: null, accountId: { not: null }, connection: { status: { not: "disconnected" }, disconnectRequestedAt:null } } });
+    if (!link?.accountId) return "skipped" as const;
+    const normalizedJson = { ...normalized, date: normalized.date.toISOString() };
+    // Stable provider IDs span authorizations; tombstones intentionally remain deduplicated.
+    const existing = await tx.finverseTransactionRecord.findFirst({ where: { externalTransactionId: transaction.transaction_id, externalAccountId: transaction.account_id, connection: { workspaceId } } });
+    if (existing) {
+      if (existing.transactionId && suggestion) {
+        const saved = await tx.transaction.findFirst({ where: { id: existing.transactionId } });
+        if (saved && canRefreshFinverseCategory(saved) && (!saved.categoryId || saved.categoryId === suggestion.categoryId)) {
+          const payload = saved.normalizedPayload && typeof saved.normalizedPayload === "object" && !Array.isArray(saved.normalizedPayload) ? saved.normalizedPayload : {};
+          await tx.transaction.updateMany({ where: { id: saved.id, updatedAt: saved.updatedAt, reviewStatus: saved.reviewStatus, categoryId: saved.categoryId, isExcluded: false, deletedAt: null }, data: {
+            categoryId: suggestion.categoryId, categoryConfidence: suggestion.categoryConfidence,
+            reviewStatus: suggestion.reviewStatus, reviewPriority: suggestion.reviewPriority,
+            reviewReasons: json(suggestion.reviewReasons), learnedRuleIdsApplied: json(suggestion.learnedRuleIdsApplied),
+            normalizedPayload: json({ ...payload, enrichment: suggestion.enrichment }),
+          } });
+        }
+      }
+      const reconciledTransactionId = (existing.normalizedPayload as { reconciledTransactionId?: string } | null)?.reconciledTransactionId;
+      if (existing.transactionId || reconciledTransactionId) claimedTransactionIds.add(existing.transactionId || reconciledTransactionId!);
+      await tx.finverseTransactionRecord.update({ where: { id: existing.id }, data: { rawPayload: json(transaction), normalizedPayload: json({ ...normalizedJson, ...(reconciledTransactionId ? { reconciledTransactionId } : {}) }), lastSeenAt: new Date() } });
+      return "existing" as const;
+    }
+    const from = new Date(normalized.date); from.setUTCHours(0, 0, 0, 0);
+    const to = new Date(+from + 86400000);
+    const candidates = await tx.transaction.findMany({ where: { workspaceId, accountId: link.accountId, currency: normalized.currency, amount: normalized.amount, type: normalized.type as TransactionType, date: { gte: from, lt: to }, id: { notIn: [...claimedTransactionIds] }, OR: [{ finverseTransactionRecord: null }, { finverseTransactionRecord: { connectionId: { not: connectionId } } }] }, include: { finverseTransactionRecord: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+    // Claim only an unambiguous bank reference within this financial scope.
+    const matches = candidates.filter(candidate => bankTransactionMatches(candidate, normalized));
+    const match = matches.length === 1 ? matches[0] : undefined;
+    const possibleDuplicate = candidates.some(candidate => bankTransactionsNeedReview(candidate, normalized));
+    const created = match ?? await tx.transaction.create({ data: {
+      workspaceId, accountId: link.accountId, reviewStatus: possibleDuplicate ? "pending_review" : suggestion?.reviewStatus ?? "pending_review",
+      isExcluded: false, duplicateConfidence: possibleDuplicate ? 60 : 0,
+      reviewPriority: possibleDuplicate ? "high" : suggestion?.reviewPriority ?? "medium", reviewReasons: json([...(possibleDuplicate ? ["finverse_possible_duplicate"] : []), ...(suggestion?.reviewReasons ?? ["category_low_confidence"])]),
+      parserConfidence: 100, categoryConfidence: suggestion?.categoryConfidence ?? 0, categoryId: suggestion?.categoryId, accountMatchConfidence: 100,
+      learnedRuleIdsApplied: json(suggestion?.learnedRuleIdsApplied ?? []),
+      rawPayload: json(transaction), normalizedPayload: json({ ...normalizedJson, enrichment: suggestion?.enrichment ?? null }), sourceRowKey: `finverse:${transaction.transaction_id}`,
+      date: normalized.date, amount: normalized.amount, currency: normalized.currency, type: normalized.type as TransactionType,
+      merchantRaw: normalized.merchantRaw, merchantClean: normalized.merchantClean, description: normalized.description,
+    } });
+    // Keep the original provider record attached. A reauthorization alias retains its
+    // own raw payload and points to the same ledger row in normalized provenance.
+    const alias = Boolean(match?.finverseTransactionRecord);
+    await tx.finverseTransactionRecord.create({ data: { connectionId, externalTransactionId: transaction.transaction_id, externalAccountId: transaction.account_id, transactionId: alias ? null : created.id, rawPayload: json(transaction), normalizedPayload: json({ ...normalizedJson, ...(alias ? { reconciledTransactionId: created.id } : {}) }) } });
+    claimedTransactionIds.add(created.id);
+    return match ? "existing" as const : "created" as const;
+  });
+};
+
+export async function POST(request: Request) {
+  if (!isFinverseEnabled()) {
+    return NextResponse.json({ error: "Bank connections are not available yet." }, { status: 404 });
+  }
+
+  let attemptedConnection:string|undefined;
+  try {
+    const { userId } = await requireAuth();
+    const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string; selectedAccountIds?: string[]; accountMappings?: Record<string,string>; refresh?: boolean };
+    if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
+    await assertWorkspaceAccess(userId, body.workspaceId);
+    const connection = await prisma.finverseConnection.findFirst({
+      where: {
+        workspaceId: body.workspaceId,
+        ...(body.connectionId ? { id: body.connectionId } : {}),
+        user: { clerkUserId: userId },
+        ...(!body.connectionId ? { encryptedRefreshToken: { not: null } } : {}),
+        status: { not: "disconnected" },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!connection) return NextResponse.json({ error: "No connected bank was found." }, { status: 404 });
+
+    if (!connection.encryptedRefreshToken) return NextResponse.json({ error: "Bank authorization was not completed. Choose your bank to reconnect securely.", reconnectRequired: true }, { status: 409 });
+
+    const planTier = await refreshProAccess(connection.userId);
+    if (planTier === "free") return NextResponse.json({error:"Bank sync requires Plus or Pro. Existing imported records are preserved."},{status:403});
+    await enforceBankAllowance(connection.userId);
+    const permitted = await prisma.finverseConnection.findUniqueOrThrow({where:{id:connection.id}});
+    if(permitted.disconnectRequestedAt) return NextResponse.json({error:"This connection is being disconnected. Your records are preserved."},{status:409});
+    if (body.refresh === true) {
+      if (!body.connectionId || !connection.loginIdentityId) return NextResponse.json({ error: "Choose a linked bank account." }, { status: 400 });
+      await reserveBankRefresh(connection);
+    }
+    await prisma.finverseConnection.update({where:{id:connection.id},data:{lastSyncAttemptAt:new Date()}});
+    attemptedConnection=connection.id;
+    const token = await getActiveFinverseToken(connection);
+    const identityResult = await getFinverseLoginIdentity(token);
+    const identity = identityResult.login_identity ?? {};
+    const status = typeof identity.status === "string" ? identity.status : "UNKNOWN";
+    const readiness = finverseDataReadiness(identity);
+    const institution = identityResult.institution ?? {};
+    const institutionName = typeof institution.institution_name === "string" ? institution.institution_name : undefined;
+    const institutionId = typeof institution.institution_id === "string" ? institution.institution_id : undefined;
+
+    if (body.refresh === true) {
+      if (!body.connectionId || !connection.loginIdentityId) return NextResponse.json({ error: "Choose a linked bank account." }, { status: 400 });
+      const refreshAllowed = (identity.refresh as { refresh_allowed?: boolean } | undefined)?.refresh_allowed === true;
+      const state = (getMobileRequestContext() ? "native." : "") + (refreshAllowed ? "refresh." : "") + randomBytes(32).toString("base64url");
+      const result = await createFinverseRefresh(token, state, connection.loginIdentityId, refreshAllowed);
+      if (!result.link_url) throw new Error("FINVERSE_LINK_URL_MISSING");
+      await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null }, data: {
+        stateHash: hashFinverseState(state), stateExpiresAt: new Date(Date.now() + 15 * 60_000), status: "link_pending",
+      } });
+      return NextResponse.json({ status: "authorize", connectionId: connection.id, linkUrl: result.link_url });
+    }
+
+    const updatedState = await prisma.finverseConnection.updateMany({
+      where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null },
+      data: {
+        status: readiness.failed ? "error" : "retrieving",
+        institutionId,
+        institutionName,
+        rawLoginIdentity: json(identityResult),
+        syncFailureSince: readiness.failed ? connection.syncFailureSince ?? new Date() : connection.syncFailureSince,
+        syncError: readiness.failed ? "Finverse could not retrieve data from this institution." : null,
+      },
+    });
+    if (!updatedState.count) return NextResponse.json({ error: "This bank was unlinked." }, { status: 409 });
+    if (readiness.failed) { await recordBankLinkStage(connection.id, "failed"); return NextResponse.json({ error: "Finverse could not retrieve data from this institution. Try connecting again or choose another bank.", status, reconnectRequired: true }, { status: 422 }); }
+    if (!readiness.ready) {
+      console.info("[finverse-sync] retrieving", { connectionId: connection.id, providerStatus: status });
+      return NextResponse.json({ status: "retrieving", providerStatus: status });
+    }
+
+    const accountResult = await getFinverseAccounts(token);
+    const resolvedInstitutionName = institutionName || (typeof accountResult.institution?.institution_name === "string" ? accountResult.institution.institution_name : undefined);
+    if (!institutionName && resolvedInstitutionName) {
+      await prisma.finverseConnection.updateMany({
+        where: { id: connection.id, disconnectRequestedAt: null, status: { not: "disconnected" } },
+        data: { institutionName: resolvedInstitutionName, institutionId: institutionId || (typeof accountResult.institution?.institution_id === "string" ? accountResult.institution.institution_id : undefined) },
+      });
+    }
+    const providerAccounts = (accountResult.accounts ?? []).filter(a => a.is_parent !== true);
+    // Avoid redundant requests and bound optional full-number discovery to three at a time.
+    for (let index = 0; index < providerAccounts.length; index += 3) {
+      await Promise.all(providerAccounts.slice(index, index + 3).map(async account => {
+        if (account.account_number_full) return;
+        const fullNumber = await getFinverseAccountNumber(token, account.account_id);
+        if (fullNumber) account.account_number_full = fullNumber;
+      }));
+    }
+    if (!providerAccounts.length) {
+      await prisma.finverseConnection.updateMany({ where: { id: connection.id, disconnectRequestedAt: null }, data: { status: "error", syncError: "The bank returned no accounts. Reconnect or use Upload or Manual." } });
+      await recordBankLinkStage(connection.id, "failed");
+      return NextResponse.json({ error: "The bank returned no accounts. Reconnect or use Upload or Manual.", reconnectRequired: true }, { status: 422 });
+    }
+    const links = await prisma.finverseAccountLink.findMany({ where: { connectionId: connection.id, unlinkedAt: null, accountId: { not: null } }, select: { externalAccountId: true } });
+    const linkedIds = new Set(links.map(l => l.externalAccountId));
+    const allowance = await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${connection.userId}`}, 0))`;
+      return bankLinkAllowance(tx, connection.userId);
+    });
+    const newAccounts = providerAccounts.filter(a => !linkedIds.has(a.account_id));
+    if (body.selectedAccountIds !== undefined && (!Array.isArray(body.selectedAccountIds) || body.selectedAccountIds.some(id => typeof id !== "string" || !providerAccounts.some(a => a.account_id === id)))) return NextResponse.json({ error: "Choose valid bank accounts." }, { status: 400 });
+    if(body.accountMappings && (typeof body.accountMappings !== 'object' || Array.isArray(body.accountMappings) || Object.entries(body.accountMappings).some(([id,target])=>!body.selectedAccountIds?.includes(id)||typeof target!=='string'))) return NextResponse.json({error:"Invalid account mapping."},{status:400});
+    const selectedIds = body.selectedAccountIds ? new Set(body.selectedAccountIds) : null;
+    const chosen = newAccounts.filter(a => selectedIds?.has(a.account_id));
+    const cloverAccounts = await prisma.account.findMany({ where: { workspaceId: connection.workspaceId }, include: { finverseAccountLink: true } });
+    const reservedIds = new Set(newAccounts.filter(a => {
+      if (allowance.usedIds.has(a.account_id)) return true;
+      const normalized = normalizeFinverseAccount(a, resolvedInstitutionName);
+      const matches = matchingBankAccounts(cloverAccounts, normalized);
+      const match = matches.length === 1 ? matches[0] : null;
+      return match?.finverseAccountLink && (matchesConfirmedCardNumber(match, normalized.accountNumber) || (/^\d+$/.test(cleanBankNumber(normalized.accountNumber)) && cleanBankNumber(match.accountNumber) === cleanBankNumber(normalized.accountNumber))) && allowance.usedIds.has(bankLinkUsageIdentity(match.finverseAccountLink));
+    }).map(a => a.account_id));
+    if (((!selectedIds || selectedIds.size === 0) && linkedIds.size === 0 && newAccounts.length > 0) || chosen.filter(a => !reservedIds.has(a.account_id)).length > allowance.remaining) {
+      await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null }, data: { status: "awaiting_selection" } });
+      await recordBankLinkStage(connection.id, "selection_required");
+      return NextResponse.json({ status: "select_accounts", connectionId: connection.id, remaining: allowance.remaining, resetsAt: allowance.periodEnd, accounts: newAccounts.map(a => {
+        const normalized = normalizeFinverseAccount(a, resolvedInstitutionName);
+        const matches = matchingBankAccounts(cloverAccounts, normalized);
+        return { id: a.account_id, name: `${normalized.name}${normalized.accountNumber ? ` •••• ${normalized.accountNumber.slice(-4)}` : ""}`, reserved: reservedIds.has(a.account_id), existingAccountName: matches.length === 1 ? matches[0].name : null, suggestedAccountId:matches.length===1?matches[0].id:null, candidates:cloverAccounts.filter(c=>c.currency===normalized.currency&&c.type===normalized.type&&bankInstitutionsMatch(c.institution||c.name,normalized.institution)).map(c=>({id:c.id,name:c.name,last4:c.accountNumber?.slice(-4)||null})) };
+      }) });
+    }
+    const accountsToImport = providerAccounts.filter(a => linkedIds.has(a.account_id) || chosen.some(c => c.account_id === a.account_id));
+    for (const account of accountsToImport) await importAccount(connection.id, connection.workspaceId, account, resolvedInstitutionName, chosen.some(c => c.account_id === account.account_id), body.accountMappings?.[account.account_id]);
+
+    const usableLinks = await prisma.finverseAccountLink.findMany({ where: { connectionId: connection.id, workspaceId: connection.workspaceId, unlinkedAt: null, accountId: { not: null } }, select: { accountId: true, normalizedPayload: true, account: { select: { name: true, currency: true } } } });
+    if (!usableLinks.length) return NextResponse.json({ error: "No bank accounts were linked. Choose accounts to finish linking.", reconnectRequired: true }, { status: 409 });
+    const providerTransactions = await getAllFinverseTransactions(token);
+    const categories = await prisma.category.findMany({ where: { workspaceId: connection.workspaceId, isArchived: false }, select: { id: true, name: true, type: true } });
+    const suggestions = await enrichFinverseTransactions({ workspaceId: connection.workspaceId, transactions: providerTransactions, institution: resolvedInstitutionName, categories });
+    let imported = 0;
+    let existing = 0;
+    let skipped = 0;
+    const claimedTransactionIds = new Set<string>();
+    for (const transaction of providerTransactions) {
+      const result = await importTransaction(connection.id, connection.workspaceId, transaction, claimedTransactionIds, suggestions.get(transaction.transaction_id));
+      if (result === "created") imported += 1;
+      else if (result === "existing") existing += 1;
+      else skipped += 1;
+    }
+    const visibleWhere: Prisma.TransactionWhereInput = { workspaceId: connection.workspaceId, OR: [{ finverseTransactionRecord: { is: { connectionId: connection.id } } }, { id: { in: [...claimedTransactionIds] } }], accountId: { in: usableLinks.flatMap(link => link.accountId ? [link.accountId] : []) }, deletedAt: null, isExcluded: false, reviewStatus: { notIn: ["rejected", "duplicate_skipped"] } };
+    const balanceLink = usableLinks.find(link => {
+      const balance = (link.normalizedPayload as { balance?: unknown } | null)?.balance;
+      return link.account && balance != null && Number.isFinite(Number(balance));
+    });
+    const [visibleTransactions, transaction] = await Promise.all([
+      prisma.transaction.count({ where: visibleWhere }),
+      balanceLink ? null : prisma.transaction.findFirst({
+        where: visibleWhere,
+        orderBy: [{ date: "desc" }, { id: "desc" }],
+        select: { id: true, amount: true, currency: true, merchantRaw: true, merchantClean: true },
+      }),
+    ]);
+    const preview = balanceLink?.account && balanceLink.accountId ? {
+      kind: "balance", id: balanceLink.accountId, label: balanceLink.account.name,
+      amount: String((balanceLink.normalizedPayload as { balance: unknown }).balance), currency: balanceLink.account.currency,
+    } : transaction ? {
+      kind: "transaction", id: transaction.id, label: transaction.merchantClean || transaction.merchantRaw,
+      amount: transaction.amount.toString(), currency: transaction.currency,
+    } : null;
+    const usableData = Boolean(balanceLink) || visibleTransactions > 0;
+    const completion = await prisma.finverseConnection.updateMany({
+      where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null },
+      data: { status: "ready", lastSyncedAt: new Date(), syncError: null, inactivityWarnedAt:null, syncFailureSince:null },
+    });
+    if (!completion.count) return NextResponse.json({ error: "This bank was unlinked. Your saved records are preserved." }, { status: 409 });
+    invalidateWorkspaceSummaryCache(connection.workspaceId);
+    await recordBankLinkStage(connection.id, usableData ? "data_available" : "empty_result", { accountCount: usableLinks.length, transactionCount: visibleTransactions });
+    console.info("[finverse-sync] complete", {
+      connectionId: connection.id,
+      accountCount: usableLinks.length,
+      importedTransactions: imported,
+      existingTransactions: existing,
+      skippedTransactions: skipped,
+    });
+    return NextResponse.json({
+      status: "ready",
+      connectionId: connection.id,
+      accounts: usableLinks.length,
+      preview,
+      dataStatus: !usableData ? "empty" : readiness.partial ? "partial" : "complete",
+      message: !usableData ? "Accounts linked, but no balances or booked transactions were returned. Try Sync again later, or use Upload or Manual." : readiness.partial ? "Bank data synced, but the bank returned only part of the requested data. Check your accounts and transactions." : imported > 0 ? `Bank synced — ${imported} new transaction${imported === 1 ? "" : "s"} ready for review.` : existing > 0 ? "Already up to date." : "Bank accounts linked. No booked transactions were returned for the selected accounts.",
+      transactions: { imported, existing, skipped },
+    });
+  } catch (error) {
+    if (error instanceof BankRefreshLimitError) return NextResponse.json({ error: error.message, retryAt: error.retryAt.toISOString() }, {
+      status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((+error.retryAt - Date.now()) / 1000))) },
+    });
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
+    const message = error instanceof Error ? error.message : "";
+    if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
+    if (message === "WORKSPACE_NOT_FOUND") return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
+    if (message === "FINVERSE_DISABLED") return NextResponse.json({ error: "Bank connections are not available yet." }, { status: 404 });
+    if (message === "FINVERSE_NOT_CONFIGURED") return NextResponse.json({ error: "Bank connections are not configured yet." }, { status: 503 });
+    if (attemptedConnection) await recordBankLinkStage(attemptedConnection, "failed");
+    if (message === "FINVERSE_RELINK_REQUIRED" || (error instanceof Error && "status" in error && error.status === 401)) {
+      if (attemptedConnection) await prisma.finverseConnection.updateMany({where:{id:attemptedConnection,disconnectRequestedAt:null},data:{syncError:"Bank authorization expired. Reconnect securely to sync again."}}).catch(()=>{});
+      return NextResponse.json({ error: "Bank authorization expired. Reconnect securely to sync again.", reconnectRequired: true }, { status: 409 });
+    }
+    if(attemptedConnection) await prisma.finverseConnection.updateMany({where:{id:attemptedConnection,disconnectRequestedAt:null,syncFailureSince:null},data:{syncFailureSince:new Date(),syncError:'Bank sync failed. Retry or reconnect; saved records are preserved.'}}).catch(()=>{});
+    console.error("Finverse sync failed", error);
+    return NextResponse.json({ error: "Unable to sync the connected bank right now." }, { status: 502 });
+  }
+}

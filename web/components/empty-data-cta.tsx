@@ -1,0 +1,78 @@
+import type { ReactNode } from "react";
+import Link from "next/link";
+
+type EmptyDataCtaProps = {
+  className?: string;
+  eyebrow?: string;
+  title: string;
+  copy?: string;
+  highlights?: string[];
+  illustration?: string;
+  illustrationAlt?: string;
+  artClassName?: string;
+  actions?: ReactNode;
+  importHref?: string;
+  accountHref: string;
+  transactionHref: string;
+  importLabel?: string;
+  accountLabel?: string;
+  transactionLabel?: string;
+};
+
+export function EmptyDataCta({
+  className,
+  eyebrow = "Start here",
+  title,
+  copy,
+  highlights,
+  illustration = "/assets/mascots/velvet-statement.webp",
+  illustrationAlt = "",
+  artClassName,
+  actions,
+  importHref,
+  accountHref,
+  transactionHref,
+  importLabel = "Upload files",
+  accountLabel = "Add an account",
+  transactionLabel = "Add a transaction",
+}: EmptyDataCtaProps) {
+  return (
+    <section className={`transactions-empty-state transactions-empty-state--compact${className ? ` ${className}` : ""}`}>
+      {illustration ? (
+        <div
+          className={`transactions-empty-state__art${artClassName ? ` ${artClassName}` : ""}`}
+          aria-hidden={illustrationAlt === ""}
+        >
+          <img src={illustration.startsWith("/illustrations/") ? "/assets/mascots/velvet-statement.webp" : illustration} alt={illustrationAlt} loading="eager" fetchPriority="high" decoding="async" />
+        </div>
+      ) : null}
+      {eyebrow ? <p className="transactions-empty-state__eyebrow">{eyebrow}</p> : null}
+      <h3>{title}</h3>
+      {copy ? <p className="transactions-empty-state__copy">{copy}</p> : null}
+      {highlights && highlights.length > 0 ? (
+        <ul className="transactions-empty-state__highlights" aria-label="What you can do here">
+          {highlights.map((highlight) => (
+            <li key={highlight}>{highlight}</li>
+          ))}
+        </ul>
+      ) : null}
+      {actions ? (
+        <div className="transactions-empty-state__actions">{actions}</div>
+      ) : (
+        <div className="transactions-empty-state__actions">
+          {importHref ? (
+            <Link className="button button-primary button-small" href={importHref}>
+              {importLabel}
+            </Link>
+          ) : null}
+          <Link className="button button-secondary button-small" href={accountHref}>
+            {accountLabel}
+          </Link>
+          <Link className="pill-link pill-link--inline transactions-empty-state__manual-link" href={transactionHref}>
+            {transactionLabel}
+          </Link>
+        </div>
+      )}
+    </section>
+  );
+}

@@ -1,0 +1,5453 @@
+"use client";
+import { accountSectionType } from "../../../shared/account-presentation";
+import { consolidatedAccountSummary } from "../../../shared/account-summary";
+import { investmentNameLabel, investmentTickerMatches, investmentTickerHint } from "../../../shared/investment-entry";
+import { usePullRefresh } from "@/lib/pull-refresh";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
+import { FinversePendingAccounts } from "@/components/finverse-pending-accounts";
+import { FinverseConnectButton as AccountBankSync } from "@/components/finverse-connect-button";
+import { AccountTypePicker } from "@/components/account-type-picker";
+import { AddEntryMethods } from "@/components/add-entry-methods";
+import { getInvestmentInstitutionSnapshotSummary } from "@/lib/investment-institution-summary";
+import { compactSummaryMoney } from "../../../shared/summary-format";
+import { AccountCreationForm } from "@/components/account-creation-form";
+import { suggestedDraftInstitution } from "../../../shared/account-institution";
+import { InterfaceIcon } from "@/components/interface-icon";
+import { AdviserFormAssist } from "@/components/adviser-form-assist";
+import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
+
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { flushSync } from "react-dom";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CloverShell, useCloverChrome } from "@/components/clover-shell";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
+import { EmptyDataCta } from "@/components/empty-data-cta";
+import { AccountBrandMark } from "@/components/account-brand-mark";
+import { CurrencySelector } from "@/components/currency-selector";
+import { FinancialAccountCard } from "@/components/financial-account-card";
+import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
+import { PlanLimitNudge } from "@/components/plan-limit-nudge";
+import { PageFileDropZone } from "@/components/page-file-drop-zone";
+import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
+import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
+import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
+import { compareAccountCheckpointFreshness, isAccountBalanceCheckpointEvidence } from "@/lib/account-balance-projection";
+import {
+  ACCOUNT_CARD_DRAG_MIME,
+  hasActiveAccountCardDrag,
+  readDraggedAccountId,
+} from "@/lib/account-card-drag";
+import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
+import { useLiveInvestmentValues } from "@/lib/use-live-investment-values";
+import { getUploadSummaryCurrencies } from "@/lib/import-upload-summary";
+import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
+import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
+import { countNonCashAccounts } from "@/lib/account-limit-count";
+import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import { useDefaultCurrency } from "@/lib/use-default-currency";
+import { convertAmount, useExchangeRates } from "@/lib/use-exchange-rates";
+import { fetchJsonOnce } from "@/lib/request-dedupe";
+import {
+  applyOptimisticWorkspaceAccountDeletion,
+  accountsWorkspaceCacheKey,
+  clearDeletedWorkspaceAccount,
+  deletedAccountsWorkspaceCacheKey,
+  getCachedAccountsWorkspace,
+  getCachedTransactionsWorkspace,
+  getDeletedWorkspaceAccountIds,
+  getDeletingWorkspaceAccountIds,
+  persistAccountsWorkspaceCache,
+  persistTransactionsWorkspaceCache,
+  syncWorkspaceCategoryCache,
+  markDeletedWorkspaceAccount,
+  markDeletingWorkspaceAccount,
+  clearDeletingWorkspaceAccount,
+  clearRepublishedWorkspaceAccountDeletionMarkers,
+  reconcilePersistedWorkspaceAccountDeletionMarkers,
+  normalizeImportedAccountKey,
+  matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
+  deletingAccountsWorkspaceCacheKey,
+  workspaceCacheUpdatedEventName,
+  type WorkspaceCacheUpdatedEventDetail,
+} from "@/lib/workspace-cache";
+import { getAccountWalletBrand as getAccountBrand } from "@/lib/account-brand";
+import { getLuxuryAccountCardClass } from "@/lib/account-card-luxury";
+import { inferAccountTypeFromStatement } from "@/lib/financial-classification";
+import { getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
+import {
+  chooseWorkspaceId,
+  persistSelectedCurrency,
+  persistSelectedWorkspaceId,
+  readSelectedCurrency,
+  readSelectedWorkspaceId,
+} from "@/lib/workspace-selection";
+import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
+import {
+  getInvestmentFieldConfigs,
+  getInvestmentSubtypeLabel,
+  canTrackInvestmentPurchaseHistory,
+  canTrackInvestmentUnits,
+  INVESTMENT_SUBTYPES,
+  type InvestmentSubtype,
+  isFixedIncomeInvestmentSubtype,
+  isMarketInvestmentSubtype,
+} from "@/lib/investments";
+import {
+  ACCOUNT_TYPE_SECTIONS,
+  formatAccountTypeLabel,
+  getRecurringKindSuggestionForAccountType,
+  isLiabilityAccountType,
+  isSpendableAccountType,
+  isTrackedAssetAccountType,
+  type SupportedAccountType,
+} from "@/lib/account-types";
+import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
+import type { UserLimits } from "@/lib/user-limits";
+import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
+import {
+  getCompletedImportActivitySummary,
+  importActivityIsComplete,
+  readImportActivity,
+  subscribeImportActivity,
+} from "@/lib/import-activity";
+import { importActivityHasCompletedRows } from "@/lib/import-activity";
+import { subscribeImportedSummary } from "@/lib/imported-summary-events";
+import {
+  mergeAccountsWithOptimisticImports as mergeAccountsWithOptimisticImportsShared,
+  mergeImportedPreviewTransactions,
+  mergeOptimisticImportedAccount as mergeOptimisticImportedAccountShared,
+  mergeProvisionalAccountSnapshot,
+  resolvePersistedImportedAccountId as resolvePersistedImportedAccountIdShared,
+  isGenericUploadedAccountShadowed,
+  isTransientUploadedAccountPlaceholder,
+  transactionMatchesImportedAccount,
+  uploadSummaryMatchesImportedAccount,
+} from "@/lib/imported-account-ui";
+
+type PlanUsage = {
+  accountCount: number;
+  monthlyUploadCount: number;
+  transactionCount: number;
+};
+
+const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 2 * 60 * 1000;
+const SYNCING_EMPTY_STATE_REFRESH_DELAY_MS = 250;
+const POST_IMPORT_RECONCILIATION_DELAYS_MS = [2_500, 7_500, 15_000] as const;
+const ACCOUNTS_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const POST_IMPORT_ACCOUNTS_MAINTENANCE_INTERVAL_MS = 2 * 60 * 1000;
+
+const accountsMaintenanceStorageKey = (workspaceId: string) =>
+  `clover.accounts.maintenance.v1:${workspaceId}`;
+
+const shouldRunAccountsMaintenance = (workspaceId: string, forceFresh: boolean) => {
+  try {
+    const lastRun = Number(window.localStorage.getItem(accountsMaintenanceStorageKey(workspaceId)) ?? 0);
+    const interval = forceFresh
+      ? POST_IMPORT_ACCOUNTS_MAINTENANCE_INTERVAL_MS
+      : ACCOUNTS_MAINTENANCE_INTERVAL_MS;
+    return !Number.isFinite(lastRun) || Date.now() - lastRun >= interval;
+  } catch {
+    return true;
+  }
+};
+
+const markAccountsMaintenanceComplete = (workspaceId: string) => {
+  try {
+    window.localStorage.setItem(accountsMaintenanceStorageKey(workspaceId), String(Date.now()));
+  } catch {
+    // Storage restrictions should not block account loading.
+  }
+};
+
+const ImportFilesModal = dynamic(
+  () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
+  { ssr: false }
+);
+
+const ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS = [
+  { value: "once", label: "One-time" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Every 2 weeks" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "annual", label: "Yearly" },
+] as const;
+
+const ACCOUNT_LOADING_TIMEOUT_MS = 45_000;
+const ACCOUNT_LOADING_PULSE_MS = 5_000;
+const PAGE_LOADING_TIMEOUT_MS = 12_000;
+const WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS = 2_500;
+
+const isImageImportFile = (file: File) =>
+  /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
+
+const uploadSummaryMatchesAccount = (summary: UploadInsightsSummary, account: Account) => {
+  return uploadSummaryMatchesImportedAccount(summary, account);
+};
+
+type Workspace = {
+  id: string;
+  name: string;
+  type: string;
+};
+
+type Account = {
+  id: string;
+  workspaceId?: string;
+  name: string;
+  institution: string | null;
+  logoUrl?: string | null;
+  accountNumber: string | null;
+  investmentSubtype: InvestmentSubtype | null;
+  investmentSymbol: string | null;
+  investmentQuantity: string | null;
+  investmentCostBasis: string | null;
+  investmentPrincipal: string | null;
+  investmentStartDate: string | null;
+  investmentMaturityDate: string | null;
+  investmentInterestRate: string | null;
+  investmentMaturityValue: string | null;
+  type: SupportedAccountType;
+  currency: string;
+  source: string;
+  balance: string | null;
+  bankBalance?: string;
+  bankBalanceAt?: string;
+  publishedImportInventory?: boolean;
+  transactionCount?: number | null;
+  favorite?: boolean;
+  updatedAt: string;
+  createdAt: string;
+};
+
+const buildCashFallbackAccount = (currency: string): Account => {
+  const now = new Date(0).toISOString();
+  return {
+    id: `fallback-cash-${formatCurrencyCode(currency).toLowerCase()}`,
+    name: "Cash",
+    institution: "Cash",
+    logoUrl: null,
+    accountNumber: null,
+    investmentSubtype: null,
+    investmentSymbol: null,
+    investmentQuantity: null,
+    investmentCostBasis: null,
+    investmentPrincipal: null,
+    investmentStartDate: null,
+    investmentMaturityDate: null,
+    investmentInterestRate: null,
+    investmentMaturityValue: null,
+    type: "cash",
+    currency: formatCurrencyCode(currency),
+    source: "manual",
+    balance: "0",
+    transactionCount: 0,
+    favorite: false,
+    updatedAt: now,
+    createdAt: now,
+  };
+};
+
+const isCashFallbackAccount = (account: Account) => account.id.startsWith("fallback-cash-");
+const isWorkspaceAccount = (account: Account, workspaceId: string) =>
+  account.workspaceId === workspaceId || (!account.workspaceId && isCashFallbackAccount(account));
+
+type UploadAccountLoadingContext = {
+  latestCheckpoint: StatementCheckpoint | null;
+  checkpointBalance: string | null;
+  stableBalance: string | null;
+  hasVisibleBalance: boolean;
+  hasLoadedTransactions: boolean;
+  displayedBalance: string | null;
+  baseIsLoading: boolean;
+  isLoading: boolean;
+  isTimedOut: boolean;
+};
+
+const buildOptimisticImportedAccount = (
+  summary: UploadInsightsSummary,
+  workspaceId: string
+): Account | null => {
+  if (!summary.accountName) {
+    return null;
+  }
+  // Account-only screenshots can finish parsing before the worker returns its
+  // canonical account ID. Keep a stable temporary card in that short gap so
+  // the UI never reports a completed import that is invisible until refresh.
+  const optimisticAccountId =
+    summary.accountId ??
+    summary.optimisticAccountId ??
+    `optimistic-import-${[summary.fileName, summary.institution ?? "", summary.accountName, summary.accountNumber ?? ""]
+      .join("-")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")}`;
+  const transactionCount = Math.max(
+    Number(summary.rowsImported ?? 0) || 0,
+    Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0
+  );
+  const publishedImportInventory = Boolean(
+    summary.accountSummaries?.some(
+      (accountSummary) => accountSummary.accountId === optimisticAccountId && Number(accountSummary.rowsImported ?? 0) === 0
+    )
+  );
+  const displayName = formatUploadAccountDisplayName(
+    summary.accountName,
+    summary.institution,
+    summary.accountNumber ?? null,
+    summary.accountType ?? null
+  );
+
+  return {
+    id: optimisticAccountId,
+    workspaceId,
+    name: displayName,
+    institution: summary.institution,
+    accountNumber: summary.accountNumber ?? null,
+    investmentSubtype: null,
+    investmentSymbol: null,
+    investmentQuantity: null,
+    investmentCostBasis: null,
+    investmentPrincipal: null,
+    investmentStartDate: null,
+    investmentMaturityDate: null,
+    investmentInterestRate: null,
+    investmentMaturityValue: null,
+    type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    currency: summary.currency ?? summary.previewTransactions?.[0]?.currency ?? "PHP",
+    source: "upload",
+    balance: summary.balance,
+    transactionCount,
+    publishedImportInventory,
+    favorite: false,
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+};
+
+const resolvePersistedImportedAccountId = (summary: UploadInsightsSummary, accounts: Account[]) => {
+  return resolvePersistedImportedAccountIdShared(
+    summary,
+    accounts,
+    summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    true
+  );
+};
+
+const getImportedAccountKey = (
+  name: string | null,
+  institution: string | null,
+  accountNumber?: string | null,
+  accountType?: string | null,
+  currency?: string | null
+) => normalizeImportedAccountKey(name, institution, accountNumber ?? null, accountType ?? null, currency ?? null);
+
+const matchesImportedAccountIdentity = (left: Account, right: Account) => {
+  return isImportedAccountIdentityMatch(left, right);
+};
+
+const transactionMatchesAccount = (transaction: Transaction, account: Account) => {
+  return transactionMatchesImportedAccount(transaction, account);
+};
+
+const hasImportedTransactionEvidence = (transactions: Transaction[]) =>
+  transactions.some((transaction) => transaction.source === "upload" || Boolean(transaction.importFileId));
+
+const inferImportedAccountTypeFromTransaction = (transaction: Transaction): SupportedAccountType => {
+  const identity = `${transaction.institution ?? ""} ${transaction.accountName ?? ""}`.toLowerCase();
+  if (/\bwise\b/.test(identity)) {
+    return "wallet";
+  }
+
+  return inferAccountTypeFromStatement(
+    transaction.institution ?? null,
+    transaction.accountName ?? transaction.merchantClean ?? transaction.merchantRaw,
+    "bank"
+  );
+};
+
+const deriveOptimisticAccountsFromTransactions = (
+  transactions: Transaction[],
+  existingAccounts: Account[],
+  deletedAccountIds: Set<string>
+) => {
+  const existingById = new Map(existingAccounts.map((account) => [account.id, account] as const));
+  const existingByKey = new Map(
+    existingAccounts.map(
+      (account) =>
+        [getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency), account] as const
+    )
+  );
+  const derivedAccounts = new Map<string, Account>();
+
+  for (const transaction of transactions) {
+    if (!transaction.accountId || deletedAccountIds.has(transaction.accountId)) {
+      continue;
+    }
+
+    const matchedExistingById = existingById.get(transaction.accountId) ?? null;
+    const inferredType = matchedExistingById?.type ?? inferImportedAccountTypeFromTransaction(transaction);
+    const importedAccountKey = getImportedAccountKey(
+      transaction.accountName ?? null,
+      transaction.institution ?? null,
+      transaction.accountNumber ?? null,
+      inferredType,
+      transaction.currency
+    );
+    const matchedExisting =
+      matchedExistingById ??
+      (importedAccountKey ? existingByKey.get(importedAccountKey) ?? null : null);
+
+    if (matchedExisting && !matchedExisting.id.startsWith("optimistic-")) {
+      continue;
+    }
+
+    const displayName = formatUploadAccountDisplayName(
+      transaction.accountName ?? transaction.institution ?? "Imported account",
+      transaction.institution ?? null,
+      transaction.accountNumber ?? null,
+      inferredType
+    );
+    const seedAccount = matchedExisting ?? {
+      id: transaction.accountId,
+      name: displayName,
+      institution: transaction.institution ?? null,
+      accountNumber: transaction.accountNumber ?? null,
+      investmentSubtype: null,
+      investmentSymbol: null,
+      investmentQuantity: null,
+      investmentCostBasis: null,
+      investmentPrincipal: null,
+      investmentStartDate: null,
+      investmentMaturityDate: null,
+      investmentInterestRate: null,
+      investmentMaturityValue: null,
+      type: inferredType,
+      currency: transaction.currency,
+      source: "upload",
+      balance: null,
+      transactionCount: 0,
+      favorite: false,
+      updatedAt: transaction.date,
+      createdAt: transaction.date,
+    };
+    const currentCount = derivedAccounts.get(seedAccount.id)?.transactionCount ?? seedAccount.transactionCount ?? 0;
+    derivedAccounts.set(seedAccount.id, {
+      ...seedAccount,
+      source: "upload",
+      currency: seedAccount.currency || transaction.currency,
+      transactionCount: currentCount + 1,
+      updatedAt: transaction.date > seedAccount.updatedAt ? transaction.date : seedAccount.updatedAt,
+      createdAt: transaction.date < seedAccount.createdAt ? transaction.date : seedAccount.createdAt,
+    });
+  }
+
+  return Array.from(derivedAccounts.values()).filter((account) => {
+    if (isTransientUploadedAccountPlaceholder(account)) {
+      return false;
+    }
+
+    return !isGenericUploadedAccountShadowed(account, existingAccounts);
+  });
+};
+
+const mergeAccountsWithOptimisticImports = (
+  fetchedAccounts: Account[],
+  currentAccounts: Account[],
+  deletedAccountIds: Set<string>,
+  supportingTransactions: Transaction[] = [],
+  options?: {
+    preserveImportedEvidence?: boolean;
+    preferCurrentImportedSnapshot?: boolean;
+    acceptConfirmedZeroBalances?: boolean;
+    preserveCurrentAccountIds?: Set<string>;
+  }
+) => {
+  const shouldPreserveImportedEvidence =
+    (options?.preserveImportedEvidence ?? false) || hasImportedTransactionEvidence(supportingTransactions);
+  const baseMergedAccounts = mergeAccountsWithOptimisticImportsShared(
+    fetchedAccounts,
+    currentAccounts,
+    {
+      deletedAccountIds,
+      preserveNonZeroOptimisticBalance: options?.acceptConfirmedZeroBalances !== true,
+      preserveCurrentInventory: shouldPreserveImportedEvidence,
+      preserveCurrentAccountIds: options?.preserveCurrentAccountIds,
+      preferCurrentImportedSnapshot: options?.preferCurrentImportedSnapshot ?? false,
+    }
+  );
+  if (!shouldPreserveImportedEvidence) {
+    return baseMergedAccounts;
+  }
+
+  if (supportingTransactions.length === 0) {
+    return baseMergedAccounts;
+  }
+
+  const derivedOptimisticAccounts = deriveOptimisticAccountsFromTransactions(
+    supportingTransactions,
+    baseMergedAccounts,
+    deletedAccountIds
+  ).filter(
+    (account) =>
+      !baseMergedAccounts.some(
+        (existingAccount) =>
+          existingAccount.id === account.id || matchesImportedAccountIdentity(existingAccount, account)
+      )
+  );
+
+  return [...derivedOptimisticAccounts, ...baseMergedAccounts];
+};
+
+const mergeOptimisticImportedAccount = (
+  currentAccounts: Account[],
+  optimisticAccount: Account,
+  options?: { authoritativeBalance?: boolean }
+) => {
+  return mergeOptimisticImportedAccountShared(currentAccounts, optimisticAccount, {
+    authoritativeBalance: options?.authoritativeBalance,
+    mergeMatchedAccount: (matchedAccount, nextOptimisticAccount, shouldPreserveExistingBalance) => ({
+      ...matchedAccount,
+      ...nextOptimisticAccount,
+      balance: shouldPreserveExistingBalance ? matchedAccount.balance : nextOptimisticAccount.balance ?? matchedAccount.balance,
+      updatedAt: nextOptimisticAccount.updatedAt ?? matchedAccount.updatedAt,
+      createdAt: matchedAccount.createdAt ?? nextOptimisticAccount.createdAt,
+    }),
+  });
+};
+
+const accountProjectionMatchesImport = (projectedAccounts: Account[], expectedAccounts: Account[]) =>
+  expectedAccounts.length > 0 &&
+  expectedAccounts.every((expectedAccount) => {
+    const projectedAccount =
+      projectedAccounts.find((account) => account.id === expectedAccount.id) ??
+      projectedAccounts.find((account) => matchesImportedAccountIdentity(account, expectedAccount)) ??
+      null;
+    if (!projectedAccount) {
+      return false;
+    }
+
+    if (expectedAccount.balance === null || expectedAccount.balance === undefined) {
+      return true;
+    }
+
+    return Math.abs(parseAmount(projectedAccount.balance) - parseAmount(expectedAccount.balance)) < 0.005;
+  });
+
+const getCachedWorkspaceHydration = (workspaceId: string) => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const transactionsSnapshot = getCachedTransactionsWorkspace(workspaceId);
+  const accountsSnapshot = getCachedAccountsWorkspace(workspaceId);
+  if (accountsSnapshot) {
+    return {
+      accounts: ((accountsSnapshot.accounts as Account[] | undefined) ?? []).filter((account) =>
+        isWorkspaceAccount(account, workspaceId)
+      ),
+      accountRules: (accountsSnapshot.accountRules as AccountRule[] | undefined) ?? [],
+      transactions: ((accountsSnapshot.transactions as Transaction[] | undefined) ?? []).filter(
+        (transaction) => transaction.workspaceId === workspaceId
+      ),
+      statementCheckpoints: ((accountsSnapshot.statementCheckpoints as StatementCheckpoint[] | undefined) ?? []).filter(
+        (checkpoint) => checkpoint.workspaceId === workspaceId
+      ),
+      imports: (transactionsSnapshot?.imports as ImportFile[] | undefined) ?? [],
+      updatedAt: accountsSnapshot.updatedAt,
+    };
+  }
+
+  if (!transactionsSnapshot) {
+    return null;
+  }
+
+  return {
+    accounts: ((transactionsSnapshot.accounts as Account[] | undefined) ?? []).filter((account) =>
+      isWorkspaceAccount(account, workspaceId)
+    ),
+    accountRules: [] as AccountRule[],
+    transactions: ((transactionsSnapshot.transactions as Transaction[] | undefined) ?? []).filter(
+      (transaction) => transaction.workspaceId === workspaceId
+    ),
+    statementCheckpoints: [] as StatementCheckpoint[],
+    imports: (transactionsSnapshot.imports as ImportFile[] | undefined) ?? [],
+    updatedAt: transactionsSnapshot.updatedAt,
+  };
+};
+
+const hasCachedWorkspaceDataEvidence = (workspaceId: string) => {
+  const cachedSnapshot = getCachedWorkspaceHydration(workspaceId);
+  if (!cachedSnapshot) {
+    return false;
+  }
+
+  return Boolean(
+    cachedSnapshot.accounts.length > 0 ||
+      cachedSnapshot.transactions.length > 0 ||
+      cachedSnapshot.statementCheckpoints.length > 0 ||
+      (cachedSnapshot.imports?.length ?? 0) > 0
+  );
+};
+
+const hasRecentWorkspaceImportEvidence = (
+  workspaceId: string,
+  activity: ReturnType<typeof readImportActivity>
+) => {
+  if (!workspaceId || !activity || activity.workspaceId !== workspaceId) {
+    return false;
+  }
+
+  const isFresh = Date.now() - Number(activity.updatedAt ?? 0) <= IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS;
+  if (!isFresh) {
+    return false;
+  }
+
+  return activity.status === "active" || importActivityHasCompletedRows(activity);
+};
+
+const getImportActivityAccountIds = (activity: ReturnType<typeof readImportActivity>) => {
+  const ids = new Set<string>();
+  const addId = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) {
+      ids.add(value.trim());
+    }
+  };
+
+  addId(activity?.summary?.accountId);
+  addId(activity?.summary?.optimisticAccountId);
+  for (const account of activity?.summary?.accountSummaries ?? []) {
+    addId(account.accountId);
+  }
+  return ids;
+};
+
+type AccountRule = {
+  accountId: string | null;
+  accountName: string;
+  institution: string | null;
+  accountType: string;
+};
+
+type ImportFile = {
+  id: string;
+  fileName: string;
+  status: string;
+  uploadedAt: string;
+  accountId?: string | null;
+};
+
+type Transaction = {
+  id: string;
+  workspaceId?: string;
+  accountId: string;
+  accountName?: string;
+  institution?: string | null;
+  accountNumber?: string | null;
+  currency: string;
+  amount: string;
+  type: "income" | "expense" | "transfer";
+  date: string;
+  merchantRaw: string;
+  merchantClean: string | null;
+  categoryName: string | null;
+  description: string | null;
+  isExcluded: boolean;
+  source?: string | null;
+  importFileId?: string | null;
+  rawPayload?: {
+    amountDelta?: string | number | null;
+    balance?: string | number | null;
+    openingBalance?: string | number | null;
+    kind?: string;
+  } | null;
+};
+
+type StatementCheckpoint = {
+  id: string;
+  workspaceId?: string;
+  accountId: string | null;
+  statementStartDate: string | null;
+  statementEndDate: string | null;
+  openingBalance: string | null;
+  endingBalance: string | null;
+  status: "pending" | "reconciled" | "mismatch";
+  mismatchReason: string | null;
+  rowCount: number;
+  createdAt: string;
+  updatedAt: string;
+  sourceMetadata?: {
+    accountName?: string | null;
+    institution?: string | null;
+    accountNumber?: string | null;
+    importMode?: string | null;
+    documentType?: string | null;
+  } | null;
+};
+
+type InvestmentInstitutionCard = {
+  kind: "investment_institution";
+  id: string;
+  institution: string;
+  currency: string;
+  balance: string;
+  updatedAt: string;
+  accounts: Account[];
+  assetCount?: number;
+};
+
+type AccountInvestmentSnapshot = {
+  id: string;
+  portfolioName: string | null;
+  currency: string;
+  updatedAt: string;
+  account: { id: string; institution: string | null } | null;
+  documentImport: { institution: string | null; currency: string } | null;
+  holdings: Array<{
+    id: string;
+    assetName: string;
+    assetSymbol: string | null;
+    assetType: string | null;
+    currentValue: string | null;
+    marketValue: string | null;
+    updatedAt: string;
+  }>;
+};
+
+const isInvestmentInstitutionCard = (row: Account | InvestmentInstitutionCard): row is InvestmentInstitutionCard =>
+  "kind" in row && row.kind === "investment_institution";
+
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString("en-PH", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
+
+const formatAccountAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+const formatDisplayAccountAmount = (value: number, currency?: string | null) =>
+  formatCurrencyAmount(Math.abs(value), currency ?? "PHP");
+
+const formatCardAccountNumber = (value: string | null | undefined) => {
+  const cleaned = (value ?? "").trim();
+  if (!cleaned) {
+    return "";
+  }
+
+  const digitsOnly = cleaned.replace(/\D/g, "");
+  if (digitsOnly.length >= 4) {
+    return `•••• ${digitsOnly.slice(-4)}`;
+  }
+
+  return cleaned;
+};
+
+const getMaskedAccountNumberCollisionKey = (account: Pick<Account, "accountNumber" | "institution" | "type">) => {
+  const digitsOnly = String(account.accountNumber ?? "").replace(/\D/g, "");
+  if (digitsOnly.length < 4) {
+    return null;
+  }
+
+  return [account.type, account.institution?.trim().toLowerCase() ?? "", digitsOnly.slice(-4)].join(":");
+};
+
+const formatDisambiguatedCardAccountNumber = (
+  value: string | null | undefined,
+  options?: { showDigitCount?: boolean }
+) => {
+  const masked = formatCardAccountNumber(value);
+  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  if (!masked || !options?.showDigitCount || digitsOnly.length <= 4) {
+    return masked;
+  }
+
+  return `${masked} · ${digitsOnly.length} digits`;
+};
+
+const removeDuplicateCardAccountSuffix = (name: string, accountNumber: string | null | undefined) => {
+  const lastFour = String(accountNumber ?? "").replace(/\D/g, "").slice(-4);
+  if (!lastFour) {
+    return name;
+  }
+
+  const cleanedName = name.trim();
+  const suffixPattern = new RegExp(`(?:\\s|[-–—_])*(?:[•*xX]{2,}\\s*)?${lastFour}$`);
+  const withoutSuffix = cleanedName.replace(suffixPattern, "").trim();
+  return withoutSuffix || cleanedName;
+};
+
+const normalizeAccountCardLabel = (value: string | null | undefined) =>
+  String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+const areEquivalentAccountCardLabels = (first: string | null | undefined, second: string | null | undefined) => {
+  const normalizedFirst = normalizeAccountCardLabel(first);
+  return Boolean(normalizedFirst) && normalizedFirst === normalizeAccountCardLabel(second);
+};
+
+const isRedundantInvestmentCardReference = (
+  accountNumber: string | null | undefined,
+  labels: Array<string | null | undefined>
+) => {
+  const reference = String(accountNumber ?? "").trim();
+  return Boolean(reference) && !/\d/.test(reference) && labels.some((label) => areEquivalentAccountCardLabels(reference, label));
+};
+
+const getCurrencyCodes = (accounts: Array<{ currency: string }>) =>
+  Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency))));
+
+const getAccountCardEyebrow = (account: Account) => {
+  if (account.type === "cash") {
+    return "Cash";
+  }
+
+  return account.institution?.trim() || getAccountBrand({
+    institution: account.institution,
+    name: account.name,
+    type: account.type,
+  }).label;
+};
+
+const isGSaveInstitutionAccount = (account: Account) =>
+  accountSectionType(account) === "investment" && /\bgsave\b|\b(?:unoready|unoboost)\b/i.test(`${account.institution ?? ""} ${account.name}`);
+
+const getInvestmentInstitutionPreviewLabel = (account: Account) => {
+  const symbol = account.investmentSymbol?.trim();
+  if (symbol) {
+    return symbol;
+  }
+
+  // The provider is already the card title. Keep imported PDAX assets concise
+  // in the card preview, including accounts created before the parser rename.
+  const name = account.name.trim();
+  if (/^pdax\s+gold(?:\s+rwa)?$/i.test(name)) {
+    return "Gold";
+  }
+  return name.replace(/^pdax\s+/i, "");
+};
+
+const getInvestmentInstitutionPreview = (accounts: Account[]) => {
+  const storedLabels = Array.from(
+    new Set(accounts.map(getInvestmentInstitutionPreviewLabel).map((label) => label.trim()).filter(Boolean))
+  );
+  const expandedLabels = Array.from(
+    new Set(
+      storedLabels
+        .flatMap((label) => label.split(/\s*,\s*/))
+        .map((label) => label.trim())
+        .filter(Boolean)
+    )
+  );
+  const meaningfulLabels = expandedLabels.length > 1
+    ? expandedLabels.filter((label) => !/^(?:gfunds|atram)\s+investments?$/i.test(label))
+    : expandedLabels;
+  const assetLabels = meaningfulLabels.length > 0 ? meaningfulLabels : expandedLabels;
+
+  if (accounts.length > 0 && accounts.every(isGSaveInstitutionAccount)) {
+    const productCount = assetLabels.length || accounts.length;
+    return `${productCount} product${productCount === 1 ? "" : "s"}`;
+  }
+
+  if (assetLabels.length === 1) {
+    return assetLabels[0];
+  }
+
+  const assetCount = assetLabels.length || accounts.length;
+  return `${assetCount} asset${assetCount === 1 ? "" : "s"}`;
+};
+
+const formatAggregateAmount = (value: number, accounts: Array<{ currency: string }>) => {
+  const currencies = getCurrencyCodes(accounts);
+  if (currencies.length === 0) {
+    return formatDisplayAccountAmount(value, "PHP");
+  }
+
+  if (currencies.length === 1) {
+    return formatDisplayAccountAmount(value, currencies[0]);
+  }
+
+  return "Mixed currencies";
+};
+
+const formatSignedAggregateAmount = (value: number, accounts: Array<{ currency: string }>) => {
+  const currencies = getCurrencyCodes(accounts);
+  if (currencies.length !== 1) {
+    return formatAggregateAmount(value, accounts);
+  }
+
+  if (value === 0) {
+    return formatDisplayAccountAmount(value, currencies[0]);
+  }
+
+  return `${value > 0 ? "+" : "-"}${formatDisplayAccountAmount(value, currencies[0])}`;
+};
+
+const getNetWorthTone = (value: number) => {
+  if (value > 0) {
+    return "is-good";
+  }
+
+  if (value < 0) {
+    return "is-danger";
+  }
+
+  return "is-neutral";
+};
+
+const getInvestmentInstitutionName = (account: Account) =>
+  isGSaveInstitutionAccount(account)
+    ? "GSave"
+    : account.institution?.trim() || account.name.trim() || "Investment institution";
+
+const buildInvestmentInstitutionCards = (
+  accounts: Account[],
+  readBalance: (account: Account) => string | null | undefined = (account) => account.balance,
+  snapshots: AccountInvestmentSnapshot[] = []
+): Array<Account | InvestmentInstitutionCard> => {
+  const groups = new Map<string, InvestmentInstitutionCard>();
+
+  for (const account of accounts) {
+    const institution = getInvestmentInstitutionName(account);
+    const currency = formatCurrencyCode(account.currency);
+    const key = `${institution.toLowerCase()}::${currency}`;
+    const current = groups.get(key);
+    const nextBalance = (parseAmount(current?.balance) ?? 0) + Math.abs(parseAmount(readBalance(account)));
+    const nextUpdatedAt =
+      current && new Date(current.updatedAt).getTime() > new Date(account.updatedAt).getTime()
+        ? current.updatedAt
+        : account.updatedAt;
+
+    groups.set(key, {
+      kind: "investment_institution",
+      id: key,
+      institution,
+      currency,
+      balance: nextBalance.toFixed(2),
+      updatedAt: nextUpdatedAt,
+      accounts: current ? [...current.accounts, account] : [account],
+    });
+  }
+
+  return Array.from(groups.values()).map((group) => {
+    const snapshotSummary = getInvestmentInstitutionSnapshotSummary(
+      group.institution,
+      group.currency,
+      group.accounts.map((account) => ({ ...account, balance: readBalance(account) ?? account.balance })),
+      snapshots
+    );
+    return snapshotSummary ? { ...group, balance: snapshotSummary.balance, assetCount: snapshotSummary.assetCount } : group;
+  }).sort(
+    (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+  );
+};
+
+const parseNullableNumberInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseNullableDateInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const date = new Date(`${trimmed}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+const getEffectiveAccountType = (account: Account) => {
+  if (account.type === "line_of_credit" && /maya/i.test(`${account.institution ?? ""} ${account.name ?? ""}`)) {
+    return "credit_card";
+  }
+
+  return accountSectionType(account);
+};
+
+const getAccountDisplayType = (account: Account) => {
+  const effectiveType = getEffectiveAccountType(account);
+  if (effectiveType === "bank" && account.institution === "Checking") return "Checking";
+  if (effectiveType === "bank" && account.institution === "Savings") return "Savings";
+  return formatAccountTypeLabel(effectiveType);
+};
+
+const getAccountTone = (account: Account) => (isLiabilityAccountType(getEffectiveAccountType(account)) ? "liability" : "asset");
+
+const getAccountWarning = (account: Account, duplicateCount: number) => {
+  if (duplicateCount > 1) return "Possible duplicate";
+  return null;
+};
+
+const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
+  if (!checkpoint) {
+    return {
+      label: "No statement checkpoint yet",
+      detail: "Import a statement to anchor this balance.",
+      tone: "neutral" as const,
+      icon: "clock" as const,
+    };
+  }
+
+  const checkpointDate = checkpoint.statementEndDate ?? checkpoint.createdAt ?? null;
+  const endingDate = checkpointDate ? formatDate(checkpointDate) : "No date";
+  if (checkpoint.status === "mismatch") {
+    return {
+      label: "Needs review",
+      detail: checkpoint.mismatchReason ?? `Mismatch detected · ${endingDate}`,
+      tone: "danger" as const,
+      icon: "warning" as const,
+    };
+  }
+
+  if (checkpoint.status === "reconciled") {
+    return {
+      label: "Reconciled",
+      detail: endingDate,
+      tone: "good" as const,
+      icon: "refresh" as const,
+    };
+  }
+
+  return {
+    label: "Checkpoint pending",
+    detail: endingDate,
+    tone: "neutral" as const,
+    icon: "calendar" as const,
+  };
+};
+
+const buildImportSummaries = (transactions: Transaction[]) => {
+  const importGroups = new Map<
+    string,
+    { key: string; count: number; latestDate: string; label: string; total: number }
+  >();
+
+  for (const transaction of transactions) {
+    if (transaction.merchantRaw === "Beginning balance") {
+      continue;
+    }
+
+    if (transaction.source !== "upload" && !transaction.importFileId) {
+      continue;
+    }
+
+    const key = transaction.importFileId ?? `${transaction.accountId}:${transaction.date.slice(0, 10)}`;
+    const current = importGroups.get(key);
+    const amount = parseAmount(transaction.amount);
+    const next = current
+      ? {
+          ...current,
+          count: current.count + 1,
+          latestDate: new Date(transaction.date) > new Date(current.latestDate) ? transaction.date : current.latestDate,
+          total: current.total + amount,
+        }
+      : {
+          key,
+          count: 1,
+          latestDate: transaction.date,
+          label: transaction.importFileId ? "Imported batch" : "Uploaded statement",
+          total: amount,
+        };
+
+    importGroups.set(key, next);
+  }
+
+  return Array.from(importGroups.values()).sort(
+    (left, right) => new Date(right.latestDate).getTime() - new Date(left.latestDate).getTime()
+  );
+};
+
+const getCheckpointTone = (status?: StatementCheckpoint["status"] | null) => {
+  if (status === "reconciled") return "good";
+  if (status === "mismatch") return "danger";
+  return "neutral";
+};
+
+const getCheckpointDocumentFamily = (checkpoint: StatementCheckpoint | null | undefined) => {
+  const rawDocumentType =
+    typeof checkpoint?.sourceMetadata?.documentType === "string" && checkpoint.sourceMetadata.documentType.trim()
+      ? checkpoint.sourceMetadata.documentType.trim().toLowerCase()
+      : typeof checkpoint?.sourceMetadata?.importMode === "string" && checkpoint.sourceMetadata.importMode.trim()
+        ? checkpoint.sourceMetadata.importMode.trim().toLowerCase()
+        : "statement";
+
+  if (rawDocumentType === "portfolio") {
+    return {
+      label: "Latest portfolio snapshot",
+      dateLabel: "Snapshot date",
+      balanceLabel: "Portfolio value",
+    };
+  }
+
+  if (rawDocumentType === "account_detail") {
+    return {
+      label: "Latest account snapshot",
+      dateLabel: "Snapshot date",
+      balanceLabel: "Balance",
+    };
+  }
+
+  if (rawDocumentType === "receipt" || rawDocumentType === "notes") {
+    return {
+      label: "Latest image checkpoint",
+      dateLabel: "Capture date",
+      balanceLabel: "Amount",
+    };
+  }
+
+  return {
+    label: "Latest statement checkpoint",
+    dateLabel: "Statement date",
+    balanceLabel: "Statement balance",
+  };
+};
+
+const getCheckpointTrustLabel = (checkpoint: StatementCheckpoint | null | undefined) => {
+  if (!checkpoint) {
+    return "No statement checkpoint yet";
+  }
+
+  const endingDate = checkpoint.statementEndDate ?? checkpoint.createdAt ?? null;
+  const formattedDate = endingDate ? formatDate(endingDate) : null;
+  if (checkpoint.status === "mismatch") {
+    return `Needs review${formattedDate ? ` · ${formattedDate}` : ""}`;
+  }
+
+  if (checkpoint.status === "reconciled") {
+    return `Reconciled${formattedDate ? ` · ${formattedDate}` : ""}`;
+  }
+
+  return `Checkpoint pending${formattedDate ? ` · ${formattedDate}` : ""}`;
+};
+
+const getCheckpointIdentityKey = (checkpoint: StatementCheckpoint) =>
+  (() => {
+    const sourceMetadata = checkpoint.sourceMetadata as Record<string, unknown> | null | undefined;
+    const accountType = typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null;
+    const checkpointInstitution =
+      typeof sourceMetadata?.institution === "string"
+        ? sourceMetadata.institution
+        : typeof sourceMetadata?.uploadBankHint === "string"
+          ? sourceMetadata.uploadBankHint
+          : null;
+    return normalizeImportedAccountKey(
+      typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+      checkpointInstitution,
+      typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null,
+      accountType,
+      typeof sourceMetadata?.currency === "string"
+        ? sourceMetadata.currency
+        : typeof sourceMetadata?.accountCurrency === "string"
+          ? sourceMetadata.accountCurrency
+          : null
+    );
+  })();
+
+const getLastFourDigits = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
+const accountNumbersMayMatch = (
+  left?: string | null,
+  right?: string | null,
+  requireExactMatch = false
+) => {
+  const leftDigits = String(left ?? "").replace(/\D/g, "");
+  const rightDigits = String(right ?? "").replace(/\D/g, "");
+  if (!leftDigits || !rightDigits) {
+    return false;
+  }
+
+  if (leftDigits === rightDigits) {
+    return true;
+  }
+
+  if (requireExactMatch) {
+    return false;
+  }
+
+  const leftIsSuffixOnly = leftDigits.length === 4;
+  const rightIsSuffixOnly = rightDigits.length === 4;
+  if (leftIsSuffixOnly !== rightIsSuffixOnly) {
+    return false;
+  }
+
+  return leftIsSuffixOnly && rightIsSuffixOnly && leftDigits === rightDigits;
+};
+
+const mergeStatementCheckpoints = (current: StatementCheckpoint[], next: StatementCheckpoint[]) => {
+  if (next.length === 0) {
+    return current;
+  }
+
+  const checkpointsById = new Map<string, StatementCheckpoint>();
+  for (const checkpoint of current) {
+    checkpointsById.set(checkpoint.id, checkpoint);
+  }
+  for (const checkpoint of next) {
+    const existing = checkpointsById.get(checkpoint.id);
+    if (!existing) {
+      checkpointsById.set(checkpoint.id, checkpoint);
+      continue;
+    }
+
+    const existingScore = [existing.statementEndDate, existing.updatedAt].filter(Boolean).join("|");
+    const nextScore = [checkpoint.statementEndDate, checkpoint.updatedAt].filter(Boolean).join("|");
+    if (nextScore >= existingScore) {
+      checkpointsById.set(checkpoint.id, checkpoint);
+    }
+  }
+
+  return Array.from(checkpointsById.values());
+};
+
+const getLatestCheckpointForAccount = (
+  account: Account,
+  statementCheckpoints: StatementCheckpoint[]
+) => {
+  // A published account inventory carries one authoritative balance per
+  // account in the Accounts API. Its shared document checkpoint represents
+  // the whole file, so applying that single ending balance to an individual
+  // card can copy another column's value onto it.
+  if (account.publishedImportInventory || account.source === "finverse" || account.bankBalance != null) {
+    return null;
+  }
+
+  let latestCheckpoint: StatementCheckpoint | null = null;
+  const identityKey = normalizeImportedAccountKey(
+    account.name,
+    account.institution,
+    account.accountNumber,
+    account.type,
+    account.currency
+  );
+
+  for (const checkpoint of statementCheckpoints) {
+    if (!isAccountBalanceCheckpointEvidence(checkpoint)) {
+      continue;
+    }
+    const sourceMetadata = checkpoint.sourceMetadata as Record<string, unknown> | null | undefined;
+    const checkpointInstitution =
+      typeof sourceMetadata?.institution === "string"
+        ? sourceMetadata.institution
+        : typeof sourceMetadata?.uploadBankHint === "string"
+          ? sourceMetadata.uploadBankHint
+          : null;
+    const checkpointAccountNumber =
+      typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
+    const checkpointLastFour = getLastFourDigits(checkpointAccountNumber);
+    const accountLastFour = getLastFourDigits(account.accountNumber ?? account.name);
+    const matchesAccount =
+      checkpoint.accountId === account.id ||
+      (getCheckpointIdentityKey(checkpoint) !== "" && getCheckpointIdentityKey(checkpoint) === identityKey) ||
+      accountNumbersMayMatch(account.accountNumber ?? null, checkpointAccountNumber) ||
+      Boolean(
+        checkpointInstitution &&
+          account.institution &&
+          checkpointInstitution.trim().toLowerCase() === account.institution.trim().toLowerCase() &&
+          checkpointLastFour &&
+          accountLastFour &&
+          checkpointLastFour === accountLastFour
+      );
+
+    if (!matchesAccount) {
+      continue;
+    }
+
+    if (!latestCheckpoint || compareAccountCheckpointFreshness(checkpoint, latestCheckpoint) >= 0) {
+      latestCheckpoint = checkpoint;
+    }
+  }
+
+  return latestCheckpoint;
+};
+
+function ActionIcon({
+  name,
+}: {
+  name:
+    | "plus"
+    | "filters"
+    | "refresh"
+    | "calendar"
+    | "chart"
+    | "save"
+    | "download"
+    | "chevron-down"
+    | "search"
+    | "edit"
+    | "upload"
+    | "history"
+    | "chevron-right"
+    | "warning"
+    | "check"
+    | "clock";
+}) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "plus":
+      return (
+        <svg {...common}>
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg {...common}>
+          <circle cx="11" cy="11" r="6" />
+          <path d="m20 20-4.2-4.2" />
+        </svg>
+      );
+    case "filters":
+      return (
+        <svg {...common}>
+          <path d="M4 6h16" />
+          <path d="M7 12h10" />
+          <path d="M10 18h4" />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg {...common}>
+          <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+          <path d="M20 4v6h-6" />
+        </svg>
+      );
+    case "calendar":
+      return <InterfaceIcon name="date" size={14} />;
+    case "chart":
+      return (
+        <svg {...common}>
+          <path d="M4 19h16" />
+          <path d="M6 16V9" />
+          <path d="M11 16V5" />
+          <path d="M16 16v-7" />
+        </svg>
+      );
+    case "save":
+      return (
+        <svg {...common}>
+          <path d="M5 5h11l3 3v11H5z" />
+          <path d="M8 5v6h8V5" />
+          <path d="M8 19v-6h8v6" />
+        </svg>
+      );
+    case "download":
+      return <InterfaceIcon name="download" size={14} />;
+    case "upload":
+      return <InterfaceIcon name="upload" size={14} />;
+    case "edit":
+      return <InterfaceIcon name="edit" size={14} />;
+    case "history":
+      return (
+        <svg {...common}>
+          <path d="M3 12a9 9 0 1 0 3-6.7" />
+          <path d="M3 4v5h5" />
+          <path d="M12 7v6l4 2" />
+        </svg>
+      );
+    case "chevron-right":
+      return (
+        <svg {...common}>
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+      );
+    case "warning":
+      return (
+        <svg {...common}>
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg {...common}>
+          <path d="m5 13 4 4 10-10" />
+        </svg>
+      );
+    case "clock":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      );
+    case "chevron-down":
+      return (
+        <svg {...common}>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+export default function AccountsPage() {
+  useEffect(() => {
+    document.title = "Clover | Accounts";
+  }, []);
+
+  return <AccountsPageContent />;
+}
+
+function AccountsPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { closeChrome } = useCloverChrome();
+  const defaultCurrency = useDefaultCurrency();
+  const addRef = useRef<HTMLDivElement>(null);
+  const balanceInputRef = useRef<HTMLInputElement>(null);
+  const workspaceLoadSeqRef = useRef(0);
+  const completedImportRefreshKeyRef = useRef<string | null>(null);
+  const authoritativeAccountsRef = useRef<{ workspaceId: string; accounts: Account[] } | null>(null);
+  const postImportReconciliationTimersRef = useRef(new Map<string, number[]>());
+  const accountProjectionRefreshesRef = useRef(
+    new Map<string, { key: string; promise: Promise<void> }>()
+  );
+  const workspaceHydrationVersionRef = useRef(new Map<string, number>());
+  const workspaceCacheWriteDepthRef = useRef(0);
+  const deletedAccountIdsRef = useRef(new Set<string>());
+  const draggedAccountIdRef = useRef<string | null>(null);
+  // Keep the server and first browser render identical. Workspace selection
+  // and its cached snapshot are restored after mount; reading localStorage
+  // here caused a hydration failure that could strand Accounts on an empty
+  // fallback state even though the API returned imported accounts.
+  const initialWorkspaceId = "";
+  const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
+  const deletingWorkspaceIdFromQuery = searchParams?.get("deletingWorkspaceId");
+  const initialCachedAccounts: Account[] = [];
+  const initialCachedTransactions: Transaction[] = [];
+  const initialCachedStatementCheckpoints: StatementCheckpoint[] = [];
+
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
+  const [selectedCurrency, setSelectedCurrency] = useState("PHP");
+  const requestedCurrencyFromQuery = searchParams?.get("currency")?.trim().toUpperCase() ?? "";
+  const [accounts, setAccounts] = useState<Account[]>(initialCachedAccounts);
+  const [draggedAccountId, setDraggedAccountId] = useState<string | null>(null);
+  const [activeAccountDropType, setActiveAccountDropType] = useState<SupportedAccountType | null>(null);
+  const [movingAccountId, setMovingAccountId] = useState<string | null>(null);
+  const [accountRules, setAccountRules] = useState<AccountRule[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>(initialCachedTransactions);
+  const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>(initialCachedStatementCheckpoints);
+  const [investmentSnapshots, setInvestmentSnapshots] = useState<AccountInvestmentSnapshot[]>([]);
+  const [drawerTransactions, setDrawerTransactions] = useState<Transaction[]>([]);
+  const [drawerStatementCheckpoints, setDrawerStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
+  const [message, setMessage] = useState("Select a workspace to review accounts.");
+  const [workspacesLoading, setWorkspacesLoading] = useState(true);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsLoadFailed, setAccountsLoadFailed] = useState(false);
+  const [accountsHydrationPending, setAccountsHydrationPending] = useState(false);
+  const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(false);
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "premium" | "unknown">("unknown");
+  const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
+  const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
+  const [luxuryAccountCardsEnabled, setLuxuryAccountCardsEnabled] = useState(false);
+  const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  useEffect(() => {
+    if (searchParams?.get("finverse") || searchParams?.get("add") === "1") {
+      const workspace = searchParams.get("finverseWorkspace");
+      if (workspace) setSelectedWorkspaceId(workspace);
+      setAddOpen(true);
+    }
+  }, [searchParams]);
+  useEffect(() => {
+    const close = () => { setAddOpen(false); window.history.replaceState(null, "", "/accounts"); };
+    window.addEventListener("finverse-background", close);
+    return () => window.removeEventListener("finverse-background", close);
+  }, []);
+  const mobileCreation = useMobileCreationRoute(addOpen, setAddOpen, "/accounts");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importSessionId, setImportSessionId] = useState(0);
+  const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
+  const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
+  const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
+  const [manualType, setManualType] = useState<Account["type"]>("bank");
+  const [manualName, setManualName] = useState("");
+  const [manualInstitution, setManualInstitution] = useState("");
+  const automaticInstitution = useRef("");
+  const institutionEdited = useRef(false);
+  useEffect(() => {
+    const institution = suggestedDraftInstitution({
+      name: manualName, type: manualType, currentInstitution: manualInstitution,
+      previousSuggestion: automaticInstitution.current, editedByUser: institutionEdited.current,
+      existingAccount: false,
+    });
+    if (institution === manualInstitution) return;
+    automaticInstitution.current = institution;
+    setManualInstitution(institution);
+  }, [manualName, manualType, manualInstitution]);
+  const [manualAccountNumber, setManualAccountNumber] = useState("");
+  const [manualInvestmentSubtype, setManualInvestmentSubtype] = useState<InvestmentSubtype>("stock");
+  const [manualInvestmentSymbol, setManualInvestmentSymbol] = useState("");
+  const [manualInvestmentQuantity, setManualInvestmentQuantity] = useState("");
+  const [manualInvestmentCostBasis, setManualInvestmentCostBasis] = useState("");
+  const [manualInvestmentPrincipal, setManualInvestmentPrincipal] = useState("");
+  const [manualInvestmentStartDate, setManualInvestmentStartDate] = useState("");
+  const [manualInvestmentMaturityDate, setManualInvestmentMaturityDate] = useState("");
+  const [manualInvestmentInterestRate, setManualInvestmentInterestRate] = useState("");
+  const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
+  const [manualBalance, setManualBalance] = useState("");
+  const [manualCurrency, setManualCurrency] = useState("PHP");
+  const automaticInvestmentTicker = useRef("");
+  const manualTickerMatches = investmentTickerMatches(manualName, manualInvestmentSubtype, manualCurrency);
+  useEffect(() => {
+    if (manualType !== "investment") return;
+    const matches = investmentTickerMatches(manualName, manualInvestmentSubtype, manualCurrency);
+    const symbol = matches.length === 1 ? matches[0].symbol : "";
+    if (manualInvestmentSymbol && manualInvestmentSymbol !== automaticInvestmentTicker.current) return;
+    automaticInvestmentTicker.current = symbol;
+    setManualInvestmentSymbol(symbol);
+  }, [manualType, manualName, manualInvestmentSubtype, manualCurrency, manualInvestmentSymbol]);
+  const [manualScheduleEnabled, setManualScheduleEnabled] = useState(false);
+  const [manualScheduleDueDate, setManualScheduleDueDate] = useState("");
+  const [manualScheduleRecurrence, setManualScheduleRecurrence] =
+    useState<(typeof ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS)[number]["value"]>("monthly");
+  const [manualScheduleAmount, setManualScheduleAmount] = useState("");
+  const [manualScheduleCounterparty, setManualScheduleCounterparty] = useState("");
+  const [addAccountError, setAddAccountError] = useState<string | null>(null);
+  const [accountEditName, setAccountEditName] = useState("");
+  const [accountEditInstitution, setAccountEditInstitution] = useState("");
+  const [accountEditInvestmentSubtype, setAccountEditInvestmentSubtype] = useState<InvestmentSubtype>("stock");
+  const [accountEditInvestmentSymbol, setAccountEditInvestmentSymbol] = useState("");
+  const [accountEditInvestmentQuantity, setAccountEditInvestmentQuantity] = useState("");
+  const [accountEditInvestmentCostBasis, setAccountEditInvestmentCostBasis] = useState("");
+  const [accountEditInvestmentPrincipal, setAccountEditInvestmentPrincipal] = useState("");
+  const [accountEditInvestmentStartDate, setAccountEditInvestmentStartDate] = useState("");
+  const [accountEditInvestmentMaturityDate, setAccountEditInvestmentMaturityDate] = useState("");
+  const [accountEditInvestmentInterestRate, setAccountEditInvestmentInterestRate] = useState("");
+  const [accountEditInvestmentMaturityValue, setAccountEditInvestmentMaturityValue] = useState("");
+  const [accountEditType, setAccountEditType] = useState<Account["type"]>("bank");
+  const [accountEditCurrency, setAccountEditCurrency] = useState("PHP");
+  const [accountEditBalance, setAccountEditBalance] = useState("");
+  const [accountEditSource, setAccountEditSource] = useState("manual");
+  const [accountEditBusy, setAccountEditBusy] = useState(false);
+  const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
+  const [accountDeleteConfirmOpen, setAccountDeleteConfirmOpen] = useState(false);
+  const [balanceDraft, setBalanceDraft] = useState("");
+  const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  // Browser storage is restored by the subscription effect after mount. Do
+  // not read it in the state initializer: the server cannot see that value,
+  // and a recently completed import would otherwise change the first client
+  // render and abort hydration before the refresh listener can attach.
+  const [importActivitySnapshot, setImportActivitySnapshot] =
+    useState<ReturnType<typeof readImportActivity>>(null);
+  const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
+  const [hasCompletedInitialAccountPaint, setHasCompletedInitialAccountPaint] = useState(false);
+  const stableAccountBalancesRef = useRef(new Map<string, string>());
+  const accountLoadingSinceRef = useRef(new Map<string, number>());
+  const pageLoadingSinceRef = useRef<number>(Date.now());
+  const wasColdLoadingRef = useRef(false);
+  const [accountLoadingPulse, setAccountLoadingPulse] = useState(() => Date.now());
+  const [pageLoadingPulse, setPageLoadingPulse] = useState(() => Date.now());
+  const isLocalDevBrowser =
+    typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/i.test(window.location.hostname);
+  const [deletingAccountIds, setDeletingAccountIds] = useState<string[]>(
+    () => {
+      const ids = new Set(getDeletingWorkspaceAccountIds(deletingWorkspaceIdFromQuery ?? initialWorkspaceId));
+      if (deletingAccountIdFromQuery) {
+        ids.add(deletingAccountIdFromQuery);
+      }
+      return Array.from(ids);
+    }
+  );
+  const deletingAccountIdsRef = useRef(new Set<string>(getDeletingWorkspaceAccountIds(initialWorkspaceId)));
+
+  const markWorkspaceHydrated = useCallback((workspaceId: string, updatedAt?: number | null) => {
+    if (!workspaceId || !updatedAt || !Number.isFinite(updatedAt)) {
+      return;
+    }
+
+    workspaceHydrationVersionRef.current.set(workspaceId, updatedAt);
+  }, []);
+
+  const shouldHydrateWorkspaceSnapshot = useCallback(
+    (workspaceId: string) => {
+      if (!workspaceId) {
+        return false;
+      }
+
+      const cachedSnapshot = getCachedWorkspaceHydration(workspaceId);
+      if (!cachedSnapshot) {
+        return true;
+      }
+
+      const previousVersion = workspaceHydrationVersionRef.current.get(workspaceId) ?? 0;
+      return Number(cachedSnapshot.updatedAt ?? 0) > previousVersion;
+    },
+    []
+  );
+
+  const persistAccountsWorkspaceSnapshot = useCallback(
+    (
+      workspaceId: string,
+      snapshot: Parameters<typeof persistAccountsWorkspaceCache>[1]
+    ) => {
+      workspaceCacheWriteDepthRef.current += 1;
+      try {
+        return persistAccountsWorkspaceCache(workspaceId, snapshot);
+      } finally {
+        workspaceCacheWriteDepthRef.current -= 1;
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPlan = async () => {
+      const response = await fetchJsonOnce<{ user?: {
+        planTier: string;
+        accountLimit: number | null;
+        monthlyUploadLimit: number | null;
+        transactionLimit: number | null;
+        usage: { accountCount: number; monthlyUploadCount: number; transactionCount: number };
+        features: { luxuryAccountCards: boolean };
+      } }>({
+        key: "me:plan",
+        route: "/api/me",
+        input: "/api/me?view=plan",
+      }).catch(() => null);
+      if (!response?.ok || cancelled) return;
+
+      const payload = response.json;
+      const nextPlanTier = payload?.user?.planTier === "premium" ? "premium" : payload?.user?.planTier === "pro" ? "pro" : "free";
+      const nextLimits = payload?.user
+        ? {
+            accountLimit:
+              payload.user.accountLimit === null || payload.user.accountLimit === undefined
+                ? null
+                : Number(payload.user.accountLimit),
+            monthlyUploadLimit:
+              payload.user.monthlyUploadLimit === null || payload.user.monthlyUploadLimit === undefined
+                ? null
+                : Number(payload.user.monthlyUploadLimit),
+            transactionLimit:
+              payload.user.transactionLimit === null || payload.user.transactionLimit === undefined
+                ? null
+                : Number(payload.user.transactionLimit),
+          }
+        : null;
+      const nextUsage = payload?.user?.usage
+        ? {
+            accountCount: Number(payload.user.usage.accountCount ?? 0),
+            monthlyUploadCount: Number(payload.user.usage.monthlyUploadCount ?? 0),
+            transactionCount: Number(payload.user.usage.transactionCount ?? 0),
+          }
+        : null;
+
+      setPlanTier(nextPlanTier);
+      setPlanLimits(nextLimits);
+      setPlanUsage(nextUsage);
+      setLuxuryAccountCardsEnabled(payload?.user?.features?.luxuryAccountCards === true);
+    };
+
+    void loadPlan();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
+    [selectedWorkspaceId, workspaces]
+  );
+  const nonCashAccountCount = useMemo(() => countNonCashAccounts(accounts), [accounts]);
+  const accountLimitUsageCount = planUsage?.accountCount ?? nonCashAccountCount;
+
+  const showPlanLimitNudge = (payload: PlanLimitPayload) => {
+    setPlanLimitNudge(payload);
+  };
+
+  const reconciledAccounts = useMemo(
+    () =>
+      accounts.map((account) => {
+        const accountTransactions = drawerAccountId === account.id && account.type !== "cash"
+          ? drawerTransactions
+          : transactions.filter((transaction) => transactionMatchesAccount(transaction, account));
+                        const latestCheckpoint =
+                          drawerAccountId === account.id
+                            ? drawerStatementCheckpoints[0] ?? null
+                            : getLatestCheckpointForAccount(account, statementCheckpoints);
+                        const effectiveType = getEffectiveAccountType(account);
+                        const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
+                        const checkpointBalance =
+                          latestCheckpoint?.status !== "mismatch" &&
+                          !prefersLiveInvestmentBalance(effectiveType) &&
+                          latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+                            ? String(latestCheckpoint.endingBalance)
+                            : null;
+                        const shouldPreserveImportedBalance =
+                          account.type !== "cash" && account.source === "upload" && checkpointBalance === null;
+                        const reconciledBalance =
+                          account.bankBalance ?? (account.source === "finverse" ? account.balance : null) ?? (effectiveType === "cash" ? null : checkpointBalance) ??
+                          (shouldPreserveImportedBalance
+                            ? account.balance
+                            : deriveReconciledBalance({
+                accountType: account.type,
+                                balance: account.balance,
+                                transactions: accountTransactions.filter(transaction => formatCurrencyCode(transaction.currency) === formatCurrencyCode(account.currency)),
+                                checkpoints: accountCheckpoints,
+                                treatStoredBalanceAsOpening: ["manual", "adviser_manual"].includes(account.source),
+                              }));
+                        const normalizedBalance = normalizeAccountBalanceSign(effectiveType, parseAmount(reconciledBalance ?? account.balance));
+
+        return {
+          ...account,
+          type: effectiveType,
+          balance: String(normalizedBalance),
+        };
+      }),
+    [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, statementCheckpoints, transactions]
+  );
+  const liveInvestmentValues = useLiveInvestmentValues(reconciledAccounts);
+
+  const collidingMaskedAccountNumberKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const account of reconciledAccounts) {
+      const key = getMaskedAccountNumberCollisionKey(account);
+      if (!key) {
+        continue;
+      }
+
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([key]) => key));
+  }, [reconciledAccounts]);
+
+  useEffect(() => {
+    for (const account of reconciledAccounts) {
+      const balance = typeof account.balance === "string" ? account.balance.trim() : "";
+      if (balance && Number(balance) !== 0) {
+        stableAccountBalancesRef.current.set(account.id, balance);
+      }
+    }
+  }, [reconciledAccounts]);
+
+  // Rendering saved rows is not a dismissal. The uploader/status monitor owns
+  // completion so its 100% confirmation survives this page's data refresh.
+
+  const deletingAccountIdsSet = useMemo(
+    () => new Set([...deletingAccountIds, ...getDeletingWorkspaceAccountIds(selectedWorkspaceId)]),
+    [deletingAccountIds, selectedWorkspaceId]
+  );
+
+  usePullRefresh(() => loadWorkspaceData(selectedWorkspaceId, { silent: true, forceFresh: true, awaitHydration: true }));
+
+  const loadWorkspaces = async () => {
+    setWorkspacesLoading(true);
+    try {
+      const response = await fetchJsonOnce<{ workspaces?: Workspace[] }>({
+        key: "workspaces:list",
+        route: "accounts.workspaces",
+        input: "/api/workspaces",
+        timeoutMs: 5000,
+      });
+      if (!response.ok) {
+        throw new Error("Unable to load workspaces.");
+      }
+
+      const items = Array.isArray(response.json?.workspaces) ? response.json.workspaces : [];
+      setWorkspaces(items);
+      setSelectedWorkspaceId((current) => chooseWorkspaceId(items, current));
+    } catch {
+      const fallbackWorkspaceId = readSelectedWorkspaceId();
+      if (fallbackWorkspaceId) {
+        setSelectedWorkspaceId((current) => current || fallbackWorkspaceId);
+        setMessage("");
+      } else {
+        setMessage("Unable to load workspaces.");
+        setHasInitialWorkspaceDataLoaded(true);
+      }
+    } finally {
+      setWorkspacesLoading(false);
+      setAccountsLoading(false);
+    }
+  };
+
+  const loadWorkspaceData = async (
+    workspaceId: string,
+    options?: {
+      silent?: boolean;
+      awaitHydration?: boolean;
+      forceFresh?: boolean;
+      preserveImportedEvidence?: boolean;
+      acceptConfirmedZeroBalances?: boolean;
+    }
+  ) => {
+    const loadSeq = ++workspaceLoadSeqRef.current;
+    let fetchedAccounts: Account[] = [];
+    let visibleFetchedAccounts: Account[] = [];
+    let visibleCachedWorkspaceAccounts: Account[] = [];
+    const backgroundTasks: Promise<void>[] = [];
+    let shouldAwaitBackgroundBeforeCompletingInitialLoad = false;
+    const shouldGuardEmptyStateDuringHydration = !options?.silent && accounts.length === 0;
+    const hasResilientFallbackEvidence = () =>
+      hasCachedWorkspaceDataEvidence(workspaceId) ||
+      hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot);
+
+    if (!workspaceId) {
+      setAccounts([]);
+      setInvestmentSnapshots([]);
+      setAccountRules([]);
+      setTransactions([]);
+      setAccountsLoading(false);
+      setAccountsLoadFailed(false);
+      setAccountsHydrationPending(false);
+      setHasInitialWorkspaceDataLoaded(true);
+      return;
+    }
+
+    if (!options?.silent) {
+      setAccountsLoading(true);
+    }
+    if (shouldGuardEmptyStateDuringHydration) {
+      setAccountsHydrationPending(true);
+    }
+
+    try {
+      // Account inventory and ledger reads are independent; do not serialize their network waits.
+      const workspaceTransactionsPromise = fetchJsonOnce<{ transactions?: Transaction[] }>({
+            key: `accounts:transactions:${workspaceId}:light`,
+            route: "accounts.transactions",
+            workspaceId,
+            detail: options?.awaitHydration ? "awaitHydration" : "background",
+            input: `/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&pageSize=all&summaryMode=light`,
+          } ).catch(() => null);
+      const accountsResponse = await fetchJsonOnce<{
+        accounts?: Account[];
+        accountRules?: AccountRule[];
+        statementCheckpoints?: StatementCheckpoint[];
+        investmentSnapshots?: AccountInvestmentSnapshot[];
+        removedEmptyCashAccountIds?: string[];
+      }>({
+        // An import may finish while the initial workspace request is still in
+        // flight. Give the completion handoff its own request so it cannot
+        // reuse that pre-import response and leave new snapshot accounts
+        // invisible until the user reloads.
+        key: options?.forceFresh
+          ? `accounts:data:${workspaceId}:cleanup-v2:import:${loadSeq}`
+          : `accounts:data:${workspaceId}:cleanup-v2`,
+        route: "accounts.data",
+        workspaceId,
+        detail: options?.awaitHydration ? "awaitHydration" : options?.silent ? "silent" : "foreground",
+        input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&cleanupEmptyCashAccounts=true`,
+        timeoutMs: options?.silent ? null : 6500,
+      });
+      if (workspaceLoadSeqRef.current !== loadSeq) {
+        return;
+      }
+
+      if (accountsResponse.ok) {
+        setAccountsLoadFailed(false);
+        const payload = accountsResponse.json;
+        const removedEmptyCashAccountIds = Array.isArray(payload?.removedEmptyCashAccountIds)
+          ? payload.removedEmptyCashAccountIds.filter((accountId): accountId is string => typeof accountId === "string" && Boolean(accountId))
+          : [];
+        for (const accountId of removedEmptyCashAccountIds) {
+          markDeletedWorkspaceAccount(workspaceId, accountId);
+          applyOptimisticWorkspaceAccountDeletion(workspaceId, accountId);
+        }
+        fetchedAccounts = Array.isArray(payload?.accounts)
+          ? (payload.accounts as Account[]).filter((account) => isWorkspaceAccount(account, workspaceId))
+          : [];
+        setInvestmentSnapshots(
+          Array.isArray(payload?.investmentSnapshots) ? payload.investmentSnapshots : []
+        );
+        const republishedInventoryAccountIds =
+          hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot)
+            ? fetchedAccounts
+                .filter((account) => account.publishedImportInventory === true)
+                .map((account) => account.id)
+            : [];
+        // A completed server response is authoritative. Stale browser
+        // tombstones must never keep a persisted account hidden forever.
+        const reconciledDeletionMarkers = reconcilePersistedWorkspaceAccountDeletionMarkers(
+          workspaceId,
+          fetchedAccounts.map((account) => account.id)
+        );
+        // A completed import can republish an account that was previously
+        // deleted or left behind by an interrupted optimistic deletion. The
+        // fresh server result is authoritative for those explicit inventory
+        // rows, so stale browser tombstones must no longer hide their cards.
+        clearRepublishedWorkspaceAccountDeletionMarkers(workspaceId, republishedInventoryAccountIds);
+        deletedAccountIdsRef.current = reconciledDeletionMarkers.deletedIds;
+        deletingAccountIdsRef.current = reconciledDeletionMarkers.deletingIds;
+        const cachedWorkspaceAccounts = getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined;
+        visibleFetchedAccounts = fetchedAccounts.filter(
+          (account) =>
+            !deletedAccountIdsRef.current.has(account.id) &&
+            !deletingAccountIdsRef.current.has(account.id)
+        );
+        authoritativeAccountsRef.current = {
+          workspaceId,
+          accounts: visibleFetchedAccounts,
+        };
+        visibleCachedWorkspaceAccounts = (cachedWorkspaceAccounts ?? []).filter(
+          (account) =>
+            isWorkspaceAccount(account, workspaceId) &&
+            !deletedAccountIdsRef.current.has(account.id) &&
+            !deletingAccountIdsRef.current.has(account.id)
+        );
+        shouldAwaitBackgroundBeforeCompletingInitialLoad =
+          !options?.silent && visibleFetchedAccounts.length === 0 && visibleCachedWorkspaceAccounts.length === 0;
+        const authoritativeAccountRules = Array.isArray(payload?.accountRules)
+          ? (payload.accountRules as AccountRule[])
+          : [];
+        const authoritativeStatementCheckpoints = Array.isArray(payload?.statementCheckpoints)
+          ? (payload.statementCheckpoints as StatementCheckpoint[])
+          : [];
+        const shouldPreserveSettlingImport =
+          options?.preserveImportedEvidence === true ||
+          hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot);
+        const settlingAccountIds = shouldPreserveSettlingImport
+          ? getImportActivityAccountIds(importActivitySnapshot)
+          : new Set<string>();
+        const authoritativeOrSettlingAccountIds = new Set([
+          ...visibleFetchedAccounts.map((account) => account.id),
+          ...settlingAccountIds,
+        ]);
+        const supportingWorkspaceTransactions = transactions.filter(
+          (transaction) =>
+            transaction.workspaceId === workspaceId &&
+            !deletedAccountIdsRef.current.has(transaction.accountId) &&
+            !deletingAccountIdsRef.current.has(transaction.accountId) &&
+            (authoritativeOrSettlingAccountIds.has(transaction.accountId) || transaction.accountId.startsWith("optimistic-"))
+        );
+        const accountsForAuthoritativeCache = mergeAccountsWithOptimisticImports(
+          visibleFetchedAccounts,
+          visibleCachedWorkspaceAccounts,
+          deletedAccountIdsRef.current,
+          supportingWorkspaceTransactions,
+          {
+            preserveImportedEvidence: shouldPreserveSettlingImport,
+            preferCurrentImportedSnapshot: shouldPreserveSettlingImport && !options?.forceFresh,
+            acceptConfirmedZeroBalances: options?.acceptConfirmedZeroBalances,
+            preserveCurrentAccountIds: settlingAccountIds,
+          }
+        );
+        const authoritativeCacheUpdatedAt = persistAccountsWorkspaceSnapshot(workspaceId, {
+          // A completion read can briefly lag the import transaction. Keep the
+          // confirmed browser snapshot in the cache until a later ordinary
+          // refresh observes the same durable account inventory.
+          accounts: accountsForAuthoritativeCache,
+          accountRules: authoritativeAccountRules,
+          transactions: supportingWorkspaceTransactions,
+          statementCheckpoints: authoritativeStatementCheckpoints,
+        });
+        markWorkspaceHydrated(workspaceId, authoritativeCacheUpdatedAt);
+        setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+        setAccounts((current) =>
+          mergeAccountsWithOptimisticImports(
+            visibleFetchedAccounts,
+            current.length > 0
+              ? current.filter(
+                  (account) => isWorkspaceAccount(account, workspaceId) && !deletedAccountIdsRef.current.has(account.id)
+                )
+              : visibleCachedWorkspaceAccounts,
+            deletedAccountIdsRef.current,
+            supportingWorkspaceTransactions,
+            {
+              preserveImportedEvidence: shouldPreserveSettlingImport,
+              preferCurrentImportedSnapshot: shouldPreserveSettlingImport && !options?.forceFresh,
+              acceptConfirmedZeroBalances: options?.acceptConfirmedZeroBalances,
+              preserveCurrentAccountIds: settlingAccountIds,
+            }
+          )
+        );
+        setAccountRules(authoritativeAccountRules);
+        setStatementCheckpoints(authoritativeStatementCheckpoints);
+        if (visibleFetchedAccounts.length > 0) {
+          setAccountsHydrationPending(false);
+        }
+      } else {
+        const cachedWorkspace = getCachedWorkspaceHydration(workspaceId);
+        const cachedDeletedAccountIds = new Set(getDeletedWorkspaceAccountIds(workspaceId));
+        const cachedDeletingAccountIds = new Set(getDeletingWorkspaceAccountIds(workspaceId));
+        const cachedAccounts = ((cachedWorkspace?.accounts as Account[] | undefined) ?? []).filter(
+          (account) => !cachedDeletedAccountIds.has(account.id) && !cachedDeletingAccountIds.has(account.id)
+        );
+        const cachedTransactions = ((cachedWorkspace?.transactions as Transaction[] | undefined) ?? []).filter(
+          (transaction) =>
+            !cachedDeletedAccountIds.has(transaction.accountId) && !cachedDeletingAccountIds.has(transaction.accountId)
+        );
+        const cachedCheckpoints = ((cachedWorkspace?.statementCheckpoints as StatementCheckpoint[] | undefined) ?? []).filter(
+          (checkpoint) =>
+            !checkpoint.accountId ||
+            (!cachedDeletedAccountIds.has(checkpoint.accountId) && !cachedDeletingAccountIds.has(checkpoint.accountId))
+        );
+        const cachedRules = (cachedWorkspace?.accountRules as AccountRule[] | undefined) ?? [];
+        const hasCachedWorkspaceSnapshot =
+          cachedAccounts.length > 0 || cachedTransactions.length > 0 || cachedCheckpoints.length > 0 || cachedRules.length > 0;
+
+        if (!options?.silent) {
+          if (hasCachedWorkspaceSnapshot) {
+            deletedAccountIdsRef.current = cachedDeletedAccountIds;
+            deletingAccountIdsRef.current = cachedDeletingAccountIds;
+            setDeletingAccountIds(Array.from(cachedDeletingAccountIds));
+            setAccounts(cachedAccounts);
+            setTransactions(cachedTransactions);
+            setStatementCheckpoints(cachedCheckpoints);
+            setAccountRules(cachedRules);
+            setMessage("");
+            setAccountsLoadFailed(false);
+            setAccountsHydrationPending(false);
+            setHasInitialWorkspaceDataLoaded(true);
+          } else if (hasResilientFallbackEvidence()) {
+            setMessage("");
+            setAccountsLoadFailed(false);
+            setAccountsHydrationPending(false);
+            setHasInitialWorkspaceDataLoaded(true);
+            window.setTimeout(() => {
+              void loadWorkspaceData(workspaceId, { silent: true, awaitHydration: true });
+            }, WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS);
+          } else {
+            setMessage("Unable to load accounts for this workspace.");
+            setAccountsLoadFailed(true);
+          }
+          setHasInitialWorkspaceDataLoaded(true);
+        }
+        setAccountsHydrationPending(false);
+      }
+
+      if (!options?.silent) {
+        if (!shouldAwaitBackgroundBeforeCompletingInitialLoad) {
+          setHasInitialWorkspaceDataLoaded(true);
+          setAccountsLoading(false);
+        }
+      }
+
+      if (!options?.silent && shouldRunAccountsMaintenance(workspaceId, options?.forceFresh === true)) {
+        void (async () => {
+          try {
+            const maintenanceResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1&cleanupEmptyCashAccounts=true&maintenance=1`, {
+              cache: "no-store",
+            });
+            const maintenancePayload = maintenanceResponse.ok
+              ? await maintenanceResponse.json().catch(() => null)
+              : null;
+            if (maintenanceResponse.ok) {
+              markAccountsMaintenanceComplete(workspaceId);
+            }
+            if (
+              workspaceLoadSeqRef.current === loadSeq &&
+              ((Array.isArray(maintenancePayload?.removedEmptyCashAccountIds) && maintenancePayload.removedEmptyCashAccountIds.length > 0) ||
+                Number(maintenancePayload?.maintenance?.removedStalePdaxBucketHoldings ?? 0) > 0 ||
+                Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAssetLabels ?? 0) > 0 ||
+                Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAccounts ?? 0) > 0 ||
+                Number(maintenancePayload?.maintenance?.repairedDuplicatePdaxWalletAccounts ?? 0) > 0 ||
+                Number(maintenancePayload?.maintenance?.refreshedPdaxCryptoMarketValues ?? 0) > 0 ||
+                Number(maintenancePayload?.maintenance?.repairedLegacyGotradeAccounts ?? 0) > 0 ||
+                Number(maintenancePayload?.maintenance?.repairedLegacyWiseWallets ?? 0) > 0)
+            ) {
+              void loadWorkspaceData(workspaceId, {
+                silent: true,
+                awaitHydration: true,
+                forceFresh: true,
+              });
+            }
+          } catch {
+            // Imported-account maintenance is best-effort and should never block opening Accounts.
+          }
+        })();
+      }
+
+      backgroundTasks.push((async () => {
+        try {
+          const categoriesResponse = await fetchJsonOnce<{ categories?: Array<{ id: string; name: string }> }>({
+            key: `accounts:categories:${workspaceId}`,
+            route: "accounts.categories",
+            workspaceId,
+            detail: "background",
+            input: `/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`,
+          });
+          if (workspaceLoadSeqRef.current !== loadSeq || !categoriesResponse.ok) {
+            return;
+          }
+
+          const fetchedCategories = Array.isArray(categoriesResponse.json?.categories) ? categoriesResponse.json.categories : [];
+          if (fetchedCategories.length === 0) {
+            return;
+          }
+
+          syncWorkspaceCategoryCache(workspaceId, fetchedCategories);
+        } catch {
+          // Categories are best-effort during background hydration.
+        }
+      })());
+
+      backgroundTasks.push((async () => {
+        try {
+          const transactionsResponse = await workspaceTransactionsPromise;
+          if (!transactionsResponse) return;
+          if (workspaceLoadSeqRef.current !== loadSeq) {
+            return;
+          }
+
+          if (transactionsResponse.ok) {
+            const fetchedTransactions = Array.isArray(transactionsResponse.json?.transactions)
+              ? (transactionsResponse.json.transactions as Transaction[]).filter(
+                  (transaction) => transaction.workspaceId === workspaceId
+                )
+              : [];
+            const cachedWorkspaceTransactions = getCachedAccountsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
+            const visibleFetchedTransactions = fetchedTransactions.filter(
+              (transaction) =>
+                !deletedAccountIdsRef.current.has(transaction.accountId) &&
+                !deletingAccountIdsRef.current.has(transaction.accountId)
+            );
+            const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
+              (transaction) =>
+                transaction.workspaceId === workspaceId &&
+                !deletedAccountIdsRef.current.has(transaction.accountId) &&
+                !deletingAccountIdsRef.current.has(transaction.accountId)
+            );
+            setTransactions((current) =>
+              visibleFetchedTransactions.length > 0
+                ? mergeImportedWorkspaceTransactions([], visibleFetchedTransactions)
+                : mergeImportedWorkspaceTransactions(
+                    current.length > 0
+                      ? current.filter(
+                          (transaction) =>
+                            !deletedAccountIdsRef.current.has(transaction.accountId) &&
+                            !deletingAccountIdsRef.current.has(transaction.accountId)
+                        )
+                      : visibleCachedWorkspaceTransactions,
+                    visibleFetchedTransactions
+                  )
+            );
+            setAccounts((current) =>
+              mergeAccountsWithOptimisticImports(
+                visibleFetchedAccounts,
+                current.filter(
+                  (account) => isWorkspaceAccount(account, workspaceId) && !deletedAccountIdsRef.current.has(account.id)
+                ),
+                deletedAccountIdsRef.current,
+                visibleFetchedTransactions.length > 0 ? visibleFetchedTransactions : visibleCachedWorkspaceTransactions,
+                {
+                  preserveImportedEvidence: true,
+                  preferCurrentImportedSnapshot:
+                    options?.preserveImportedEvidence === true && !options?.forceFresh,
+                  acceptConfirmedZeroBalances: options?.acceptConfirmedZeroBalances,
+                }
+              )
+            );
+          }
+        } catch {
+          // Background transaction hydration is best-effort.
+        } finally {
+          if (workspaceLoadSeqRef.current === loadSeq) {
+            setAccountsHydrationPending(false);
+            if (!options?.silent && shouldAwaitBackgroundBeforeCompletingInitialLoad) {
+              setHasInitialWorkspaceDataLoaded(true);
+              setAccountsLoading(false);
+            }
+          }
+        }
+      })());
+
+      if (options?.awaitHydration) {
+        await Promise.allSettled(backgroundTasks);
+      }
+    } catch {
+      if (workspaceLoadSeqRef.current !== loadSeq) {
+        return;
+      }
+
+      const hydrated = hydrateWorkspaceFromCache(workspaceId);
+      if (!options?.silent) {
+        const shouldSuppressFailure = hydrated || hasResilientFallbackEvidence();
+        setMessage(shouldSuppressFailure ? "" : "Unable to load accounts for this workspace.");
+        setAccountsLoadFailed(!shouldSuppressFailure && accounts.length === 0);
+        setHasInitialWorkspaceDataLoaded(true);
+        if (shouldSuppressFailure) {
+          window.setTimeout(() => {
+            void loadWorkspaceData(workspaceId, { silent: true, awaitHydration: true });
+          }, WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS);
+        }
+      }
+      setAccountsHydrationPending(false);
+    } finally {
+      if (!options?.silent && !shouldAwaitBackgroundBeforeCompletingInitialLoad) {
+        setAccountsLoading(false);
+      }
+    }
+  };
+
+  const refreshImportedAccountProjection = (
+    summary: UploadInsightsSummary,
+    workspaceId = selectedWorkspaceId
+  ) => {
+    if (!workspaceId) {
+      return Promise.resolve();
+    }
+
+    const expectedSummaries =
+      summary.accountSummaries && summary.accountSummaries.length > 0
+        ? summary.accountSummaries.map((accountSummary) => ({
+            ...summary,
+            accountId: accountSummary.accountId,
+            accountName: accountSummary.accountName,
+            institution: accountSummary.institution,
+            accountNumber: accountSummary.accountNumber,
+            accountType: accountSummary.accountType,
+            currency: accountSummary.currency,
+            balance: accountSummary.balance,
+            rowsImported: accountSummary.rowsImported,
+            accountSummaries: undefined,
+            optimistic: false,
+            optimisticAccountId: null,
+            previewTransactions: [],
+          }))
+        : [summary];
+    const expectedAccounts = expectedSummaries
+      .map((accountSummary) => buildOptimisticImportedAccount(accountSummary, workspaceId))
+      .filter((account): account is Account => Boolean(account));
+    const hasAuthoritativeBalances = expectedSummaries.every(
+      (accountSummary) =>
+        accountSummary.optimistic === false &&
+        accountSummary.balance !== null &&
+        accountSummary.balance !== undefined
+    );
+    const refreshKey = JSON.stringify(
+      expectedSummaries.map((accountSummary) => [
+        accountSummary.accountId,
+        accountSummary.accountNumber,
+        accountSummary.currency,
+        accountSummary.balance,
+        accountSummary.rowsImported,
+      ])
+    );
+    const activeRefresh = accountProjectionRefreshesRef.current.get(workspaceId);
+    if (activeRefresh?.key === refreshKey) {
+      return activeRefresh.promise;
+    }
+
+    const retryDelaysMs = [0, 350, 750, 1_250, 2_000];
+    const previousRefresh = activeRefresh?.promise ?? Promise.resolve();
+    let refreshPromise: Promise<void>;
+    refreshPromise = previousRefresh
+      .catch(() => undefined)
+      .then(async () => {
+        for (const retryDelayMs of retryDelaysMs) {
+          if (retryDelayMs > 0) {
+            await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
+          }
+
+          await loadWorkspaceData(workspaceId, {
+            silent: true,
+            forceFresh: true,
+            preserveImportedEvidence: true,
+            acceptConfirmedZeroBalances: hasAuthoritativeBalances,
+          });
+          const authoritativeSnapshot = authoritativeAccountsRef.current;
+          if (
+            authoritativeSnapshot?.workspaceId === workspaceId &&
+            accountProjectionMatchesImport(authoritativeSnapshot.accounts, expectedAccounts)
+          ) {
+            // Finish one full hydration after the lightweight account projection
+            // settles so Transactions and account checkpoints advance together.
+            await loadWorkspaceData(workspaceId, {
+              silent: true,
+              awaitHydration: true,
+              forceFresh: true,
+              preserveImportedEvidence: true,
+              acceptConfirmedZeroBalances: hasAuthoritativeBalances,
+            });
+            return;
+          }
+        }
+
+        // Keep the latest authoritative response even if an institution-specific
+        // projection takes longer than the bounded settlement window.
+        await loadWorkspaceData(workspaceId, {
+          silent: true,
+          awaitHydration: true,
+          forceFresh: true,
+          preserveImportedEvidence: true,
+          acceptConfirmedZeroBalances: hasAuthoritativeBalances,
+        });
+      })
+      .finally(() => {
+        if (accountProjectionRefreshesRef.current.get(workspaceId)?.promise === refreshPromise) {
+          accountProjectionRefreshesRef.current.delete(workspaceId);
+        }
+      });
+
+    accountProjectionRefreshesRef.current.set(workspaceId, {
+      key: refreshKey,
+      promise: refreshPromise,
+    });
+    return refreshPromise;
+  };
+
+  const schedulePostImportWorkspaceReconciliation = (workspaceId: string) => {
+    if (!workspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    for (const timer of postImportReconciliationTimersRef.current.get(workspaceId) ?? []) {
+      window.clearTimeout(timer);
+    }
+
+    const timers = POST_IMPORT_RECONCILIATION_DELAYS_MS.map((delayMs) =>
+      window.setTimeout(() => {
+        if (delayMs === POST_IMPORT_RECONCILIATION_DELAYS_MS.at(-1)) {
+          postImportReconciliationTimersRef.current.delete(workspaceId);
+        }
+
+        const activeWorkspaceId = readSelectedWorkspaceId();
+        if (activeWorkspaceId && activeWorkspaceId !== workspaceId) {
+          return;
+        }
+
+        void loadWorkspaceData(workspaceId, {
+          silent: true,
+          awaitHydration: true,
+          forceFresh: true,
+          preserveImportedEvidence: true,
+        });
+      }, delayMs)
+    );
+    postImportReconciliationTimersRef.current.set(workspaceId, timers);
+  };
+
+  const hydrateWorkspaceFromCache = (workspaceId: string) => {
+    if (!workspaceId) {
+      return false;
+    }
+
+    const cachedSnapshot = getCachedWorkspaceHydration(workspaceId);
+    deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
+    deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(workspaceId));
+    setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+    if (!cachedSnapshot) {
+      return false;
+    }
+
+    const filteredAccounts = (cachedSnapshot.accounts as Account[]).filter(
+      (account) => !deletedAccountIdsRef.current.has(account.id) && !deletingAccountIdsRef.current.has(account.id)
+    );
+    const filteredTransactions = (cachedSnapshot.transactions as Transaction[]).filter(
+      (transaction) =>
+        !deletedAccountIdsRef.current.has(transaction.accountId) && !deletingAccountIdsRef.current.has(transaction.accountId)
+    );
+    const filteredCheckpoints = (cachedSnapshot.statementCheckpoints as StatementCheckpoint[]).filter(
+      (checkpoint) =>
+        !checkpoint.accountId ||
+        (!deletedAccountIdsRef.current.has(checkpoint.accountId) && !deletingAccountIdsRef.current.has(checkpoint.accountId))
+    );
+
+    const removedIds = new Set([...deletedAccountIdsRef.current, ...deletingAccountIdsRef.current]);
+    setAccounts((current) => mergeProvisionalAccountSnapshot(
+      current.filter((account) => isWorkspaceAccount(account, workspaceId)),
+      filteredAccounts,
+      removedIds
+    ));
+    setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
+    // A metadata-only cache publication must not erase a loaded receipt ledger.
+    // The direct API response remains authoritative for edits and removals.
+    setTransactions((current) => mergeImportedWorkspaceTransactions(
+      current.filter((transaction) => transaction.workspaceId === workspaceId && !removedIds.has(transaction.accountId)),
+      filteredTransactions
+    ));
+    setStatementCheckpoints(filteredCheckpoints);
+    markWorkspaceHydrated(workspaceId, cachedSnapshot.updatedAt);
+    setAccountsLoading(false);
+    setHasInitialWorkspaceDataLoaded(true);
+    return true;
+  };
+
+  useEffect(() => {
+    // Restore the last usable Accounts snapshot immediately after hydration.
+    // Waiting for `/api/workspaces` first made repeat visits show a blank
+    // full-page splash for several seconds even though the same workspace was
+    // already cached locally. The authoritative refresh still runs below and
+    // reconciles any server changes in the background.
+    const cachedWorkspaceId = readSelectedWorkspaceId();
+    if (cachedWorkspaceId) {
+      setSelectedWorkspaceId((current) => current || cachedWorkspaceId);
+      hydrateWorkspaceFromCache(cachedWorkspaceId);
+    }
+    void loadWorkspaces();
+  }, []);
+
+  useEffect(() => {
+    if (workspacesLoading || !selectedWorkspaceId) {
+      return;
+    }
+
+    persistSelectedWorkspaceId(selectedWorkspaceId);
+  }, [selectedWorkspaceId, workspacesLoading]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const requested = requestedCurrencyFromQuery === "ALL" ? "" : /^[A-Z]{3}$/.test(requestedCurrencyFromQuery) ? requestedCurrencyFromQuery : null;
+    setSelectedCurrency(requested ?? readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
+  }, [defaultCurrency, selectedWorkspaceId, requestedCurrencyFromQuery]);
+
+  useEffect(() => {
+    setImportActivitySnapshot(readImportActivity());
+    return subscribeImportActivity(() => {
+      setImportActivitySnapshot(readImportActivity());
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      for (const timers of postImportReconciliationTimersRef.current.values()) {
+        for (const timer of timers) {
+          window.clearTimeout(timer);
+        }
+      }
+      postImportReconciliationTimersRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      !selectedWorkspaceId ||
+      importActivitySnapshot?.workspaceId !== selectedWorkspaceId ||
+      !importActivityIsComplete(importActivitySnapshot)
+    ) {
+      return;
+    }
+
+    const refreshKey = [
+      importActivitySnapshot.importFileId ?? importActivitySnapshot.fileName ?? "import",
+      importActivitySnapshot.updatedAt,
+    ].join(":");
+    if (completedImportRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+
+    completedImportRefreshKeyRef.current = refreshKey;
+    // Import completion can arrive from a global uploader or race the account
+    // write. Use a new request key, then retry once because an account-only
+    // snapshot can commit immediately after the first completion event.
+    // This is deliberately independent of the modal so background imports
+    // also render their accounts without a manual page reload.
+    void loadWorkspaceData(selectedWorkspaceId, {
+      silent: true,
+      awaitHydration: true,
+      forceFresh: true,
+      preserveImportedEvidence: true,
+    });
+    const retry = window.setTimeout(() => {
+      void loadWorkspaceData(selectedWorkspaceId, {
+        silent: true,
+        awaitHydration: true,
+        forceFresh: true,
+        preserveImportedEvidence: true,
+      });
+    }, 650);
+    schedulePostImportWorkspaceReconciliation(selectedWorkspaceId);
+
+    return () => {
+      window.clearTimeout(retry);
+    };
+  }, [importActivitySnapshot, loadWorkspaceData, selectedWorkspaceId]);
+
+  useEffect(() => {
+    return subscribeImportedSummary(({ workspaceId, summary }) => {
+      if (!selectedWorkspaceId || workspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      // The global uploader can finish while Accounts remains mounted. A
+      // server-component refresh alone preserves this page's client state, so
+      // follow the authoritative projection until it reflects the confirmed
+      // import balance instead of stopping on an early stale response.
+      void refreshImportedAccountProjection(summary);
+      schedulePostImportWorkspaceReconciliation(selectedWorkspaceId);
+    });
+  }, [loadWorkspaceData, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (searchParams?.get("import") === "1") {
+      setImportOpen(true);
+      router.replace("/accounts");
+    }
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    const deletingAccountId = searchParams?.get("deletingAccountId");
+    if (!deletingAccountId) {
+      return;
+    }
+
+    const activeWorkspaceId = searchParams?.get("deletingWorkspaceId") ?? readSelectedWorkspaceId() ?? selectedWorkspaceId;
+    if (!activeWorkspaceId) {
+      return;
+    }
+
+    markDeletingWorkspaceAccount(activeWorkspaceId, deletingAccountId);
+    deletingAccountIdsRef.current.add(deletingAccountId);
+    setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+
+    const nextSearchParams = new URLSearchParams(searchParams?.toString() ?? "");
+    nextSearchParams.delete("deletingAccountId");
+    nextSearchParams.delete("deletingWorkspaceId");
+    const nextQuery = nextSearchParams.toString();
+    router.replace(nextQuery ? `/accounts?${nextQuery}` : "/accounts");
+  }, [router, searchParams, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      if (workspacesLoading || workspaces.length > 0) {
+        setAccountsLoading(true);
+        setHasInitialWorkspaceDataLoaded(false);
+        return;
+      }
+
+      setAccounts([]);
+      setInvestmentSnapshots([]);
+      setAccountRules([]);
+      setTransactions([]);
+      setStatementCheckpoints([]);
+      setAccountsLoading(false);
+      setAccountsHydrationPending(false);
+      setHasInitialWorkspaceDataLoaded(true);
+      return;
+    }
+
+    deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(selectedWorkspaceId));
+    deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(selectedWorkspaceId));
+    if (
+      deletingAccountIdFromQuery &&
+      (!deletingWorkspaceIdFromQuery || deletingWorkspaceIdFromQuery === selectedWorkspaceId)
+    ) {
+      deletingAccountIdsRef.current.add(deletingAccountIdFromQuery);
+    }
+    setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+
+    const hydratedFromCache = hydrateWorkspaceFromCache(selectedWorkspaceId);
+    if (!hydratedFromCache && accounts.length === 0) {
+      setAccounts([]);
+      setInvestmentSnapshots([]);
+      setAccountRules([]);
+      setTransactions([]);
+      setStatementCheckpoints([]);
+    }
+    // A cached workspace is already usable. Keep its refresh non-blocking so
+    // the persistence effect can save accounts reconstructed from background
+    // transaction evidence (notably currency-scoped Wise wallets). Marking a
+    // silent refresh as loading leaves the flag set indefinitely and makes the
+    // same wallet disappear on every reload until transactions arrive again.
+    setAccountsLoading(!hydratedFromCache);
+    setAccountsHydrationPending(!hydratedFromCache && accounts.length === 0);
+    setHasInitialWorkspaceDataLoaded(hydratedFromCache);
+    void loadWorkspaceData(selectedWorkspaceId, {
+      silent: hydratedFromCache,
+      // A cold Accounts view must not present the stored snapshot as final
+      // before transaction deltas have reconciled it. Cached workspaces can
+      // paint immediately and refresh in the background.
+      awaitHydration: !hydratedFromCache,
+    });
+  }, [selectedWorkspaceId, workspacesLoading, workspaces.length]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    const shouldReactToCacheKey = (key: string | null) =>
+      key === accountsWorkspaceCacheKey ||
+      key === deletedAccountsWorkspaceCacheKey ||
+      key === deletingAccountsWorkspaceCacheKey ||
+      key === "clover.selected-workspace-id.v1";
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage) {
+        return;
+      }
+
+      if (!shouldReactToCacheKey(event.key)) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId) && shouldHydrateWorkspaceSnapshot(activeWorkspaceId)) {
+        setAccountsLoading(true);
+        void loadWorkspaceData(activeWorkspaceId);
+      }
+    };
+
+    const handleWorkspaceCacheUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<WorkspaceCacheUpdatedEventDetail>;
+      if (!shouldReactToCacheKey(customEvent.detail?.key ?? null)) {
+        return;
+      }
+      if (workspaceCacheWriteDepthRef.current > 0) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId) && shouldHydrateWorkspaceSnapshot(activeWorkspaceId)) {
+        setAccountsLoading(true);
+        void loadWorkspaceData(activeWorkspaceId);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    };
+  }, [loadWorkspaceData, selectedWorkspaceId, shouldHydrateWorkspaceSnapshot]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || accountsLoading || accountsLoadFailed) {
+      return;
+    }
+
+    const updatedAt = persistAccountsWorkspaceSnapshot(selectedWorkspaceId, {
+      accounts: accounts.filter((account) => isWorkspaceAccount(account, selectedWorkspaceId)),
+      accountRules,
+      transactions: transactions.filter((transaction) => transaction.workspaceId === selectedWorkspaceId),
+      statementCheckpoints: statementCheckpoints.filter(
+        (checkpoint) => checkpoint.workspaceId === selectedWorkspaceId
+      ),
+    });
+    markWorkspaceHydrated(selectedWorkspaceId, updatedAt);
+  }, [accounts, accountRules, accountsLoadFailed, accountsLoading, selectedWorkspaceId, statementCheckpoints, transactions]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStatementCheckpoints = async () => {
+      if (!drawerAccountId) {
+        setDrawerStatementCheckpoints([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/accounts/${drawerAccountId}/statement-checkpoints`);
+        if (!response.ok) {
+          if (!cancelled) {
+            setDrawerStatementCheckpoints([]);
+          }
+          return;
+        }
+
+        const payload = await response.json();
+        if (!cancelled) {
+          const nextCheckpoints = Array.isArray(payload.checkpoints) ? (payload.checkpoints as StatementCheckpoint[]) : [];
+          setDrawerStatementCheckpoints(nextCheckpoints);
+          setStatementCheckpoints((current) => mergeStatementCheckpoints(current, nextCheckpoints));
+        }
+      } catch {
+        if (!cancelled) {
+          setDrawerStatementCheckpoints([]);
+        }
+      }
+    };
+
+    void loadStatementCheckpoints();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [drawerAccountId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const deletingIds = new Set(getDeletingWorkspaceAccountIds(selectedWorkspaceId));
+    const deletedIds = new Set(getDeletedWorkspaceAccountIds(selectedWorkspaceId));
+    if (deletingIds.size === 0 && deletedIds.size === 0) {
+      return;
+    }
+
+    setAccounts((current) => current.filter((account) => !deletedIds.has(account.id) && !deletingIds.has(account.id)));
+    setTransactions((current) =>
+      current.filter((transaction) => !deletedIds.has(transaction.accountId) && !deletingIds.has(transaction.accountId))
+    );
+    setStatementCheckpoints((current) =>
+      current.filter(
+        (checkpoint) =>
+          !checkpoint.accountId || (!deletedIds.has(checkpoint.accountId) && !deletingIds.has(checkpoint.accountId))
+      )
+    );
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!drawerAccountId) {
+      return;
+    }
+
+    const account = reconciledAccounts.find((entry) => entry.id === drawerAccountId) ?? null;
+    if (!account) {
+      return;
+    }
+
+    setDrawerTransactions(transactions.filter((transaction) => transactionMatchesAccount(transaction, account)));
+  }, [drawerAccountId, reconciledAccounts, transactions]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDrawerTransactions = async () => {
+      if (!drawerAccountId || !selectedWorkspaceId) {
+        setDrawerTransactions([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/transactions?workspaceId=${encodeURIComponent(selectedWorkspaceId)}&accountId=${encodeURIComponent(drawerAccountId)}`
+        );
+        if (!response.ok) {
+          if (!cancelled) {
+            setDrawerTransactions([]);
+          }
+          return;
+        }
+
+        const payload = await response.json();
+        if (!cancelled) {
+          setDrawerTransactions(Array.isArray(payload.transactions) ? (payload.transactions as Transaction[]) : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setDrawerTransactions([]);
+        }
+      }
+    };
+
+    void loadDrawerTransactions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [drawerAccountId, selectedWorkspaceId]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || (event.target instanceof Element && event.target.closest('[data-escape-dismiss="local"]'))) return;
+      if (event.key === "Escape") {
+        setAddOpen(false);
+        setImportOpen(false);
+        setDrawerAccountId(null);
+        setDownloadMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!downloadMenuRef.current) {
+        return;
+      }
+
+      if (!downloadMenuRef.current.contains(event.target as Node)) {
+        setDownloadMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, []);
+
+  const latestCheckpoint = useMemo(() => drawerStatementCheckpoints[0] ?? null, [drawerStatementCheckpoints]);
+  const selectedAccountCheckpointSummary = useMemo(
+    () => getCheckpointSummary(latestCheckpoint),
+    [latestCheckpoint]
+  );
+
+  const availableCurrencies = useMemo(() => {
+    const currencySet = new Set(
+      reconciledAccounts
+        .map((account) => formatCurrencyCode(account.currency))
+        .filter(Boolean)
+    );
+    for (const currency of getUploadSummaryCurrencies(pendingImportSummary)) {
+      currencySet.add(currency);
+    }
+
+    if (currencySet.size === 0) {
+      currencySet.add("PHP");
+    }
+
+    return Array.from(currencySet).sort((left, right) => left.localeCompare(right));
+  }, [pendingImportSummary, reconciledAccounts]);
+
+  useEffect(() => {
+    if (!hasInitialWorkspaceDataLoaded) {
+      return;
+    }
+
+    if ((!selectedCurrency || selectedCurrency.toLowerCase() === "all") && availableCurrencies.length > 1) {
+      return;
+    }
+
+    if (availableCurrencies.includes(selectedCurrency)) {
+      return;
+    }
+
+    const fallbackCurrency = availableCurrencies[0] ?? "PHP";
+    setSelectedCurrency(fallbackCurrency);
+    persistSelectedCurrency(selectedWorkspaceId, fallbackCurrency);
+  }, [availableCurrencies, hasInitialWorkspaceDataLoaded, selectedCurrency, selectedWorkspaceId]);
+
+  const valuedAccounts = useMemo(
+    () =>
+      reconciledAccounts.map((account) => {
+        const liveValue = liveInvestmentValues[account.id];
+        return liveValue === undefined ? account : { ...account, balance: liveValue.toFixed(2) };
+      }),
+    [liveInvestmentValues, reconciledAccounts]
+  );
+
+  const currencyFilteredAccounts = useMemo(
+    () => {
+      if (!selectedCurrency || selectedCurrency.toLowerCase() === "all") {
+        return valuedAccounts;
+      }
+
+      return valuedAccounts.filter((account) => formatCurrencyCode(account.currency) === selectedCurrency);
+    },
+    [selectedCurrency, valuedAccounts]
+  );
+
+  const hasResolvedBalance = (value: string | null | undefined) => {
+    const normalized = typeof value === "string" ? value.trim() : "";
+    if (!normalized) {
+      return false;
+    }
+
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric);
+  };
+
+  const getUploadAccountLoadingContext = (account: Account): UploadAccountLoadingContext => {
+    const matchingImportSummary =
+      pendingImportSummary
+        ? pendingImportSummary
+        : getCompletedImportActivitySummary(importActivitySnapshot);
+    const latestCheckpoint = getLatestCheckpointForAccount(account, statementCheckpoints);
+    const cachedTransactionsWorkspace = selectedWorkspaceId ? getCachedTransactionsWorkspace(selectedWorkspaceId) : null;
+    const cachedTransactionsForAccount = Array.isArray(cachedTransactionsWorkspace?.transactions)
+      ? (cachedTransactionsWorkspace.transactions as Transaction[]).some((transaction) => transactionMatchesAccount(transaction, account))
+      : false;
+    const matchingImportSummaryHasRows =
+      matchingImportSummary &&
+      Number(matchingImportSummary.rowsImported ?? 0) > 0 &&
+      uploadSummaryMatchesAccount(matchingImportSummary, account);
+    const checkpointBalance =
+      latestCheckpoint?.status !== "mismatch" &&
+      latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+        ? String(latestCheckpoint.endingBalance)
+        : null;
+    const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
+    const hasVisibleBalance = hasResolvedBalance(account.balance);
+    const hasApiConfirmedTransactions = Number(account.transactionCount ?? 0) > 0;
+    const hasLoadedTransactions = Boolean(
+      hasApiConfirmedTransactions ||
+        transactions.some((transaction) => transactionMatchesAccount(transaction, account)) ||
+        cachedTransactionsForAccount ||
+        (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0) ||
+        matchingImportSummaryHasRows
+    );
+    const displayedBalance = hasResolvedBalance(checkpointBalance)
+      ? checkpointBalance
+      : hasResolvedBalance(account.balance)
+        ? account.balance
+        : stableBalance;
+    const isLoading = Boolean(
+      account.source === "upload" &&
+        !hasVisibleBalance &&
+        !hasResolvedBalance(checkpointBalance) &&
+        !stableBalance &&
+        !hasLoadedTransactions
+    );
+    const loadingSince = accountLoadingSinceRef.current.get(account.id);
+    const isTimedOut =
+      isLoading &&
+      loadingSince !== undefined &&
+      accountLoadingPulse - loadingSince >= ACCOUNT_LOADING_TIMEOUT_MS;
+    const shouldShowLoading = isLoading && !isTimedOut;
+
+    return {
+      latestCheckpoint,
+      checkpointBalance,
+      stableBalance,
+      hasVisibleBalance,
+      hasLoadedTransactions,
+      displayedBalance,
+      baseIsLoading: isLoading,
+      isLoading: shouldShowLoading,
+      isTimedOut,
+    };
+  };
+
+  const getDisplayedAccountBalance = (account: Account) => {
+    // Market investments are revalued from their current holdings. A statement
+    // checkpoint is historical evidence and must never override that current
+    // value on Accounts; doing so makes the institution card disagree with its
+    // own Holdings page until another refresh arrives.
+    const liveInvestmentValue = liveInvestmentValues[account.id];
+    if (Number.isFinite(liveInvestmentValue)) {
+      return liveInvestmentValue.toFixed(2);
+    }
+
+    if (
+      (prefersLiveInvestmentBalance(getEffectiveAccountType(account)) || isGSaveInstitutionAccount(account)) &&
+      hasResolvedBalance(account.balance)
+    ) {
+      return account.balance;
+    }
+
+    // Cash is a ledger projection with the checkpoint as its starting point.
+    if (getEffectiveAccountType(account) === "cash" && hasResolvedBalance(account.balance)) {
+      return account.balance;
+    }
+    const latestCheckpoint = getLatestCheckpointForAccount(account, statementCheckpoints);
+    const checkpointBalance =
+      latestCheckpoint?.status !== "mismatch" &&
+      latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+        ? String(latestCheckpoint.endingBalance)
+        : null;
+    const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
+
+    if (hasResolvedBalance(checkpointBalance)) {
+      return checkpointBalance;
+    }
+
+    if (hasResolvedBalance(account.balance)) {
+      return account.balance;
+    }
+
+    return stableBalance ?? checkpointBalance;
+  };
+
+  const activeUploadLoadingAccountIds = useMemo(() => {
+    return currencyFilteredAccounts
+      .filter((account) => getUploadAccountLoadingContext(account).baseIsLoading)
+      .map((account) => account.id);
+  }, [accountLoadingPulse, currencyFilteredAccounts, importActivitySnapshot, pendingImportSummary, statementCheckpoints, transactions]);
+
+  const visibleUploadLoadingAccountIds = useMemo(() => {
+    return currencyFilteredAccounts.filter((account) => getUploadAccountLoadingContext(account).isLoading).map((account) => account.id);
+  }, [accountLoadingPulse, currencyFilteredAccounts, importActivitySnapshot, pendingImportSummary, statementCheckpoints, transactions]);
+
+  useEffect(() => {
+    const activeIds = new Set(activeUploadLoadingAccountIds);
+    const now = Date.now();
+
+    for (const id of activeIds) {
+      if (!accountLoadingSinceRef.current.has(id)) {
+        accountLoadingSinceRef.current.set(id, now);
+      }
+    }
+
+    for (const id of Array.from(accountLoadingSinceRef.current.keys())) {
+      if (!activeIds.has(id)) {
+        accountLoadingSinceRef.current.delete(id);
+      }
+    }
+  }, [activeUploadLoadingAccountIds]);
+
+  useEffect(() => {
+    if (visibleUploadLoadingAccountIds.length === 0) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setAccountLoadingPulse(Date.now());
+    }, ACCOUNT_LOADING_PULSE_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [visibleUploadLoadingAccountIds.length]);
+
+  const isColdLoading =
+    (selectedWorkspaceId && (accountsLoading || !hasInitialWorkspaceDataLoaded)) ||
+    (!selectedWorkspaceId && (workspacesLoading || accountsLoading || !hasInitialWorkspaceDataLoaded));
+
+  useEffect(() => {
+    if (hasInitialWorkspaceDataLoaded) {
+      setHasCompletedInitialAccountPaint(true);
+    }
+  }, [hasInitialWorkspaceDataLoaded]);
+
+  useEffect(() => {
+    if (!isColdLoading) {
+      wasColdLoadingRef.current = false;
+      return;
+    }
+
+    if (!wasColdLoadingRef.current) {
+      pageLoadingSinceRef.current = Date.now();
+    }
+    wasColdLoadingRef.current = true;
+
+    const interval = window.setInterval(() => {
+      setPageLoadingPulse(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isColdLoading]);
+
+  useEffect(() => {
+    if (hasInitialWorkspaceDataLoaded) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setAccountsLoading(false);
+      setWorkspacesLoading(false);
+      setAccountsLoadFailed(accounts.length === 0);
+      setHasInitialWorkspaceDataLoaded(true);
+    }, PAGE_LOADING_TIMEOUT_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [accounts.length, hasInitialWorkspaceDataLoaded]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.body.toggleAttribute(
+      "data-clover-accounts-loading",
+      !hasCompletedInitialAccountPaint && isColdLoading && accounts.length === 0
+    );
+
+    return () => {
+      document.body.removeAttribute("data-clover-accounts-loading");
+    };
+  }, [accounts.length, hasCompletedInitialAccountPaint, isColdLoading]);
+
+  const duplicateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const account of currencyFilteredAccounts) {
+      const key = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [currencyFilteredAccounts]);
+
+  const visibleAccounts = useMemo(() => {
+    const hasCashAccount = currencyFilteredAccounts.some((account) => getEffectiveAccountType(account) === "cash");
+    const accountsForDisplay = hasCashAccount
+      ? currencyFilteredAccounts
+      : [...currencyFilteredAccounts, buildCashFallbackAccount(selectedCurrency || "PHP")];
+
+    return [...accountsForDisplay].sort((left, right) => {
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    });
+  }, [currencyFilteredAccounts, selectedCurrency]);
+
+  const totals = useMemo(() => {
+    return visibleAccounts.reduce(
+      (accumulator, account) => {
+        const displayedBalance = getDisplayedAccountBalance(account);
+        const signedValue = normalizeAccountBalanceSign(getEffectiveAccountType(account), parseAmount(displayedBalance));
+        if (isSpendableAccountType(getEffectiveAccountType(account)) && signedValue > 0) {
+          accumulator.spendable += signedValue;
+        }
+        if (signedValue >= 0) {
+          accumulator.assets += signedValue;
+        } else {
+          accumulator.liabilities += Math.abs(signedValue);
+        }
+        accumulator.netWorth += signedValue;
+        return accumulator;
+      },
+      { assets: 0, liabilities: 0, netWorth: 0, spendable: 0 }
+    );
+  }, [visibleAccounts, statementCheckpoints]);
+
+  const isAllCurrenciesView = !selectedCurrency || selectedCurrency.toLowerCase() === "all";
+  const visibleAccountCurrencies = useMemo(
+    () => getCurrencyCodes(visibleAccounts),
+    [visibleAccounts]
+  );
+  const defaultCurrencyCode = formatCurrencyCode(defaultCurrency);
+  const usesFxEstimates =
+    isAllCurrenciesView && visibleAccountCurrencies.some((currency) => currency !== defaultCurrencyCode);
+  const accountExchangeRates = useExchangeRates(
+    visibleAccountCurrencies,
+    defaultCurrency,
+    usesFxEstimates
+  );
+  const consolidated = consolidatedAccountSummary(visibleAccounts.map(account => ({
+    type: getEffectiveAccountType(account), currency: formatCurrencyCode(account.currency),
+    balance: getDisplayedAccountBalance(account) === null ? null : parseAmount(getDisplayedAccountBalance(account)),
+  })), isAllCurrenciesView ? defaultCurrencyCode : formatCurrencyCode(selectedCurrency), accountExchangeRates.rates);
+  const estimatedTotals = { netWorth: consolidated.values[0] ?? 0, spendable: consolidated.values[1] ?? 0, assets: consolidated.values[2] ?? 0, liabilities: consolidated.values[3] ?? 0 };
+  const accountEstimateUnavailable = consolidated.values.some(value => value === null);
+  const formatAccountSummary = (value: number, signed = false) => {
+    if (accountEstimateUnavailable) {
+      return "—";
+    }
+    const currencies = getCurrencyCodes(visibleAccounts);
+    const currency = usesFxEstimates ? defaultCurrency : currencies.length <= 1 ? currencies[0] ?? "PHP" : null;
+    const sign = signed && value !== 0 ? value > 0 ? "+" : "-" : "";
+    const amount = usesFxEstimates
+      ? `${sign}${formatDisplayAccountAmount(value, defaultCurrency)}`
+      : signed ? formatSignedAggregateAmount(value, visibleAccounts) : formatAggregateAmount(value, visibleAccounts);
+    if (!currency) return amount;
+    const compact = `${sign}${compactSummaryMoney(Math.abs(value), currency)}`;
+    return <span title={amount}>
+      <span className="sr-only">{amount}</span>
+      <span className="summary-desktop-label" aria-hidden="true">{amount}</span>
+      <span className="summary-mobile-label" aria-hidden="true">{compact}</span>
+    </span>;
+  };
+  const getAccountSummaryTooltip = (calculation: string) => {
+    if (!usesFxEstimates) {
+      return calculation;
+    }
+
+    const rateDate = accountExchangeRates.asOf
+      ? ` Rates are current as of ${formatDate(accountExchangeRates.asOf)}.`
+      : "";
+    return `${calculation} Values are estimated in ${defaultCurrency} using the latest available exchange rates.${rateDate}`;
+  };
+
+  const accountGroups = useMemo(() => {
+    const groups = [
+      {
+        title: "Banks & savings",
+        dropType: "bank" as const,
+        tone: "assets",
+        itemLabel: "account",
+        rows: visibleAccounts.filter((account) => {
+          const effectiveType = getEffectiveAccountType(account);
+          return effectiveType === "bank" && !isGSaveInstitutionAccount(account);
+        }),
+      },
+      {
+        title: "Credit Cards",
+        dropType: "credit_card" as const,
+        tone: "liability",
+        itemLabel: "account",
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "credit_card"),
+      },
+      {
+        title: "Liabilities",
+        dropType: "loan" as const,
+        tone: "liability",
+        itemLabel: "account",
+        rows: visibleAccounts.filter((account) => {
+          const effectiveType = getEffectiveAccountType(account);
+          return effectiveType !== "credit_card" && isLiabilityAccountType(effectiveType);
+        }),
+      },
+      {
+        title: "Wallets",
+        dropType: "wallet" as const,
+        tone: "assets",
+        itemLabel: "account",
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "wallet"),
+      },
+      {
+        title: "Investments",
+        dropType: "investment" as const,
+        tone: "assets",
+        itemLabel: "institution",
+        rows: buildInvestmentInstitutionCards(
+          visibleAccounts.filter(
+            (account) => getEffectiveAccountType(account) === "investment" || isGSaveInstitutionAccount(account)
+          ),
+          getDisplayedAccountBalance,
+          investmentSnapshots
+        ),
+      },
+      {
+        title: "Tracked assets",
+        dropType: "other" as const,
+        tone: "neutral",
+        itemLabel: "account",
+        rows: visibleAccounts.filter((account) => isTrackedAssetAccountType(getEffectiveAccountType(account))),
+      },
+      {
+        title: "Cash",
+        dropType: "cash" as const,
+        tone: "cash",
+        itemLabel: "account",
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "cash"),
+      },
+    ];
+
+    return groups
+      .map((group) => {
+        const rows = [...group.rows].sort((left, right) => {
+          const comparableValue = (row: Account | InvestmentInstitutionCard) => {
+            const accountType = isInvestmentInstitutionCard(row)
+              ? "investment"
+              : getEffectiveAccountType(row);
+            const signedValue = normalizeAccountBalanceSign(accountType, parseAmount(row.balance));
+            if (!isAllCurrenciesView) {
+              return Math.abs(signedValue);
+            }
+
+            return Math.abs(convertAmount(signedValue, row.currency, accountExchangeRates.rates) ?? signedValue);
+          };
+          const valueDifference = comparableValue(right) - comparableValue(left);
+          if (valueDifference !== 0) {
+            return valueDifference;
+          }
+
+          const leftName = isInvestmentInstitutionCard(left) ? left.institution : getAccountDisplayName(left);
+          const rightName = isInvestmentInstitutionCard(right) ? right.institution : getAccountDisplayName(right);
+          return leftName.localeCompare(rightName) || left.id.localeCompare(right.id);
+        });
+        const groupCurrencies = getCurrencyCodes(group.rows);
+        const usesFxEstimate =
+          isAllCurrenciesView && groupCurrencies.some((currency) => currency !== defaultCurrencyCode);
+        let estimateUnavailable = false;
+        const total = group.rows.reduce((sum, row) => {
+          const signedValue = normalizeAccountBalanceSign(
+            "kind" in row && row.kind === "investment_institution" ? "investment" : getEffectiveAccountType(row as Account),
+            parseAmount(row.balance)
+          );
+          if (!usesFxEstimate) {
+            return sum + signedValue;
+          }
+
+          const convertedValue = convertAmount(signedValue, row.currency, accountExchangeRates.rates);
+          if (convertedValue === null) {
+            estimateUnavailable = true;
+            return sum;
+          }
+          return sum + convertedValue;
+        }, 0);
+
+        return { ...group, rows, total, usesFxEstimate, estimateUnavailable };
+      })
+      .filter((group) => group.rows.length > 0 || draggedAccountId !== null);
+  }, [accountExchangeRates.rates, defaultCurrencyCode, draggedAccountId, investmentSnapshots, isAllCurrenciesView, liveInvestmentValues, visibleAccounts]);
+
+  const selectedAccount = useMemo(
+    () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
+    [drawerAccountId, reconciledAccounts]
+  );
+  const selectedAccountLoadingContext = useMemo(
+    () => (selectedAccount ? getUploadAccountLoadingContext(selectedAccount) : null),
+    [accountLoadingPulse, importActivitySnapshot, pendingImportSummary, selectedAccount, statementCheckpoints, transactions]
+  );
+  const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
+  const selectedAccountCurrency = selectedAccount?.currency ?? "PHP";
+
+  useEffect(() => {
+    if (!selectedAccount) {
+      return;
+    }
+
+    setAccountEditName(selectedAccount.name);
+    setAccountEditInstitution(selectedAccount.institution ?? "");
+    setAccountEditInvestmentSubtype(selectedAccount.investmentSubtype ?? "stock");
+    setAccountEditInvestmentSymbol(selectedAccount.investmentSymbol ?? "");
+    setAccountEditInvestmentQuantity(selectedAccount.investmentQuantity ?? "");
+    setAccountEditInvestmentCostBasis(selectedAccount.investmentCostBasis ?? "");
+    setAccountEditInvestmentPrincipal(selectedAccount.investmentPrincipal ?? "");
+    setAccountEditInvestmentStartDate(selectedAccount.investmentStartDate ? selectedAccount.investmentStartDate.slice(0, 10) : "");
+    setAccountEditInvestmentMaturityDate(selectedAccount.investmentMaturityDate ? selectedAccount.investmentMaturityDate.slice(0, 10) : "");
+    setAccountEditInvestmentInterestRate(selectedAccount.investmentInterestRate ?? "");
+    setAccountEditInvestmentMaturityValue(selectedAccount.investmentMaturityValue ?? "");
+    setAccountEditType(selectedAccount.type);
+    setAccountEditCurrency(selectedAccount.currency);
+    setAccountEditSource(selectedAccount.source);
+    setAccountEditBalance(selectedAccount.balance ?? "");
+    setBalanceDraft(selectedAccount.balance ?? "");
+    setAccountDeleteConfirmOpen(false);
+  }, [selectedAccount]);
+
+  const selectedAccountTransactions = useMemo(
+    () =>
+      selectedAccount
+        ? drawerTransactions.filter((transaction) => !transaction.isExcluded || transaction.merchantRaw === "Beginning balance")
+        : [],
+    [selectedAccount, drawerTransactions]
+  );
+
+  const accountHistoryEntries = useMemo(() => {
+    if (!selectedAccount) return [];
+    return selectedAccountTransactions.slice(0, 5).map((transaction) => ({
+      id: transaction.id,
+      title: transaction.merchantClean ?? transaction.merchantRaw,
+      subtitle: transaction.categoryName ?? "Uncategorized",
+      value: transaction.amount,
+      date: transaction.date,
+      kind: transaction.type,
+    }));
+  }, [selectedAccount, selectedAccountTransactions]);
+
+  const openingBalanceEntry = useMemo(
+    () => selectedAccountTransactions.find((transaction) => transaction.merchantRaw === "Beginning balance") ?? null,
+    [selectedAccountTransactions]
+  );
+  const selectedAccountImportSummaries = useMemo(
+    () => buildImportSummaries(selectedAccountTransactions),
+    [selectedAccountTransactions]
+  );
+
+  const manualAccountBrand = useMemo(
+    () =>
+      getAccountBrand({
+        institution:
+          manualType === "cash"
+            ? "Cash"
+            : manualInstitution || manualName,
+        name: manualName,
+        type: manualType,
+      }),
+    [manualInstitution, manualName, manualType]
+  );
+
+  const manualInvestmentFieldConfigs = useMemo(
+    () => getInvestmentFieldConfigs(manualType === "investment" ? manualInvestmentSubtype : null).filter(field => !["investmentCostBasis", "investmentPrincipal"].includes(field.key)),
+    [manualInvestmentSubtype, manualType]
+  );
+
+  const manualTypeGuidance = useMemo(() => {
+    if (isLiabilityAccountType(manualType)) {
+      return "Use Recurring if you want Clover to track due dates, installments, or repayment reminders for this liability.";
+    }
+
+    if (manualType === "receivable") {
+      return "Use Recurring if you want Clover to follow collection dates or repayment reminders for money owed to you.";
+    }
+
+    if (manualType === "prepaid") {
+      return "Use the balance to track stored value. Add a recurring item if you want reload or expiry reminders.";
+    }
+
+    if (manualType === "insurance") {
+      return "Use the balance to track policy or cash value. Add a recurring item if you want premium or renewal reminders.";
+    }
+
+    return null;
+  }, [manualType]);
+
+  const manualScheduleConfig = useMemo(() => {
+    if (manualType === "receivable") {
+      return {
+        kind: "receivable" as const,
+        titleSuffix: "collection",
+        toggleLabel: "Track collections in Clover",
+        helper: "Add the next collection date here and Clover will create a linked receivable reminder for this account.",
+        amountLabel: "Expected amount",
+        amountPlaceholder: "0.00",
+        counterpartyLabel: "Who owes you? (optional)",
+        counterpartyPlaceholder: "Client, friend, employer",
+        dueDateLabel: "Next collection date",
+        recurrenceDefault: "once" as const,
+      };
+    }
+
+    if (manualType === "insurance") {
+      return {
+        kind: "planned_payment" as const,
+        titleSuffix: "premium",
+        toggleLabel: "Track premiums in Clover",
+        helper: "Add the premium schedule here and Clover will create a linked reminder for this policy.",
+        amountLabel: "Premium amount",
+        amountPlaceholder: "0.00",
+        counterpartyLabel: "Provider (optional)",
+        counterpartyPlaceholder: "Insurer or broker",
+        dueDateLabel: "Next premium date",
+        recurrenceDefault: "monthly" as const,
+      };
+    }
+
+    if (manualType === "prepaid") {
+      return {
+        kind: "planned_payment" as const,
+        titleSuffix: "reload",
+        toggleLabel: "Track reloads or expiry in Clover",
+        helper: "Use this if you want Clover to remind you about reloads, renewals, or stored-value expiry.",
+        amountLabel: "Reload amount",
+        amountPlaceholder: "0.00",
+        counterpartyLabel: "Provider (optional)",
+        counterpartyPlaceholder: "Merchant or wallet provider",
+        dueDateLabel: "Next reminder date",
+        recurrenceDefault: "monthly" as const,
+      };
+    }
+
+    const suggestedKind = getRecurringKindSuggestionForAccountType(manualType);
+    if (suggestedKind === "debt") {
+      return {
+        kind: "debt" as const,
+        titleSuffix: "repayment",
+        toggleLabel: "Track repayments in Clover",
+        helper: "Add the next due date here and Clover will create a linked repayment reminder for this account.",
+        amountLabel: "Amount due",
+        amountPlaceholder: "0.00",
+        counterpartyLabel: "Lender or provider (optional)",
+        counterpartyPlaceholder: "Bank, lender, merchant",
+        dueDateLabel: "Next due date",
+        recurrenceDefault: "monthly" as const,
+      };
+    }
+
+    return null;
+  }, [manualType]);
+
+  useEffect(() => {
+    if (!manualScheduleConfig) {
+      setManualScheduleEnabled(false);
+      setManualScheduleDueDate("");
+      setManualScheduleRecurrence("monthly");
+      setManualScheduleAmount("");
+      setManualScheduleCounterparty("");
+      return;
+    }
+
+    setManualScheduleRecurrence((current) =>
+      current === manualScheduleConfig.recurrenceDefault ? current : manualScheduleConfig.recurrenceDefault
+    );
+  }, [manualScheduleConfig]);
+
+  const manualAccountReference = useMemo(() => {
+    if (manualType === "insurance") {
+      return {
+        label: "Policy number",
+        placeholder: "Example: POL-12345678",
+        helper: "Use a policy or member number if this insurance account has one.",
+      };
+    }
+
+    if (manualType === "prepaid") {
+      return {
+        label: "Card or reference number",
+        placeholder: "Example: GC-1024-7788",
+        helper: "Helpful for gift cards, stored-value cards, and other prepaid balances.",
+      };
+    }
+
+    if (manualType === "receivable") {
+      return {
+        label: "Invoice or reference number",
+        placeholder: "Example: INV-2026-001",
+        helper: "Use a reimbursement, invoice, or collection reference if you have one.",
+      };
+    }
+
+    if (manualType === "payable" || manualType === "bnpl") {
+      return {
+        label: "Reference number",
+        placeholder: "Example: REF-8291",
+        helper: "Use the merchant, billing, or plan reference number if it helps you track this obligation.",
+      };
+    }
+
+    if (manualType === "loan" || manualType === "mortgage" || manualType === "line_of_credit") {
+      return {
+        label: "Loan or account number",
+        placeholder: "Example: 1234 5678 9012",
+        helper: "Use the lender or account number if you want this liability easier to match later.",
+      };
+    }
+
+    return {
+      label: "Account number",
+      placeholder: "Example: 1234 5678 9012",
+      helper: null,
+    };
+  }, [manualType]);
+
+  const accountEditInvestmentFieldConfigs = useMemo(
+    () => getInvestmentFieldConfigs(accountEditType === "investment" ? accountEditInvestmentSubtype : null),
+    [accountEditInvestmentSubtype, accountEditType]
+  );
+
+  const refreshAll = async (options?: { preserveImportedEvidence?: boolean }) => {
+    if (!selectedWorkspaceId) return;
+    await loadWorkspaceData(selectedWorkspaceId, {
+      silent: true,
+      awaitHydration: true,
+      forceFresh: true,
+      preserveImportedEvidence: options?.preserveImportedEvidence,
+    });
+    setMessage(`Workspace "${selectedWorkspace?.name ?? "selected"}" refreshed.`);
+  };
+
+  const openAddAccount = () => {
+    flushSync(() => {
+      closeChrome();
+    });
+
+
+    flushSync(() => {
+      setAddAccountError(null);
+      setAddOpen(true);
+    });
+  };
+
+  const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
+    const shouldLaunchInBackground = backgroundOnly && !(files?.some(isImageImportFile) ?? false);
+    flushSync(() => {
+      closeChrome();
+    });
+
+    if (!selectedWorkspaceId || !hasInitialWorkspaceDataLoaded) {
+      setMessage("Clover is still loading your workspace. Please wait a moment, then upload again.");
+      return;
+    }
+
+    if (!isLocalDevBrowser && planLimits?.accountLimit != null && accountLimitUsageCount >= planLimits.accountLimit) {
+      setAddOpen(true);
+      setMessage("You’ve reached the current account limit for this plan.");
+      return;
+    }
+
+    flushSync(() => {
+      setPendingImportSummary(null);
+      setAddOpen(false);
+      setImportBackgroundOnly(shouldLaunchInBackground);
+      setImportSessionId((current) => current + 1);
+      setImportSeedFiles(files && files.length > 0 ? files : null);
+      setImportOpen(true);
+    });
+  };
+
+  const moveAccountToType = async (account: Account, nextType: SupportedAccountType) => {
+    if (
+      !selectedWorkspaceId ||
+      isCashFallbackAccount(account) ||
+      account.id.startsWith("optimistic-") ||
+      movingAccountId === account.id ||
+      account.type === nextType
+    ) {
+      return;
+    }
+
+    const previousType = account.type;
+    setMovingAccountId(account.id);
+    setAccounts((current) =>
+      current.map((entry) => (entry.id === account.id ? { ...entry, type: nextType } : entry))
+    );
+
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          type: nextType,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to move this account.");
+      }
+
+      const payload = await response.json();
+      setAccounts((current) =>
+        current.map((entry) => (entry.id === account.id ? ((payload.account as Account | undefined) ?? entry) : entry))
+      );
+      setMessage(`${account.name} moved to ${formatAccountTypeLabel(nextType)}.`);
+    } catch (error) {
+      setAccounts((current) =>
+        current.map((entry) => (entry.id === account.id ? { ...entry, type: previousType } : entry))
+      );
+      setMessage(error instanceof Error ? error.message : "Unable to move this account.");
+    } finally {
+      setMovingAccountId(null);
+    }
+  };
+
+  const saveInlineAccountField = async (
+    account: Account,
+    field: "name" | "accountNumber" | "balance",
+    value: string
+  ) => {
+    if (!selectedWorkspaceId || account.id.startsWith("optimistic-")) return;
+
+    const trimmed = value.trim();
+    if (field === "name" && !trimmed) {
+      setMessage("Account name cannot be empty.");
+      throw new Error("Account name cannot be empty.");
+    }
+    const parsedBalance = field === "balance" ? Number(trimmed.replace(/,/g, "")) : null;
+    if (field === "balance" && !Number.isFinite(parsedBalance)) {
+      setMessage("Enter a valid balance.");
+      throw new Error("Enter a valid balance.");
+    }
+
+    const optimisticValue =
+      field === "balance"
+        ? normalizeAccountBalanceSign(getEffectiveAccountType(account), parsedBalance ?? 0).toFixed(2)
+        : trimmed;
+    const previous = account;
+    setAccounts((current) =>
+      current.map((entry) =>
+        entry.id === account.id
+          ? {
+              ...entry,
+              [field]: field === "accountNumber" ? optimisticValue || null : optimisticValue,
+            }
+          : entry
+      )
+    );
+
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          [field]: field === "accountNumber" ? optimisticValue || null : optimisticValue,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.account) throw new Error("Unable to save this account detail.");
+      setAccounts((current) =>
+        current.map((entry) => (entry.id === account.id ? (payload.account as Account) : entry))
+      );
+      setMessage("Account updated.");
+    } catch (error) {
+      setAccounts((current) => current.map((entry) => (entry.id === account.id ? previous : entry)));
+      setMessage(error instanceof Error ? error.message : "Unable to save this account detail.");
+      throw error;
+    }
+  };
+
+  const saveAccountLogo = async (account: Account, logoUrl: string | null) => {
+    if (!selectedWorkspaceId || account.id.startsWith("optimistic-") || isCashFallbackAccount(account)) return;
+    const previous = account;
+    setAccounts((current) => current.map((entry) => (entry.id === account.id ? { ...entry, logoUrl } : entry)));
+
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: selectedWorkspaceId, logoUrl }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.account) throw new Error("Unable to save this account logo.");
+      setAccounts((current) => current.map((entry) => (entry.id === account.id ? (payload.account as Account) : entry)));
+      setMessage("Account logo updated.");
+    } catch (error) {
+      setAccounts((current) => current.map((entry) => (entry.id === account.id ? previous : entry)));
+      setMessage(error instanceof Error ? error.message : "Unable to save this account logo.");
+      throw error;
+    }
+  };
+
+  const handleAccountDragStart = (event: DragEvent<HTMLDivElement>, account: Account) => {
+    if (
+      window.innerWidth <= 1100 ||
+      isCashFallbackAccount(account) ||
+      account.id.startsWith("optimistic-") ||
+      movingAccountId === account.id
+    ) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(ACCOUNT_CARD_DRAG_MIME, account.id);
+    event.dataTransfer.setData("text/plain", account.id);
+    draggedAccountIdRef.current = account.id;
+    setDraggedAccountId(account.id);
+  };
+
+  const finishAccountDrag = () => {
+    draggedAccountIdRef.current = null;
+    setDraggedAccountId(null);
+    setActiveAccountDropType(null);
+  };
+
+  const renderAccountCard = (row: Account | InvestmentInstitutionCard, key: string, mobileOverview = false) => {
+    if (isInvestmentInstitutionCard(row)) {
+      const accountBrand = getAccountBrand({
+        institution: row.institution,
+        name: row.institution,
+        type: "investment",
+      });
+
+      return (
+        <FinancialAccountCard
+          key={key}
+          accountBrand={accountBrand}
+          name={row.institution}
+          accountNumber={row.assetCount ? `${row.assetCount} asset${row.assetCount === 1 ? "" : "s"}` : getInvestmentInstitutionPreview(row.accounts)}
+          amount={formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}
+          onOpen={() => openInvestmentInstitution(row)}
+          openLabel={`Open ${row.institution} investment institution`}
+          className={[
+            "financial-account-card--investment-institution",
+            mobileOverview ? "financial-account-card--mobile-overview" : null,
+            luxuryAccountCardsEnabled ? getLuxuryAccountCardClass(row.id) : null,
+          ].filter(Boolean).join(" ")}
+        />
+      );
+    }
+
+    const isDeleting = deletingAccountIdsSet.has(row.id);
+    const loadingContext = getUploadAccountLoadingContext(row);
+    const latestCheckpoint = loadingContext.latestCheckpoint;
+    const latestCheckpointMetadata = latestCheckpoint?.sourceMetadata as Record<string, unknown> | null | undefined;
+    const relatedAccountTransaction = transactions.find((transaction) => transactionMatchesAccount(transaction, row));
+    const relatedTransactionWithAccountNumber = transactions.find(
+      (transaction) => transactionMatchesAccount(transaction, row) && Boolean(transaction.accountNumber?.trim())
+    );
+    const fallbackAccountNumber =
+      row.accountNumber ??
+      latestCheckpoint?.sourceMetadata?.accountNumber ??
+      relatedTransactionWithAccountNumber?.accountNumber?.trim() ??
+      null;
+    const relatedTransactionInstitution = relatedAccountTransaction?.institution?.trim() ?? null;
+    const checkpointInstitution =
+      typeof latestCheckpointMetadata?.institution === "string"
+        ? latestCheckpointMetadata.institution
+        : typeof latestCheckpointMetadata?.uploadBankHint === "string"
+          ? latestCheckpointMetadata.uploadBankHint
+        : null;
+    // Checkpoints begin with provisional parser metadata. Once an account and
+    // transactions are persisted, their identity is authoritative; otherwise
+    // an old provisional label can rename a correct account card after refresh.
+    const resolvedBankLabel = row.institution ?? relatedTransactionInstitution ?? checkpointInstitution ?? null;
+    const checkpointAccountName =
+      typeof latestCheckpointMetadata?.accountName === "string"
+        ? latestCheckpointMetadata.accountName
+        : null;
+    const accountNameIsNewerThanCheckpoint =
+      !latestCheckpoint || new Date(row.updatedAt).getTime() > new Date(latestCheckpoint.updatedAt).getTime();
+    const rawAccountCardName =
+      resolvedBankLabel
+        ? formatUploadAccountDisplayName(
+            accountNameIsNewerThanCheckpoint ? row.name : checkpointAccountName ?? row.name,
+            resolvedBankLabel,
+            fallbackAccountNumber,
+            row.type
+          )
+        : row.source === "upload" && !fallbackAccountNumber
+        ? formatUploadAccountDisplayName(row.name, row.institution, null, row.type)
+        : getAccountCardName({
+            name: row.name,
+            institution: row.institution ?? resolvedBankLabel,
+            accountNumber: fallbackAccountNumber,
+            type: row.type,
+            source: row.source,
+          });
+    const accountBrand = getAccountBrand({
+      institution: row.institution ?? resolvedBankLabel,
+      name: rawAccountCardName,
+      type: getEffectiveAccountType(row),
+      logoUrl: row.logoUrl,
+    });
+    const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));
+    const formattedAccountCardNumber = formatDisambiguatedCardAccountNumber(fallbackAccountNumber, {
+      showDigitCount: collidingMaskedAccountNumberKeys.has(getMaskedAccountNumberCollisionKey(row) ?? ""),
+    });
+    const accountCardName = formattedAccountCardNumber
+      ? removeDuplicateCardAccountSuffix(rawAccountCardName, fallbackAccountNumber)
+      : rawAccountCardName;
+    const accountCardNumber =
+      getEffectiveAccountType(row) === "investment" &&
+      isRedundantInvestmentCardReference(fallbackAccountNumber, [accountCardName, row.name, row.institution, accountBrand.label])
+        ? null
+        : formattedAccountCardNumber;
+
+    return (
+      <div
+        key={key}
+        className={`accounts-card-drag-shell${draggedAccountId === row.id ? " is-dragging" : ""}`}
+        draggable={!isDeleting && !loadingContext.isLoading && !isCashFallbackAccount(row)}
+        onDragStart={(event) => handleAccountDragStart(event, row)}
+        onDragEnd={finishAccountDrag}
+      >
+        <FinancialAccountCard
+          accountBrand={accountBrand}
+          name={accountCardName}
+          accountNumber={accountCardNumber}
+          amount={
+            loadingContext.isLoading
+              ? "Loading..."
+              : loadingContext.isTimedOut
+                ? "Pending review"
+                : formatAccountAmount(balanceValue, row.currency)
+          }
+          onOpen={() => openAccountDrawer(row)}
+          editableName={mobileOverview ? undefined : row.name}
+          editableAccountNumber={mobileOverview ? undefined : fallbackAccountNumber ?? ""}
+          editableAmount={mobileOverview ? undefined : Math.abs(parseAmount(loadingContext.displayedBalance ?? row.balance)).toFixed(2)}
+          onNameCommit={(value) => saveInlineAccountField(row, "name", value)}
+          onAccountNumberCommit={(value) => saveInlineAccountField(row, "accountNumber", value)}
+          onAmountCommit={(value) => saveInlineAccountField(row, "balance", value)}
+          logoUrl={row.logoUrl}
+          onLogoCommit={mobileOverview || isCashFallbackAccount(row) ? undefined : (logoUrl) => saveAccountLogo(row, logoUrl)}
+          openLabel={`Open ${accountCardName} account`}
+          className={[mobileOverview ? "financial-account-card--mobile-overview" : null, luxuryAccountCardsEnabled ? getLuxuryAccountCardClass(row.id) : null].filter(Boolean).join(" ")}
+          state={isDeleting ? "deleting" : loadingContext.isLoading ? "loading" : undefined}
+        />
+      </div>
+    );
+  };
+
+  const renderMobileListRow = (row: Account | InvestmentInstitutionCard, key: string) => {
+    const card = renderAccountCard(row, `${key}-card`, true);
+    if (isInvestmentInstitutionCard(row)) return <div key={key}>{card}</div>;
+    const name = getAccountDisplayName(row);
+    return <MobileSwipeDelete key={key} className="accounts-mobile-grid-swipe"
+      deleteLabel={`Delete ${name}`} disabled={accountDeleteBusy || deletingAccountIdsSet.has(row.id) || isCashFallbackAccount(row)}
+      confirmationMessage={`Delete account "${name}" and its linked transactions? This cannot be undone.`}
+      onDelete={() => deleteAccount(row, true)}>{card}</MobileSwipeDelete>;
+  };
+
+  useEffect(() => {
+    const active = addOpen;
+    document.body.toggleAttribute("data-clover-page-modal", active);
+
+    return () => {
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, [addOpen]);
+
+  const applyManualNameSuggestion = (suggestion: InstitutionSuggestion) => {
+    if (!institutionEdited.current) {
+      automaticInstitution.current = suggestion.label;
+      setManualInstitution(suggestion.label);
+    }
+    if (suggestion.category === "investment_platform") {
+      setManualType("investment");
+      // Choosing a provider is explicit; do not infer a broker later from an asset name.
+      institutionEdited.current = true;
+      return;
+    }
+
+    if (suggestion.category === "wallet") {
+      setManualType("wallet");
+      return;
+    }
+
+    setManualType("bank");
+  };
+
+  const openInvestmentInstitution = (institutionCard: InvestmentInstitutionCard) => {
+    closeChrome();
+    window.location.assign(
+      getInvestmentInstitutionPath({
+        institution: institutionCard.institution,
+        currency: institutionCard.currency,
+      })
+    );
+  };
+
+  const resolveNavigableAccount = (account: Account) => {
+    if (!account.id.startsWith("optimistic-")) {
+      return account;
+    }
+
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
+    return (
+      accounts.find(
+        (entry) =>
+          !entry.id.startsWith("optimistic-") &&
+          getImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type, entry.currency) === accountKey
+      ) ??
+      accounts.find((entry) => !entry.id.startsWith("optimistic-") && matchesImportedAccountIdentity(entry, account)) ??
+      null
+    );
+  };
+
+  const openAccountDrawer = (account: Account) => {
+    if (deletingAccountIdsSet.has(account.id) || isCashFallbackAccount(account)) {
+      return;
+    }
+    const navigableAccount = resolveNavigableAccount(account);
+    const targetAccount = navigableAccount ?? account;
+    closeChrome();
+    window.location.assign(getAccountPath(targetAccount));
+  };
+
+  const openFullAccountPage = () => {
+    if (!selectedAccount) return;
+    const navigableAccount = resolveNavigableAccount(selectedAccount);
+    const targetAccount = navigableAccount ?? selectedAccount;
+    closeChrome();
+    window.location.assign(getAccountPath(targetAccount));
+  };
+
+  const openDrawerForWarning = (account: Account, warning: string) => {
+    void warning;
+    if (deletingAccountIdsSet.has(account.id)) {
+      return;
+    }
+    closeChrome();
+    const targetAccount = resolveNavigableAccount(account) ?? account;
+    window.location.assign(getAccountPath(targetAccount));
+  };
+
+  const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    if (!selectedWorkspaceId || !selectedAccount) return;
+
+    const name = accountEditName.trim();
+    if (!name) {
+      setMessage("Account name is required.");
+      return;
+    }
+
+    setAccountEditBusy(true);
+    try {
+      const editIsInvestment = accountEditType === "investment";
+      const editIsMarket = editIsInvestment && isMarketInvestmentSubtype(accountEditInvestmentSubtype);
+      const editIsFixedIncome = editIsInvestment && isFixedIncomeInvestmentSubtype(accountEditInvestmentSubtype);
+      const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          name,
+          institution: accountEditInstitution.trim() || null,
+          investmentSubtype: editIsInvestment ? accountEditInvestmentSubtype : null,
+          investmentSymbol:
+            editIsInvestment && (editIsMarket || accountEditInvestmentSubtype === "other")
+              ? accountEditInvestmentSymbol.trim() || null
+              : null,
+          investmentQuantity: editIsMarket ? parseNullableNumberInput(accountEditInvestmentQuantity) : null,
+          investmentCostBasis:
+            editIsInvestment && (editIsMarket || accountEditInvestmentSubtype === "other")
+              ? parseNullableNumberInput(accountEditInvestmentCostBasis)
+              : editIsFixedIncome
+                ? null
+                : null,
+          investmentPrincipal: editIsFixedIncome ? parseNullableNumberInput(accountEditInvestmentPrincipal) : null,
+          investmentStartDate: editIsFixedIncome ? parseNullableDateInput(accountEditInvestmentStartDate) : null,
+          investmentMaturityDate: editIsFixedIncome ? parseNullableDateInput(accountEditInvestmentMaturityDate) : null,
+          investmentInterestRate: editIsFixedIncome ? parseNullableNumberInput(accountEditInvestmentInterestRate) : null,
+          investmentMaturityValue: editIsFixedIncome ? parseNullableNumberInput(accountEditInvestmentMaturityValue) : null,
+          type: accountEditType,
+          currency: accountEditCurrency || "PHP",
+          source: accountEditSource || selectedAccount.source,
+          balance: accountEditBalance.trim() ? Number(accountEditBalance) : null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update account.");
+      }
+
+      const payload = await response.json();
+      if (payload.account) {
+        setAccounts((current) => current.map((account) => (account.id === selectedAccount.id ? payload.account : account)));
+        setMessage(`Account "${name}" updated.`);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update account.");
+    } finally {
+      setAccountEditBusy(false);
+    }
+  };
+
+  const deleteAccount = async (accountOverride?: Account, fromRow = false) => {
+    const accountToDelete = accountOverride ?? selectedAccount;
+    if (!selectedWorkspaceId || !accountToDelete) return;
+
+    setAccountDeleteBusy(true);
+    try {
+      clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletingAccountIdsRef.current.delete(accountToDelete.id);
+      setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+      // Keep a swipe row mounted until the server accepts deletion, so failures remain retryable.
+      if (fromRow) {
+        const response = await fetch(`/api/accounts/${accountToDelete.id}`, { method: "DELETE" });
+        if (!response.ok) throw new Error(`Unable to delete account "${accountToDelete.name}".`);
+      }
+      markDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletedAccountIdsRef.current.add(accountToDelete.id);
+      applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, accountToDelete.id);
+      flushSync(() => {
+        setAccounts((current) => current.filter((account) => account.id !== accountToDelete.id));
+        setTransactions((current) => current.filter((transaction) => transaction.accountId !== accountToDelete.id));
+        setAccountRules((current) => current.filter((rule) => rule.accountId !== accountToDelete.id));
+        setDrawerAccountId(null);
+        setAccountDeleteConfirmOpen(false);
+        setMessage(`Account "${accountToDelete.name}" deleted.`);
+      });
+
+      const response = fromRow ? null : await fetch(`/api/accounts/${accountToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      if (response && !response.ok) {
+        throw new Error(`Unable to delete account "${accountToDelete.name}".`);
+      }
+    } catch (error) {
+      clearDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletedAccountIdsRef.current.delete(accountToDelete.id);
+      clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletingAccountIdsRef.current.delete(accountToDelete.id);
+      setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+      await loadWorkspaceData(selectedWorkspaceId, { silent: true });
+      setMessage(error instanceof Error ? error.message : `Unable to delete account "${accountToDelete.name}".`);
+      if (fromRow) throw error;
+    } finally {
+      setAccountDeleteBusy(false);
+    }
+  };
+
+  const saveManualAccount = async ({ keepOpen }: { keepOpen: boolean }) => {
+    setAddAccountError(null);
+    if (!selectedWorkspaceId) {
+      const nextError = "Select a workspace first.";
+      setAddAccountError(nextError);
+      setMessage(nextError);
+      return;
+    }
+
+    const name = manualName.trim();
+    if (!name) {
+      const nextError = "Account name is required.";
+      setAddAccountError(nextError);
+      setMessage(nextError);
+      return;
+    }
+
+    if (manualScheduleEnabled && manualScheduleConfig && !manualScheduleDueDate) {
+      const nextError = `${manualScheduleConfig.dueDateLabel} is required when schedule tracking is turned on.`;
+      setAddAccountError(nextError);
+      setMessage(nextError);
+      return;
+    }
+
+    try {
+      const manualIsInvestment = manualType === "investment";
+      const manualIsFixedIncome = manualIsInvestment && isFixedIncomeInvestmentSubtype(manualInvestmentSubtype);
+      const manualTracksUnits = manualIsInvestment && canTrackInvestmentUnits(manualInvestmentSubtype);
+      const manualTracksPurchaseValue = manualIsInvestment && canTrackInvestmentPurchaseHistory(manualInvestmentSubtype) && !manualIsFixedIncome;
+      const response = await fetch("/api/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          name,
+          institution:
+            manualType === "cash"
+              ? "Cash"
+              : manualInstitution.trim() || (institutionEdited.current ? "" : name),
+          accountNumber: manualAccountNumber.trim() || null,
+          investmentSubtype: manualIsInvestment ? manualInvestmentSubtype : null,
+          investmentSymbol:
+            manualIsInvestment && (manualTracksUnits || manualInvestmentSubtype === "other")
+              ? manualInvestmentSymbol.trim() || null
+              : null,
+          investmentQuantity: manualTracksUnits ? parseNullableNumberInput(manualInvestmentQuantity) : null,
+          investmentCostBasis:
+            manualTracksPurchaseValue
+              ? parseNullableNumberInput(manualBalance) ?? "0"
+              : null,
+          investmentPrincipal: manualIsFixedIncome ? parseNullableNumberInput(manualBalance) ?? "0" : null,
+          investmentStartDate: manualIsFixedIncome ? parseNullableDateInput(manualInvestmentStartDate) : null,
+          investmentMaturityDate: manualIsFixedIncome ? parseNullableDateInput(manualInvestmentMaturityDate) : null,
+          investmentInterestRate: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentInterestRate) : null,
+          investmentMaturityValue: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentMaturityValue) : null,
+          type: manualType,
+          currency: manualCurrency.trim().toUpperCase() || "PHP",
+          source: "manual",
+          balance: manualBalance.trim() || "0",
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const limitPayload = parsePlanLimitPayload(payload);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
+        throw new Error(payload?.error ?? "Unable to create account.");
+      }
+
+      const data = await response.json();
+      if (!data.account) {
+        throw new Error("The account was not returned after saving.");
+      }
+
+      let scheduleCreated = false;
+      let scheduleError: string | null = null;
+      if (manualScheduleEnabled && manualScheduleConfig) {
+        const scheduleTitle = `${name} ${manualScheduleConfig.titleSuffix}`;
+        const scheduleResponse = await fetch("/api/commitments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: selectedWorkspaceId,
+            kind: manualScheduleConfig.kind,
+            title: scheduleTitle,
+            counterparty: manualScheduleCounterparty.trim() || null,
+            amount: manualScheduleAmount.trim() || null,
+            currency: manualCurrency.trim().toUpperCase() || "PHP",
+            dueDate: manualScheduleDueDate,
+            recurrence: manualScheduleRecurrence,
+            nextDueDate: manualScheduleDueDate,
+            notes: `${formatAccountTypeLabel(manualType)} linked from Add account`,
+            accountId: data.account.id,
+            status: "active",
+          }),
+        });
+
+        if (!scheduleResponse.ok) {
+          const payload = await scheduleResponse.json().catch(() => null);
+          scheduleError = payload?.error ?? "The account was saved, but Clover could not add the linked schedule.";
+        } else {
+          scheduleCreated = true;
+        }
+      }
+
+      setAccounts((current) => [data.account, ...current]);
+      setManualName("");
+      setManualInstitution("");
+      automaticInstitution.current = "";
+      institutionEdited.current = false;
+      setManualAccountNumber("");
+      setManualInvestmentSubtype("stock");
+      setManualInvestmentSymbol("");
+      setManualInvestmentQuantity("");
+      setManualInvestmentCostBasis("");
+      setManualInvestmentPrincipal("");
+      setManualInvestmentStartDate("");
+      setManualInvestmentMaturityDate("");
+      setManualInvestmentInterestRate("");
+      setManualInvestmentMaturityValue("");
+      setManualBalance("");
+      setManualCurrency("PHP");
+      setManualScheduleEnabled(false);
+      setManualScheduleDueDate("");
+      setManualScheduleRecurrence("monthly");
+      setManualScheduleAmount("");
+      setManualScheduleCounterparty("");
+      setAddAccountError(null);
+      if (!keepOpen) {
+        setManualType("bank");
+        setAddOpen(false);
+      }
+      setMessage(
+        scheduleError
+          ? `${scheduleError} The account "${name}" was still created.`
+          : scheduleCreated
+          ? `Account "${name}" created and its schedule is now being tracked.`
+          : `Account "${name}" created.`
+      );
+    } catch (error) {
+      const nextError = error instanceof Error ? error.message : "Unable to create account.";
+      setAddAccountError(nextError);
+      setMessage(nextError);
+    }
+  };
+
+  const exportCsv = () => {
+    const rows = [
+      ["Name", "Type", "Amount", "Currency", "Last updated", "Source"],
+      ...visibleAccounts.map((account) => [
+        account.name,
+        getAccountDisplayType(account),
+        formatAccountAmount(parseAmount(account.balance), account.currency),
+        formatCurrencyCode(account.currency),
+        formatDate(account.updatedAt),
+        account.source,
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${selectedWorkspace?.name ?? "accounts"}-summary.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPdf = () => {
+    const report = window.open("", "_blank", "width=980,height=780");
+    if (!report) return;
+    report.document.write(`
+      <html>
+        <head>
+          <title>${selectedWorkspace?.name ?? "Accounts"} summary</title>
+          <style>
+            body { font-family: Inter, Arial, sans-serif; padding: 32px; color: #111; }
+            h1 { margin: 0 0 10px; }
+            .muted { color: #66727b; }
+            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            th, td { text-align: left; border-bottom: 1px solid #e2e8ec; padding: 10px 8px; }
+          </style>
+        </head>
+        <body>
+          <h1>${selectedWorkspace?.name ?? "Accounts"} summary</h1>
+          <p class="muted">Net worth ${formatAggregateAmount(totals.netWorth, visibleAccounts)} · Assets ${formatAggregateAmount(totals.assets, visibleAccounts)} · Liabilities ${formatAggregateAmount(totals.liabilities, visibleAccounts)}</p>
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Amount</th><th>Symbol</th><th>Last updated</th></tr>
+            </thead>
+            <tbody>
+              ${visibleAccounts
+                .map(
+                  (account) => `
+                    <tr>
+                      <td>${account.name}</td>
+                      <td>${getAccountDisplayType(account)}</td>
+                      <td>${formatDisplayAccountAmount(parseAmount(account.balance), account.currency)}</td>
+                      <td><span class="currency-symbol">${formatCurrencySymbol(account.currency)}</span></td>
+                      <td>${formatDate(account.updatedAt)}</td>
+                    </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+          <script>window.print();</script>
+        </body>
+      </html>
+    `);
+    report.document.close();
+  };
+
+  const downloadSummary = (format: "csv" | "pdf") => {
+    setDownloadMenuOpen(false);
+    if (format === "csv") {
+      exportCsv();
+      return;
+    }
+
+    exportPdf();
+  };
+
+  const showColdLoadGuard =
+    !hasCompletedInitialAccountPaint &&
+    accounts.length === 0 &&
+    isColdLoading &&
+    pageLoadingPulse - pageLoadingSinceRef.current < PAGE_LOADING_TIMEOUT_MS;
+  const hasWorkspaceDataEvidence =
+    Boolean(selectedWorkspaceId) &&
+    (
+      accounts.length > 0 ||
+      transactions.length > 0 ||
+      statementCheckpoints.length > 0 ||
+      hasCachedWorkspaceDataEvidence(selectedWorkspaceId) ||
+      (importActivitySnapshot?.workspaceId === selectedWorkspaceId &&
+        (importActivitySnapshot.status === "active" || importActivityHasCompletedRows(importActivitySnapshot)))
+    );
+  const shouldShowSyncingInsteadOfEmpty =
+    accounts.length === 0 &&
+    !accountsLoadFailed &&
+    !accountsLoading &&
+    (hasWorkspaceDataEvidence || accountsHydrationPending);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || !shouldShowSyncingInsteadOfEmpty) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true });
+    }, SYNCING_EMPTY_STATE_REFRESH_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [loadWorkspaceData, selectedWorkspaceId, shouldShowSyncingInsteadOfEmpty]);
+
+  const showAccountsSplash =
+    !accountsLoadFailed &&
+    accounts.length === 0 &&
+    (
+      showColdLoadGuard ||
+      (!hasCompletedInitialAccountPaint &&
+        (workspacesLoading ||
+          accountsLoading ||
+          !hasInitialWorkspaceDataLoaded ||
+          accountsHydrationPending ||
+          shouldShowSyncingInsteadOfEmpty))
+    );
+
+  if (showAccountsSplash) {
+    return <CloverLoadingScreen label="accounts" />;
+  }
+
+  const accountsShellActions = (
+    <>
+      <CurrencySelector
+        value={selectedCurrency}
+        onChange={(next) => {
+          const nextCurrency = next.toLowerCase() === "all" ? "" : formatCurrencyCode(next);
+          setSelectedCurrency(nextCurrency);
+          persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
+        }}
+        options={availableCurrencies}
+        includeAllOption={availableCurrencies.length > 1}
+        allLabel="All currencies"
+        ariaLabel="Select account currency" showCurrencyCode
+        className="accounts-currency-filter"
+        buttonClassName="accounts-currency-filter__button"
+        menuClassName="accounts-currency-filter__menu"
+        optionClassName="accounts-currency-filter__option"
+        menuAlignment="end"
+        showChevron={false}
+      />
+      <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount} aria-label="Add account">
+        <ActionIcon name="plus" />
+        <span>Add account</span>
+      </button>
+    </>
+  );
+
+  return (
+    <CloverShell
+      active="accounts"
+      title="Accounts"
+      mobileLeadingAction={<CurrencySelector value={selectedCurrency} onChange={next => { const code = next.toLowerCase() === "all" ? "" : formatCurrencyCode(next); setSelectedCurrency(code); persistSelectedCurrency(selectedWorkspaceId, code); }} options={availableCurrencies} includeAllOption={availableCurrencies.length > 1} allLabel="All currencies" ariaLabel="Select account currency" showCurrencyCode showChevron={false} portalMenu menuAlignment="start" buttonClassName="accounts-mobile-currency-button" />}
+      desktopTitleAction={<ContextualAskClover context="accounts" planTier={planTier} />}
+      mobileTrailingAction={<><ContextualAskClover context="accounts" planTier={planTier} /><button className="icon-button" type="button" aria-label="Add account" onClick={openAddAccount}><ActionIcon name="plus" /></button></>}
+      actions={<div className="accounts-desktop-tools">{accountsShellActions}</div>}
+      >
+      <div className="accounts-page">
+        {selectedWorkspaceId ? <FinversePendingAccounts workspaceId={selectedWorkspaceId} /> : null}
+
+        {visibleAccounts.length > 0 ? (
+          <section className="accounts-overview-grid" aria-label="Account summary">
+            <article className="accounts-overview-card glass">
+              <button className="accounts-overview-card__info" type="button" aria-label={usesFxEstimates ? "How the Net Worth FX estimate is calculated" : "How Net Worth is calculated"}>
+                i
+                <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                  {getAccountSummaryTooltip("Assets minus liabilities across visible accounts. Positive balances add to net worth; credit cards, loans, and other debts subtract from it.")}
+                </span>
+              </button>
+              <p className="eyebrow">{isAllCurrenciesView ? "Est. Net Worth" : "Net Worth"}</p>
+              <strong className={`accounts-overview-card__amount ${getNetWorthTone(estimatedTotals.netWorth)}`} title={accountEstimateUnavailable ? `Exchange rate unavailable for ${accountExchangeRates.unavailable.join(", ")}` : undefined}>
+                {formatAccountSummary(estimatedTotals.netWorth, true)}
+              </strong>
+            </article>
+            <article className="accounts-overview-card glass">
+              <button className="accounts-overview-card__info" type="button" aria-label={usesFxEstimates ? "How the Spendable FX estimate is calculated" : "How Spendable is calculated"}>
+                i
+                <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                  {getAccountSummaryTooltip("Positive balances from spendable accounts, such as bank, wallet, and cash accounts. Debts and tracked assets are excluded.")}
+                </span>
+              </button>
+              <p className="eyebrow">{isAllCurrenciesView ? "Est. Spendable" : "Spendable"}</p>
+              <strong className="accounts-overview-card__amount is-good">
+                {formatAccountSummary(estimatedTotals.spendable)}
+              </strong>
+            </article>
+            <article className="accounts-overview-card glass">
+              <button className="accounts-overview-card__info" type="button" aria-label={usesFxEstimates ? "How the Assets FX estimate is calculated" : "How Assets is calculated"}>
+                i
+                <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                  {getAccountSummaryTooltip("Sum of visible account balances that count as positive value after Clover applies each account type's balance rules.")}
+                </span>
+              </button>
+              <p className="eyebrow">{isAllCurrenciesView ? "Est. Assets" : "Assets"}</p>
+              <strong className="accounts-overview-card__amount is-good">
+                {formatAccountSummary(estimatedTotals.assets)}
+              </strong>
+            </article>
+            <article className="accounts-overview-card glass">
+              <button className="accounts-overview-card__info" type="button" aria-label={usesFxEstimates ? "How the Liabilities FX estimate is calculated" : "How Liabilities is calculated"}>
+                i
+                <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                  {getAccountSummaryTooltip("Sum of visible credit card, loan, and other debt balances. Clover shows this as a positive total so the amount is easy to scan.")}
+                </span>
+              </button>
+              <p className="eyebrow">{isAllCurrenciesView ? "Est. Liabilities" : "Liabilities"}</p>
+              <strong className="accounts-overview-card__amount is-danger">
+                {formatAccountSummary(estimatedTotals.liabilities)}
+              </strong>
+            </article>
+          </section>
+        ) : null}
+        {usesFxEstimates && (accountExchangeRates.loading || consolidated.missingCurrencies.length > 0) ? <p className="muted" role="status">{accountExchangeRates.loading ? "Loading exchange rates…" : `Unable to estimate all balances. Exchange rate unavailable: ${consolidated.missingCurrencies.join(", ")}.`}</p> : null}
+        {usesFxEstimates && !accountExchangeRates.loading && consolidated.missingCurrencies.length ? <button type="button" className="button button-small" onClick={accountExchangeRates.retry}>Retry rates</button> : null}
+        <section className="accounts-main-grid">
+          <div className="accounts-list-column">
+            <div className="accounts-sections">
+              {accountsLoadFailed ? (
+                <div className="empty-state accounts-empty-state accounts-empty-state--error">
+                  <strong>Couldn&apos;t load accounts.</strong>
+                  <p>Your accounts may still be there, but Clover could not reach the latest workspace data. Try again before adding anything new.</p>
+                  <div className="accounts-empty-state__actions">
+                    <button className="button button-primary button-small" type="button" onClick={() => void loadWorkspaceData(selectedWorkspaceId)}>
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              ) : accountGroups.length > 0 ? (
+                accountGroups.map((group) => (
+                  <article
+                    key={group.title}
+                    className={`accounts-group accounts-group--drop-target${
+                      activeAccountDropType === group.dropType ? " is-drag-over" : ""
+                    }`}
+                    data-account-drop-type={group.dropType}
+                    onDragEnter={(event) => {
+                      if (!hasActiveAccountCardDrag(draggedAccountIdRef.current, Array.from(event.dataTransfer.types))) return;
+                      event.preventDefault();
+                      setActiveAccountDropType(group.dropType);
+                    }}
+                    onDragOver={(event) => {
+                      if (!hasActiveAccountCardDrag(draggedAccountIdRef.current, Array.from(event.dataTransfer.types))) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                    }}
+                    onDragLeave={(event) => {
+                      const bounds = event.currentTarget.getBoundingClientRect();
+                      const leftSection =
+                        event.clientX <= bounds.left ||
+                        event.clientX >= bounds.right ||
+                        event.clientY <= bounds.top ||
+                        event.clientY >= bounds.bottom;
+                      if (leftSection) {
+                        setActiveAccountDropType((current) => (current === group.dropType ? null : current));
+                      }
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const accountId = readDraggedAccountId(
+                        (type) => event.dataTransfer.getData(type),
+                        draggedAccountIdRef.current
+                      );
+                      const droppedAccount = accounts.find((entry) => entry.id === accountId);
+                      finishAccountDrag();
+                      if (droppedAccount) {
+                        void moveAccountToType(droppedAccount, group.dropType);
+                      }
+                    }}
+                  >
+                    <div className="accounts-group__head">
+                      <div className="accounts-group__title-row">
+                        <h5>{group.title}</h5>
+                        <strong title={group.estimateUnavailable ? "An exchange rate is unavailable for this section." : undefined}>
+                          {group.usesFxEstimate
+                            ? group.estimateUnavailable
+                              ? "Est. —"
+                              : `Est. ${formatDisplayAccountAmount(group.total, defaultCurrency)}`
+                            : group.title === "Investments"
+                              ? `Est. ${formatAggregateAmount(group.total, group.rows)}`
+                              : formatAggregateAmount(group.total, group.rows)}
+                        </strong>
+                      </div>
+                      {group.title === "Investments" ? (
+                        <p className="accounts-group__estimate-note">
+                          Estimated values. Check your investment apps for the latest amounts.
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="accounts-card-grid accounts-card-grid--desktop" aria-label={`${group.title} accounts`}>
+                      {group.rows.map((row) => renderAccountCard(row, `${group.title}-${row.id}`))}
+                      {draggedAccountId && group.rows.length === 0 ? (
+                        <div className="accounts-group__empty-drop-hint">Move account here</div>
+                      ) : null}
+                    </div>
+                    <div className="accounts-mobile-card-grid" aria-label={`${group.title} account list`}>
+                      {group.rows.map((row) => renderMobileListRow(row, `${group.title}-mobile-${row.id}`))}
+                    </div>
+                    </article>
+                ))
+              ) : (
+                accounts.length > 0 ? (
+                  <EmptyDataCta
+                    eyebrow={selectedCurrency}
+                    title={`No ${formatCurrencySymbol(selectedCurrency)} accounts yet`}
+                    copy={`This view is focused on ${formatCurrencySymbol(selectedCurrency)} accounts only. Add or import one to compare balances here, or switch currencies to see the rest of your workspace.`}
+                    highlights={[
+                      "Keep each currency separate when you want a cleaner balance view.",
+                      "Import another statement to let Clover detect the matching account automatically.",
+                    ]}
+                    accountHref="/accounts"
+                    transactionHref="/transactions?manual=1"
+                    actions={
+                      <>
+                        <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
+                          Add account
+                        </button>
+                      </>
+                    }
+                  />
+                ) : (
+                  <EmptyDataCta
+                    className="empty-state--illustrated"
+                    eyebrow="Accounts"
+                    title="Build your financial picture here"
+                    copy="This page becomes your account map. Add accounts, upload statements, and Clover organizes each balance into cards you can scan at a glance."
+                    highlights={[
+                      "Create manual accounts for cash, wallets, and balances you want to track today.",
+                      "Upload statements when you want Clover to populate cards for you.",
+                      "Open each card later to review account-specific transactions and details.",
+                    ]}
+                    illustration="/assets/mascots/velvet-statement.webp"
+                    illustrationAlt="A 3D Clover dashboard illustration"
+                    importHref="/accounts?import=1"
+                    accountHref="/accounts"
+                    transactionHref="/transactions?manual=1"
+                    actions={
+                      <>
+                        <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
+                          Add account
+                        </button>
+                      </>
+                    }
+                  />
+                )
+              )}
+            </div>
+          </div>
+
+        </section>
+      </div>
+
+      {selectedAccount ? (
+        <div className="accounts-drawer-backdrop" role="presentation" onClick={() => setDrawerAccountId(null)}>
+          <aside className="accounts-drawer glass" role="dialog" aria-modal="true" aria-labelledby="account-drawer-title" onClick={(event) => event.stopPropagation()}>
+            <div className="accounts-drawer__head">
+              <div>
+                <p className="eyebrow">Account drawer</p>
+                <h4 id="account-drawer-title">{accountEditName || selectedAccount.name}</h4>
+                <p>{getAccountDisplayType(selectedAccount)} · {selectedAccount.source === "manual" ? "Manual" : "Imported"}</p>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setDrawerAccountId(null)} aria-label="Close account drawer">
+                ×
+              </button>
+            </div>
+
+            <div className="accounts-drawer__overview">
+              <div>
+                <span>Current balance</span>
+                <strong>
+                  {selectedAccountLoadingContext?.isLoading
+                    ? "Loading..."
+                    : selectedAccountLoadingContext?.isTimedOut
+                      ? "Pending review"
+                      : formatAccountAmount(parseAmount(selectedAccount.balance), selectedAccount.currency)}
+                </strong>
+              </div>
+              <div>
+                <span>Last updated</span>
+                <strong>{formatDate(selectedAccount.updatedAt)}</strong>
+              </div>
+              {getEffectiveAccountType(selectedAccount) !== "cash" ? (
+                <div>
+                  <span>Institution</span>
+                  <strong>{selectedAccount.institution ?? "No institution"}</strong>
+                </div>
+              ) : null}
+                <div>
+                  <span>Status</span>
+                  <strong>
+                    {deletingAccountIdsSet.has(selectedAccount.id)
+                      ? "Deleting"
+                      : (latestCheckpoint?.status === "pending" ? "Loading" : null) ??
+                        getAccountWarning(
+                          selectedAccount,
+                          duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0
+                        ) ??
+                        "Ready"}
+                  </strong>
+                </div>
+              </div>
+
+            <div className="accounts-drawer__guide">
+              <strong>Balance guide</strong>
+              <p>
+                Current balance is the number on this account now.
+              </p>
+            </div>
+
+            {drawerNotice ? (
+              <div className="accounts-drawer__notice">
+                <strong>Needs review</strong>
+                <p>{drawerNotice}</p>
+              </div>
+            ) : null}
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Edit account</h5>
+                <ActionIcon name="edit" />
+              </div>
+              <form className="accounts-drawer__form" onSubmit={saveAccountChanges}>
+                <label>
+                  Name
+                  <input value={accountEditName} onChange={(event) => setAccountEditName(event.target.value)} />
+                </label>
+                <label>
+                  Institution
+                  <input
+                    value={accountEditInstitution}
+                    onChange={(event) => setAccountEditInstitution(event.target.value)}
+                    placeholder={accountEditType === "investment" ? "Broker or platform" : "Bank or wallet name"}
+                  />
+                </label>
+                <label>
+                  Type
+                  <select value={accountEditType} onChange={(event) => setAccountEditType(event.target.value as Account["type"])}>
+                    {ACCOUNT_TYPE_SECTIONS.map((section) => (
+                      <optgroup key={section.label} label={section.label}>
+                        {section.options.map((option) => (
+                          <option key={option} value={option}>
+                            {formatAccountTypeLabel(option)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </label>
+                {accountEditType === "investment" ? (
+                  <>
+                    <label>
+                      Investment subtype
+                      <select
+                        value={accountEditInvestmentSubtype}
+                        onChange={(event) => setAccountEditInvestmentSubtype(event.target.value as InvestmentSubtype)}
+                      >
+                        {INVESTMENT_SUBTYPES.map((subtype) => (
+                          <option key={subtype} value={subtype}>
+                            {getInvestmentSubtypeLabel(subtype)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="accounts-investment-fields">
+                      {accountEditInvestmentFieldConfigs.map((field) => {
+                        const value =
+                          field.key === "investmentSymbol"
+                            ? accountEditInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? accountEditInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? accountEditInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? accountEditInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? accountEditInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? accountEditInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? accountEditInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? accountEditInvestmentMaturityValue
+                                          : "";
+
+                        const onChange =
+                          field.key === "investmentSymbol"
+                            ? setAccountEditInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? setAccountEditInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? setAccountEditInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? setAccountEditInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? setAccountEditInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? setAccountEditInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? setAccountEditInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? setAccountEditInvestmentMaturityValue
+                                          : setAccountEditInvestmentSymbol;
+
+                        return (
+                          <label key={field.key}>
+                            {field.label}
+                            <input
+                              value={value}
+                              onChange={(event) => onChange(event.target.value)}
+                              placeholder={field.placeholder}
+                              inputMode={field.inputMode}
+                              type={field.type}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : null}
+                <label>
+                  Balance
+                  <input value={accountEditBalance} onChange={(event) => setAccountEditBalance(event.target.value)} inputMode="decimal" placeholder="0.00" />
+                </label>
+                <div className="accounts-form-currency-field">
+                  <span className="sr-only">Currency</span>
+                          <CurrencySelector
+                            value={accountEditCurrency}
+                            onChange={setAccountEditCurrency}
+                            options={currencyCatalogCodes}
+                            ariaLabel="Select account currency"
+                            showCurrencyCode
+                            className="accounts-form-currency-field__selector"
+                            buttonClassName="accounts-form-currency-field__button"
+                            menuClassName="accounts-form-currency-field__menu"
+                            optionClassName="accounts-form-currency-field__option"
+                            menuAlignment="end"
+                          />
+                </div>
+                <button className="button button-primary" type="submit" disabled={accountEditBusy}>
+                  {accountEditBusy ? "Saving..." : "Save changes"}
+                </button>
+              </form>
+            </section>
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Add balance</h5>
+                <ActionIcon name="plus" />
+              </div>
+              <div className="accounts-drawer__mini-form">
+                <label>
+                  Balance
+                  <input
+                    ref={balanceInputRef}
+                    value={balanceDraft}
+                    onChange={(event) => setBalanceDraft(event.target.value)}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                  />
+                </label>
+                <button
+                  className="button button-secondary button-small"
+                  type="button"
+                  onClick={() => {
+                    setAccountEditBalance(balanceDraft);
+                    void saveAccountChanges();
+                  }}
+                >
+                  Update balance
+                </button>
+              </div>
+            </section>
+
+            {selectedAccount && selectedWorkspaceId ? <AccountBankSync mode="sync" accountId={selectedAccount.id} workspaceId={selectedWorkspaceId} onSynced={() => loadWorkspaceData(selectedWorkspaceId, {silent:true,awaitHydration:true})} /> : null}
+
+            {openingBalanceEntry ? (
+              <section className="accounts-drawer__section">
+                <div className="accounts-drawer__section-head">
+                  <h5>Opening balance</h5>
+                  <ActionIcon name="history" />
+                </div>
+                <div className="accounts-drawer__note">
+                  <strong>{formatDate(openingBalanceEntry.date)}</strong>
+                  <span>{formatAccountAmount(parseAmount(openingBalanceEntry.amount), selectedAccount?.currency)}</span>
+                </div>
+              </section>
+            ) : null}
+
+            {latestCheckpoint ? (
+              <section className="accounts-drawer__section">
+                <div className="accounts-drawer__section-head">
+                  <h5>{getCheckpointDocumentFamily(latestCheckpoint).label}</h5>
+                  <ActionIcon name="calendar" />
+                </div>
+                <div className="accounts-drawer__checkpoint">
+                  <div className={`accounts-drawer__checkpoint-hero is-${getCheckpointSummary(latestCheckpoint).tone}`}>
+                    <div className="accounts-drawer__checkpoint-hero-head">
+                      <div className={`accounts-checkpoint-badge is-${getCheckpointSummary(latestCheckpoint).tone}`}>
+                        <span className="accounts-checkpoint-badge__icon">
+                          <ActionIcon name={getCheckpointSummary(latestCheckpoint).icon} />
+                        </span>
+                        <div>
+                          <strong>{getCheckpointSummary(latestCheckpoint).label}</strong>
+                          <span>{getCheckpointSummary(latestCheckpoint).detail}</span>
+                        </div>
+                      </div>
+                      <span className={`accounts-summary-chip is-${getCheckpointTone(latestCheckpoint.status)}`}>
+                        {latestCheckpoint.rowCount} rows
+                      </span>
+                    </div>
+                    <div className="accounts-drawer__checkpoint-grid">
+                      <div>
+                        <span>{getCheckpointDocumentFamily(latestCheckpoint).dateLabel}</span>
+                        <strong>{formatDate(latestCheckpoint.statementEndDate ?? latestCheckpoint.createdAt)}</strong>
+                      </div>
+                      <div>
+                        <span>{getCheckpointDocumentFamily(latestCheckpoint).balanceLabel}</span>
+                        <strong>{formatAccountAmount(parseAmount(latestCheckpoint.endingBalance), selectedAccount?.currency)}</strong>
+                      </div>
+                      <div>
+                        <span>Difference</span>
+                        <strong>
+                          {latestCheckpoint.status === "mismatch"
+                            ? latestCheckpoint.mismatchReason ?? "Mismatch detected"
+                            : latestCheckpoint.status === "reconciled"
+                              ? "Matches ledger"
+                              : "Pending review"}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="accounts-drawer__actions">
+                    <button className="button button-secondary button-small" type="button" onClick={openFullAccountPage}>
+                      {latestCheckpoint.status === "mismatch" ? "Review mismatch" : "View checkpoint"}
+                    </button>
+                    <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
+                      Upload files
+                    </button>
+                    <button
+                      className="button button-secondary button-small"
+                      type="button"
+                      onClick={() => balanceInputRef.current?.focus()}
+                    >
+                      Add balance
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Recent imports</h5>
+                <ActionIcon name="upload" />
+              </div>
+              {selectedAccountImportSummaries.length > 0 ? (
+                <div className="accounts-drawer__imports">
+                  {selectedAccountImportSummaries.slice(0, 3).map((summary) => (
+                    <div key={summary.key} className="accounts-drawer__import">
+                      <div>
+                        <strong>{summary.label}</strong>
+                        <span>{summary.count} rows · {formatDate(summary.latestDate)}</span>
+                      </div>
+                      <strong>{formatAccountAmount(summary.total, selectedAccount?.currency)}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="accounts-drawer__note">No uploaded import batches are linked to this account yet.</p>
+              )}
+              <div className="accounts-drawer__actions">
+                <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
+                  Upload files
+                </button>
+                <button className="button button-secondary button-small" type="button" onClick={openFullAccountPage} disabled={!selectedAccount}>
+                  Open account page
+                </button>
+              </div>
+            </section>
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Delete account</h5>
+                <ActionIcon name="warning" />
+              </div>
+              <p className="accounts-drawer__note">This removes the account and its linked transactions from the workspace.</p>
+              {accountDeleteConfirmOpen ? (
+                <div className="detail-warning-box accounts-drawer__delete-confirm">
+                  <div className="detail-warning-box__header">
+                    <span className="detail-warning-box__icon" aria-hidden="true">
+                      <ActionIcon name="warning" />
+                    </span>
+                    <strong>Delete this account?</strong>
+                  </div>
+                  <p>
+                    This will remove <strong>{selectedAccount?.name ?? "this account"}</strong> from the workspace and also delete its linked transactions.
+                  </p>
+                  <p>If you change your mind later, you can always add it again or re-import the original file.</p>
+                  <div className="detail-warning-actions">
+                    <button
+                      className="button button-secondary button-small"
+                      type="button"
+                      onClick={() => setAccountDeleteConfirmOpen(false)}
+                      disabled={accountDeleteBusy}
+                    >
+                      Cancel
+                    </button>
+                    <button className="button button-danger button-small" type="button" onClick={() => void deleteAccount()} disabled={accountDeleteBusy}>
+                      {accountDeleteBusy ? "Deleting..." : "Yes, delete account"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="button button-secondary button-small accounts-drawer__delete"
+                  type="button"
+                  onClick={() => setAccountDeleteConfirmOpen(true)}
+                  disabled={accountDeleteBusy}
+                >
+                  Delete account
+                </button>
+              )}
+            </section>
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Recent transactions</h5>
+                <ActionIcon name="history" />
+              </div>
+              <div className="accounts-drawer__transactions">
+                {selectedAccountTransactions.length > 0 ? (
+                  selectedAccountTransactions.slice(0, 5).map((transaction) => (
+                    <div key={transaction.id} className="accounts-drawer__transaction">
+                      <div>
+                        <strong>
+                          {getEffectiveTransactionMerchantName({
+                            merchantClean: transaction.merchantClean,
+                            merchantRaw: transaction.merchantRaw,
+                            rawPayload: transaction.rawPayload as never,
+                          }) ?? transaction.merchantRaw}
+                        </strong>
+                        <span>
+                          {formatDate(transaction.date)} · {transaction.type}
+                          {transaction.merchantClean && transaction.merchantClean !== transaction.merchantRaw
+                            ? ` · ${transaction.merchantRaw}`
+                            : ""}
+                        </span>
+                      </div>
+                      <strong>{formatAccountAmount(parseAmount(transaction.amount), selectedAccountCurrency)}</strong>
+                    </div>
+                  ))
+                ) : (
+                  <p className="accounts-drawer__note">No recent transactions are linked to this account yet.</p>
+                )}
+              </div>
+            </section>
+          </aside>
+        </div>
+      ) : null}
+
+      {addOpen ? (
+        <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setAddOpen(false)}>
+          <section
+            className="modal-card modal-card--wide accounts-add-modal glass"
+            role={mobileCreation ? "region" : "dialog"}
+            aria-modal={mobileCreation ? undefined : true}
+            aria-labelledby="add-account-title"
+            ref={addRef}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MobileSheetHandle onClose={() => setAddOpen(false)} />
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Accounts</p>
+                <h4 id="add-account-title">Add account</h4>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close add account">
+                <InterfaceIcon name="close" />
+              </button>
+            </div>
+
+            <AddEntryMethods key={selectedWorkspaceId} kind="accounts" workspaceId={selectedWorkspaceId} accounts={accounts} onUploadFiles={(files) => openImportFiles(files)} onboarding={Boolean(searchParams?.get("onboarding"))} initialMethod={searchParams?.get("finverse") || searchParams?.get("onboarding") === "connect" ? "connect" : "manual"} onAccountsSynced={() => loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true })}>
+            <div className="accounts-add-grid">
+              <AccountCreationForm onSave={saveManualAccount}>
+                {(isSaving, createAnotherManualAccount) => (<>
+                <div
+                  className="accounts-add-layout"
+                  style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, width: "100%" }}
+                >
+                  <div className="accounts-add-fields" style={{ width: "100%", minWidth: 0 }}>
+                          <label className="accounts-add-fields__type-field" >
+                            <span>Account type</span>
+                            <AccountTypePicker value={manualType} onChange={setManualType} />
+                          </label>
+
+                    <div className="accounts-add-fields__row accounts-add-fields__row--amount" style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}>
+                      <label className="accounts-add-fields__currency">
+                        <span className="sr-only">Currency</span>
+                        <div className="accounts-form-currency-field accounts-form-currency-field--inline">
+                          <CurrencySelector
+                            value={manualCurrency}
+                            onChange={setManualCurrency}
+                            options={currencyCatalogCodes}
+                            ariaLabel="Select account currency"
+                            showCurrencyCode
+                            className="accounts-form-currency-field__selector"
+                            buttonClassName="accounts-form-currency-field__button"
+                            menuClassName="accounts-form-currency-field__menu"
+                            optionClassName="accounts-form-currency-field__option"
+                            compact
+                            showGroupedSections
+                            portalMenu
+                          />
+                        </div>
+                      </label>
+                      <div className="accounts-add-fields__amount-grow" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
+                        <label className="accounts-add-fields__balance">
+                          {manualType === "investment" ? "Purchase Value" : manualType === "receivable" ? "Amount owed to you" : isLiabilityAccountType(manualType) ? "Outstanding balance" : "Current balance"}
+                          <input
+                            value={manualBalance}
+                            onChange={(event) => setManualBalance(event.target.value)}
+                            inputMode="decimal"
+                            placeholder="0.00"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <div className="accounts-add-fields__name-row" style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}>
+                      <span className="accounts-add-brand-inline" aria-label="Account logo preview">
+                        <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
+                      </span>
+                      <div className="accounts-add-fields__name-grow" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
+                        <InstitutionAutocomplete
+                          label={manualType === "investment" ? investmentNameLabel(manualInvestmentSubtype) : "Account name"}
+                          value={manualName}
+                          onChange={setManualName}
+                          onSelectSuggestion={applyManualNameSuggestion}
+                          placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO"}
+                          variant="account"
+                        />
+                      </div>
+                    </div>
+                    {manualType !== "cash" ? (
+                      <InstitutionAutocomplete
+                        label="Institution"
+                        value={manualInstitution}
+                        onChange={value => { institutionEdited.current = true; setManualInstitution(value); }}
+                        placeholder={manualType === "investment" ? "Example: COL Financial" : "Example: BPI"}
+                        variant={manualType === "investment" ? "investment" : "account"}
+                      />
+                    ) : null}
+                    <details className="accounts-add-advanced">
+                      <summary>More details</summary>
+                      <div className="accounts-add-advanced__body">
+                        {manualType === "investment" ? (                    <div className="accounts-investment-fields">
+                      {manualInvestmentFieldConfigs.map((field) => {
+                        const value =
+                          field.key === "investmentSymbol"
+                            ? manualInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? manualInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? manualInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? manualInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? manualInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? manualInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? manualInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? manualInvestmentMaturityValue
+                                          : "";
+
+                        const onChange =
+                          field.key === "investmentSymbol"
+                            ? setManualInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? setManualInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? setManualInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? setManualInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? setManualInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? setManualInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? setManualInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? setManualInvestmentMaturityValue
+                                          : setManualInvestmentSymbol;
+
+                        return (
+                          <label key={field.key}>
+                            {field.key === "investmentSymbol" ? "Ticker Name" : field.label}
+                            <input
+                              value={value}
+                              onChange={(event) => onChange(event.target.value)}
+                              placeholder={field.placeholder}
+                              inputMode={field.inputMode}
+                              type={field.type}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>) : null}
+                        <AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind: "account", fields: {name:manualName,institution:manualInstitution,type:manualType,currency:manualCurrency,balance:manualBalance}}} />
+                        <div
+                          className="accounts-add-fields__row accounts-add-fields__row--meta"
+                          style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}
+                        >
+                          <label className="accounts-add-fields__account-number" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
+                            <span className="field-label-inline">
+                              {manualAccountReference.label} <span className="field-optional">(optional)</span>
+                            </span>
+                            <input
+                              value={manualAccountNumber}
+                              onChange={(event) => setManualAccountNumber(event.target.value)}
+                              inputMode="numeric"
+                              placeholder={manualAccountReference.placeholder}
+                            />
+                            {manualAccountReference.helper ? <span className="field-help">{manualAccountReference.helper}</span> : null}
+                          </label>
+                        </div>
+                        {manualTypeGuidance ? <p className="modal-copy">{manualTypeGuidance}</p> : null}
+                        {manualScheduleConfig ? (
+                          <div className="accounts-add-schedule">
+                            <label className="accounts-add-schedule__toggle">
+                              <input
+                                type="checkbox"
+                                checked={manualScheduleEnabled}
+                                onChange={(event) => setManualScheduleEnabled(event.target.checked)}
+                              />
+                              <span>{manualScheduleConfig.toggleLabel}</span>
+                            </label>
+                            <p className="field-help">{manualScheduleConfig.helper}</p>
+                            {manualScheduleEnabled ? (
+                              <div className="accounts-add-schedule__fields">
+                                <div className="accounts-add-fields__row">
+                                  <label>
+                                    {manualScheduleConfig.dueDateLabel}
+                                    <input
+                                      type="date"
+                                      value={manualScheduleDueDate}
+                                      onChange={(event) => setManualScheduleDueDate(event.target.value)}
+                                    />
+                                  </label>
+                                  <label>
+                                    Repeats
+                                    <select
+                                      value={manualScheduleRecurrence}
+                                      onChange={(event) =>
+                                        setManualScheduleRecurrence(
+                                          event.target.value as (typeof ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS)[number]["value"]
+                                        )
+                                      }
+                                    >
+                                      {ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                </div>
+                                <div className="accounts-add-fields__row">
+                                  <label>
+                                    {manualScheduleConfig.amountLabel} <span className="field-optional">(optional)</span>
+                                    <input
+                                      value={manualScheduleAmount}
+                                      onChange={(event) => setManualScheduleAmount(event.target.value)}
+                                      inputMode="decimal"
+                                      placeholder={manualScheduleConfig.amountPlaceholder}
+                                    />
+                                  </label>
+                                  <label>
+                                    {manualScheduleConfig.counterpartyLabel}
+                                    <input
+                                      value={manualScheduleCounterparty}
+                                      onChange={(event) => setManualScheduleCounterparty(event.target.value)}
+                                      placeholder={manualScheduleConfig.counterpartyPlaceholder}
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </details>
+                  </div>
+                </div>
+                {manualType === "investment" ? (
+                  <>
+                    <label>
+                      Investment subtype
+                      <select
+                        value={manualInvestmentSubtype}
+                        onChange={(event) => setManualInvestmentSubtype(event.target.value as InvestmentSubtype)}
+                      >
+                        {INVESTMENT_SUBTYPES.map((subtype) => (
+                          <option key={subtype} value={subtype}>
+                            {getInvestmentSubtypeLabel(subtype)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {manualTickerMatches.length > 1 ? <label>Which share class do you own?<select value={manualInvestmentSymbol} onChange={event => { automaticInvestmentTicker.current = ""; setManualInvestmentSymbol(event.target.value); }}><option value="">Choose a share class</option>{manualTickerMatches.map(match => <option key={match.symbol} value={match.symbol}>{match.name} ({match.symbol})</option>)}</select></label> : null}
+                    {manualInvestmentSymbol ? <p className="field-help">{investmentTickerHint(manualName, manualInvestmentSubtype, manualCurrency, manualInvestmentSymbol)}</p> : null}
+                    <p className="field-help">Purchase Value is the total you paid. Add a ticker and quantity in More Details to calculate the current value when a matching quote is available.</p>
+
+                  </>
+                ) : null}
+                <div className="accounts-add-actions">
+                  <div className="accounts-add-actions__buttons">
+                    <button className="button button-secondary" type="button" onClick={() => void createAnotherManualAccount()} disabled={isSaving || !manualName.trim()}>
+                      {isSaving ? "Saving..." : "Add another"}
+                    </button>
+                    <button className="button button-primary" type="submit" disabled={isSaving || !manualName.trim()}>
+                      {isSaving ? "Saving..." : "Add account"}
+                    </button>
+                  </div>
+                </div>
+                {addAccountError ? (
+                  <div className="accounts-drawer__notice" role="alert">
+                    <strong>Unable to save account</strong>
+                    <p>{addAccountError}</p>
+                  </div>
+                ) : null}
+              </>)}
+              </AccountCreationForm>
+            </div>
+            </AddEntryMethods>
+          </section>
+        </div>
+      ) : null}
+
+      <PageFileDropZone
+        enabled={true}
+        title="Drop statement files anywhere"
+        onFilesDropped={(files) => openImportFiles(files, true)}
+      />
+
+      <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
+
+      <ImportFilesModal
+        key={importSessionId}
+        open={importOpen}
+        workspaceId={selectedWorkspaceId}
+        accounts={accounts}
+        accountRules={accountRules}
+        defaultAccountId={null}
+        initialFiles={importSeedFiles}
+        onInitialFilesConsumed={() => setImportSeedFiles(null)}
+        backgroundOnly={importBackgroundOnly}
+        onClose={() => {
+          setImportOpen(false);
+          setImportSeedFiles(null);
+          setImportBackgroundOnly(false);
+        }}
+        onImported={async (summary) => {
+          const importedCurrencies = getUploadSummaryCurrencies(summary);
+          if (importedCurrencies.length === 1) {
+            setSelectedCurrency(importedCurrencies[0]);
+            persistSelectedCurrency(selectedWorkspaceId, importedCurrencies[0]);
+          }
+          const importedAccountSummaries =
+            summary.accountSummaries && summary.accountSummaries.length > 1
+              ? summary.accountSummaries.map((accountSummary) => ({
+                  ...summary,
+                  accountId: accountSummary.accountId,
+                  accountName: accountSummary.accountName,
+                  institution: accountSummary.institution,
+                  accountNumber: accountSummary.accountNumber,
+                  accountType: accountSummary.accountType,
+                  currency: accountSummary.currency,
+                  balance: accountSummary.balance,
+                  rowsImported: accountSummary.rowsImported,
+                  accountSummaries: undefined,
+                  optimistic: false,
+                  optimisticAccountId: null,
+                  previewTransactions: [],
+                }))
+              : [summary];
+          const optimisticAccounts = importedAccountSummaries
+            .map((accountSummary) => buildOptimisticImportedAccount(accountSummary, selectedWorkspaceId))
+            .filter((account): account is Account => Boolean(account));
+          const importedAccountIds = new Set(optimisticAccounts.map((account) => account.id));
+          const previewTransactions = summary.previewTransactions ?? [];
+          const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+          let nextAccountsSnapshot: Account[] | null = null;
+          let nextTransactionsSnapshot: Transaction[] | null = null;
+
+          flushSync(() => {
+            setAccountsLoading(false);
+            // The previous statement checkpoint would otherwise hide the newly
+            // confirmed balance until the next Accounts request finishes.
+            setStatementCheckpoints((current) =>
+              current.filter(
+                (checkpoint) =>
+                  !checkpoint.accountId || !importedAccountIds.has(checkpoint.accountId)
+              )
+            );
+            if (optimisticAccounts.length > 0) {
+              setAccounts((current) =>
+                (nextAccountsSnapshot = current.filter((account) => {
+                  if (summary.optimisticAccountId && account.id === summary.optimisticAccountId) {
+                    return false;
+                  }
+
+                  if (account.source === "upload") {
+                    return !optimisticAccounts.some(
+                      (importedAccount) =>
+                        getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency) ===
+                        getImportedAccountKey(
+                          importedAccount.name,
+                          importedAccount.institution,
+                          importedAccount.accountNumber,
+                          importedAccount.type,
+                          importedAccount.currency
+                        )
+                    );
+                  }
+
+                  return true;
+                }))
+              );
+            }
+
+            if (importedAccountId) {
+              setTransactions((current) => {
+                if (previewTransactions.length === 0) {
+                  nextTransactionsSnapshot = current;
+                  return current;
+                }
+                const next = mergeImportedPreviewTransactions(current, previewTransactions);
+                nextTransactionsSnapshot = next;
+                return next;
+              });
+            } else if (previewTransactions.length > 0) {
+              setTransactions((current) => {
+                const next = mergeImportedPreviewTransactions(current, previewTransactions);
+                nextTransactionsSnapshot = next;
+                return next;
+              });
+            } else {
+              setTransactions((current) => {
+                nextTransactionsSnapshot = current;
+                return current;
+              });
+            }
+
+            if (optimisticAccounts.length > 0) {
+              setAccounts((current) => {
+                const next = optimisticAccounts.reduce(
+                  (accountsSoFar, importedAccount) => {
+                    const matchingSummary = importedAccountSummaries.find(
+                      (accountSummary) =>
+                        accountSummary.accountId === importedAccount.id ||
+                        getImportedAccountKey(
+                          accountSummary.accountName,
+                          accountSummary.institution,
+                          accountSummary.accountNumber,
+                          accountSummary.accountType,
+                          accountSummary.currency
+                        ) ===
+                          getImportedAccountKey(
+                            importedAccount.name,
+                            importedAccount.institution,
+                            importedAccount.accountNumber,
+                            importedAccount.type,
+                            importedAccount.currency
+                          )
+                    );
+                    return mergeOptimisticImportedAccount(accountsSoFar, importedAccount, {
+                      authoritativeBalance:
+                        matchingSummary?.optimistic === false &&
+                        matchingSummary.balance !== null &&
+                        matchingSummary.balance !== undefined,
+                    });
+                  },
+                  current
+                );
+                nextAccountsSnapshot = next;
+                return next;
+              });
+            } else {
+              setAccounts((current) => {
+                nextAccountsSnapshot = current;
+                return current;
+              });
+            }
+
+            if (
+              drawerAccountId &&
+              previewTransactions.length > 0 &&
+              (drawerAccountId === importedAccountId || drawerAccountId === summary.optimisticAccountId)
+            ) {
+              setDrawerTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
+            }
+          });
+
+          const settledAccountId =
+            (nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null) ??
+            (summary.accountId && !summary.accountId.startsWith("optimistic-") ? summary.accountId : null);
+          const settledSummary =
+            settledAccountId && settledAccountId !== summary.accountId
+              ? {
+                  ...summary,
+                  accountId: settledAccountId,
+                  optimistic: false,
+                  optimisticAccountId: null,
+                }
+              : summary;
+          setPendingImportSummary(settledSummary);
+
+          if (selectedWorkspaceId && nextAccountsSnapshot && nextTransactionsSnapshot) {
+            const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(selectedWorkspaceId);
+            persistTransactionsWorkspaceCache(selectedWorkspaceId, {
+              accounts: nextAccountsSnapshot,
+              categories: cachedTransactionsWorkspace?.categories ?? [],
+              transactions: nextTransactionsSnapshot,
+              imports: cachedTransactionsWorkspace?.imports ?? [],
+            });
+          }
+
+          setImportRefreshInFlight(true);
+          // Do not report success while Accounts still displays a pre-import
+          // balance. Follow the authoritative projection with bounded backoff
+          // instead of assuming it will settle within one fixed retry.
+          try {
+            await refreshImportedAccountProjection(settledSummary);
+          } finally {
+            setImportRefreshInFlight(false);
+          }
+          schedulePostImportWorkspaceReconciliation(selectedWorkspaceId);
+          // Invalidate prefetched server pages such as Recurring after an
+          // account inventory changes. Accounts itself is refreshed above
+          // because router.refresh() preserves this client component's state.
+          router.refresh();
+          setMessage("Import complete. Accounts and Transactions are updated.");
+        }}
+      />
+    </CloverShell>
+  );
+}

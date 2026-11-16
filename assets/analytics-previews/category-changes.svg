@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-labelledby="title desc">
+  <title id="title">Category Changes Preview</title>
+  <desc id="desc">Minimal category delta bars preview</desc>
+  <rect width="320" height="200" rx="24" fill="#ffffff"/>
+  <g font-family="Inter, Arial, sans-serif">
+    <text x="24" y="30" fill="#5d6b75" font-size="12" letter-spacing=".16em">CHANGES</text>
+    <line x1="24" y1="120" x2="296" y2="120" stroke="#d9e7eb" stroke-width="2"/>
+    <rect x="46" y="66" width="32" height="54" rx="12" fill="#c64f6e" opacity=".88"/>
+    <rect x="106" y="84" width="32" height="36" rx="12" fill="#03a8c0" opacity=".88"/>
+    <rect x="166" y="52" width="32" height="68" rx="12" fill="#0e9f6e" opacity=".88"/>
+    <rect x="226" y="94" width="32" height="26" rx="12" fill="#d08b00" opacity=".88"/>
+    <g font-size="11" fill="#5d6b75">
+      <text x="36" y="148">Food</text>
+      <text x="94" y="148">Travel</text>
+      <text x="150" y="148">Shopping</text>
+      <text x="214" y="148">Bills</text>
+    </g>
+  </g>
+</svg>

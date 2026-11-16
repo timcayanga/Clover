@@ -1,0 +1,31 @@
+CHINA BANK
+STATEMENT OF ACCOUNT
+Synthetic account holder EXAMPLE PERSON
+Statement Period: Jul. 01, 2026 To Jul. 31, 2026
+Account No. : 0123-00-00042-1 1,000.00 0.00 1,000.00 2,000.00
+Beginning Balance 1,000.00
+Jul 01 Cash Deposit 0.00 100.00 1,100.00
+Jul 01 Cash Deposit 0.00 100.00 1,200.00
+Jul 02 Cash Deposit 0.00 100.00 1,300.00
+Jul 03 Cash Deposit 0.00 100.00 1,400.00
+Jul 04 Cash Deposit 0.00 100.00 1,500.00
+Jul 05 Cash Deposit 0.00 100.00 1,600.00
+Jul 06 Cash Deposit 0.00 100.00 1,700.00
+Jul 07 Cash Deposit 0.00 100.00 1,800.00
+Jul 08 Cash Deposit 0.00 100.00 1,900.00
+Jul 09 Cash Deposit 0.00 100.00 2,000.00
+Ending Balance 2,000.00
+Statement Period: Aug. 01, 2026 To Aug. 31, 2026
+Account No. : 0123-00-00042-1 2,000.00 0.00 1,000.00 3,000.00
+Beginning Balance 2,000.00
+Aug 01 Cash Deposit 0.00 100.00 2,100.00
+Aug 01 Cash Deposit 0.00 100.00 2,200.00
+Aug 02 Cash Deposit 0.00 100.00 2,300.00
+Aug 03 Cash Deposit 0.00 100.00 2,400.00
+Aug 04 Cash Deposit 0.00 100.00 2,500.00
+Aug 05 Cash Deposit 0.00 100.00 2,600.00
+Aug 06 Cash Deposit 0.00 100.00 2,700.00
+Aug 07 Cash Deposit 0.00 100.00 2,800.00
+Aug 08 Cash Deposit 0.00 100.00 2,900.00
+Aug 09 Cash Deposit 0.00 100.00 3,000.00
+Ending Balance 3,000.00

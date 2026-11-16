@@ -1,0 +1,11 @@
+Page 1 of 1
+As at 31 Dec 2025
+Details of Your POSB Payroll Account Account No.: 000-00123-4
+DATE DETAILS OF TRANSACTIONS WITHDRAWAL($) DEPOSIT($) BALANCE($)
+Balance Brought Forward 100.00
+Balance Carried Forward 80.22
+POSB_TXN | 09 Dec | outgoing | 10.00 | 90.00 | FAST Payment / Receipt Wise:FAKE Transfer INVENTED001 Other
+POSB_TXN | 09 Dec | outgoing | 10.00 | 80.00 | FAST Payment / Receipt Wise:FAKE Transfer INVENTED002 Other
+POSB_TXN | 10 Dec | outgoing | 5.00 | 75.00 | Cash Withdrawal INVENTED ATM
+POSB_TXN | 27 Dec | incoming | 5.20 | 80.20 | Salary Invented Shop
+POSB_TXN | 31 Dec | incoming | 0.02 | 80.22 | Interest Earned

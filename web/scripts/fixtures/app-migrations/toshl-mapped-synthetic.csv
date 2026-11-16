@@ -1,0 +1,5 @@
+Migration Source,Date,Description,Amount,Currency,Account,Type,Category,Subcategory,Tags,Excluded,Transaction ID
+spreadsheet,2026-09-01,Lunch,50000,IDR,Toshl Cash,Expense,Meals,Lunch,travel;work,false,toshl-1
+spreadsheet,2026-09-02,Salary,100000,IDR,Toshl Cash,Income,Work,,monthly,false,toshl-2
+spreadsheet,2026-09-03,Transfer,500,IDR,Toshl Cash,Transfer Out,Transfers,,,false,toshl-3
+spreadsheet,2026-09-03,Transfer,500,IDR,Toshl Savings,Transfer In,Transfers,,,false,toshl-4

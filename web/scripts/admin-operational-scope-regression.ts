@@ -1,0 +1,134 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const readSource = (path: string) =>
+  readFileSync(resolve(process.cwd(), path), "utf8");
+
+const adminLayoutSource = readSource("app/admin/layout.tsx");
+const adminStyles = readSource("app/admin/admin.css");
+const globalStyles = readSource("app/globals.css");
+
+assert.match(adminLayoutSource, /import "\.\/admin\.css"/);
+assert.match(adminLayoutSource, /className="admin-root"/);
+assert.doesNotMatch(globalStyles, /@import url\("\/admin\.css"\)/);
+assert.match(adminStyles, /\.admin-root\s*\{/);
+assert.match(adminStyles, /\.admin-kpi-grid\s*\{/);
+assert.match(adminStyles, /\.admin-dashboard-grid\s*\{/);
+assert.match(adminStyles, /@media \(max-width: 760px\)/);
+assert.match(adminStyles, /overflow-x: auto/);
+
+const scopeSource = readSource("lib/admin-data-scope.ts");
+const adminSource = readSource("lib/admin.ts");
+assert.match(adminSource, /CLOVER_DEPLOYMENT_ENVIRONMENT === "staging"/);
+assert.match(adminSource, /VERCEL_ENV === "preview"/);
+assert.match(scopeSource, /@placeholder\.local/);
+assert.match(scopeSource, /@example\.com/);
+assert.match(scopeSource, /local-admin/);
+assert.match(scopeSource, /staging-guest/);
+assert.match(scopeSource, /seed-demo-user/);
+assert.match(scopeSource, /getCurrentDeploymentErrorWhere/);
+assert.match(scopeSource, /deploymentId: build\.deploymentId/);
+
+for (const file of ["lib/admin-command-center.ts", "lib/admin-analytics.ts"]) {
+  const source = readSource(file);
+  assert.match(source, /await customerAnalyticsUserWhere\(getAdminDataEnvironment\(\)\)/);
+}
+// Operational inspection still includes staff/test records; customer metrics use the stricter scope.
+assert.match(readSource("lib/admin-operations.ts"), /getAdminReal(?:User|Workspace)Where/);
+
+const commandCenterSource = readSource("lib/admin-command-center.ts");
+assert.match(commandCenterSource, /getCurrentDeploymentErrorWhere/);
+assert.match(commandCenterSource, /Current deploy errors/);
+
+const analyticsSource = readSource("lib/admin-analytics.ts");
+assert.match(analyticsSource, /usersStartedTracking/);
+assert.match(analyticsSource, /usersWithRecentTransactions/);
+assert.match(analyticsSource, /getAnalyticsBetaStartedAt/);
+assert.match(analyticsSource, /betaParticipantUser/);
+assert.match(analyticsSource, /betaTransaction/);
+assert.match(analyticsSource, /betaImport/);
+assert.match(analyticsSource, /getPostHogLiveAnalytics\(getAdminDataEnvironment\(\)\)/);
+assert.match(analyticsSource, /customerAnalyticsUserWhere\(getAdminDataEnvironment\(\)\)/);
+assert.match(
+  analyticsSource,
+  /Added data in 30d/,
+);
+assert.doesNotMatch(analyticsSource, /name: "Import magic"/);
+assert.doesNotMatch(
+  analyticsSource,
+  /\{ label: "Items awaiting review", count: reviewQueueItems \}/,
+);
+
+const usersSource = readSource("lib/admin-users.ts");
+assert.match(usersSource, /const ACTIVE_TRANSACTION_WHERE:[\s\S]*?deletedAt: null,[\s\S]*?\};/);
+assert.match(usersSource, /const realUserWhere = getAdminRealUserWhere\(\)/);
+assert.match(usersSource, /adminRealUserSqlPredicate/);
+assert.match(usersSource, /getCurrentDeploymentErrorWhere/);
+assert.match(
+  usersSource,
+  /const where: Prisma\.UserWhereInput = \{\s*\.\.\.getAdminRealUserWhere\(\),/,
+);
+
+const inquiriesSource = readSource("lib/contact-inquiries.ts");
+assert.match(inquiriesSource, /items: items\.map\(toAdminContactInquiry\)/);
+assert.match(inquiriesSource, /getAdminContactInquiryAttachment/);
+assert.match(inquiriesSource, /environment: getDeploymentEnvironment\(\)/);
+assert.match(inquiriesSource, /environment: getAdminDataEnvironment\(\)/);
+
+const dataQaSource = readSource("lib/admin-data-qa.ts");
+assert.match(dataQaSource, /workspace: getAdminRealWorkspaceWhere\(\)/);
+assert.match(dataQaSource, /status: \{ not: "deleted" \}/);
+
+const dataQaRunRouteSource = readSource("app/api/admin/data-qa/[runId]/route.ts");
+assert.match(dataQaRunRouteSource, /getCurrentProductionRunWhere/);
+assert.match(dataQaRunRouteSource, /workspace: \{ user: \{ environment: getAdminDataEnvironment\(\) \} \}/);
+
+const dataQaFileRouteSource = readSource("app/api/admin/data-qa/file/[importFileId]/route.ts");
+assert.match(dataQaFileRouteSource, /await requireAdminAuth\(\)/);
+assert.match(dataQaFileRouteSource, /status: \{ not: "deleted" \}/);
+assert.match(dataQaFileRouteSource, /environment: getAdminDataEnvironment\(\)/);
+assert.doesNotMatch(dataQaFileRouteSource, /assertWorkspaceAccess/);
+
+const sampleCorpusRouteSource = readSource("app/api/admin/data-qa/sample-corpus/route.ts");
+assert.match(sampleCorpusRouteSource, /environment: getAdminDataEnvironment\(\)/);
+assert.match(sampleCorpusRouteSource, /status: \{ not: "deleted" \}/);
+assert.doesNotMatch(sampleCorpusRouteSource, /listAllImportFilesCompat/);
+
+const supportSource = readSource("lib/admin-support.ts");
+assert.match(supportSource, /transactions: \{\s*where: \{ deletedAt: null \}/);
+
+const inquiriesComponentSource = readSource(
+  "components/admin-inquiries-console.tsx",
+);
+assert.match(inquiriesComponentSource, /View attachment/);
+assert.doesNotMatch(inquiriesComponentSource, /attachment\.dataUrl/);
+// Search is server-paginated now: preserve all returned rows and encode the submitted query.
+assert.ok(inquiriesComponentSource.includes("query=${encodeURIComponent(search)}"));
+assert.match(inquiriesComponentSource, /const visible = items;/);
+assert.match(inquiriesComponentSource, /setSearch\(query\);\s*setPage\(1\)/);
+
+const attachmentRouteSource = readSource(
+  "app/api/admin/inquiries\/[inquiryId]\/attachment/route.ts",
+);
+assert.match(attachmentRouteSource, /await requireAdminAuth\(\)/);
+assert.match(attachmentRouteSource, /private, no-store/);
+assert.match(attachmentRouteSource, /X-Content-Type-Options/);
+
+const importMutationRouteSource = readSource(
+  "app/api/imports\/[importId]\/route.ts",
+);
+assert.equal(
+  importMutationRouteSource.match(/await assertWorkspaceAccess\(/g)?.length,
+  2,
+);
+assert.match(
+  importMutationRouteSource,
+  /await assertWorkspaceAccess\(userId, String\(existingImport\.workspaceId\)\)/,
+);
+assert.match(
+  importMutationRouteSource,
+  /await assertWorkspaceAccess\(userId, String\(importFile\.workspaceId\)\)/,
+);
+
+console.log("Admin operational scope regression passed.");

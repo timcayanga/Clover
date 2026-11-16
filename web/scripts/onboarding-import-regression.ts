@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {formatImportResultHeadline} from '@/lib/import-result-summary';
+import {hasVisibleImportData} from '@/lib/import-visibility-rules';
+const usd = {rowsImported: 2, expenseTotal:12.5, previewTransactions:[{amount:'12.50',type:'expense',currency:'USD'}]};
+assert.match(formatImportResultHeadline(usd), /\$12\.50 spent/);
+assert.doesNotMatch(formatImportResultHeadline(usd), /₱/);
+assert.equal(formatImportResultHeadline({...usd,previewTransactions:[...usd.previewTransactions,{amount:'20',type:'expense',currency:'PHP'}]}), '2 transactions imported');
+assert.equal(formatImportResultHeadline({rowsImported:2,expenseTotal:12.5}), '2 transactions imported');
+const item = {id:'qa',file:{name:'qa.csv',type:'text/csv'},importMode:'statement' as const,status:'importing' as const,targetAccountId:'existing-account',importedRows:2,confirmationState:'staged' as const,progress:75,importFileId:'qa'};
+assert.equal(hasVisibleImportData(item,null),false,'local parsed row counts must not certify persistence');
+assert.equal(hasVisibleImportData({...item,status:'done',confirmationState:'confirmed'},null),true);
+assert.equal(hasVisibleImportData({...item,status:'error'},null),false);
+console.log('[PASS] onboarding import currency and persistence checks');

@@ -1,0 +1,478 @@
+import { TransactionBulkDestination } from "../../src/transaction-bulk-destination";
+import { mergeCommittedReceiptRows } from "../../src/committed-receipt-rows";
+import { beginTelemetry } from "../../../shared/analytics";
+import { TransactionPagination } from "../../src/transaction-pagination";
+import { MerchantLogo } from "../../src/merchant-logo";
+import { SwipeDeleteRow } from "../../src/swipe-delete-row";
+import { reportTransactionFilters } from "../../src/report-drilldown";
+import { AdaptiveDetail, useDetailPane } from "../../src/adaptive-detail";
+import { useAdaptiveLayout } from "../../src/adaptive";
+import { registerScreenRefresh } from "../../src/screen-refresh";
+import { transactionReviewReasons } from "../../src/transaction-review";
+import { CloverEmptyState } from "../../src/clover-mascot";
+import { AccountBrandLogo } from "../../src/account-brand-logo";
+import { Text } from "../../src/app-text";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Modal, Pressable, View, useWindowDimensions, type FlatListProps } from "react-native";
+import { matchesDemoFilters, demoFilterOptions } from "../../src/transaction-filter-query";
+import { TransactionFilterPanel } from "../../src/transaction-filters";
+import { hasTransactionFilters, emptyTransactionFilters, transactionFilterQuery, type TransactionFilters, type FilterOptions } from "../../src/transaction-filter-query";
+import { useSession } from "../../src/session";
+import type { Transaction, TransactionPage } from "../../src/types";
+import {
+  Screen,
+  Heading,
+  Card,
+  Icon,
+  Body,
+  Button,
+  Field,
+  Notice,
+  dateLabel,
+  money,
+  useTheme,
+} from "../../src/ui";
+
+export default function Transactions() {
+  const { colors, styles, dark } = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const adaptive = useAdaptiveLayout();
+  const wide = useDetailPane();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<string[]>([]);
+  const [action, setAction] = useState<{ids:string[]; kind:"review"|"delete"}|null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState("");
+  const [acting, setActing] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const searchHeight = Math.max(38, Math.ceil(20 * fontScale + 16));
+  const { demo, rows: samples, profileId, request, cached, fileQueue, queuedFiles } = useSession();
+  const [filters, setFilters] = useState(false);
+  const params = useLocalSearchParams<{ review?: string; query?: string; report?: string; currency?: string; reviewRequest?: string }>();
+  const [filterValues, setFilterValues] = useState<TransactionFilters>(()=>params.review === "pending_review" ? {...emptyTransactionFilters,reviewFilter:"pending",currency:params.currency ?? ""} : emptyTransactionFilters);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({accounts:[],categories:[],tags:[]});
+  const [optionError, setOptionError] = useState("");
+  useEffect(() => {
+    setFilterValues(params.review === "pending_review" ? {...emptyTransactionFilters,reviewFilter:"pending",currency:params.currency ?? ""} : emptyTransactionFilters);
+    setFilters(false);
+    setSelectedId(null);
+    setFilterOptions({accounts:[],categories:[],tags:[]});
+  }, [profileId]);
+  useEffect(() => {
+    if (!filters || demo) return;
+    let active = true;
+    setOptionError("");
+    request<FilterOptions>(`options?workspaceId=${encodeURIComponent(profileId)}&context=filters`)
+      .then(data => { if (active) setFilterOptions(data); })
+      .catch((e: Error) => { if (active) setOptionError(e.message); });
+    return () => { active = false; };
+  }, [filters, demo, profileId, request]);
+  useEffect(() => {
+    if (params.review === "pending_review") {
+      setFilterValues({...emptyTransactionFilters,reviewFilter:"pending",currency:params.currency ?? ""});
+      setQuery(""); setSearch("");
+      setFilters(false);
+    }
+  }, [params.review, params.currency, params.reviewRequest, profileId]);
+  useEffect(() => {
+    if (!params.report) return;
+    const incoming = reportTransactionFilters(params.report);
+    if (incoming) { setFilterValues(incoming.filters); setQuery(""); setFilters(true); }
+  }, [params.report, profileId]);
+  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => { if (params.query !== undefined) setQuery(params.query); }, [params.query]);
+  const [loadedRows, setRows] = useState<Transaction[]>([]);
+  const [rowScope, setRowScope] = useState("");
+  const [rowSource, setRowSource] = useState<"cache" | "request" | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const pagination = useRef(new TransactionPagination()).current;
+  const activeScope = useRef("");
+  const scope = `${profileId}:${search}:${JSON.stringify(filterValues)}`;
+  activeScope.current = scope;
+  const useCommittedRows = !demo && !hasTransactionFilters(filterValues, search);
+  const pendingReceipts = useCommittedRows ? fileQueue?.getCommittedReceipts(profileId) ?? [] : [];
+  const rows = rowScope === scope ? mergeCommittedReceiptRows(loadedRows, pendingReceipts) : [];
+  const attemptedReceiptRefresh = useRef<string | null>(null);
+  const cachedPage = useRef(cached);
+  cachedPage.current = cached;
+  const screenFocused = useRef(false);
+  const receiptPresentation = useRef({ profileId, fileQueue, queuedFiles });
+  receiptPresentation.current = { profileId, fileQueue, queuedFiles };
+  const firstRows = useRef<{ scope: string; finish: ReturnType<typeof beginTelemetry> } | null>(null);
+  const viewableRows = useRef<{ scope: string; ids: string[]; observedAt: number } | null>(null);
+  const presentation = useRef({ scope, rowScope, rowSource, rows });
+  presentation.current = { scope, rowScope, rowSource, rows };
+  const finishViewableRows = useCallback(() => {
+    const timing = firstRows.current;
+    const visible = viewableRows.current;
+    const list = presentation.current;
+    if (!timing || !visible || !list.rowSource || timing.scope !== list.scope ||
+        visible.scope !== list.scope || list.rowScope !== list.scope ||
+        !list.rows.some(row => visible.ids.includes(row.id))) return;
+    firstRows.current = null;
+    timing.finish("completed", { result: "rows", row_source: list.rowSource });
+  }, []);
+  const observeReceiptRows = useCallback(() => {
+    const visible = viewableRows.current;
+    const list = presentation.current;
+    const { profileId, fileQueue, queuedFiles } = receiptPresentation.current;
+    if (!screenFocused.current) return;
+    if (!fileQueue || !visible || visible.scope !== list.scope || list.rowScope !== list.scope) return;
+    const ids = queuedFiles.filter(file => file.workspaceId === profileId && file.state === "done" &&
+      file.receiptTiming && !file.receiptTiming.outcome && file.receiptTransactionId &&
+      visible.ids.includes(file.receiptTransactionId) && list.rows.some(row => row.id === file.receiptTransactionId))
+      .map(file => file.receiptTransactionId!);
+    if (ids.length) void fileQueue.observeReceiptRows(profileId, ids).catch(() => {});
+    if (queuedFiles.some(file => file.workspaceId === profileId && (file.commitNotice || file.pdfVisibilityTarget || file.firstReceiptScan))) {
+      const visibleRows = list.rows.filter(row => visible.ids.includes(row.id));
+      if (visibleRows.length) {
+        void fileQueue.observeCommittedRows(profileId, visibleRows, visible.observedAt).catch(() => {});
+        void fileQueue.observePdfRows(profileId, visibleRows, visible.observedAt).catch(() => {});
+        void fileQueue.observeFirstReceiptRows(profileId, visibleRows, visible.observedAt).catch(() => {});
+      }
+    }
+  }, []);
+  const onViewableItemsChanged = useCallback<NonNullable<FlatListProps<Transaction>["onViewableItemsChanged"]>>(({ viewableItems }) => {
+    viewableRows.current = {
+      scope: presentation.current.rowScope,
+      observedAt: Date.now(),
+      ids: viewableItems.filter(token => token.isViewable).map(token => token.item.id),
+    };
+    finishViewableRows();
+    observeReceiptRows();
+  }, [finishViewableRows, observeReceiptRows]);
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const load = useCallback(
+    async (next = 1, refresh = false) => {
+      if (!demo && !profileId) return false;
+      const ticket = pagination.begin(next);
+      if(ticket === null) return false;
+      const receiptsToVerify = next === 1 && useCommittedRows ? fileQueue?.getCommittedReceipts(profileId) ?? [] : [];
+      if (receiptsToVerify.length) {
+        attemptedReceiptRefresh.current = JSON.stringify([profileId, receiptsToVerify.map(row => row.id)]);
+      }
+      setBusy(true);
+      setError("");
+      const legacyResource = `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}&${transactionFilterQuery(filterValues)}`;
+      const resource = `${legacyResource}&pagination=lookahead`;
+      if (next === 1) setPage(1);
+      if (next === 1 && !refresh) {
+        const previous = cachedPage.current<TransactionPage>(resource) ?? cachedPage.current<TransactionPage>(legacyResource);
+        setRowScope(scope);
+        setRows(previous?.transactions ?? []);
+        setRowSource(previous?.transactions.length ? "cache" : null);
+        setTotal(previous?.totalCount ?? 0);
+        setHasMore(previous?.hasMore ?? Boolean(previous && previous.transactions.length < previous.totalCount));
+      }
+      setRefreshing(refresh);
+      try {
+        const data: TransactionPage = demo
+          ? {
+              transactions: samples.filter(
+                (r) =>
+                  matchesDemoFilters(r, filterValues) &&
+                  `${r.merchantClean} ${r.accountName} ${r.categoryName} ${r.tags?.map((t) => t.name).join(" ")}`
+                    .toLowerCase()
+                    .includes(search.toLowerCase()),
+              ),
+              totalCount: samples.length,
+              page: 1,
+            }
+          : await request(resource, undefined, receiptsToVerify.length > 0);
+        if (!pagination.current(ticket) || activeScope.current !== scope) return false;
+        if (next === 1) {
+          fileQueue?.acknowledgeCommittedReceipts(receiptsToVerify);
+          setRowScope(scope);
+          setRowSource("request");
+        }
+        setRows(previous => {
+          if (next === 1) return data.transactions;
+          const seen = new Set(previous.map(row => row.id));
+          return [...previous, ...data.transactions.filter(row => !seen.has(row.id))];
+        });
+        setPage(next);
+        pagination.complete(ticket,next);
+        setTotal(demo ? data.transactions.length : data.totalCount);
+        setHasMore(!demo && (data.hasMore ?? (next - 1) * 30 + data.transactions.length < data.totalCount));
+        return true;
+      } catch (e) {
+        if (pagination.current(ticket)) setError((e as Error).message);
+        return false;
+      } finally {
+        if (pagination.current(ticket)) {
+          pagination.complete(ticket);
+          setBusy(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    [demo, samples, profileId, request, search, filterValues, scope, pagination, fileQueue, useCommittedRows],
+  );
+  useFocusEffect(
+    useCallback(() => {
+      const timing = !demo && profileId ? { scope, finish: beginTelemetry("data_load", {
+        operation: "transactions_first_rows",
+        phase: "presentation",
+        screen: "/transactions",
+        timing_boundary: "focus_to_first_viewable_rows",
+        filtered: hasTransactionFilters(filterValues, search),
+      }) } : null;
+      screenFocused.current = true;
+      firstRows.current = timing;
+      void load();
+      const unregister = registerScreenRefresh("/transactions", () => load(1, true));
+      return () => {
+        screenFocused.current = false;
+        viewableRows.current = null;
+        unregister();
+        pagination.invalidate();
+        if (timing && firstRows.current === timing) {
+          firstRows.current = null;
+          timing.finish("canceled", { reason: "scope_left" });
+        }
+      };
+    }, [load, demo, profileId, scope, filterValues, search, pagination]),
+  );
+  const receiptRefreshKey = pendingReceipts.length ? JSON.stringify([profileId, pendingReceipts.map(row => row.id)]) : null;
+  useEffect(() => {
+    if (!busy && screenFocused.current && receiptRefreshKey && attemptedReceiptRefresh.current !== receiptRefreshKey) {
+      void load(1, true);
+    }
+  }, [busy, receiptRefreshKey, load]);
+  useEffect(() => {
+    finishViewableRows();
+    observeReceiptRows();
+    const timing = firstRows.current;
+    if (!timing || timing.scope !== scope || rowScope !== scope) return;
+    if (!busy && rows.length === 0 && (error || rowSource === "request")) {
+      firstRows.current = null;
+      timing.finish(error ? "failed" : "completed", { result: error ? "request_failed" : "empty" });
+    }
+  });
+  useEffect(() => {
+    if(!busy && pagination.takeDeferredEnd() && !error && !demo && rows.length > 0 && hasMore) void load(page+1);
+  }, [busy,error,demo,rows.length,hasMore,page,load,pagination]);
+  useEffect(() => { setSelection([]); setAction(null); setActionError(""); setBulkOpen(false); setBulkNotice(""); }, [profileId, search, filterValues]);
+  const toggleSelection = (id:string) => setSelection(current=>current.includes(id) ? current.filter(value=>value!==id) : current.length < 500 ? [...current,id] : current);
+  const selectableIds = rows.slice(0, 500).map(row => row.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every(id => selection.includes(id));
+  const resolveAction = async (kind:"keep"|"delete") => {
+    if(!action || acting || demo) return;
+    const ids = action.ids;
+    const startingScope = scope;
+    setActing(true); setActionError("");
+    try {
+      await request(`transactions/${kind === "keep" ? "review" : "bulk-delete"}?workspaceId=${encodeURIComponent(profileId)}`,{method:"POST",body:JSON.stringify({workspaceId:profileId,transactionIds:ids})});
+      if(activeScope.current !== startingScope) return;
+      setSelection(current=>current.filter(id=>!ids.includes(id)));
+      setRows(current=>kind === "delete" || filterValues.reviewFilter === "pending" ? current.filter(row=>!ids.includes(row.id)) : current.map(row=>ids.includes(row.id) ? {...row,reviewStatus:"confirmed",reviewReasons:[]} : row));
+      setAction(null);
+      await load(1,true);
+    } catch(cause) { if(activeScope.current === startingScope) setActionError(cause instanceof Error ? cause.message : "Unable to update transactions."); }
+    finally { setActing(false); }
+  };
+  const selected = rows.find(row => row.id === selectedId);
+  const openDetails = (id: string) => router.push({ pathname: "/transaction/[id]", params: { id } });
+  const detail = <Screen>
+    {selected ? <>
+      <Heading>{selected.merchantClean ?? selected.merchantRaw}</Heading>
+      <Card>
+        <Text style={{ color: colors.ink, fontSize: 24 }}>{money(selected.amount, selected.currency)}</Text>
+        <Body>{dateLabel(selected.date)}</Body>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><AccountBrandLogo size={28} account={{ name: selected.accountName, institution: selected.institution ?? null, type: selected.accountType ?? "bank", brandLogoUrl: selected.brandLogoUrl ?? null }} /><Body muted={false}>{selected.accountName}</Body></View>
+        <Body>{selected.categoryName ?? "Uncategorized"}</Body>
+        {selected.userNote ? <Body>{selected.userNote}</Body> : null}
+        {transactionReviewReasons(selected).map(reason => <Notice key={reason}>{reason}</Notice>)}
+        <Button title="Open transaction details" onPress={() => openDetails(selected.id)} />
+      </Card>
+      <Button secondary title="Clear selection" onPress={() => setSelectedId(null)} />
+    </> : <Body>Select a transaction to see its details here.</Body>}
+  </Screen>;
+  return <AdaptiveDetail selected={Boolean(selected)} detail={detail} list={(
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View style={{ width: "100%", maxWidth: 960, alignSelf: "center", paddingHorizontal: 12, paddingVertical: 8, gap: 8, flexShrink: 1 }}>
+        {selection.length ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.white }}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityLabel={allSelected ? "Deselect all loaded transactions" : "Select all loaded transactions"}
+              accessibilityState={{ checked: allSelected ? true : "mixed" }}
+              onPress={() => setSelection(allSelected ? [] : selectableIds)}
+              style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
+            >
+              <Icon line name={allSelected ? "checkbox-outline" : "remove-circle-outline"} size={24} color={colors.teal} />
+            </Pressable>
+            <Button title="Add To" disabled={demo} onPress={() => { setBulkNotice(""); setBulkOpen(true); }} />
+            <Button danger title="Delete" disabled={demo} onPress={() => { setActionError(""); setAction({ ids: selection, kind: "delete" }); }} />
+          </View>
+        ) : <>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Field
+              accessibilityLabel="Search transactions"
+              placeholder="Search"
+              style={{ height: searchHeight, minHeight: searchHeight, borderRadius: 999, paddingVertical: 0, fontSize: 13 }}
+              value={query}
+              onChangeText={setQuery}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Filter transactions" accessibilityState={{expanded:filters}} onPress={() => setFilters(v=>!v)} hitSlop={4} style={{width:searchHeight,height:searchHeight,borderRadius:999,borderWidth:1,borderColor:colors.line,backgroundColor:colors.white,alignItems:"center",justifyContent:"center"}}>
+            <Icon line name="options-outline" size={20} color={colors.teal}/>
+          </Pressable>
+        </View>
+        {filterValues.reviewFilter === "pending" && !filters ? <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center"}}><Text style={{color:colors.ink}}>Needs review · {total}</Text><Pressable accessibilityRole="button" accessibilityLabel="Show all transactions" onPress={()=>setFilterValues(current=>({...current,reviewFilter:""}))}><Text style={{color:colors.teal}}>Show all</Text></Pressable></View> : null}
+        {filters ? <TransactionFilterPanel value={filterValues} options={demo ? demoFilterOptions(samples) : filterOptions} optionError={optionError} onClose={()=>setFilters(false)} onApply={next=>{setFilterValues(next);setFilters(false);}} /> : null}
+        </>}
+        {error ? (
+          <Notice>{error}</Notice>
+        ) : null}
+      </View>
+      {bulkNotice ? <Notice>{bulkNotice}</Notice> : null}
+      {bulkOpen && selection.length ? <TransactionBulkDestination
+        key={profileId} rows={rows.filter(row => selection.includes(row.id))} count={selection.length} profileId={profileId}
+        onClose={() => setBulkOpen(false)}
+        onSuccess={notice => { setBulkOpen(false); setSelection([]); setBulkNotice(notice); void load(1, true); }}
+      /> : null}
+      <Modal visible={Boolean(action)} transparent animationType="fade" onRequestClose={()=>{if(!acting)setAction(null);}}>
+        <View style={{flex:1,backgroundColor:"#00000066",justifyContent:"center",padding:24}}>
+          <View accessibilityViewIsModal style={{padding:20,borderRadius:20,backgroundColor:colors.white,gap:12}}>
+            <Heading>{action?.kind === "delete" ? "Delete selected transactions?" : "Review transactions"}</Heading>
+            <Body>{action?.ids.length === 1 ? rows.find(row=>row.id===action.ids[0])?.merchantClean : `${action?.ids.length ?? 0} transactions`}</Body>
+            {action?.ids.length === 1 ? transactionReviewReasons(rows.find(row=>row.id===action.ids[0]) ?? {reviewStatus:null,reviewReasons:[]}).map(reason=><Body key={reason}>{reason}</Body>) : null}
+            {actionError ? <Notice>{actionError}</Notice> : null}
+            {action?.kind === "review" ? <Button title={acting ? "Saving…" : "Keep"} disabled={acting || demo} onPress={()=>void resolveAction("keep")}/> : null}
+            <Button secondary danger title={acting ? "Please wait…" : "Delete"} disabled={acting || demo} onPress={()=>action?.kind === "review" ? setAction({...action,kind:"delete"}) : void resolveAction("delete")}/>
+            <Button secondary title="Cancel" disabled={acting} onPress={()=>setAction(null)}/>
+          </View>
+        </View>
+      </Modal>
+      <FlatList
+        key={scope}
+        data={rows}
+        onViewableItemsChanged={onViewableItemsChanged}
+        keyExtractor={(row) => row.id}
+        keyboardShouldPersistTaps="handled"
+        refreshing={refreshing}
+        onRefresh={() => { setSelection([]); void load(1, true); }}
+        onEndReachedThreshold={0.6}
+        onEndReached={() => {
+          if(demo || rows.length === 0) return;
+          if(pagination.busy) pagination.deferEnd();
+          else if(!error && hasMore) void load(page+1);
+        }}
+        contentContainerStyle={{
+          paddingHorizontal: 0,
+          paddingBottom: adaptive.dockHeight + 48,
+          maxWidth: 960,
+          width: "100%",
+          alignSelf: "center",
+        }}
+        renderItem={({ item }) => (
+          <SwipeDeleteRow label={item.merchantClean ?? item.merchantRaw ?? "Transaction"} disabled={demo || selection.length > 0} onSelect={()=>toggleSelection(item.id)} onReview={transactionReviewReasons(item).length ? ()=>{setActionError("");setAction({ids:[item.id],kind:"review"});} : undefined} onOpen={() => openDetails(item.id)} onDelete={async () => {
+            await request(`transactions/${item.id}?workspaceId=${encodeURIComponent(profileId)}`, { method: "DELETE" });
+            setRows(current => current.filter(row => row.id !== item.id));
+            setTotal(current => Math.max(0, current - 1));
+            if (selectedId === item.id) setSelectedId(null);
+            void load(1, true);
+          }}>
+          <View style={{position:"relative"}}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}${money(item.amount.replace(/^-/, ""), item.currency)}, ${dateLabel(item.date)}.${transactionReviewReasons(item).length ? ` ${transactionReviewReasons(item).join(". ")}.` : ""} Open transaction.`}
+            accessibilityState={{ selected: selection.includes(item.id) || (wide && selectedId === item.id) }}
+            onLongPress={() => toggleSelection(item.id)}
+            accessibilityHint="Touch and hold to select transactions"
+            delayLongPress={350}
+            onPress={() => selection.length ? toggleSelection(item.id) : wide ? setSelectedId(item.id) : openDetails(item.id)}
+            style={({ pressed }) => ({
+              minHeight: 68,
+              paddingVertical: 12,
+              paddingHorizontal: 12,
+              paddingRight: transactionReviewReasons(item).length ? 52 : 12,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              backgroundColor: selection.includes(item.id) || (wide && selectedId === item.id) ? colors.pale : colors.white,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.line,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            {selection.length > 0 ? <Icon line name={selection.includes(item.id) ? "checkbox-outline" : "square-outline"} size={24} color={colors.teal}/> : <MerchantLogo transaction={item} size={24} />}
+            <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+              <Text
+                numberOfLines={1}
+                style={{
+                  flexShrink: 1,
+                  fontSize: 13,
+                  fontFamily: "Poppins-SemiBold",
+                  color: colors.ink,
+                }}
+              >
+                {item.merchantClean ?? item.merchantRaw}
+              </Text>
+
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+              <AccountBrandLogo size={16} account={{ name: item.accountName, institution: item.institution ?? null, type: item.accountType ?? "bank", brandLogoUrl: item.brandLogoUrl ?? null }} />
+              <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 10, color: colors.muted }}>
+                {item.accountName}
+                {item.lastFour && !item.accountName.endsWith(item.lastFour)
+                  ? ` ${item.lastFour}`
+                  : ""} · {dateLabel(item.date)}
+              </Text>
+              </View>
+              {transactionReviewReasons(item).length > 0 ? <Text style={{ fontSize: 10, color: dark ? "#F2CE76" : "#87610D" }}>{transactionReviewReasons(item)[0]}</Text> : null}
+            </View>
+            <Text
+              style={{
+                maxWidth: "30%",
+                fontSize: 12,
+                fontFamily: "Poppins-SemiBold",
+                color:
+                  item.type === "income"
+                    ? colors.positive
+                    : item.type === "expense"
+                      ? colors.danger
+                      : colors.ink,
+              }}
+            >
+              {item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}{money(item.amount.replace(/^-/, ""), item.currency)}
+            </Text>
+            {transactionReviewReasons(item).length ? null : <Icon line name="chevron-forward" size={14} color={colors.muted} />}
+          </Pressable>
+          {transactionReviewReasons(item).length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`Review ${item.merchantClean ?? item.merchantRaw}`} hitSlop={12} onPress={event=>{event.stopPropagation();setActionError("");setAction({ids:[item.id],kind:"review"});}} style={{position:"absolute",right:8,top:"50%",marginTop:-20,width:40,height:40,alignItems:"center",justifyContent:"center"}}><Icon line name="warning-outline" size={16} color="#D6A226"/></Pressable> : null}
+          </View>
+          </SwipeDeleteRow>
+        )}
+        ListEmptyComponent={
+          !busy ? (
+            <CloverEmptyState pose={error ? "error" : "receipt"}>
+              {error ? "Pull down to retry." : hasTransactionFilters(filterValues, search) ? "No matching transactions. Try another search or filter." : "Add your first transaction. Upload a receipt or add one manually."}
+            </CloverEmptyState>
+          ) : (
+            !refreshing ? <View accessibilityLabel="Loading transactions" accessibilityRole="progressbar" style={{ padding: 24, alignItems: "center" }}><ActivityIndicator color={colors.teal} /></View> : undefined
+          )
+        }
+        ListFooterComponent={
+          rows.length > 0 && rows.length < total && !demo && !refreshing ? (
+            busy ? <View accessibilityLabel="Loading more transactions" accessibilityRole="progressbar" style={{padding:16}}><ActivityIndicator color={colors.teal}/></View> : undefined
+          ) : undefined
+        }
+      />
+    </View>
+  )} />;
+}

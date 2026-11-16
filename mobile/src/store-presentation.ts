@@ -1,0 +1,48 @@
+/** Display the store's localized metadata without inventing exchange rates. */
+export function storePriceLabel(product: { priceString: string; currencyCode: string; subscriptionPeriod: string | null }) {
+  return `${product.priceString} ${product.currencyCode} / ${product.subscriptionPeriod === 'P1Y' ? 'year' : 'month'}`;
+}
+export function storeVerificationMessage(tier: 'free' | 'pro' | 'premium', action: 'silent' | 'refresh' | 'restore' | 'purchase') {
+  if (action === 'silent') return '';
+  if (tier !== 'free') return `Clover ${tier === 'premium' ? 'Pro' : 'Plus'} access verified.`;
+  if (action === 'restore') return 'No active Clover Plus or Pro purchase was found for this account.';
+  if (action === 'purchase') return 'Your purchase is awaiting store verification. Refresh plan status before trying another purchase.';
+  return 'You’re on Clover Free.';
+}
+
+/** Entitlement follows the Clover login, but billing stays with the original store. */
+export function planManagement(status: { hasPaidSubscription?: boolean; billingProvider?: string | null; accessSource?: string; trial?: import("../../shared/signup-trial").SignupTrialSnapshot | null }, platform: string, target: 'free' | 'pro' | 'premium') {
+  const provider = status.billingProvider;
+  const apple = provider === 'app_store', google = provider === 'play_store';
+  const store = apple ? 'Apple' : 'Google Play';
+  if (status.hasPaidSubscription === false && status.trial?.status === 'active') return {
+    title: 'Your Clover Plus trial', url: null,
+    message: 'No subscription or payment method is attached to this trial. It ends on ' + new Date(status.trial.endsAt).toLocaleDateString('en-PH') + '. After that, Free applies unless you have other valid access. Your financial history stays available.',
+  };
+  if (status.hasPaidSubscription === false) return {
+    title: 'Your Clover access', url: null,
+    message: 'Your current access was granted without a store subscription. There is no store subscription to cancel. Contact Clover support if you want this access changed.',
+  };
+  if (!apple && !google) return {
+    title: 'Manage your subscription', url: null,
+    message: provider ? 'Your subscription is managed by your original billing provider. Open Plan on the Clover website to manage it.' : 'Refresh plan status to identify the store that manages your subscription before changing plans.',
+  };
+  const sameStore = apple ? platform === 'ios' : platform === 'android';
+  const action = target === 'free'
+    ? 'Cancel renewal to return to Free when your paid access ends.'
+    : google ? 'Change your plan in Clover on Android. Google Play will show the effective date and any charge before you confirm.'
+      : `Choose Clover ${target === 'premium' ? 'Pro' : 'Plus'} in your subscription options. The store will show the effective date and any charge before you confirm.`;
+  return {
+    title: `Manage your ${store} subscription`,
+    message: `${action} ${sameStore ? `Continue to ${store} subscriptions.` : `This subscription was purchased through ${store}. Manage it ${apple ? 'on your Apple device' : 'in Google Play using the Google account that purchased it'}. Your Clover access works on both platforms.`}`,
+    nativeSheet: sameStore && apple,
+    url: sameStore && google ? 'https://play.google.com/store/account/subscriptions' : null,
+  };
+}
+
+/** Immediate catalog display until the store returns localized product metadata. */
+export function catalogStorePrice(tier: "free" | "pro" | "premium", period: "P1M" | "P1Y") {
+  if (tier === "free") return "Free forever";
+  const amount = tier === "premium" ? (period === "P1Y" ? "99.99" : "12.99") : (period === "P1Y" ? "59.99" : "7.99");
+  return `US$${amount} USD / ${period === "P1Y" ? "year" : "month"}`;
+}

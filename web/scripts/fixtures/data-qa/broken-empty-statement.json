@@ -1,0 +1,38 @@
+{
+  "name": "broken-empty-statement",
+  "input": {
+    "workspaceId": "workspace-test",
+    "importFileId": "import-broken",
+    "source": "local_training",
+    "fileName": "broken.pdf",
+    "fileType": "application/pdf",
+    "parserVersion": "v2",
+    "parsedRows": [],
+    "metadata": {
+      "institution": null,
+      "accountNumber": null,
+      "accountName": null,
+      "accountType": null,
+      "confidence": 22
+    },
+    "timings": {
+      "totalMs": 8200,
+      "parsingMs": 7900,
+      "usedVisionFallback": true,
+      "usedOpenAiFallback": true,
+      "pageCount": 12
+    }
+  },
+  "expectations": {
+    "maxScore": 40,
+    "requiredFindingCodes": [
+      "transactions.empty",
+      "statement.identity_missing",
+      "performance.slow_parse"
+    ],
+    "forbiddenFindingCodes": [],
+    "metrics": {
+      "uiTransactionsReady": false
+    }
+  }
+}

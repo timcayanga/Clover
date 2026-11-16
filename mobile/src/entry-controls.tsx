@@ -1,0 +1,185 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Animated,
+  AccessibilityInfo,
+  Image,
+  Pressable,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import { Text } from "./app-text";
+import { useTheme } from "./ui";
+const methodIcons: Record<string, number> = {
+  manual: require("../assets/organize/method-manual.png"),
+  ask: require("../assets/mascots/velvet-compact.png"),
+  upload: require("../assets/organize/method-upload.png"),
+  sync: require("../assets/organize/method-sync.png"),
+  connect: require("../assets/organize/method-sync.png"),
+};
+
+export function EntrySelector({
+  value,
+  items,
+  onChange,
+  disabled = false,
+}: {
+  value: string;
+  items: string[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const { colors } = useTheme();
+  const [width, setWidth] = useState(0);
+  const offset = useRef(new Animated.Value(0)).current;
+  const reduced = useRef(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { reduced.current = value; });
+    const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", value => { reduced.current = value; });
+    return () => listener.remove();
+  }, []);
+  const { fontScale } = useWindowDimensions();
+  const wrapped = width > 0 && (width - 10) / items.length < 76 * Math.max(1, fontScale);
+  const segmentWidth = Math.max(0, width - 10) / items.length;
+  const selectedIndex = Math.max(0, items.indexOf(value));
+  useEffect(() => {
+    Animated.timing(offset, { toValue: selectedIndex * segmentWidth, duration: reduced.current ? 0 : 160, useNativeDriver: true }).start();
+    return () => offset.stopAnimation();
+  }, [offset, selectedIndex, segmentWidth]);
+  return (
+    <View
+      onLayout={event => setWidth(event.nativeEvent.layout.width)}
+      accessibilityRole="tablist"
+      style={{
+        flexDirection: "row",
+        flexWrap: wrapped ? "wrap" : "nowrap",
+        padding: 4,
+        borderRadius: wrapped ? 20 : 999,
+        borderWidth: 1,
+        borderColor: colors.line,
+        backgroundColor: colors.pale,
+      }}
+    >
+      {width > 0 && !wrapped ? <Animated.View pointerEvents="none" style={{ position: "absolute", top: 4, bottom: 4, left: 4, width: segmentWidth, borderRadius: 999, backgroundColor: colors.teal, transform: [{ translateX: offset }] }} /> : null}
+      {items.map((method) => (
+        <Pressable
+          key={method}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: value === method, disabled }}
+          disabled={disabled}
+          onPress={() => onChange(method)}
+          style={{
+            flexGrow: 1,
+            flexBasis: wrapped ? "45%" : 0,
+            minWidth: 0,
+            paddingVertical: 6,
+            minHeight: 52,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+            borderRadius: 999,
+            backgroundColor: wrapped && value === method ? colors.teal : "transparent",
+          }}
+        >
+          {methodIcons[method] ? <Image source={methodIcons[method]} style={{ width: 26, height: 26, tintColor: value === method ? "#fff" : undefined }} fadeDuration={0} resizeMode="contain" accessible={false} /> : null}
+          <Text
+            style={{
+              fontSize: 12,
+              lineHeight: 16,
+              textAlign: "center",
+              textAlignVertical: "center",
+              includeFontPadding: false,
+              alignSelf: "stretch",
+              color: value === method ? "white" : colors.ink,
+            }}
+          >
+            {method === "ask"
+              ? "Ask Clover"
+              : method === "connect" ? "Sync" : method[0].toUpperCase() + method.slice(1)}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+export function EntryTransition({
+  value,
+  children,
+  direction = 1,
+}: {
+  value: string;
+  children: ReactNode;
+  direction?: number;
+}) {
+  const slide = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (!active || reduced) return;
+      slide.setValue(8 * direction);
+      Animated.timing(slide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+    });
+    return () => {
+      active = false;
+      slide.stopAnimation();
+    };
+  }, [value, slide, direction]);
+  return (
+    <Animated.View style={{ gap: 16, transform: [{ translateX: slide }] }}>
+      {children}
+    </Animated.View>
+  );
+}
+export function UploadTiles({
+  onChoose,
+  disabled = false,
+}: {
+  onChoose: (source: "file" | "camera" | "library") => void;
+  disabled?: boolean;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ gap: 10 }}>
+      {(["file", "camera", "library"] as const).map((source) => (
+        <Pressable
+          key={source}
+          disabled={disabled}
+          accessibilityRole="button"
+          onPress={() => onChoose(source)}
+          style={{
+            minHeight: 104,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: colors.line,
+            borderRadius: 20,
+            backgroundColor: colors.white,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+          }}
+        >
+          <Image
+            source={
+              source === "file"
+                ? require("../assets/organize/upload-files.png")
+                : source === "camera"
+                  ? require("../assets/organize/upload-camera.png")
+                  : require("../assets/organize/upload-library.png")
+            }
+            style={{ width: 56, height: 56 }}
+          />
+          <Text style={{ fontSize: 15, color: colors.ink }}>
+            {source === "file"
+              ? "Choose files"
+              : source === "camera"
+                ? "Take photo"
+                : "Photo library"}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}

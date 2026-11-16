@@ -1,0 +1,175 @@
+.shell {
+  display: grid;
+  gap: 24px;
+  color: var(--text, #233b46);
+  max-width: 1200px;
+  margin-inline: auto;
+  width: 100%;
+  padding: clamp(12px, 2vw, 28px);
+  font-family: var(--font-poppins, Arial), sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  box-sizing: border-box;
+}
+.shell * {
+  box-sizing: border-box;
+}
+.shell h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  margin: 0;
+}
+.shell h2 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+.shell h3 {
+  font-size: 16px;
+  margin: 0;
+}
+.shell p {
+  margin: 8px 0;
+}
+.shell a {
+  color: #008799;
+}
+.shell label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+}
+.shell input,
+.shell select,
+.shell textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #b9d3d7;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  color: #233b46;
+  background: #fff;
+}
+.shell textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+.shell button {
+  min-height: 44px;
+  padding: 9px 16px;
+  border-radius: 24px;
+  border: 1px solid #b3dade;
+  background: #fff;
+  color: #087c88;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.shell button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.shell button:focus-visible,
+.shell a:focus-visible {
+  outline: 3px solid #009eb1;
+  outline-offset: 3px;
+}
+.card {
+  padding: clamp(16px, 2vw, 24px);
+  border: 1px solid #d7e8e9;
+  border-radius: 18px;
+  background: var(--surface, #fff);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.stack {
+  display: grid;
+  gap: 14px;
+}
+.shell .primary {
+  background: #009eb1;
+  color: #fff;
+  border-color: #009eb1;
+}
+.note {
+  color: #526975;
+  font-size: 13px;
+}
+.message {
+  padding: 12px 16px;
+  border: 1px solid #addadd;
+  border-radius: 12px;
+  background: #effafa;
+  color: #244551;
+}
+.terms {
+  white-space: pre-wrap;
+}
+.metrics {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.metrics > div {
+  display: grid;
+  min-width: 120px;
+}
+.metrics strong {
+  font-size: 20px;
+}
+.shell dl {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 2fr;
+  gap: 10px;
+}
+.shell dt {
+  color: #526975;
+}
+.shell dd {
+  margin: 0;
+}
+.danger {
+  color: #a42b37 !important;
+}
+.code {
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+.history {
+  font-size: 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+.full {
+  grid-column: 1/-1;
+}
+@media (max-width: 650px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .shell h1 {
+    font-size: 24px;
+  }
+  .shell dl {
+    grid-template-columns: 1fr;
+  }
+  .shell dt {
+    margin-top: 8px;
+  }
+  .row > button {
+    flex-grow: 1;
+  }
+}

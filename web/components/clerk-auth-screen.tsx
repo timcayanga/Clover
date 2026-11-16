@@ -1,0 +1,1076 @@
+"use client";
+
+import { needsSignInVerification } from "../../shared/auth-failure";
+
+import { signupProperties, type SignupAttribution } from "../../shared/web-signup-attribution";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
+import { shouldTrackAnalytics } from "@/lib/analytics";
+import { getSignupAttribution, submitSignupAttribution } from "@/lib/web-signup-attribution-client";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth, useSignIn, useSignUp } from "@clerk/nextjs";
+import { useSocialProviders } from "@/components/use-social-providers";
+import type { SocialProvider } from "@/lib/social-providers";
+import { PasswordIcon } from "@/components/password-icon";
+import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
+import {
+  persistRememberedSessionId,
+  persistStaySignedInPreference,
+  readStaySignedInPreference,
+} from "@/lib/clerk-session-persistence";
+
+type ClerkAuthScreenProps = {
+  enabled: boolean;
+  mode: "sign-in" | "sign-up";
+  completeRedirectUrl?: string;
+};
+
+type SocialStrategy = SocialProvider["strategy"];
+type SecondFactorStrategy = "totp" | "phone_code" | "email_code" | "backup_code";
+
+const callbackUrl = "/sso-callback";
+
+function getFirstClerkError(error: unknown) {
+  const clerkError = error as {
+    errors?: Array<{
+      code?: string;
+      message?: string;
+      longMessage?: string;
+    }>;
+    errorsList?: Array<{
+      code?: string;
+      message?: string;
+      longMessage?: string;
+    }>;
+    code?: string;
+    message?: string;
+  };
+
+  const source = clerkError.errors ?? clerkError.errorsList ?? [];
+  const first = source[0];
+
+  return {
+    code: first?.code ?? clerkError.code ?? "",
+    message: first?.longMessage ?? first?.message ?? clerkError.message ?? "",
+  };
+}
+
+function getSignInErrorMessage(error: unknown, context: "password" | "verification" | "reset" = "password") {
+  const firstError = getFirstClerkError(error);
+  const code = firstError.code.toLowerCase();
+  const message = firstError.message.toLowerCase();
+
+  if (code.includes("too_many") || code.includes("rate_limit")) {
+    return "Too many attempts were made. Please wait a few minutes, then try again.";
+  }
+
+  if (code.includes("identifier_not_found") || code.includes("incorrect_password") || code.includes("password_incorrect")) {
+    return context === "reset"
+      ? "We couldn’t send a reset code. Check the email and try again."
+      : "That email or password isn’t right. Please try again.";
+  }
+
+  if (code.includes("identifier_invalid")) {
+    return "That email address doesn’t look quite right. Please check it and try again.";
+  }
+
+  if (code.includes("strategy_for_user_invalid") || code.includes("password_not_set")) {
+    return "This account may use a connected sign-in provider instead of a password. Try the same method you used when creating it.";
+  }
+
+  if (code.includes("verification") || code.includes("code_incorrect") || code.includes("code_expired")) {
+    return context === "reset"
+      ? "That reset code is incorrect or has expired. Request a new code and try again."
+      : "That verification code is incorrect or has expired. Please try again.";
+  }
+
+  if (code.includes("session_exists") || code.includes("already_signed_in")) {
+    return "You’re already signed in. Refresh the page to continue to Clover.";
+  }
+
+  if (
+    code.includes("network") ||
+    code.includes("fetch") ||
+    message.includes("response: 0") ||
+    message.includes("network") ||
+    message.includes("fetch")
+  ) {
+    return "Clover couldn’t reach the secure sign-in service. Check your connection and try again.";
+  }
+
+  if (context === "verification") {
+    return "We couldn’t verify that code yet. Please try again or use another available code.";
+  }
+
+  if (context === "reset") {
+    return "We couldn’t send a reset code. Check the email and try again.";
+  }
+
+  return "That email or password isn’t right. Please try again.";
+}
+
+function isValidEmail(email: string) {
+  if (!email.trim()) {
+    return false;
+  }
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function getPasswordRequirements(password: string) {
+  const requirements = {
+    minLength: password.length >= 8,
+    lowerCase: /[a-z]/.test(password),
+    upperCase: /[A-Z]/.test(password),
+    number: /\d/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+  };
+
+  return requirements;
+}
+
+function getPasswordMessage(password: string) {
+  const requirements = getPasswordRequirements(password);
+  const missing: string[] = [];
+
+  if (!requirements.minLength) missing.push("at least 8 characters");
+  if (!requirements.lowerCase) missing.push("one lowercase letter");
+  if (!requirements.upperCase) missing.push("one uppercase letter");
+  if (!requirements.number) missing.push("one number");
+  if (!requirements.special) missing.push("one special character");
+
+  if (missing.length === 0) {
+    return null;
+  }
+
+  return `Please include ${missing.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
+}
+
+function getMissingPasswordRequirements(password: string) {
+  const requirements = getPasswordRequirements(password);
+  const missing: string[] = [];
+
+  if (!requirements.minLength) missing.push("8+ characters");
+  if (!requirements.lowerCase) missing.push("1 lowercase letter");
+  if (!requirements.upperCase) missing.push("1 uppercase letter");
+  if (!requirements.number) missing.push("1 number");
+  if (!requirements.special) missing.push("1 special character");
+
+  return missing;
+}
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true" className="clover-auth-button__icon">
+      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.2 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.153 7.962 3.038l5.657-5.657C34.442 6.053 29.525 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917Z" />
+      <path fill="#FF3D00" d="M6.306 14.691 12.876 19.5C14.654 15.004 19.045 12 24 12c3.059 0 5.842 1.153 7.962 3.038l5.657-5.657C34.442 6.053 29.525 4 24 4c-7.682 0-14.378 4.327-17.694 10.691Z" />
+      <path fill="#4CAF50" d="M24 44c5.42 0 10.255-1.958 14.04-5.179l-6.487-5.47C29.583 34.951 26.98 36 24 36c-5.178 0-9.621-3.319-11.287-7.946l-6.522 5.03C9.465 40.556 16.12 44 24 44Z" />
+      <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a11.99 11.99 0 0 1-3.75 5.351l.003-.002 6.487 5.47C37.58 36.891 44 31 44 24c0-1.341-.138-2.65-.389-3.917Z" />
+    </svg>
+  );
+}
+
+function SocialIcon({ provider }: { provider: SocialProvider["provider"] }) {
+  if (provider === "apple") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="clover-auth-button__icon" fill="currentColor">
+        <path d="M17.05 12.54c.03 3.23 2.83 4.3 2.86 4.32-.02.08-.45 1.54-1.48 3.05-.9 1.3-1.84 2.61-3.31 2.64-1.44.03-1.91-.86-3.56-.86-1.64 0-2.16.83-3.53.89-1.42.05-2.5-1.42-3.4-2.72-1.85-2.67-3.26-7.55-1.36-10.84a5.27 5.27 0 0 1 4.46-2.71c1.39-.03 2.7.94 3.55.94.85 0 2.45-1.16 4.13-.99.7.03 2.67.28 3.94 2.14-.1.06-2.35 1.37-2.3 4.14ZM14.33 4.46c.75-.91 1.26-2.18 1.12-3.46-1.08.04-2.39.72-3.16 1.63-.69.8-1.3 2.09-1.14 3.32 1.2.1 2.43-.61 3.18-1.49Z" />
+      </svg>
+    );
+  }
+  return <GoogleIcon />;
+}
+
+export function ClerkAuthScreen({ enabled, mode, completeRedirectUrl = "/continue" }: ClerkAuthScreenProps) {
+  if (!enabled) {
+    return (
+      <section className="glass" style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
+        <p className="eyebrow">Authentication setup</p>
+        <h1>Clerk is not configured for this environment yet.</h1>
+        <p>
+          Add <code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code> and <code>CLERK_SECRET_KEY</code> to the staging
+          environment, then redeploy to enable the auth form.
+        </p>
+      </section>
+    );
+  }
+
+  return <ClerkAuthScreenInner mode={mode} completeRedirectUrl={completeRedirectUrl} />;
+}
+
+function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" | "sign-up"; completeRedirectUrl: string }) {
+  const router = useRouter();
+  const socialProviders = useSocialProviders();
+  const auth = useAuth();
+  const signInState = useSignIn();
+  const signUpState = useSignUp();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phase, setPhase] = useState<"form" | "verify-second-factor" | "reset-request" | "reset-code" | "reset-password">(
+    "form",
+  );
+  const [secondFactorStrategy, setSecondFactorStrategy] = useState<SecondFactorStrategy | null>(null);
+  const [secondFactorCode, setSecondFactorCode] = useState("");
+  const [resetEmailAddress, setResetEmailAddress] = useState("");
+  const [resetVerificationCode, setResetVerificationCode] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [socialBusy, setSocialBusy] = useState<SocialStrategy | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [touchedEmail, setTouchedEmail] = useState(false);
+  const [touchedPassword, setTouchedPassword] = useState(false);
+  const [touchedResetEmail, setTouchedResetEmail] = useState(false);
+  const [touchedResetPassword, setTouchedResetPassword] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [staySignedIn, setStaySignedIn] = useState(true);
+
+  const isReady = auth.isLoaded && signInState.isLoaded && signUpState.isLoaded;
+  const signupAttribution = useRef<SignupAttribution | null>(null);
+  useEffect(() => {
+    if (mode !== "sign-up" || !isReady || auth.isSignedIn || signupAttribution.current || !shouldTrackAnalytics()) return;
+    signupAttribution.current = getSignupAttribution();
+    capturePostHogClientEvent("web_signup_form_viewed", signupProperties(signupAttribution.current));
+  }, [mode, isReady, auth.isSignedIn]);
+
+  const trackSignupSubmit = (provider: "email" | "google" | "apple") => {
+    if (!shouldTrackAnalytics()) return;
+    const submitted = submitSignupAttribution(signupAttribution.current ?? getSignupAttribution(), provider);
+    signupAttribution.current = submitted;
+    capturePostHogClientEvent("web_signup_submitted", signupProperties(submitted), { send_instantly: true });
+  };
+
+  const trimmedEmail = email.trim();
+  const trimmedFirstName = firstName.trim();
+  const trimmedLastName = lastName.trim();
+  const trimmedResetEmail = resetEmailAddress.trim();
+  const emailIsValid = useMemo(() => isValidEmail(email), [email]);
+  const resetEmailIsValid = useMemo(() => isValidEmail(resetEmailAddress), [resetEmailAddress]);
+  const passwordRequirements = useMemo(() => getPasswordRequirements(password), [password]);
+  const passwordMessage = useMemo(() => getPasswordMessage(password), [password]);
+  const missingPasswordRequirements = useMemo(() => getMissingPasswordRequirements(password), [password]);
+  const resetPasswordMessage = useMemo(() => getPasswordMessage(resetPassword), [resetPassword]);
+  const missingResetPasswordRequirements = useMemo(() => getMissingPasswordRequirements(resetPassword), [resetPassword]);
+  const passwordMatchesRequirements = passwordMessage === null;
+  const resetPasswordMatchesRequirements = resetPasswordMessage === null;
+  const passwordStatusMessage = passwordMatchesRequirements
+    ? "Password looks good."
+    : `Missing: ${missingPasswordRequirements.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
+  const resetPasswordStatusMessage = resetPasswordMatchesRequirements
+    ? "Password looks good."
+    : `Missing: ${missingResetPasswordRequirements.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
+  const showEmailWarning = (touchedEmail || attemptedSubmit) && !emailIsValid;
+  const showResetEmailWarning = (touchedResetEmail || attemptedSubmit) && !resetEmailIsValid;
+  const showPasswordWarning = mode === "sign-up" ? (touchedPassword || attemptedSubmit) && Boolean(passwordMessage) : false;
+  const showResetPasswordWarning =
+    phase === "reset-password" ? (touchedResetPassword || attemptedSubmit) && Boolean(resetPasswordMessage) : false;
+  const canSubmitSignUp =
+    Boolean(trimmedFirstName) && Boolean(trimmedLastName) && emailIsValid && passwordMessage === null && !busy;
+  const canSubmitSignIn = emailIsValid && password.length > 0 && !busy;
+
+  useEffect(() => {
+    if (auth.isLoaded && auth.isSignedIn) {
+      setIsRedirecting(true);
+      router.replace(completeRedirectUrl);
+    }
+  }, [auth.isLoaded, auth.isSignedIn, completeRedirectUrl, router]);
+
+  useEffect(() => {
+    if (mode !== "sign-in") {
+      return;
+    }
+
+    setStaySignedIn(readStaySignedInPreference());
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "sign-in") {
+      return;
+    }
+
+    persistStaySignedInPreference(staySignedIn);
+  }, [mode, staySignedIn]);
+
+  useEffect(() => {
+    setPhase("form");
+    setResetEmailAddress("");
+    setResetVerificationCode("");
+    setResetPassword("");
+    setSecondFactorStrategy(null);
+    setSecondFactorCode("");
+    setError(null);
+    setNotice(null);
+    setBusy(false);
+    setSocialBusy(null);
+    setShowPassword(false);
+    setShowResetPassword(false);
+    setTouchedEmail(false);
+    setTouchedPassword(false);
+    setTouchedResetEmail(false);
+    setTouchedResetPassword(false);
+    setAttemptedSubmit(false);
+    setEmail("");
+    setPassword("");
+    setFirstName("");
+    setLastName("");
+  }, [mode]);
+
+  if (!isReady) {
+    return <CloverRouteLoadingScreen label="secure sign-in" viewport />;
+  }
+
+  if (isRedirecting) {
+    return <CloverRouteLoadingScreen label="Clover" viewport />;
+  }
+
+  const submitSignIn = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setAttemptedSubmit(true);
+
+    try {
+      const response = await signInState.signIn.create({
+        strategy: "password",
+        identifier: trimmedEmail,
+        password,
+      });
+
+      if (response.status === "complete" && response.createdSessionId) {
+        persistRememberedSessionId(staySignedIn ? response.createdSessionId : null);
+        setIsRedirecting(true);
+        await signInState.setActive({
+          session: response.createdSessionId,
+          redirectUrl: completeRedirectUrl,
+        });
+        return;
+      }
+
+      if (needsSignInVerification(response.status)) {
+        const factors = response.supportedSecondFactors ?? [];
+        const factor =
+          factors.find((candidate) => candidate.strategy === "totp") ??
+          factors.find((candidate) => candidate.strategy === "email_code") ??
+          factors.find((candidate) => candidate.strategy === "phone_code") ??
+          factors.find((candidate) => candidate.strategy === "backup_code");
+
+        if (!factor) {
+          setError("This account needs an additional verification method that Clover cannot show yet. Please use a connected sign-in provider.");
+          return;
+        }
+
+        if (factor.strategy === "email_code") {
+          await signInState.signIn.prepareSecondFactor({ strategy: "email_code", emailAddressId: factor.emailAddressId });
+          setNotice("We sent a verification code to your account email.");
+        } else if (factor.strategy === "phone_code") {
+          await signInState.signIn.prepareSecondFactor({ strategy: "phone_code", phoneNumberId: factor.phoneNumberId });
+          setNotice("We sent a verification code to your phone.");
+        } else if (factor.strategy === "totp") {
+          setNotice("Enter the current code from your authenticator app.");
+        } else {
+          setNotice("Enter one of your backup codes.");
+        }
+
+        setSecondFactorStrategy(factor.strategy);
+        setSecondFactorCode("");
+        setPhase("verify-second-factor");
+        return;
+      }
+
+      if (response.status === "needs_first_factor") {
+        const strategies = (response.supportedFirstFactors ?? []).map((factor) => factor.strategy);
+        if (!strategies.includes("password")) {
+          setError("This account does not use a password. Use the sign-in method you connected to this account.");
+          return;
+        }
+      }
+
+      setError("Your sign-in needs another step. Please try again or reset your password below.");
+
+    } catch (err) {
+      setIsRedirecting(false);
+      setError(getSignInErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startPasswordReset = async () => {
+    setPhase("reset-request");
+    setError(null);
+    setNotice(null);
+    setResetEmailAddress(trimmedEmail || resetEmailAddress);
+    setResetVerificationCode("");
+    setResetPassword("");
+    setShowResetPassword(false);
+    setTouchedResetEmail(false);
+    setTouchedResetPassword(false);
+    setAttemptedSubmit(false);
+  };
+
+  const cancelPasswordReset = async () => {
+    setPhase("form");
+    setError(null);
+    setNotice(null);
+    setResetEmailAddress("");
+    setResetVerificationCode("");
+    setResetPassword("");
+    setShowResetPassword(false);
+    setTouchedResetEmail(false);
+    setTouchedResetPassword(false);
+    setAttemptedSubmit(false);
+    setSecondFactorStrategy(null);
+    setSecondFactorCode("");
+  };
+
+  const sendPasswordResetCode = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setAttemptedSubmit(true);
+
+    if (!resetEmailIsValid) {
+      setBusy(false);
+      setError("Please enter the email address you use for Clover.");
+      return;
+    }
+
+    try {
+      await signInState.signIn.create({
+        strategy: "reset_password_email_code",
+        identifier: trimmedResetEmail,
+      });
+
+      setPhase("reset-code");
+      setNotice(`We sent a reset code to ${trimmedResetEmail}.`);
+    } catch (err) {
+      setError(getSignInErrorMessage(err, "reset"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifyPasswordResetCode = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setAttemptedSubmit(true);
+
+    try {
+      const response = await signInState.signIn.attemptFirstFactor({
+        strategy: "reset_password_email_code",
+        code: resetVerificationCode.trim(),
+      });
+
+      if (response.status === "needs_new_password") {
+        setPhase("reset-password");
+        return;
+      }
+
+      setError("That reset code could not be confirmed. Request a new code and try again.");
+    } catch (err) {
+      setError(getSignInErrorMessage(err, "reset"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitNewPassword = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setAttemptedSubmit(true);
+
+    if (resetPasswordMessage) {
+      setBusy(false);
+      setError(resetPasswordMessage);
+      return;
+    }
+
+    try {
+      const response = await signInState.signIn.resetPassword({
+        password: resetPassword,
+        signOutOfOtherSessions: true,
+      });
+
+      if (response.status === "complete" && response.createdSessionId) {
+        persistRememberedSessionId(staySignedIn ? response.createdSessionId : null);
+        setIsRedirecting(true);
+        await signInState.setActive({
+          session: response.createdSessionId,
+          redirectUrl: completeRedirectUrl,
+        });
+        return;
+      }
+
+      if (signInState.signIn.status === "needs_second_factor") {
+        setError("We’ve sent the reset request through, but extra verification is required. Please check your account.");
+        return;
+      }
+
+      setError("We couldn’t finish the password reset just yet. Please try again.");
+    } catch (err) {
+      setIsRedirecting(false);
+      setError(getSignInErrorMessage(err, "reset"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifySecondFactor = async () => {
+    if (!secondFactorStrategy || !secondFactorCode.trim()) {
+      setError("Enter your verification code to continue.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      const response = await signInState.signIn.attemptSecondFactor({
+        strategy: secondFactorStrategy,
+        code: secondFactorCode.trim(),
+      });
+
+      if (response.status === "complete" && response.createdSessionId) {
+        persistRememberedSessionId(staySignedIn ? response.createdSessionId : null);
+        setIsRedirecting(true);
+        await signInState.setActive({
+          session: response.createdSessionId,
+          redirectUrl: completeRedirectUrl,
+        });
+        return;
+      }
+
+      setError("That verification did not complete sign-in. Please try another code.");
+    } catch (err) {
+      setIsRedirecting(false);
+      setError(getSignInErrorMessage(err, "verification"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitSignUp = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setAttemptedSubmit(true);
+
+    if (!isValidEmail(email)) {
+      setBusy(false);
+      setError("Please enter a valid email address so we can keep your account in sync.");
+      return;
+    }
+
+    if (passwordMessage) {
+      setBusy(false);
+      setError(passwordMessage);
+      return;
+    }
+
+    if (!trimmedFirstName || !trimmedLastName) {
+      setBusy(false);
+      setError("Please enter your first and last name.");
+      return;
+    }
+
+    try {
+      trackSignupSubmit("email");
+      const response = await signUpState.signUp.create({
+        emailAddress: trimmedEmail,
+        password,
+        firstName: trimmedFirstName,
+        lastName: trimmedLastName,
+      });
+
+      if (response.status === "complete" && response.createdSessionId) {
+        persistRememberedSessionId(response.createdSessionId);
+        setIsRedirecting(true);
+        await signUpState.setActive({
+          session: response.createdSessionId,
+          redirectUrl: completeRedirectUrl,
+        });
+        return;
+      }
+
+      if (response.missingFields.length > 0) {
+        setError("Please complete the remaining required sign-up fields.");
+        return;
+      }
+
+      setError("We couldn't finish your sign-up. Please try again.");
+    } catch (err) {
+      setIsRedirecting(false);
+      const firstError = getFirstClerkError(err);
+
+      if (firstError.code.includes("form_identifier_exists") || firstError.code.includes("identifier_exists")) {
+        setError("That email is already in use. Try signing in instead.");
+      } else if (firstError.code.includes("password") && firstError.message) {
+        setError("Your password needs one more tweak. Please make sure it meets the Clover rules.");
+      } else if (firstError.code.includes("email")) {
+        setError("Please double-check that email address. It should look something like name@example.com.");
+      } else {
+        setError("We couldn’t finish your sign-up just yet. Please review the form and try again.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (busy) {
+      return;
+    }
+
+    if (mode === "sign-in") {
+      if (phase === "verify-second-factor") {
+        await verifySecondFactor();
+        return;
+      }
+
+      if (phase === "reset-request") {
+        await sendPasswordResetCode();
+        return;
+      }
+
+      if (phase === "reset-code") {
+        await verifyPasswordResetCode();
+        return;
+      }
+
+      if (phase === "reset-password") {
+        await submitNewPassword();
+        return;
+      }
+
+      if (!emailIsValid) {
+        setAttemptedSubmit(true);
+        setError("Please enter a valid email address.");
+        return;
+      }
+
+      if (!password) {
+        setAttemptedSubmit(true);
+        setError("Please enter your password so we can check your account.");
+        return;
+      }
+
+      await submitSignIn();
+      return;
+    }
+
+    await submitSignUp();
+  };
+
+  const handleSocialLogin = async (strategy: SocialStrategy) => {
+    setError(null);
+    setNotice(null);
+    setSocialBusy(strategy);
+
+    try {
+      if (mode === "sign-in") {
+        await signInState.signIn.authenticateWithRedirect({
+          strategy,
+          redirectUrl: callbackUrl,
+          redirectUrlComplete: completeRedirectUrl,
+        });
+        return;
+      }
+
+      trackSignupSubmit(strategy === "oauth_apple" ? "apple" : "google");
+      await signUpState.signUp.authenticateWithRedirect({
+        strategy,
+        redirectUrl: callbackUrl,
+        redirectUrlComplete: completeRedirectUrl,
+      });
+    } catch (err) {
+      setError(getSignInErrorMessage(err));
+      setSocialBusy(null);
+    }
+  };
+
+  const isResetFlow = mode === "sign-in" && phase.startsWith("reset-");
+  const isSignInContinuation = mode === "sign-in" && phase === "verify-second-factor";
+  const title =
+    mode === "sign-in"
+      ? phase === "reset-request"
+        ? "Reset your password"
+        : phase === "reset-code"
+          ? "Check your email"
+          : phase === "reset-password"
+            ? "Set a new password"
+            : phase === "verify-second-factor"
+              ? "Verify it’s you"
+            : "Welcome back"
+      : "Create your Clover account";
+  const subtitle =
+    mode === "sign-in"
+      ? phase === "reset-request"
+        ? "We’ll send a reset code to the email address on your Clover account."
+        : phase === "reset-code"
+          ? "Enter the 6-digit code we sent to your email."
+          : phase === "reset-password"
+            ? "Choose a new password to get back into Clover."
+            : phase === "verify-second-factor"
+              ? "Complete your account’s extra security check to sign in."
+              : null
+      : null;
+  const footerText =
+    mode === "sign-in" ? (
+      isResetFlow || isSignInContinuation ? (
+        <button
+          type="button"
+          className="clover-auth-card__link clover-auth-card__link-button"
+          onClick={() => {
+            void cancelPasswordReset();
+          }}
+        >
+          Back to sign in
+        </button>
+      ) : (
+        <>
+          New to Clover? <Link className="clover-auth-card__link" href={completeRedirectUrl === "/onboarding?campaign=switch-to-clover" ? "/sign-up?campaign=switch-to-clover" : "/sign-up"}>
+            Create an account
+          </Link>
+        </>
+      )
+    ) : (
+      <>
+        Already have an account? <Link className="clover-auth-card__link" href={completeRedirectUrl === "/onboarding?campaign=switch-to-clover" ? "/sign-in?campaign=switch-to-clover" : "/sign-in"}>
+          Sign In
+        </Link>
+      </>
+    );
+
+  return (
+    <section className="clover-auth-card glass">
+      <Link className="clover-auth-card__brand" href="/" aria-label="Back to Clover home" prefetch={false}>
+        <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" loading="eager" fetchPriority="high" />
+      </Link>
+
+      <header className="clover-auth-card__header">
+        <h1>{title}</h1>
+        {subtitle ? <p>{subtitle}</p> : null}
+      </header>
+
+      <form className="clover-auth-card__form" onSubmit={handleSubmit}>
+        {mode === "sign-in" && phase === "reset-request" ? (
+          <>
+            <label className="clover-auth-field">
+              <span>Email address</span>
+              <input
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="Enter the email on your Clover account"
+                value={resetEmailAddress}
+                onChange={(event) => setResetEmailAddress(event.target.value)}
+                onBlur={() => setTouchedResetEmail(true)}
+                aria-invalid={showResetEmailWarning}
+                aria-describedby={showResetEmailWarning ? "clover-reset-email-warning" : undefined}
+                required
+              />
+            </label>
+            {showResetEmailWarning ? (
+              <p id="clover-reset-email-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
+                Please enter the email address you use for Clover.
+              </p>
+            ) : null}
+
+            <p className="clover-auth-field__hint">
+              We’ll send a reset code to this email so you can create a new password.
+            </p>
+
+            <button className="clover-auth-primary" type="submit" disabled={busy}>
+              {busy ? "Sending..." : "Send reset code"}
+            </button>
+          </>
+        ) : mode === "sign-in" && phase === "reset-code" ? (
+          <>
+            <label className="clover-auth-field">
+              <span>Reset code</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="Enter the 6-digit code"
+                value={resetVerificationCode}
+                onChange={(event) => setResetVerificationCode(event.target.value)}
+                required
+              />
+            </label>
+
+            <p className="clover-auth-field__hint">
+              We sent a code to <strong>{trimmedResetEmail}</strong>. Enter it below to continue.
+            </p>
+
+            <button className="clover-auth-primary" type="submit" disabled={busy}>
+              {busy ? "Verifying..." : "Verify code"}
+            </button>
+
+            <button
+              className="clover-auth-secondary"
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setError(null);
+                setNotice(null);
+                setBusy(true);
+                try {
+                  await signInState.signIn.create({
+                    strategy: "reset_password_email_code",
+                    identifier: trimmedResetEmail,
+                  });
+                  setNotice(`We sent a new reset code to ${trimmedResetEmail}.`);
+                } catch (err) {
+                  setError(getSignInErrorMessage(err, "reset"));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Resend code
+            </button>
+
+          </>
+        ) : mode === "sign-in" && phase === "reset-password" ? (
+          <>
+            <label className="clover-auth-field">
+              <span>New password</span>
+              <div className="clover-auth-password">
+                <input
+                  type={showResetPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  placeholder="Enter your new password"
+                  value={resetPassword}
+                  onChange={(event) => setResetPassword(event.target.value)}
+                  onBlur={() => setTouchedResetPassword(true)}
+                  aria-invalid={showResetPasswordWarning}
+                  aria-describedby={showResetPasswordWarning ? "clover-reset-password-warning" : undefined}
+                  required
+                />
+                <button
+                  type="button"
+                  className="clover-auth-password-toggle"
+                  onClick={() => setShowResetPassword((value) => !value)}
+                  aria-label={showResetPassword ? "Hide password" : "Show password"}
+                >
+                  <PasswordIcon visible={showResetPassword} />
+                </button>
+              </div>
+            </label>
+
+            <p
+              className={`clover-auth-field__hint clover-auth-field__hint--status ${resetPasswordMatchesRequirements ? "is-ok" : "is-missing"}`}
+              role="status"
+              aria-live="polite"
+            >
+              <span className="clover-auth-field__status-mark" aria-hidden="true">
+                {resetPasswordMatchesRequirements ? "✓" : "✕"}
+              </span>
+              <span>{resetPasswordStatusMessage}</span>
+            </p>
+
+            {showResetPasswordWarning ? (
+              <p id="clover-reset-password-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
+                {resetPasswordMessage}
+              </p>
+            ) : null}
+
+            <button className="clover-auth-primary" type="submit" disabled={busy}>
+              {busy ? "Saving..." : "Set new password"}
+            </button>
+          </>
+        ) : mode === "sign-in" && phase === "verify-second-factor" ? (
+          <>
+            <label className="clover-auth-field">
+              <span>{secondFactorStrategy === "backup_code" ? "Backup code" : "Verification code"}</span>
+              <input
+                type="text"
+                inputMode={secondFactorStrategy === "backup_code" ? "text" : "numeric"}
+                autoComplete="one-time-code"
+                placeholder={secondFactorStrategy === "backup_code" ? "Enter a backup code" : "Enter the 6-digit code"}
+                value={secondFactorCode}
+                onChange={(event) => setSecondFactorCode(event.target.value)}
+                required
+                autoFocus
+              />
+            </label>
+
+            <button className="clover-auth-primary" type="submit" disabled={busy || !secondFactorCode.trim()}>
+              {busy ? "Verifying..." : "Verify and sign in"}
+            </button>
+          </>
+        ) : phase === "form" ? (
+          <>
+            {mode === "sign-up" ? (
+              <div className="clover-auth-name-grid">
+                <label className="clover-auth-field">
+                  <span>First name</span>
+                  <input
+                    type="text"
+                    autoComplete="given-name"
+                    placeholder="First name"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="clover-auth-field">
+                  <span>Last name</span>
+                  <input
+                    type="text"
+                    autoComplete="family-name"
+                    placeholder="Last name"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    required
+                  />
+                </label>
+              </div>
+            ) : null}
+            <label className="clover-auth-field">
+              <span>Email address</span>
+              <input
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="Enter your email address"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                onBlur={() => setTouchedEmail(true)}
+                aria-invalid={showEmailWarning}
+                aria-describedby={showEmailWarning ? "clover-email-warning" : undefined}
+                required
+              />
+            </label>
+            {showEmailWarning ? (
+              <p id="clover-email-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
+                That email address doesn’t look quite right. Please double-check it.
+              </p>
+            ) : null}
+
+            <div className="clover-auth-field">
+              <span className="clover-auth-field__label-row">
+                <label htmlFor="clover-auth-password">Password</label>
+              </span>
+              <div className="clover-auth-password">
+                <input
+                  id="clover-auth-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  onBlur={() => setTouchedPassword(true)}
+                  aria-invalid={showPasswordWarning}
+                  aria-describedby={showPasswordWarning ? "clover-password-warning" : undefined}
+                  required
+                />
+                <button
+                  type="button"
+                  className="clover-auth-password-toggle"
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  <PasswordIcon visible={showPassword} />
+                </button>
+              </div>
+              {mode === "sign-in" ? (
+                <button
+                  type="button"
+                  className="clover-auth-card__link clover-auth-card__link-button clover-auth-forgot-password"
+                  onClick={() => {
+                    void startPasswordReset();
+                  }}
+                  disabled={busy}
+                >
+                  Forgot password?
+                </button>
+              ) : null}
+            </div>
+            {mode === "sign-up" && password.length > 0 ? (
+              <p
+                className={`clover-auth-field__hint clover-auth-field__hint--status ${passwordMatchesRequirements ? "is-ok" : "is-missing"}`}
+                role="status"
+                aria-live="polite"
+              >
+                <span className="clover-auth-field__status-mark" aria-hidden="true">
+                  {passwordMatchesRequirements ? "✓" : "✕"}
+                </span>
+                <span>{passwordStatusMessage}</span>
+              </p>
+            ) : null}
+            {showPasswordWarning ? (
+              <p id="clover-password-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
+                {passwordMessage}
+              </p>
+            ) : null}
+
+            {mode === "sign-up" ? <div id="clerk-captcha" className="clover-auth-captcha" /> : null}
+
+            <button
+              className="clover-auth-primary"
+              type="submit"
+              disabled={mode === "sign-in" ? !canSubmitSignIn : !canSubmitSignUp}
+            >
+              {busy ? "Please wait..." : mode === "sign-in" ? "Sign In" : "Continue"}
+            </button>
+
+            {mode === "sign-in" ? (
+              <label className="clover-auth-remember">
+                <input
+                  type="checkbox"
+                  checked={staySignedIn}
+                  onChange={(event) => setStaySignedIn(event.target.checked)}
+                />
+                <span>Stay signed in on this device</span>
+              </label>
+            ) : null}
+
+          </>
+        ) : null}
+      </form>
+
+      {error ? <p className="clover-auth-card__message clover-auth-card__message--error">{error}</p> : null}
+      {notice ? <p className="clover-auth-card__message clover-auth-card__message--notice">{notice}</p> : null}
+
+      {!isResetFlow && !isSignInContinuation ? (
+        <>
+          <div className="clover-auth-card__divider">
+            <span>or continue with</span>
+          </div>
+
+          <div className="clover-auth-card__socials">
+            {socialProviders.map((provider) => (
+              <button
+                key={provider.strategy}
+                type="button"
+                className="clover-auth-social"
+                disabled={socialBusy !== null || busy}
+                onClick={() => {
+                  void handleSocialLogin(provider.strategy);
+                }}
+              >
+                <SocialIcon provider={provider.provider} />
+                <span>{socialBusy === provider.strategy ? "Connecting..." : provider.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      <footer className="clover-auth-card__footer">{footerText}</footer>
+    </section>
+  );
+}

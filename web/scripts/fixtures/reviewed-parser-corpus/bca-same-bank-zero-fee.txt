@@ -1,0 +1,6 @@
+Transfer Dana
+Transaksi berhasil diotorisasi
+BCA. Hak cipta
+Halaman 1 dari 1
+BCA_NATIVE_PAGES 1
+BCA_TRANSFER {"inputDate":"10/04/2025","inputTime":"09:12:34","transferDate":"10/04/2025","transferTime":"09:12:34","sourceAccount":"001-1234567","owner":"EXAMPLE HOLDING P","recipient":"002-7654321","amount":"Rp 30.00","fee":"Rp 0.00","fx":"1.00","status":"Berhasil","reference":"20250410001234","recipientOwner":"EXAMPLE RECIPIENT"}

@@ -1,0 +1,72 @@
+/* Window-size adaptation, including tablet split windows and browser zoom.
+   Keep narrow entry forms readable while directories use the available space. */
+@media (max-width: 1100px) {
+  .shell-bottom-nav.shell-bottom-nav.glass {
+    width: min(640px, calc(100% - 20px)) !important;
+    left: 0 !important;
+    right: 0 !important;
+    margin-inline: auto;
+  }
+  .app-shell .content {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  .app-shell :is(input, select, textarea) { min-width: 0; max-width: 100%; }
+  .transaction-creation-tabs > button { height: auto !important; white-space: normal; }
+}
+
+@media (min-width: 600px) and (max-width: 1100px) {
+  .collection-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+  .content--accounts .accounts-overview-grid,
+  .content--reports .reports-overview-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  }
+  .settings-plan-grid.settings-plan-carousel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    overflow: visible;
+    scroll-snap-type: none;
+    align-items: stretch;
+  }
+  .settings-plan-carousel .settings-plan-card { width: auto; min-width: 0; }
+}
+
+@media (min-width: 600px) and (max-width: 1100px) {
+  .content--settings .settings-section:not(.settings-section--plan) {
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
+  }
+  :is(.modal-card, .recurring-create, .split-bill-manual-modal, .split-bill-modal__card, .budget-editor--page):has(.mobile-sheet-handle) {
+    max-width: 720px !important;
+    margin-inline: auto !important;
+  }
+}
+
+/* A landscape phone or a window above the keyboard must retain a scrollable
+   dialog and reachable actions. Never size these surfaces to device height. */
+@media (max-height: 500px) {
+  :is(.reports-filter-dialog, .investments-filter-dialog, .transaction-filter-dialog) {
+    max-height: calc(100dvh - 16px);
+    padding-block: 12px;
+    overflow-y: auto;
+  }
+  .reports-filter-backdrop { padding-block: 8px; }
+}
+
+@media (max-width: 359px) {
+  .transaction-creation-tabs.transaction-creation-tabs {
+    flex-wrap: wrap;
+  }
+  .transaction-creation-tabs.transaction-creation-tabs > button {
+    flex: 1 1 40% !important;
+    min-width: 0;
+  }
+  .transaction-creation-tabs::before { display: none; }
+  .transaction-creation-tabs > button[aria-selected="true"] {
+    background: var(--brand-gradient);
+    border-radius: 24px;
+  }
+}

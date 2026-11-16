@@ -1,0 +1,514 @@
+import { formatReceiptLineItemAmount, formatTransactionRecordAmount } from "../../../shared/transaction-record-display";
+import type { TransactionSourceMatchAction } from "../../../shared/transaction-source-match";
+import { TransactionConversion, QuickAddLineItem } from "../../src/transaction-detail-extras";
+import { MerchantLogo } from "../../src/merchant-logo";
+import { transactionReviewReasons } from "../../src/transaction-review";
+import { InlineDetailRow } from "../../src/inline-detail-row";
+import { TransactionRelatedActions } from "../../src/transaction-related-actions";
+import { Text } from "../../src/app-text";
+import { ChoiceField } from "../../src/transaction-entry";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  Platform,
+  Pressable,
+  Switch,
+  View,
+} from "react-native";
+import { useAccess } from "../../src/access";
+import { useSession } from "../../src/session";
+import type { Transaction } from "../../src/types";
+import {
+  Icon,
+  Body,
+  Button,
+  Card,
+  Field,
+  Heading,
+  Notice,
+  Screen,
+  dateLabel,
+  money,
+  useTheme,
+} from "../../src/ui";
+
+export default function TransactionDetail() {
+  const { colors, styles, dark } = useTheme();
+  const access = useAccess();
+  const session = useSession();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const [row, setRow] = useState<Transaction | null>(null);
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [accounts, setAccounts] = useState<
+    { id: string; name: string; currency: string }[]
+  >([]);
+  const [categories, setCategories] = useState<
+    { id: string; name: string; type: string }[]
+  >([]);
+  const [name, setName] = useState("");
+  const [userNote, setUserNote] = useState("");
+  const [type, setType] = useState<Transaction["type"]>("expense");
+  const [lineItems, setLineItems] = useState<NonNullable<Transaction["receiptLineItems"]>>([]);
+  const [excluded, setExcluded] = useState(false);
+  const [tags, setTags] = useState("");
+  const [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setRow(null);
+    setError("");
+    const load = async () => {
+      const response = session.demo
+        ? null
+        : await session.request<{
+            transaction: Transaction;
+            accounts: { id: string; name: string; currency: string }[];
+            categories: { id: string; name: string; type: string }[];
+          }>(
+            `transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,
+          );
+      const result =
+        response?.transaction ?? session.rows.find((r) => r.id === id);
+      if (!live) return;
+      if (!result || result.workspaceId !== session.profileId)
+        throw new Error("This transaction is not in the selected Profile.");
+      setRow(result);
+      setAmount(result.amount);
+      setDate(result.date.slice(0, 10));
+      setAccountId(result.accountId);
+      setCategoryId(result.categoryId ?? "");
+      setAccounts(response?.accounts ?? []);
+      setCategories(response?.categories ?? []);
+      setName(result.merchantClean ?? result.merchantRaw);
+      setUserNote(result.userNote ?? "");
+      setType(result.type);
+      setLineItems(result.receiptLineItems ?? []);
+      setExcluded(result.isExcluded ?? false);
+      setTags(result.tags?.map((t) => t.name).join(", ") ?? "");
+    };
+    if (access.active && session.profileId)
+      void load().catch((e: Error) => {
+        if (live) setError(e.message);
+      });
+    return () => {
+      live = false;
+    };
+  }, [
+    id,
+    session.demo,
+    session.profileId,
+    session.request,
+    reload,
+    access.active,
+  ]);
+  const reviewSourceMatch = async (matchId: string, action: TransactionSourceMatchAction) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await session.request<{ transaction: Transaction }>(
+        `transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,
+        { method: "PATCH", body: JSON.stringify({ [action]: matchId }) },
+      );
+      setRow(result.transaction);
+      setLineItems(result.transaction.receiptLineItems ?? []);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Couldn’t review this match.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const reviewReasons = row ? transactionReviewReasons(row) : [];
+  if (!access.active) return null;
+  const save = async () => {
+    if (!row || busy) return;
+    if (!name.trim()) {
+      setError("Add a transaction name.");
+      return;
+    }
+    const parsedDate = new Date(`${date}T00:00:00Z`);
+    if (
+      !/^\d{1,12}(\.\d{1,2})?$/.test(amount) ||
+      Number(amount) <= 0 ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      !Number.isFinite(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== date
+    ) {
+      setError("Enter a positive amount and a valid date.");
+      return;
+    }
+    const selectedTags = [
+      ...new Set(
+        tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (
+      selectedTags.length > 20 ||
+      selectedTags.some((tag) => tag.length > 64)
+    ) {
+      setError("Use up to 20 tags, each under 65 characters.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setSaved(false);
+    try {
+      if (session.demo)
+        session.updateSample({
+          ...row,
+          merchantClean: name.trim(),
+          userNote,
+          type,
+          amount, date, accountId, categoryId: categoryId || null,
+          receiptLineItems: lineItems, isExcluded: excluded,
+          tags: selectedTags.map((tag) => ({ id: tag, name: tag })),
+        });
+      else
+        await session.request(
+          `transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              ...(amount !== row.amount ? { amount } : {}),
+              ...(date !== row.date.slice(0, 10) ? { date } : {}),
+              ...(accountId !== row.accountId ? { accountId } : {}),
+              ...(categoryId !== (row.categoryId ?? "")
+                ? { categoryId: categoryId || null }
+                : {}),
+              merchantClean: name.trim(),
+              userNote,
+              ...(excluded !== Boolean(row.isExcluded) ? { isExcluded: excluded } : {}),
+              ...(JSON.stringify(lineItems) !== JSON.stringify(row.receiptLineItems ?? []) ? { receiptLineItems: lineItems } : {}),
+              ...(type !== row.type ? { type } : {}),
+              tags: selectedTags,
+            }),
+          },
+        );
+      setSaved(true);
+      setEditing(false);
+      setReload((n) => n + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const keep = async () => {
+    if(!row || busy || session.demo) return;
+    setBusy(true);setError("");
+    try {
+      await session.request(`transactions/review?workspaceId=${encodeURIComponent(session.profileId)}`,{method:"POST",body:JSON.stringify({workspaceId:session.profileId,transactionIds:[row.id]})});
+      setReload(n=>n+1);
+    } catch(cause) {setError((cause as Error).message);} finally {setBusy(false);}
+  };
+  const remove = async () => {
+    if (!row || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await session.request(
+        `transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,
+        { method: "DELETE" },
+      );
+      router.replace("/(tabs)/transactions");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={{ flex: 1 }}>
+      <Screen>
+        {error ? <Notice>{error}</Notice> : null}
+        {!row ? (
+          <>
+            <Body>
+              {error
+                ? "Unable to load this transaction."
+                : "Loading transaction…"}
+            </Body>
+            {error ? (
+              <Button title="Retry" onPress={() => setReload((n) => n + 1)} />
+            ) : null}
+          </>
+        ) : (
+          <>
+            {!editing ? (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    paddingVertical: 16,
+                  }}
+                >
+                  <MerchantLogo transaction={row} size={32} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontFamily: "Poppins-SemiBold",
+                        color: colors.ink,
+                      }}
+                    >
+                      {row.merchantClean || row.merchantRaw}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: colors.muted }}>
+                      {dateLabel(row.date)}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end", alignSelf: "flex-start", gap: 4, maxWidth: "42%" }}>
+                    <Text style={{ fontSize: 15, fontFamily: "Poppins-SemiBold", color: row.type === "expense" ? colors.danger : row.type === "income" ? colors.positive : colors.ink }}>{formatTransactionRecordAmount(row)}</Text>
+
+                  </View>
+                </View>
+                <TransactionConversion amount={row.amount} currency={row.currency} />
+                <Card
+                  style={{ padding: 0, gap: 0, overflow: "hidden", borderRadius: 16 }}
+                >
+                  {[
+                    {label:"Type",key:"type",value:row.type,display:row.type[0].toUpperCase()+row.type.slice(1),options:["expense","income","transfer"].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))},
+                    {label:"Name",key:"merchantClean",value:row.merchantClean||row.merchantRaw},
+                    {label:"Account",key:"accountId",value:row.accountId,display:row.accountName,options:accounts.filter(a=>a.currency===row.currency).map(a=>({value:a.id,label:a.name}))},
+                    {label:"Category",key:"categoryId",value:row.categoryId||"",display:row.categoryName||"Uncategorized",options:[{value:"",label:"Uncategorized"},...categories.filter(c=>c.type===row.type).map(c=>({value:c.id,label:c.name}))]},
+                    {label:"Tags",key:"tags",value:row.tags?.map(t=>t.name).join(", ")||"",display:row.tags?.map(t=>t.name).join(", ")||"No tags"},
+                    {label:"Date",key:"date",value:row.date.slice(0,10),display:dateLabel(row.date)},
+                    {label:"Amount",key:"amount",value:row.amount,display:formatTransactionRecordAmount(row)},
+                    {label:"Notes",key:"userNote",value:row.userNote||"",display:row.userNote||"No notes"},
+                  ].map(field=><InlineDetailRow key={field.key} label={field.label} value={field.value} displayValue={field.display} options={field.options} numeric={field.key==="amount"} onSave={async value=>{
+                    const patch = {[field.key]:field.key==="tags"?value.split(",").map(t=>t.trim()).filter(Boolean):field.key==="categoryId"?value||null:value};
+                    if(session.demo){session.updateSample({...row,...patch,...(field.key === "tags" ? { tags: value.split(",").map(t=>t.trim()).filter(Boolean).map(name=>({id:name,name})) } : {})} as Transaction);}else await session.request(`transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,{method:"PATCH",body:JSON.stringify(patch)});
+                    setReload(v=>v+1);
+                  }}/>) }
+                </Card>
+                {reviewReasons.length > 0 ? <Card>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Icon line name="warning-outline" size={18} color="#D6A226"/><Heading>Review transaction</Heading></View>
+                  {reviewReasons.map(reason => <Body key={reason}>{reason}</Body>)}
+                  <Button title={busy ? "Saving…" : "Keep"} disabled={busy || session.demo} onPress={()=>void keep()}/>
+                  <Button secondary danger title="Delete" disabled={busy || session.demo} onPress={()=>Alert.alert("Delete transaction?","This cannot be undone.",[{text:"Cancel",style:"cancel"},{text:"Delete",style:"destructive",onPress:()=>void remove()}])}/>
+                  <Button secondary title="Edit details" onPress={() => setEditing(true)} />
+                </Card> : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: sourceOpen }}
+                  onPress={() => setSourceOpen((v) => !v)}
+                  style={{ minHeight: 44, justifyContent: "center" }}
+                >
+                  <Text style={{ fontSize: 12, color: colors.teal }}>
+                    {sourceOpen ? "▾" : "▸"} Source and review details
+                  </Text>
+                </Pressable>
+                {sourceOpen ? (
+                  <Card>
+                    <Body>Source: {row.source || "Recorded"}</Body>
+                    <Body>
+                      Confidence:{" "}
+                      {row.confidenceScore == null
+                        ? "Not available"
+                        : `${row.confidenceScore}%`}
+                    </Body>
+                    <Body>Parsed information</Body>
+                    <Body>{row.parsedNote || row.merchantRaw}</Body>
+                  </Card>
+                ) : null}
+                <Card>
+                  <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between"}}><Text style={{ fontSize: 16, fontFamily: "Poppins-SemiBold", color: colors.muted }}>Line Items</Text><Pressable accessibilityLabel="Edit line items" onPress={()=>setEditing(true)}><Icon line name="create-outline" size={16}/></Pressable></View>
+                  {row.receiptLineItems?.length ? (
+                    row.receiptLineItems.map((item, i) => (
+                      <Body key={i}>
+                        {item.description}{item.quantity ? ` · Qty ${item.quantity}` : ""} ·{" "}
+                        {formatReceiptLineItemAmount(item, row.currency, (amount, currency) => money(String(amount), currency))}
+                      </Body>
+                    ))
+                  ) : (
+                    <Body>No line items yet.</Body>
+                  )}
+                  {row.sourceMatches?.length ? (
+                    <View style={{ gap: 8 }}>
+                      <Body muted={false}>Matches from other sources</Body>
+                      {row.sourceMatches.map(match => (
+                        <View key={match.id} style={{ gap: 4 }}>
+                          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: "/transaction/[id]", params: { id: match.id } })}>
+                            <Body>{match.name} · {match.source} · {match.accountName} · {match.date.slice(0, 10)}</Body>
+                          </Pressable>
+                          <Body>{match.confirmed ? "Confirmed same purchase" : match.evidence.join(" · ")}</Body>
+                          {!match.confirmed ? <Button title="Same purchase" disabled={busy} onPress={() => void reviewSourceMatch(match.id, "confirmSourceMatchId")} /> : null}
+                          {match.canCopyLineItems && !row.receiptLineItems?.length ? (
+                            <Button title="Copy receipt line items" disabled={busy} onPress={() => void reviewSourceMatch(match.id, "copyReceiptFromTransactionId")} />
+                          ) : null}
+                          <Button title="Not the same purchase" disabled={busy} onPress={() => void reviewSourceMatch(match.id, "dismissSourceMatchId")} />
+                        </View>
+                      ))}
+                      <Body>Confirming a match keeps both transactions and their totals.</Body>
+                    </View>
+                  ) : null}
+                  <QuickAddLineItem key={row.id} currency={row.currency} count={row.receiptLineItems?.length ?? 0} disabled={busy} onAdd={async (item,requestId) => {
+                    const receiptLineItems = [...(row.receiptLineItems ?? []),item];
+                    setBusy(true);
+                    try {
+                      if(session.demo) session.updateSample({...row,receiptLineItems});
+                      else {
+                        const result = await session.request<{transaction:Transaction}>(`transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,{method:'PATCH',body:JSON.stringify({appendReceiptLineItem:{item,requestId}})});
+                        setRow(result.transaction);setLineItems(result.transaction.receiptLineItems ?? []);
+                        return;
+                      }
+                      setRow({...row,receiptLineItems});setLineItems(receiptLineItems);
+                    } finally {setBusy(false);}
+                  }} />
+                </Card>
+                <TransactionRelatedActions key={row.id} transaction={row} />
+              </>
+            ) : (
+              <>
+                {reviewReasons.length > 0 ? <Notice>{reviewReasons.map(reason => reason.replace(/[.]+$/, "")).join(". ")}. Check these details against the original record before saving.</Notice> : null}
+                <ChoiceField
+                  label="Type"
+                  value={type}
+                  onChange={(value) => { setType(value as Transaction["type"]); setCategoryId(""); }}
+                  options={[{ value: "income", label: "Income" }, { value: "expense", label: "Expense" }, { value: "transfer", label: "Transfer" }]}
+                />
+                <Field
+                  label={`Amount (${row.currency})`}
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="decimal-pad"
+                />
+                <Field
+                  label="Date (YYYY-MM-DD)"
+                  value={date}
+                  onChangeText={setDate}
+                />
+                {!session.demo ? (
+                  <>
+                    <ChoiceField
+                      label="Account"
+                      value={accountId}
+                      onChange={setAccountId}
+                      options={accounts
+                        .filter((a) => a.currency === row.currency)
+                        .map((a) => ({ value: a.id, label: a.name }))}
+                    />
+                    <ChoiceField
+                      label="Category"
+                      value={categoryId}
+                      onChange={setCategoryId}
+                      options={[
+                        { value: "", label: "Uncategorized" },
+                        ...categories
+                          .filter(
+                            (c) =>
+                              c.type === type || type === "transfer",
+                          )
+                          .map((c) => ({ value: c.id, label: c.name })),
+                      ]}
+                    />
+                  </>
+                ) : null}
+                <Field
+                  label="Name"
+                  value={name}
+                  onChangeText={(v) => {
+                    setName(v);
+                    setSaved(false);
+                  }}
+                  maxLength={200}
+                />
+                <Field
+                  label="Notes"
+                  value={userNote}
+                  onChangeText={(v) => {
+                    setUserNote(v);
+                    setSaved(false);
+                  }}
+                  multiline
+                  maxLength={2000}
+                />
+                <Field
+                  label="Tags, separated by commas"
+                  placeholder="Household, Travel, Work"
+                  value={tags}
+                  onChangeText={(v) => {
+                    setTags(v);
+                    setSaved(false);
+                  }}
+                />
+                <Heading>Line Items</Heading>
+                {lineItems.map((item, index) => <Card key={index}>
+                  <Field label={`Item ${index + 1}`} value={item.description} maxLength={500} onChangeText={description => setLineItems(items => items.map((entry, i) => i === index ? { ...entry, description } : entry))} />
+                  <Field label={`Item ${index + 1} quantity`} value={item.quantity ?? ""} keyboardType="decimal-pad" maxLength={32} onChangeText={quantity => setLineItems(items => items.map((entry, i) => i === index ? { ...entry, quantity: quantity || null } : entry))} />
+                  <Field label={`Item ${index + 1} currency`} value={item.currency ?? row.currency} maxLength={3} autoCapitalize="characters" onChangeText={currency => setLineItems(items => items.map((entry, i) => i === index ? { ...entry, currency: currency.toUpperCase() } : entry))} />
+                  <Field label={`Item ${index + 1} amount (${item.currency || row.currency})`} value={item.amount ?? ""} keyboardType="decimal-pad" maxLength={32} onChangeText={amount => setLineItems(items => items.map((entry, i) => i === index ? { ...entry, amount: amount || null } : entry))} />
+                  <Button title={`Remove item ${index + 1}`} secondary onPress={() => setLineItems(items => items.filter((_, i) => i !== index))} />
+                </Card>)}
+                <QuickAddLineItem key={`${row.id}:edit`} currency={row.currency} count={lineItems.length} disabled={busy} onAdd={item=>setLineItems(items=>[...items,item])} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <Switch accessibilityLabel="Exclude from reports" value={excluded} onValueChange={setExcluded} />
+                  <Body>Exclude from reports</Body>
+                </View>
+                <Body>
+                  Your changes are saved only when you tap Save changes. The
+                  original statement data stays traceable.
+                </Body>
+                {saved && (
+                  <Notice>
+                    {session.demo
+                      ? "Sample updated on this device only."
+                      : "Changes saved to Clover."}
+                  </Notice>
+                )}
+                <Button
+                  title={busy ? "Saving…" : "Save changes"}
+                  disabled={busy}
+                  onPress={() => void save()}
+                />
+                <Button
+                  secondary
+                  title="Cancel"
+                  onPress={() => {
+                    setEditing(false);
+                    setReload((n) => n + 1);
+                    setSaved(false);
+                  }}
+                />
+              </>
+            )}
+            {!session.demo && reviewReasons.length === 0 ? (
+              <Button
+                secondary
+                title="Delete transaction"
+                disabled={busy}
+                onPress={() =>
+                  Alert.alert(
+                    "Delete transaction?",
+                    "This removes the transaction from your active records.",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: () => void remove(),
+                      },
+                    ],
+                  )
+                }
+              />
+            ) : null}
+          </>
+        )}
+      </Screen>
+    </View>
+  );
+}

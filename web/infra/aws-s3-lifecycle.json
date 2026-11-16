@@ -1,0 +1,14 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-temporary-imports",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "workspaces/"
+      },
+      "Expiration": {
+        "Days": 3
+      }
+    }
+  ]
+}

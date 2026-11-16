@@ -1,0 +1,25 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="3D Clover icon / Take Photo">
+<path id="Vector" opacity="0.12" d="M28.875 53.375C39.5065 53.375 48.125 51.4162 48.125 49C48.125 46.5838 39.5065 44.625 28.875 44.625C18.2435 44.625 9.625 46.5838 9.625 49C9.625 51.4162 18.2435 53.375 28.875 53.375Z" fill="#07536B"/>
+<path id="Vector_2" d="M8.75 20.125H17.5L21 13.125H35.875L39.375 20.125H49.875V43.75L46.375 47.25H8.75V20.125Z" fill="#087F99"/>
+<path id="Vector_3" d="M6.125 16.625H16.625L20.125 9.625H35L38.5 16.625H47.25V42H6.125V16.625Z" fill="url(#paint0_linear_0_158)"/>
+<path id="Vector_4" opacity="0.5" d="M7.875 17.5H45.5V21.875H7.875V17.5Z" fill="#C6FFF1"/>
+<path id="Vector_5" d="M28 41.125C34.2822 41.125 39.375 36.0322 39.375 29.75C39.375 23.4678 34.2822 18.375 28 18.375C21.7178 18.375 16.625 23.4678 16.625 29.75C16.625 36.0322 21.7178 41.125 28 41.125Z" fill="#E4FFFA"/>
+<path id="Vector_6" d="M28.875 39.375C33.7075 39.375 37.625 35.4575 37.625 30.625C37.625 25.7925 33.7075 21.875 28.875 21.875C24.0425 21.875 20.125 25.7925 20.125 30.625C20.125 35.4575 24.0425 39.375 28.875 39.375Z" fill="#068FA9"/>
+<path id="Vector_7" d="M28 36.75C32.3492 36.75 35.875 33.2242 35.875 28.875C35.875 24.5258 32.3492 21 28 21C23.6508 21 20.125 24.5258 20.125 28.875C20.125 33.2242 23.6508 36.75 28 36.75Z" fill="url(#paint1_radial_0_158)"/>
+<path id="Vector_8" opacity="0.65" d="M25.375 28C26.8247 28 28 27.2165 28 26.25C28 25.2835 26.8247 24.5 25.375 24.5C23.9253 24.5 22.75 25.2835 22.75 26.25C22.75 27.2165 23.9253 28 25.375 28Z" fill="white"/>
+<path id="Vector_9" d="M42.4375 19.25H38.9375C38.2126 19.25 37.625 19.8376 37.625 20.5625V21.4375C37.625 22.1624 38.2126 22.75 38.9375 22.75H42.4375C43.1624 22.75 43.75 22.1624 43.75 21.4375V20.5625C43.75 19.8376 43.1624 19.25 42.4375 19.25Z" fill="#E8FFFA"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_158" x1="6.125" y1="9.625" x2="37.5952" y2="49.6006" gradientUnits="userSpaceOnUse">
+<stop stop-color="#78F0D6"/>
+<stop offset="0.52" stop-color="#27CACC"/>
+<stop offset="1" stop-color="#039BB6"/>
+</linearGradient>
+<radialGradient id="paint1_radial_0_158" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(28 28.875) scale(7.875)">
+<stop stop-color="#61DFE2"/>
+<stop offset="0.45" stop-color="#146776"/>
+<stop offset="1" stop-color="#0C3547"/>
+</radialGradient>
+</defs>
+</svg>

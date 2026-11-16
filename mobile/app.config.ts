@@ -1,0 +1,125 @@
+import type { ExpoConfig } from "expo/config";
+
+const iosBundleIdentifier = process.env.CLOVER_IOS_BUNDLE_ID || "ph.clover.preview";
+
+const config: ExpoConfig = {
+  name: process.env.CLOVER_APP_NAME || "Clover Preview",
+  slug: "clover-mobile",
+  owner: "clover-innovations",
+  extra: {
+    eas: {
+      projectId: "742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff",
+      build: { experimental: { ios: { appExtensions: [{
+        targetName: "CloverQuickActions",
+        bundleIdentifier: `${iosBundleIdentifier}.QuickActions`,
+        entitlements: { "com.apple.security.application-groups": [`group.${iosBundleIdentifier}.widgets`] },
+      }] } } },
+    },
+  },
+  scheme: process.env.CLOVER_APP_SCHEME || "clover-preview",
+  version: "1.1.3",
+  icon: "./assets/clover-liquid-glass-icon.png",
+  userInterfaceStyle: "automatic",
+  orientation: "default",
+  ios: {
+    bundleIdentifier: iosBundleIdentifier,
+    appleTeamId: "6XX38GYURG",
+    buildNumber: "56",
+    supportsTablet: true,
+    usesAppleSignIn: true,
+    associatedDomains: ["applinks:clover.ph", "applinks:staging.clover.ph"],
+    // SQLCipher adds bundled cryptography; complete Apple’s export declaration for release.
+  },
+  android: {
+    package: process.env.CLOVER_ANDROID_PACKAGE_ID || "ph.clover.preview",
+    versionCode: 56,
+    allowBackup: false,
+    // Country-only receipt suggestions never need precise/background location.
+    // Remove these even when a dependency contributes them during manifest merge.
+    blockedPermissions: [
+      "android.permission.ACCESS_FINE_LOCATION",
+      "android.permission.ACCESS_BACKGROUND_LOCATION",
+      "android.permission.FOREGROUND_SERVICE_LOCATION",
+      "android.permission.READ_CONTACTS",
+      "android.permission.WRITE_CONTACTS",
+      "android.permission.MANAGE_CONTACTS",
+      "android.permission.ACCESS_LOCAL_NETWORK",
+      "android.permission.MANAGE_EXTERNAL_STORAGE",
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.READ_MEDIA_IMAGES",
+      "android.permission.READ_MEDIA_VIDEO",
+      "android.permission.READ_MEDIA_AUDIO",
+      "android.permission.READ_SMS",
+      "android.permission.RECEIVE_SMS",
+      "android.permission.SEND_SMS",
+      "android.permission.READ_CALL_LOG",
+      "android.permission.WRITE_CALL_LOG",
+    ],
+    intentFilters: [{
+      action: "VIEW", autoVerify: true, category: ["BROWSABLE", "DEFAULT"],
+      data: ["clover.ph", "staging.clover.ph"].map(host => ({ scheme: "https", host, pathPrefix: "/split-bill/request/" })),
+    }],
+    adaptiveIcon: { foregroundImage: "./assets/clover-liquid-glass-icon.png", backgroundColor: "#1F2933" },
+    predictiveBackGestureEnabled: true,
+  },
+  plugins: [
+    "expo-router",
+    "./plugins/with-clover-launcher.cjs",
+    "expo-apple-authentication",
+    [
+      "expo-splash-screen",
+      {
+        backgroundColor: "#F7F9FA",
+        image: "./assets/splash-brand.png",
+        imageWidth: 220,
+        resizeMode: "contain",
+        ios: { image: "./assets/splash-brand.png", imageWidth: 220, resizeMode: "contain", backgroundColor: "#F7F9FA" },
+        android: { image: "./assets/android-clover-symbol.png", imageWidth: 160, backgroundColor: "#F7F9FA" },
+      },
+    ],
+    "expo-localization",
+    ["expo-location", { locationAlwaysAndWhenInUsePermission: false, locationAlwaysPermission: false, motionUsagePermission: "Clover’s location library includes optional motion support. Clover does not request or collect motion or fitness activity; receipt scanning works without this access.", locationWhenInUsePermission: "Use your location to suggest the currency for your next receipt photo. Only the country is saved; scanning also works without location.", isIosBackgroundLocationEnabled: false, isAndroidBackgroundLocationEnabled: false, isAndroidForegroundServiceEnabled: false }],
+    ["expo-build-properties", { android: {
+      minSdkVersion: 26,
+      enableMinifyInReleaseBuilds: true,
+      enableShrinkResourcesInReleaseBuilds: true,
+    } }],
+    "./plugins/with-clover-android-release.cjs",
+    ["expo-sqlite", { useSQLCipher: true }],
+    "./plugins/with-unique-pod-uuids.cjs",
+    "./plugins/with-quoted-ios-paths.cjs",
+    "./plugins/with-clover-adaptive-icon.cjs",
+    "expo-secure-store",
+    "expo-web-browser",
+    "expo-sharing",
+    "expo-font",
+    ["@clerk/expo", { appleSignIn: true }],
+    [
+      "expo-image-picker",
+      {
+        photosPermission:
+          "Choose an account photo, receipt, or financial screenshot for Clover.",
+        cameraPermission: "Take a photo of a receipt to import into Clover.",
+        microphonePermission:
+          "Use your microphone to dictate a Clover message.",
+      },
+    ],
+    "expo-document-picker",
+    [
+      "expo-speech-recognition",
+      {
+        androidSpeechServicePackages: [
+          "com.google.android.googlequicksearchbox",
+          "com.google.android.tts",
+          "com.google.android.as",
+        ],
+        microphonePermission:
+          "Use your microphone to dictate a Clover message.",
+        speechRecognitionPermission:
+          "Turn your spoken words into a draft you can review before sending.",
+      },
+    ],
+  ],
+  web: { bundler: "metro", output: "single" },
+};
+export default config;

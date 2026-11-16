@@ -1,0 +1,388 @@
+"use client";
+
+import { CloverMascot } from "@/components/clover-mascot";
+import { SwitchOfferNotice } from "@/components/switch-campaign";
+import { StoryBackground } from "@/components/story-background";
+import { cloverPhoneScreens } from "@/lib/connect-platform-designs";
+import { useLandingTableFit } from "@/lib/use-landing-table-fit";
+
+import Image from "next/image";
+import Link from "next/link";
+import { PublicFooter } from "@/components/public-footer";
+import { PlanComparisonTable } from "@/components/plan-comparison-table";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { LandingSignupModal } from "@/components/landing-signup-modal";
+import { FEATURE_LINKS } from "@/lib/public-site";
+import typography from "@/components/landing-type.module.css";
+import styles from "./landing-preview.module.css";
+
+const chapters = [
+  { title: <>Months of finances.<br /><em>Organized in minutes.</em></>, copy: "Connect supported banks, upload statements and receipts, or add details manually. Understand your money and take one clearer step at a time." },
+  { title: <>Start with <em>what suits you.</em></>, copy: "Connect supported banks. Upload statements, receipts, screenshots, or spreadsheets. Add details manually. Choose what works for you." },
+  { title: <>Your financial data stays <em>under your control.</em></>, copy: "Your financial records are private, reviewable, and traceable. You can edit, export, or delete your data through your account." },
+  { title: <>Understand your finances.<br /><em>Build better habits.</em></>, copy: "Your financial life in one view. Track accounts, balances, recurring obligations, investments, and trends across your accounts." },
+  { title: <>Ask what your money can make <em>possible.</em></>, copy: "Your Ask Clover can tell you what you can safely spend, what changed this month, or assist you with creating budgets and goals." },
+  { title: <>Manage money together <em>with less effort.</em></>, copy: "Split expenses with friends on Split Bills. Manage household expenses with a partner on Circles." },
+  { title: <>Do more when your finances <em>get more complex.</em></>, copy: "Start free. Upgrade to Plus or Pro for connected bank accounts, higher limits, and more help from Ask Clover." },
+  { title: <>Feel clearer about your money, and more confident <em>about what comes next.</em></>, copy: null },
+] as const;
+
+// Preserve each scene's responsive composition when its place in the story changes.
+const chapterLayouts = [0, 0, 5, 2, 3, 4, 6, 7] as const;
+const productChapters = [0, 3, 4, 5] as const;
+
+export type LandingMarket = "ph" | "global";
+
+const marketContent = {
+  ph: {
+    documents: [["BPI STATEMENT", "12 months"], ["RECEIPT", "₱2,480"], ["GCASH EXPORT", "Old records"], ["MERALCO BILL", "Card activity"]],
+    documentLines: [
+      [["Payroll", "+ ₱68,000"], ["SM Supermarket", "− ₱2,480"], ["Meralco", "− ₱4,920"]],
+      [["Groceries", "₱2,480"], ["VAT", "₱265"], ["Total", "₱2,745"]],
+      [["Grab", "− ₱220"], ["Transfer received", "+ ₱3,000"], ["Mobile load", "− ₱599"]],
+    ],
+    uploadRows: [
+      ["BPI statement", "/assets/banks/philippines/bpi.png"],
+      ["Grab receipt", "/assets/banks/philippines/grabpay.png"],
+      ["GCash export", "/assets/banks/philippines/gcash.png"],
+    ],
+    balance: "₱633,688.84", income: "₱68,000", expenses: "₱31,420", cashFlow: "₱36,580",
+    transactions: [["Pay day • BPI", "+ ₱68,000"], ["SM Supermarket", "− ₱2,480"], ["Meralco", "− ₱4,920"], ["Grab", "− ₱220"]],
+    accountCards: [
+      ["BPI Savings • PHP", "₱428,350.84", "/assets/banks/philippines/bpi.png"],
+      ["Cash • PHP", "₱18,500.00", "/assets/banks/1 generic/cash.png"],
+      ["GCash Wallet • PHP", "₱12,838.00", "/assets/banks/philippines/gcash.png"],
+    ],
+    insight: "Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.",
+    planAmount: "₱12,000",
+  },
+  global: {
+    documents: [["CHASE STATEMENT", "12 months"], ["RECEIPT", "$84.20"], ["PAYPAL EXPORT", "Old records"], ["UTILITY BILL", "Card activity"]],
+    documentLines: [
+      [["Pay day", "+ $6,800"], ["Whole Foods", "− $84"], ["National Grid", "− $192"]],
+      [["Groceries", "$84.20"], ["Tax", "$7.31"], ["Total", "$91.51"]],
+      [["Uber", "− $22"], ["Transfer received", "+ $300"], ["Streaming", "− $15"]],
+    ],
+    uploadRows: [
+      ["Chase statement", "/assets/banks/uk/chase bank.png"],
+      ["PayPal receipt", "/assets/banks/philippines/paypal.png"],
+      ["Wise export", "/assets/banks/philippines/wise.png"],
+    ],
+    balance: "$24,860.42", income: "$6,800", expenses: "$3,142", cashFlow: "$3,658",
+    transactions: [["Pay day • Chase", "+ $6,800"], ["Whole Foods", "− $84"], ["National Grid", "− $192"], ["Uber", "− $22"]],
+    accountCards: [
+      ["Chase Checking • USD", "$18,420.42", "/assets/banks/uk/chase bank.png"],
+      ["Cash • USD", "$1,240.00", "/assets/banks/1 generic/cash.png"],
+      ["Wise Wallet • USD", "$5,200.00", "/assets/banks/philippines/wise.png"],
+    ],
+    insight: "Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.",
+    planAmount: "$820",
+  },
+} as const;
+
+const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
+
+
+function ComparisonTable() {
+  return <table className={styles.comparisonTable}>
+    <caption>The old way compared with organizing your finances in Clover</caption>
+    <thead><tr><th scope="col">The old way</th><th scope="col">A simpler way</th></tr></thead>
+    <tbody>
+      <tr><td>Jump between apps and files</td><td><strong>1. Bring together</strong> connect, upload, or add manually</td></tr>
+      <tr><td>Piece together your financial history</td><td><strong>2. Organize</strong> accounts and transactions in one place</td></tr>
+      <tr><td>Guess what changed in your finances</td><td><strong>3. Understand</strong> patterns, reports, and Ask Clover guidance</td></tr>
+      <tr><td>Make decisions without knowing what to do next</td><td><strong>4. Improve</strong> by acting on one clear recommendation at a time</td></tr>
+    </tbody>
+  </table>;
+}
+
+export function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
+  return <div className={styles.actions}>
+    {authEnabled ? <LandingSignupModal enabled>Organize my finances for free <span aria-hidden="true">→</span></LandingSignupModal> : <Link className="button button-primary button-pill" data-analytics-action="signup" href="/sign-up" prefetch={false}>Organize my finances for free <span aria-hidden="true">→</span></Link>}
+    {!final && <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>}
+  </div>;
+}
+
+export function ProActions(_props: { market?: LandingMarket }) {
+  return <div className={styles.proActions} data-landing-actions>
+    <Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual" prefetch={false}>Upgrade to Plus <span aria-hidden="true">→</span></Link>
+    <small>You can keep using Clover for free.</small>
+  </div>;
+}
+
+export function ProComparison({ market, style, showActions = true, variant = "landing" }: { market: LandingMarket; style: CSSProperties; showActions?: boolean; variant?: "landing" | "feature" }) {
+  return <div className={styles.proDetails} style={style}>
+    <div className={styles.proComparisonCard}>
+      <PlanComparisonTable market={market} variant={variant} className={styles.proTable} paidFirst footer={<SwitchOfferNotice compact />} />
+      <Link className={styles.proCompareLink} href="/pricing?plan_source=landing">Compare all Free, Plus and Pro features <span aria-hidden="true">→</span></Link>
+    </div>
+    {showActions ? <ProActions market={market} /> : null}
+  </div>;
+}
+
+export function LandingTransactionPhone({ market, style, screen = "transactions", screenSource }: { market: LandingMarket; style?: CSSProperties; screen?: string; screenSource?: string }) {
+  const capture = screenSource ?? cloverPhoneScreens[screen] ?? `/assets/landing-screens/${screen}-${market}.webp`;
+  const localizedCapture = market === "global" ? capture.replace(/-ph\.webp$/, "-global.webp") : capture;
+  return <div className={styles.iphoneFrame} data-story-visual="phone" style={style}>
+        <span className={styles.iphoneSideButtons} />
+        <div className={styles.iphoneDisplay}>
+          <div className={styles.iphoneStatusBar}><b>9:41</b><span className={styles.iphoneIsland} /><span className={styles.iphoneIndicators}><svg viewBox="0 0 18 12"><path d="M1 11V8h2v3M5 11V6h2v5M9 11V3h2v8M13 11V1h2v10" stroke="currentColor" strokeWidth="1.5" /></svg><svg viewBox="0 0 16 12"><path d="M1 3q7-5 14 0M4 6q4-3 8 0M7 9q1-1 2 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><i /></span></div>
+          <Image className={styles.iphoneAppScreen} src={localizedCapture} alt={`Clover mobile ${screen} screen with fictional sample data`} width={1206} height={2334} sizes="(max-width: 900px) 1px, 40vw" draggable={false} unoptimized />
+          <span className={styles.iphoneHomeIndicator} />
+        </div>
+        <span className={styles.iphoneGlass} />
+      </div>;
+}
+
+export function JourneyHeader({ featureBasePath = "/features", homeHref = "/" }: { featureBasePath?: string; homeHref?: string } = {}) {
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const featuresRef = useRef<HTMLDivElement>(null);
+  const [featuresOpen, setFeaturesOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useEffect(() => {
+    const mobileLayout = window.matchMedia("(max-width: 900px)");
+    const closeNavigation = () => {
+      setMobileMenuOpen(false);
+      setFeaturesOpen(false);
+    };
+    mobileLayout.addEventListener("change", closeNavigation);
+    return () => mobileLayout.removeEventListener("change", closeNavigation);
+  }, []);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => Array.from(drawerRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled])') ?? []);
+    focusable()[0]?.focus();
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const targets = focusable();
+      const first = targets[0];
+      const last = targets[targets.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawerRef.current?.contains(document.activeElement))) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawerRef.current?.contains(document.activeElement))) {
+        event.preventDefault(); first?.focus();
+      }
+    };
+    document.addEventListener("keydown", trapFocus);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", trapFocus);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [mobileMenuOpen]);
+  useEffect(() => {
+    const closeMenus = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!featuresRef.current?.contains(target)) setFeaturesOpen(false);
+      if (!headerRef.current?.contains(target) && !target.closest("[data-mobile-navigation]")) {
+        setFeaturesOpen(false);
+        setMobileMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        const menu = featuresRef.current;
+        if (menu?.contains(document.activeElement)) {
+          menu.querySelector<HTMLButtonElement>('button[aria-controls="preview-features-menu"]')?.focus({ preventScroll: true });
+        }
+        setFeaturesOpen(false);
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeMenus);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenus);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+  return <>      <header ref={headerRef} className={styles.header}>
+        <Link href={homeHref} className={styles.brand} aria-label="Clover home">
+          <Image src="/clover-mark.svg" alt="" width={44} height={44} priority />
+          <Image src="/clover-name-teal.svg" alt="Clover" width={132} height={32} priority />
+        </Link>
+        <nav aria-label="Public site">
+          <div ref={featuresRef} className={styles.featureMenu}>
+            <button
+              type="button"
+              data-analytics-action="view_features" className={styles.navTrigger}
+              aria-expanded={featuresOpen}
+              aria-controls="preview-features-menu"
+              onClick={() => setFeaturesOpen((open) => !open)}
+            >
+              Features <span aria-hidden="true">▾</span>
+            </button>
+            {featuresOpen ? <div className={styles.featuresDropdown} id="preview-features-menu">
+              {FEATURE_LINKS.map((item) => <Link key={item.href} href={`${featureBasePath}/${item.href.split("/").pop()}`} onClick={() => setFeaturesOpen(false)}><strong>{item.label}</strong>{item.products ? <small>{item.products}</small> : null}</Link>)}
+            </div> : null}
+          </div>
+          <Link href="/help">Help</Link>
+          <Link href="/contact-us">Contact</Link>
+          <Link href="/pricing?plan_source=landing">Pricing</Link>
+        </nav>
+        <div className={styles.mobileMenu}>
+          <button
+            type="button"
+            className={styles.mobileMenuTrigger}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="preview-mobile-menu"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
+          </button>
+        </div>
+        <div className={styles.headerActions}><Link href="/sign-in">Log in</Link><Link href="/sign-up">Sign up</Link></div>
+      </header>
+
+      {mobileMenuOpen ? <div data-mobile-navigation="true">
+        <button className={styles.mobileMenuBackdrop} type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />
+        <div ref={drawerRef} className={styles.mobileDrawer} id="preview-mobile-menu" role="dialog" aria-modal="true" aria-label="Clover navigation">
+          <div className={styles.mobileDrawerHeader}>
+            <Image src="/clover-mark.svg" alt="" width={34} height={34} />
+            <strong>Menu</strong>
+            <button type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>×</button>
+          </div>
+          <div className={styles.mobileDrawerLinks}>
+            <p>Features</p>
+            {FEATURE_LINKS.map((item) => <Link key={item.href} href={`${featureBasePath}/${item.href.split("/").pop()}`} onClick={() => setMobileMenuOpen(false)}><strong>{item.label}</strong>{item.products ? <small>{item.products}</small> : null}</Link>)}
+            <span />
+            <Link href="/help" onClick={() => setMobileMenuOpen(false)}>Help</Link>
+            <Link href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+            <Link href="/pricing?plan_source=landing" onClick={() => setMobileMenuOpen(false)}>Pricing</Link>
+          </div>
+        </div>
+      </div> : null}
+
+</>;
+}
+
+export function LandingJourney({ authEnabled, initialMarket, countryResolved }: { authEnabled: boolean; initialMarket: LandingMarket; countryResolved: boolean }) {
+  const journeyRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<number | null>(null);
+  const [chapter, setChapter] = useState(0);
+  const [storyPosition, setStoryPosition] = useState(0);
+  const [market, setMarket] = useState<LandingMarket>(initialMarket);
+  useLandingTableFit(journeyRef);
+
+  useEffect(() => {
+    if (countryResolved || initialMarket === "ph") return;
+    const localeLooksPhilippine = navigator.languages.some((locale) => /(?:^|-)PH$/i.test(locale) || /^fil(?:-|$)/i.test(locale));
+    const timezoneLooksPhilippine = Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Manila";
+    if (localeLooksPhilippine || timezoneLooksPhilippine) setMarket("ph");
+  }, [countryResolved, initialMarket]);
+
+
+
+  useEffect(() => {
+    const journey = journeyRef.current;
+    if (!journey) return;
+    const update = () => {
+      frameRef.current = null;
+      const bounds = journey.getBoundingClientRect();
+      const distance = Math.max(1, journey.offsetHeight - window.innerHeight);
+      const progress = Math.min(1, Math.max(0, -bounds.top / distance));
+      const nextPosition = progress * (chapters.length - 1);
+      const nextChapter = Math.min(chapters.length - 1, Math.round(nextPosition));
+      journey.style.setProperty("--journey-progress", progress.toFixed(4));
+      setChapter((current) => current === nextChapter ? current : nextChapter);
+      setStoryPosition((current) => Math.abs(current - nextPosition) < 0.002 ? current : nextPosition);
+    };
+    const requestUpdate = () => { if (frameRef.current === null) frameRef.current = window.requestAnimationFrame(update); };
+    update();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    return () => {
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+    };
+  }, []);
+
+  const goToChapter = (index: number) => {
+    const journey = journeyRef.current;
+    if (!journey) return;
+    const distance = journey.offsetHeight - window.innerHeight;
+    const top = window.scrollY + journey.getBoundingClientRect().top + distance * (index / (chapters.length - 1));
+    window.scrollTo({ top, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+  };
+
+  const local = marketContent[market];
+  const chapterFloor = Math.min(chapters.length - 1, Math.floor(storyPosition));
+  const chapterPhase = storyPosition - chapterFloor;
+  const displayedChapter = chapterPhase < 0.5 ? chapterFloor : Math.min(chapters.length - 1, chapterFloor + 1);
+  const chapterMotion = (index: number): CSSProperties => {
+    return {
+      opacity: index === 1 || index === 6 || index === displayedChapter ? 1 : 0,
+      transform: "translate3d(0, 0, 0)",
+    };
+  };
+  const tableMotion = (index: number): CSSProperties => {
+    const visibility = displayedChapter === index ? 1 : 0;
+    return {
+      opacity: visibility,
+      transform: `translate3d(0, ${(1 - visibility) * 10}px, 0)`,
+    };
+  };
+  const productMotion = (index: number, direction = 1): CSSProperties => {
+    if (index > 0) {
+      const visible = displayedChapter === productChapters[index];
+      return { opacity: visible ? 1 : 0, visibility: visible ? "visible" : "hidden", transform: visible ? "translate3d(0,0,0)" : "translate3d(0,24px,0)" };
+    }
+    const distance = storyPosition - productChapters[index];
+    const proximity = clamp(1 - Math.abs(distance) * 1.35);
+    return {
+      opacity: proximity,
+      visibility: proximity > 0 ? "visible" : "hidden",
+      transform: `translate3d(${clamp(distance, -1, 1) * 34 * direction}px, ${clamp(distance, -1, 1) * 18}px, 0) scale(${0.94 + proximity * 0.06})`,
+    };
+  };
+
+  return <><div ref={journeyRef} className={`${styles.journey} ${typography.standard}`} data-chapter={chapterLayouts[chapter]} data-comparison={chapter === 1} data-pro={chapter === 6} data-has-cta={chapter === 0 || chapter === 6 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
+    <div className={styles.stage}>
+      <JourneyHeader />
+
+      <div className={styles.world} aria-hidden="true">
+        <StoryBackground prefix="landing" count={chapters.length} active={displayedChapter} position={storyPosition} blurred={chapter === 1 || chapter === 6} reservePhone={[3,4,5].includes(displayedChapter)} />
+        <div className={styles.worldWash} />
+      </div>
+
+      <div className={styles.heroStatements} data-active={displayedChapter === 0} aria-hidden="true" style={{ opacity: displayedChapter === 0 ? Math.max(0, 1 - storyPosition) : 0 }}>
+        {marketContent[market].documents.slice(0, 3).map(([name], index) => <div className={styles.heroStatement} key={name}>
+          <img className={styles.heroStatementLogo} src={marketContent[market].uploadRows[index][1]} alt="" width="28" height="28" /><strong>{name}</strong>
+          {marketContent[market].documentLines[index].map(([label, amount]) => <span key={label}><span>{label}</span><b>{amount}</b></span>)}
+        </div>)}
+      </div>
+
+      <section className={styles.story} aria-live="polite">
+        {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 6 ? styles.proChapter : ""} ${index === 7 ? styles.finalChapter : ""}`} data-landing-copy data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
+          <div className={styles.chapterCopy} data-visible={index === displayedChapter} style={{ opacity: index === displayedChapter ? 1 : 0 }}>{index === 4 ? <div className="marketing-clover-companion"><CloverMascot pose="celebrating" /></div> : null}<h1>{item.title}</h1>
+          {item.copy ? <p>{item.copy}</p> : null}
+          {index === 6 ? <ProActions market={market} /> : null}</div>
+          {index === 1 ? <div className={styles.comparisonDetails} style={tableMotion(index)}><ComparisonTable /></div> : null}
+          {index === 2 ? <div className={styles.trustLinks}><Link href="/privacy-policy">Privacy Policy</Link><Link href="/features/security">How Clover protects your data →</Link></div> : null}
+          {index === 6 ? <ProComparison market={market} style={tableMotion(index)} showActions={false} /> : null}
+          {(index === 0 || index === chapters.length - 1) && <JourneyActions authEnabled={authEnabled} final={index === chapters.length - 1} />}
+        </div>)}
+      </section>
+
+      <div className={styles.supportStage} data-active={[3,4,5].includes(displayedChapter)} aria-hidden="true">
+      <LandingTransactionPhone market={market} screen="accounts" style={productMotion(1)} />
+      <LandingTransactionPhone market={market} screen="adviser" style={productMotion(2, -1)} />
+      <LandingTransactionPhone market={market} screen="split" style={productMotion(3)} />
+      </div>
+
+      <nav className={styles.markers} aria-label="Landing page chapters" data-progress={`${chapter + 1}/${chapters.length}`}>
+        {chapters.map((_, index) => <button key={index} type="button" className={chapter === index ? styles.activeMarker : ""} onClick={() => goToChapter(index)} aria-label={`Go to chapter ${index + 1}`} aria-current={chapter === index ? "step" : undefined}><span /></button>)}
+        <b>{chapter + 1} / {chapters.length}</b>
+      </nav>
+      {chapter < chapters.length - 1 && <div className={styles.scrollHint} aria-hidden="true"><span>Keep scrolling</span><i /></div>}
+      <div className={styles.grain} aria-hidden="true" />
+    </div>
+  </div><PublicFooter /></>;
+}

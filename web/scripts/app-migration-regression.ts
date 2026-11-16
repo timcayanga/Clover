@@ -1,0 +1,261 @@
+import { runQifMigrationRegression } from "./qif-migration-regression";
+import { runUploadFormatCoverageRegression } from "./upload-format-coverage-regression";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { performance } from "node:perf_hooks";
+import * as XLSX from "xlsx";
+import { parseImportText } from "@/lib/import-parser";
+import { enrichParsedRowsWithTraining, resolveParsedTransactionCategoryName } from "@/lib/data-engine";
+import { decodeSpreadsheetWorkbookBytes } from "@/lib/spreadsheet-import.server";
+import { readAppMigration, createMigrationOverlapMatcher } from "@/lib/app-migration-import";
+import { persistMigrationTags } from "@/lib/app-migration-persistence";
+const parse = (text: string) => parseImportText(text, "export.csv", "text/csv", { currency: "PHP" });
+const main = async () => {
+ await runUploadFormatCoverageRegression();
+ await runQifMigrationRegression();
+ const actualText=readFileSync('scripts/fixtures/app-migrations/actual-query-synthetic.csv','utf8');
+ const actual=parse(actualText);
+ assert.equal(actual.length,7,'Actual split parents and starting balances must not be imported as movements');
+ assert(actual.every(r=>readAppMigration(r.rawPayload)?.source==='actual'));
+ assert.deepEqual(actual.map(r=>r.amount),['12.50','30.00','20.00','2500.00','5.00','100.00','100.00']);
+ assert.deepEqual(actual.map(r=>r.type),['expense','expense','expense','income','income','transfer','transfer']);
+ assert.equal(actual[1].description,'Shopping · Shirt');assert.equal(actual[2].categoryName,'Living / Food');
+ assert.equal(readAppMigration(actual[1].rawPayload)?.splitGroup,readAppMigration(actual[2].rawPayload)?.splitGroup);
+ assert.throws(()=>parse(actualText.replace('-30,0,Cleared','-29,0,Cleared')),/split.*total/i);
+ assert.throws(()=>parse(actualText.split('\n').filter(line=>!line.includes('(SPLIT 2 OF 2)')).join('\n')),/split/i);
+ assert.throws(()=>parse(actualText.replace('Transfer Out','')),/Type.*transfer/i);
+ assert(actual.slice(-2).every(r=>r.categoryName==='Transfers' && r.categoryConfidence===100));
+ assert.deepEqual(readAppMigration(actual[1].rawPayload)?.actualSplit,{parentSourceRow:4,parentAmount:'-50.00',currency:'USD',part:1,parts:2,parentNote:'Shopping',parentPayee:'Department Store'});
+ const inheritedActual=parse(actualText.replace('Department Store,(SPLIT 1 OF 2) Shirt',',(SPLIT 1 OF 2)'));
+ assert.equal(inheritedActual[1].merchantRaw,'Department Store');assert.equal(inheritedActual[1].description,'Shopping');
+ const actualSummary=actual[0].rawPayload?.migrationSummary as any;
+ assert.equal(actualSummary.inputRows,9);assert.equal(actualSummary.importedRows,7);assert.equal(actualSummary.skippedRows.length,2);
+ const actualChecking=actualSummary.totals.find((t:any)=>t.account==='Actual Checking');
+ assert.deepEqual([actualChecking.income,actualChecking.expense,actualChecking.transferOut],[2505,62.5,100]);
+ const actualHeader='Account,Date,Payee,Notes,Category_Group,Category,Amount,Split_Amount,Cleared';
+ const actualStandard=actualHeader+'\nChecking,2026-09-01,Shop,Food,Living,Food,-25,0,Not cleared';
+ assert.equal(parseImportText(actualStandard,'actual.csv','text/csv',{currency:'CAD'})[0].currency,'CAD');
+ assert.throws(()=>parseImportText(actualStandard,'actual.csv','text/csv'),/Currency/);
+ assert.equal(parse(actualStandard.replace('Shop',"'=SUM(A1)"))[0].merchantRaw,"'=SUM(A1)",'Keep escaped formula-like payees as literal source data');
+ assert.throws(()=>parse(actualText.replace('(SPLIT 2 OF 2)','(SPLIT 1 OF 2)')),/split.*ordered/i);
+ assert.throws(()=>parse(actualText.split('\n').filter(line=>!line.includes('(SPLIT INTO 2)')).join('\n')),/split.*parent/i);
+ assert.throws(()=>parse(actualText.replace('Shopping,,,0,-50','Shopping,,,50,-50')),/split parent/i);
+ assert.throws(()=>parse(actualText.replace('(SPLIT INTO 2)','(SPLIT INTO 25001)')),/child count/);
+ assert.throws(()=>parse(actualText.replace('-20,0,Cleared,USD','-20,0,Cleared,CAD')),/same account, date and currency/);
+ assert.throws(()=>parse(actualText.replace('Shirt,Living,Clothing','Shirt,,').replace('Snacks,Living,Food','Snacks,,')),/Type/);
+ assert.throws(()=>parse(actualText.replace('Transfer Out','Income')),/conflicts/);
+ const endIncomplete=actualHeader+',Currency\nChecking,2026-09-01,Shop,(SPLIT INTO 2),,,0,-50,Cleared,USD\nChecking,2026-09-01,Shop,(SPLIT 1 OF 2) Shirt,Living,Food,-30,0,Cleared,USD';
+ assert.throws(()=>parse(endIncomplete),/split is incomplete/);
+ const actualMixedSplit=parse(actualText.replace('Shopping,,,0,-50','Shopping,,,0,-10').replace('Snacks,Living,Food,-20','Snacks,Living,Food,20'));
+ assert.equal(actualMixedSplit[2].type,'income','A refund inside a split keeps its incoming direction');
+ const actualEnriched=await enrichParsedRowsWithTraining({workspaceId:'offline-actual',rows:actual});
+ assert.deepEqual(actualEnriched.map(r=>[r.amount,r.type,r.categoryName,r.description]),actual.map(r=>[r.amount,r.type,r.categoryName,r.description]));
+ const actualReimport=createMigrationOverlapMatcher(actual.map(r=>({...r,accountId:r.accountName,date:'2025-01-01',amount:'1.00',description:'Changed'})));
+ assert(actual.every(r=>actualReimport({...r,accountId:r.accountName})));
+ for(const format of ['xlsx','xls','ods'] as const) {
+   const bytes=XLSX.write(XLSX.read(actualText,{type:'string',raw:true}),{type:'buffer',bookType:format});
+   const decoded=await decodeSpreadsheetWorkbookBytes(bytes);
+   const rows=parseImportText(decoded,`actual.${format}`,'application/octet-stream',{currency:'USD'});
+   assert.deepEqual(rows.map(r=>[r.amount,r.accountName,r.type,r.categoryName,r.description]),actual.map(r=>[r.amount,r.accountName,r.type,r.categoryName,r.description]),format);
+ }
+ const splitBenchmark=actualHeader+',Currency\n'+Array.from({length:3000},(_,i)=>[
+   `Checking,2026-09-01,Shop ${i},(SPLIT INTO 2),,,0,-50,Cleared,USD`,
+   `Checking,2026-09-01,Shop ${i},(SPLIT 1 OF 2) Shirt,Living,Clothing,-30,0,Cleared,USD`,
+   `Checking,2026-09-01,Shop ${i},(SPLIT 2 OF 2) Snacks,Living,Food,-20,0,Cleared,USD`,
+ ].join('\n')).join('\n');
+ const actualStart=performance.now();
+ const actualLarge=await enrichParsedRowsWithTraining({workspaceId:'offline-actual-large',rows:parse(splitBenchmark)});
+ const actualMs=Math.round(performance.now()-actualStart);
+ assert.equal(actualLarge.length,6000);assert.equal(actualLarge.reduce((sum,r)=>sum+Number(r.amount),0),150000);
+ assert(actualMs<10000,`Actual 9,000 source rows exceeded 10s: ${actualMs}`);
+ console.log('Actual: 3,000 validated split groups (9,000 input / 6,000 saved rows):',actualMs,'ms');
+ const bluecoins = parse(readFileSync("scripts/fixtures/app-migrations/bluecoins-official-advanced.csv", "utf8"));
+ assert.equal(bluecoins.length, 9, "All official Bluecoins sample rows must survive");
+ assert.equal(bluecoins[1].merchantRaw, "Grocery items", "Labels are not merchants");
+ assert.equal(bluecoins[3].merchantRaw, "Electric bill");
+ assert.equal(bluecoins[7].type, "transfer");
+ assert.equal(bluecoins[8].type, "transfer");
+ assert.equal(readAppMigration(bluecoins[7].rawPayload)?.direction, "expense");
+ assert.equal(readAppMigration(bluecoins[8].rawPayload)?.direction, "income");
+ assert.deepEqual(readAppMigration(bluecoins[1].rawPayload)?.tags, ["food", "groceries", "chicken", "eggs"]);
+ assert.equal(readAppMigration(bluecoins[4].rawPayload)?.splitGroup, readAppMigration(bluecoins[6].rawPayload)?.splitGroup);
+ assert.equal(bluecoins[0].categoryName, "Employer / Salary");
+ const realbyte = 'Date,Account,Category,Subcategory,Note,Amount,Income/Expense,Description\n09/01/2026,Cash,Food,Lunch,Restaurant,500,Expense,lunch\n09/02/2026,BPI,Work,Stipend,Employer,10000,Income,monthly\n09/03/2026,BPI,Savings,,Transfer,1000,Transfer out,\n09/04/2026,Cash,Food,Lunch,,150,Expense,';
+ const rb = parse(realbyte);
+ assert.equal(rb.length, 5);
+ assert.equal(rb[4].accountName, "Savings");
+ assert.equal(readAppMigration(rb[4].rawPayload)?.direction, "income");
+ assert.equal(readAppMigration(rb[4].rawPayload)?.derivedTransferLeg, true);
+ assert.equal(rb[1].type, "income");
+ assert.equal(rb[3].categoryName, "Food / Lunch");
+ const moneyLover = parse('Date;Wallet;Category;Amount;Note;Type;Currency\n2026-09-01;Cash;Lunch;"50.000,00";;Expense;IDR\n2026-09-02;BCA;Work;"5.000.000,00";Employer;Income;IDR');
+ assert.equal(moneyLover.length, 2); assert.equal(moneyLover[0].amount, "50000.00"); assert.equal(moneyLover[1].type, "income");
+ const wallet = parse('date,account,category,amount,currency,ref_currency_amount,payment_type,type,note,tags,excluded\n2026-09-01,BPI,Food,-500,PHP,-9,card,Expense,Lunch,travel|work,true\n2026-09-02,BPI,Pay,9000,PHP,150,transfer,Income,Salary,,false');
+ assert.equal(wallet.length, 2); assert.equal(wallet[0].amount, "500.00"); assert.equal(readAppMigration(wallet[0].rawPayload)?.excluded, true);
+ assert.deepEqual(readAppMigration(wallet[0].rawPayload)?.tags, ["travel", "work"]);
+ const templateText = readFileSync("public/templates/clover-migration.csv", "utf8");
+ const template = parse(templateText); assert.equal(template.length, 4);
+ // Explicitly supply no DB training context: migration-only enrichment must
+ // not query training data or replace the user's labels/accounts/direction.
+ const enriched = await enrichParsedRowsWithTraining({ workspaceId: "offline-test-must-not-query", rows: [...rb, ...bluecoins, ...wallet] });
+ assert.deepEqual(enriched.map(r => [r.categoryName, r.merchantRaw, r.accountName, r.type]), [...rb, ...bluecoins, ...wallet].map(r => [r.categoryName, r.merchantRaw, r.accountName, r.type]));
+ assert.equal(resolveParsedTransactionCategoryName(rb[0]), "Food / Lunch");
+ for (const format of ["xlsx", "xls", "ods"] as const) {
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, XLSX.read(templateText, { type: "string", raw: true }).Sheets.Sheet1, "Transactions");
+  const text = await decodeSpreadsheetWorkbookBytes(XLSX.write(book, { type: "buffer", bookType: format }));
+  const rows = parseImportText(text, `export.${format}`, "application/octet-stream", { currency: "PHP" });
+  assert.equal(rows.length, 4, format); assert.deepEqual(rows.map(r => [r.accountName, r.amount, r.currency, r.type, r.categoryName]), template.map(r => [r.accountName, r.amount, r.currency, r.type, r.categoryName]), format);
+ }
+ const base = 'Migration Source,Date,Description,Amount,Currency,Account,Type,Category,Status,Transaction ID';
+ const repeated = `${base}\nspreadsheet,2026-09-01,Lunch,500,PHP,Cash,Expense,Food,posted,a\nspreadsheet,2026-09-01,Lunch,500,PHP,Cash,Expense,Food,posted,a\nspreadsheet,2026-09-02,Lunch,500,PHP,Cash,Expense,Food,pending,b`;
+ const unique = parse(repeated);assert.equal(unique.length, 1);
+ assert.equal((unique[0].rawPayload?.migrationSummary as any).inputRows, 3);
+ assert.equal((unique[0].rawPayload?.migrationSummary as any).skippedRows.length, 2);
+ assert.throws(() => parse(repeated.replace('Food,posted,a\nspreadsheet', 'Food,posted,c\nspreadsheet').replace('2026-09-02,Lunch,500', 'not-a-date,Lunch,500').replace('Food,pending,b', 'Food,posted,b')), /row 4.*date/);
+ assert.throws(() => parse(repeated.replace('2026-09-01,Lunch,500,PHP,Cash,Expense,Food,posted,a\nspreadsheet', '2026-09-01,Lunch,501,PHP,Cash,Expense,Food,posted,a\nspreadsheet')), /conflicting values/);
+ assert.throws(() => parse('Date,Wallet,Category,Amount,Note\n2026-09-01,Cash,Food,500,Lunch'), /unsigned amount/);
+ assert.throws(() => parse(templateText.replace('500,PHP', 'oops,PHP')), /row 2/);
+ const noIds = parse(templateText.replace(/example-[^\n]*/g, ''));
+ const existing = [{ ...noIds[0], accountId: 'cash' }, { ...noIds[0], accountId: 'cash' }];
+ const match = createMigrationOverlapMatcher(existing);
+ assert.equal(match({ ...noIds[0], accountId: 'other' }), false);
+ assert.equal(match({ ...noIds[0], accountId: 'cash' }), true);
+ assert.equal(match({ ...noIds[0], accountId: 'cash' }), true);
+ assert.equal(match({ ...noIds[0], accountId: 'cash' }), false, 'Preserve occurrence count');
+ // Re-import identity must come from the immutable export, including legacy
+ // rows written before this change, never the user's corrected fields.
+ const corrected = {...noIds[0], accountId:'cash', date:'2026-08-01', amount:'99.00', merchantRaw:'Corrected merchant', description:'My correction'};
+ assert.equal(createMigrationOverlapMatcher([corrected])({...noIds[0], accountId:'cash'}), true);
+ for (const profile of [
+   ['Date,Account,Category,Subcategory,Note,Amount,Income/Expense', '2026-09-01,Cash,Food,Lunch,Receipt,25,Expense'],
+   ['Date,Wallet,Category,Amount,Note,Type,Currency', '2026-09-01,Cash,Food,25,Receipt,Expense,PHP'],
+   ['Date,Account,Category,Amount,Payment Type,Type,Currency', '2026-09-01,Cash,Food,25,Cash,Expense,PHP'],
+   ['Type,Date,Item or Payee,Amount,Category,Account,Split,Currency', 'e,2026-09-01,Receipt,25,Food,Cash,,PHP'],
+   ['Migration Source,Date,Description,Amount,Currency,Account,Type,Category', 'spreadsheet,2026-09-01,Receipt,25,PHP,Cash,Expense,Food'],
+ ]) {
+   const input=profile.join('\n');
+   assert.throws(()=>parse(input.replace('2026-09-01','2026-02-30')),/date/i,profile[0]);
+   assert.throws(()=>parse(input.replace(',25,',',fee 25,')),/numeric amount/,profile[0]);
+   assert.equal(parse(input.replace(',25,',',"12,5",'))[0].amount,'12.50');
+ }
+ const transferHeader='Date,Account,Category,Subcategory,Note,Amount,Income/Expense,Currency';
+ const pairedTransfers=transferHeader+'\n2026-09-01,BPI,Savings,,Transfer,"1,000.00",Transfer out,PHP\n09/01/2026,Savings,BPI,,Transfer,1000,Transfer in,PHP';
+ assert.equal(parse(pairedTransfers).length,2,'Equivalent amount/date formatting must not create an extra receiving leg');
+ const repeatedTransfers=pairedTransfers+'\n2026-09-01,BPI,Savings,,Transfer,1000,Transfer out,PHP';
+ assert.equal(parse(repeatedTransfers).length,4,'One incoming occurrence cannot satisfy two outgoing transfers');
+ assert.throws(()=>parse(pairedTransfers.replace('Transfer in,PHP','Transfer in,USD')),/cross-currency/);
+ assert.equal(parse('Date,Wallet,Category,Amount,Note,Type,Currency\n2026-09-01,Cash,Pay,-25,Refund,Income,PHP')[0].type,'income','An explicit source type remains authoritative');
+ assert.equal(readAppMigration(parse('Date,Wallet,Category,Amount,Note,Type,Currency\n2026-09-01,Cash,Pay,-25,Refund,Income,PHP')[0].rawPayload)?.direction,'income');
+ assert.throws(()=>parse('Date,Wallet,Category,Amount,Note,Type,Currency\n03/04/2026,Cash,Food,25,Lunch,Expense,PHP'),/ambiguous/);
+ const declaredMixed=parse('Date,Wallet,Category,Amount,Note,Type,Currency,Date Format\n13/04/2026,Cash,Food,25,Lunch,Expense,PHP,DMY\n04/13/2026,Cash,Food,25,Lunch,Expense,PHP,MDY');
+ assert(declaredMixed.every(r=>r.date==='2026-04-13'));
+ const skipAmbiguous=parse('Date,Wallet,Category,Amount,Note,Type,Currency,Status\n13/04/2026,Cash,Food,25,Lunch,Expense,PHP,posted\n04/13/2026,Cash,Food,25,Lunch,Expense,PHP,pending');
+ assert.equal(skipAmbiguous.length,1);
+ const negativeIncome=parse('Date,Wallet,Category,Amount,Note,Type,Currency\n2026-09-01,Cash,Pay,-25,Refund,Income,PHP')[0];
+ const legacyDirection={...negativeIncome,accountId:'cash',rawPayload:{...negativeIncome.rawPayload,appMigration:{...readAppMigration(negativeIncome.rawPayload)!,direction:'expense'}}};
+ assert.equal(createMigrationOverlapMatcher([legacyDirection])({...negativeIncome,accountId:'cash'}),true,'Legacy magnitude-based income evidence must still match');
+ const categoriesOnly=parse('Date,Wallet,Category,Amount,Note,Type,Currency\n2026-09-01,Cash,Food,25,,Expense,PHP\n2026-09-01,Cash,Rent,25,,Expense,PHP');
+ assert.equal(createMigrationOverlapMatcher([{...categoriesOnly[0],accountId:'cash'}])({...categoriesOnly[1],accountId:'cash'}),false,'Source category is identity when it is the only description');
+ const transferStart=performance.now();
+ const manyTransfers=parse(transferHeader+'\n'+Array.from({length:5000},(_,i)=>`2026-09-01,From,To,,Transfer ${i},1000,Transfer out,PHP\n09/01/2026,To,From,,Transfer ${i},1000,Transfer in,PHP`).join('\n'));
+ const transferMs=Math.round(performance.now()-transferStart);
+ assert.equal(manyTransfers.length,10000);assert(!manyTransfers.some(r=>readAppMigration(r.rawPayload)?.derivedTransferLeg));
+ assert(transferMs<10000,`10,000 transfer rows exceeded 10s: ${transferMs}`);
+ console.log('Realbyte 10,000 transfer rows:',transferMs,'ms');
+ for (const source of ['spendee','toshl']) {
+   const mapped=parse(readFileSync(`scripts/fixtures/app-migrations/${source}-mapped-synthetic.csv`,'utf8'));
+   assert.equal(mapped.length,4);assert(mapped.every(r=>readAppMigration(r.rawPayload)?.source==='spreadsheet'));
+   assert.deepEqual(mapped.map(r=>r.type),['expense','income','transfer','transfer']);
+   assert.deepEqual(mapped.map(r=>readAppMigration(r.rawPayload)?.direction),['expense','income','expense','income']);
+   assert.equal(mapped[0].amount,source==='spendee'?'125.50':'50000.00');
+   assert.deepEqual(readAppMigration(mapped[0].rawPayload)?.tags,['travel','work']);
+ }
+ // Persistence contract uses only the provided new transaction IDs, batches
+ // tags and scopes every lookup to the current Profile.
+ const calls:any[]=[];
+ await persistMigrationTags({ tag: { createMany: async (x:any) => { calls.push(x); }, findMany: async (x:any) => { assert.equal(x.where.workspaceId,'test-profile'); return [{id:'tag-1',normalizedName:'travel'},{id:'tag-2',normalizedName:'work'}]; } }, transactionTag: { createMany: async(x:any) => { calls.push(x); } } } as any, 'test-profile', [{id:'new-transaction',rawPayload:wallet[0].rawPayload}]);
+ assert.deepEqual(calls[1].data.map((x:any)=>x.transactionId), ['new-transaction','new-transaction']);
+ const ynabText = readFileSync("scripts/fixtures/app-migrations/ynab-register-synthetic.csv", "utf8");
+ const monarchText = readFileSync("scripts/fixtures/app-migrations/monarch-transactions-synthetic.csv", "utf8");
+ const ynab = parse(ynabText), monarch = parse(monarchText);
+ assert.equal(ynab.length, 7); assert.equal(monarch.length, 7);
+ assert(ynab.every(r => readAppMigration(r.rawPayload)?.source === "ynab"));
+ assert(monarch.every(r => readAppMigration(r.rawPayload)?.source === "monarch"));
+ assert.deepEqual(ynab.map(r => r.amount), ["45.25", "2500.00", "200.00", "200.00", "5.25", "30.00", "20.00"]);
+ assert.deepEqual(ynab.map(r => r.type), ["expense", "income", "transfer", "transfer", "income", "expense", "expense"]);
+ assert.equal(ynab[0].categoryName, "Living / Groceries"); assert.equal(ynab[0].description, "Apples, bread");
+ assert.deepEqual(readAppMigration(ynab[0].rawPayload)?.tags, ["YNAB: Blue"]);
+ assert.equal((ynab[0].rawPayload?.migrationSummary as any).skippedRows[0].reason, "starting balance (not income)");
+ assert.equal(monarch[0].merchantRaw, "POS CORNER SHOP 0042"); assert.equal(monarch[0].merchantClean, "Corner Shop");
+ assert.equal(monarch[0].description, "Lunch, snacks"); assert.equal(monarch[5].type, "income");
+ assert.equal(monarch.filter(r => r.type === "transfer").length, 3);
+ assert.equal(readAppMigration(monarch[6].rawPayload)?.excluded, true);
+ assert.deepEqual(readAppMigration(monarch[0].rawPayload)?.tags, ["household", "food"]);
+ const monarchStandard="Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n2026-09-01,Shop,Groceries,Card,POS FOOD,Refund,25,food";
+ assert.equal(parseImportText(monarchStandard,"monarch.csv","text/csv",{currency:"CAD"})[0].currency,"CAD");
+ assert.throws(()=>parseImportText(monarchStandard,"monarch.csv","text/csv"),/Currency/);
+ const ynabStandard="Account,Flag,Date,Payee,Category Group/Category,Category Group,Category,Memo,Outflow,Inflow,Cleared\nChecking,,2026-09-01,Shop,Living: Food,Living,Food,Receipt,25,0,Cleared";
+ assert.equal(parseImportText(ynabStandard,"ynab.csv","text/csv",{currency:"SGD"})[0].currency,"SGD");
+ assert.throws(()=>parseImportText(ynabStandard,"ynab.csv","text/csv"),/Currency/);
+ const newEnriched = await enrichParsedRowsWithTraining({workspaceId:"offline-new-profiles", rows:[...ynab, ...monarch]});
+ assert.deepEqual(newEnriched.map(r=>[r.merchantRaw,r.merchantClean,r.categoryName,r.type,r.currency,r.amount]), [...ynab,...monarch].map(r=>[r.merchantRaw,r.merchantClean,r.categoryName,r.type,r.currency,r.amount]));
+ const yh = "Account,Flag,Date,Payee,Category Group,Category,Memo,Outflow,Inflow,Cleared,Currency";
+ const yrow = (date:string, out="25", incoming="0") => `YNAB,Blue,${date},Shop,Living,Food,Receipt,${out},${incoming},Cleared,USD`;
+ assert.throws(()=>parse(yh+"\n"+yrow("03/04/2026")), /ambiguous/);
+ assert.throws(()=>parse(yh+"\n"+yrow("2026-02-30")), /invalid/);
+ assert.throws(()=>parse(yh+"\n"+yrow("2026-09-01","25","10")), /not both/);
+ assert.throws(()=>parse(yh+"\n"+yrow("2026-09-01","-25")), /nonnegative/);
+ assert.throws(()=>parse(yh+"\n"+yrow("2026-09-01","fee 25")), /numeric amount/);
+ assert.throws(()=>parse(yh+"\n"+yrow("13/04/2026")+"\n"+yrow("04/13/2026")), /mixes/);
+ const dmy = parse(yh+"\n"+yrow("13/04/2026")+"\n"+yrow("03/04/2026"));
+ assert.equal(dmy[1].date, "2026-04-03");
+ const explicit = parse(yh+",Date Format\n"+yrow("03/04/2026")+",MDY");
+ assert.equal(explicit[0].date, "2026-03-04");
+ const euro = parse(yh.replaceAll(",","\t")+"\n"+yrow("2026-09-01").replaceAll(",","\t").replace("25\t0", "1.234,56\t0,00").replace("USD","EUR"));
+ assert.equal(euro[0].amount, "1234.56");
+ for (const bad of ["12,34,56", "10 20", "(25", "2-5", "25-", "=25", "0.001"]) {
+  assert.throws(()=>parse(yh+"\n"+yrow("2026-09-01",`"${bad}"`)), /amount|decimal|sign/, bad);
+ }
+ assert.throws(()=>parse(monarchText.replace("Date,Merchant", "Account,Date,Merchant").replace("2026-09-01,Corner", "Other,2026-09-01,Corner")), /Duplicate migration column/);
+ assert.equal(parse(monarchText.replace("Currency,Hidden", "Currency,Hidden,Type").replace("USD,false", "USD,false,Transfer"))[0].type,"transfer");
+ assert.throws(()=>parse(monarchText.replace("Currency,Hidden", "Currency,Hidden,Type").replace("USD,false", "USD,false,Income")), /conflicts/);
+ assert.throws(()=>parse(ynabText.replace("YNAB Checking,Blue", ",Blue")), /Account name/);
+ const quoted = parse(monarchText.replace("Lunch, snacks", "Lunch, snacks\nand dinner"));
+ assert.equal(quoted[0].description, "Lunch, snacks\nand dinner");
+ assert.equal(parse(yh+"\n"+yrow("2026-09-01",'"12,5"'))[0].amount,"12.50");
+ assert.equal(parse(yh+"\n"+yrow("2026-09-01",'"1.234,5"'))[0].amount,"1234.50");
+ assert.equal(parse(yh+"\n"+yrow("2026-09-01",'"1 234,50"'))[0].amount,"1234.50");
+ assert.equal(parse(yh+"\n"+yrow("2026-09-01",'"1,234.50"'))[0].amount,"1234.50");
+ const summary=monarch[0].rawPayload?.migrationSummary as any;
+ const checking=summary.totals.find((t:any)=>t.account==="Monarch Checking");
+ assert.deepEqual([checking.income,checking.expense,checking.transferIn,checking.transferOut,checking.excluded],[2004.5,24.5,0,150,15]);
+ const sourceBenchmarks:Record<string,number>={};
+ for(const source of ["ynab","monarch"]) {
+   const text=source==="ynab" ? yh+"\n"+Array.from({length:10000},(_,i)=>yrow("2026-09-01").replace("Shop",`Shop ${i}`)).join("\n")
+     : "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags,Currency\n"+Array.from({length:10000},(_,i)=>`2026-09-01,Shop ${i},Food,Monarch,POS ${i},Receipt,-25,work,USD`).join("\n");
+   const start=performance.now();const ready=await enrichParsedRowsWithTraining({workspaceId:"offline-source-benchmark",rows:parse(text)});
+   sourceBenchmarks[source]=Math.round(performance.now()-start);
+   assert.equal(ready.length,10000);assert(ready.every(r=>r.amount==="25.00"&&r.type==="expense"&&r.currency==="USD"));
+   assert(sourceBenchmarks[source]<10000,`${source} exceeded 10s: ${sourceBenchmarks[source]}`);
+ }
+ console.log("New source benchmarks (10,000 rows each):",sourceBenchmarks);
+ const before = ynabText.split("\n").filter(line=>!line.includes("Starting Balance")).join("\n");
+ const occurrence = createMigrationOverlapMatcher(parse(before).map(r=>({...r,accountId:r.accountName})));
+ assert(parse(before).every(r=>occurrence({...r,accountId:r.accountName})));
+ for (const input of [ynabText, monarchText]) {
+   for (const format of ["xlsx", "xls", "ods"] as const) {
+     const book = XLSX.read(input, {type:"string", raw:true});
+     const decoded = await decodeSpreadsheetWorkbookBytes(XLSX.write(book,{type:"buffer",bookType:format}));
+     const actual = parseImportText(decoded, `migration.${format}`, "application/octet-stream", {currency:"USD"});
+     assert.deepEqual(actual.map(r=>[r.amount,r.currency,r.accountName,r.type,r.categoryName]), parse(input).map(r=>[r.amount,r.currency,r.accountName,r.type,r.categoryName]), format);
+   }
+ }
+ const count=10000;
+ const large=['Migration Source,Date,Description,Amount,Currency,Account,Type,Category', ...Array.from({length:count},(_,i)=>`spreadsheet,2026-09-01,Purchase ${i},125.50,PHP,Cash,Expense,My food`)].join('\n');
+ const start=performance.now(); const rows=parse(large); const ready=await enrichParsedRowsWithTraining({workspaceId:'offline-performance',rows});const elapsed=performance.now()-start;
+ assert.equal(ready.length,count);assert(ready.every(r=>r.amount==='125.50'&&r.categoryName==='My food'&&r.type==='expense'));
+ assert(elapsed<10000, `10,000 deterministic migration rows exceeded 10s: ${elapsed}ms`);
+ console.log(`PASS migrations: 8 CSV/workbook adapters plus QIF, official Bluecoins 9/9, fields/enrichment, workbook formats, invalid rows, duplicates, tags. 10,000 rows parsed+enriched in ${Math.round(elapsed)}ms.`);
+};
+main().catch(e=>{console.error(e);process.exitCode=1;});

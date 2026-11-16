@@ -1,0 +1,75 @@
+import assert from "node:assert/strict";
+import { readReceiptSettlementEvidence, readReceiptTenders, reconcileReceiptSettlement, splitTenderDifference } from "../lib/receipt-settlement-evidence";
+import { incompleteReceiptFields } from "../lib/receipt-review";
+import { parseReceiptText } from "../lib/split-bill";
+
+const receipt = (...lines: string[]) => [
+  "Harbour Coffee", "OFFICIAL RECEIPT", "2026-11-15", "Espresso PHP 180.00", ...lines,
+].join("\n");
+const correct = receipt("Subtotal PHP 180.00", "Grand Total PHP 201.60", "Cash tendered PHP 500.00",
+  "Change PHP 298.40", "VAT breakdown", "VATable amount PHP 180.00", "Total VAT PHP 21.60",
+  "Total PHP 21.60", "Settlement", "Total PHP 201.60");
+assert.deepEqual(readReceiptSettlementEvidence(correct), { kind: "payable", amount: 201.6 });
+const parsed = parseReceiptText(correct);
+assert.equal(parsed.total, "201.60");
+assert.equal(parsed.subtotal, "180.00");
+assert.equal(parsed.receiptText, correct);
+
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Total 180.00", "Grand Total 201.60", "Cash 500.00", "Change 298.40")),
+  { kind: "payable", amount: 201.6 });
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Total 201.60", "Total 500.00", "Cash 500.00", "Change 298.40")),
+  { kind: "payable", amount: 201.6 });
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Total 201.60", "Cash 100.00", "Card 101.60", "Change 0")),
+  { kind: "payable", amount: 201.6 });
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Grand Total USD 12.50", "Cash PHP 800", "Change PHP 100")),
+  { kind: "payable", amount: 12.5 });
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Amount payable:", "PHP 201.60", "Total item count 1")),
+  { kind: "payable", amount: 201.6 });
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Grand total PHP 201.60", "Refund policy: within 7 days")),
+  { kind: "payable", amount: 201.6 });
+
+for (const source of [
+  receipt("Subtotal 180.00", "Cash 500.00", "Change 298.40"),
+  receipt("Tax summary", "Total VAT 21.60"),
+  receipt("Grand Total 201.60", "Amount Paid 301.60"),
+  receipt("Grand Total 201.60", "Cash 500.00", "Change 198.40"),
+  receipt("TOTAL 201.60", "Grand Total ?"),
+]) {
+  const preview = parseReceiptText(source);
+  assert.equal(preview.total, null);
+  assert.equal(preview.requiresReview, true);
+  assert.equal(incompleteReceiptFields({ merchant_raw: preview.merchantName, transaction_date: "2026-11-15",
+    currency: "PHP", total: null }).includes("total"), true);
+}
+for (const source of [
+  receipt("Refund receipt", "Amount refunded PHP 180.00"),
+  receipt("Total (PHP 180.00)"),
+]) {
+  assert.deepEqual(readReceiptSettlementEvidence(source), { kind: "refund", amount: 180 });
+  assert.equal(parseReceiptText(source).total, null);
+}
+
+const candidate = { total: 500, parser_evidence: { source_text: correct, reason: "Initial extraction" } };
+const repaired = reconcileReceiptSettlement(candidate, readReceiptSettlementEvidence(correct));
+assert.equal(repaired.total, 201.6);
+assert.equal(reconcileReceiptSettlement(repaired, readReceiptSettlementEvidence(correct)), repaired);
+assert.equal(candidate.total, 500);
+assert.equal(repaired.parser_evidence.source_text, correct);
+console.log("Receipt settlement roles passed: tax and tender duplicates, split and foreign tender, missing and conflicting totals, refunds, and replay.");
+
+const split = receipt("Grand Total PHP 201.60", "Cash tendered PHP 100.00", "Change PHP 20.00",
+  "Visa ****1234 PHP 50.00", "GCash payment:", "PHP 71.60", "Card number 1234");
+const preview = parseReceiptText(split);
+assert.equal(preview.paymentMethod, "Mixed");
+assert.equal(preview.total, "201.60");
+assert.deepEqual(preview.tenders?.map(({ method, amount, currency, evidence }) => [method, amount, currency, evidence]), [
+  ["cash", 100, "PHP", "Cash tendered PHP 100.00"],
+  ["change", 20, "PHP", "Change PHP 20.00"],
+  ["card", 50, "PHP", "Visa ****1234 PHP 50.00"],
+  ["wallet", 71.6, "PHP", "GCash payment:\nPHP 71.60"],
+]);
+assert.equal(splitTenderDifference(preview.tenders!, 201.6, "PHP"), 0);
+assert.equal(splitTenderDifference(preview.tenders!, 211.6, "PHP"), -10);
+assert.equal(splitTenderDifference([...preview.tenders!, preview.tenders![0]], 201.6, "PHP"), null);
+assert.equal(splitTenderDifference(preview.tenders!.map(tender => tender.method === "card" ? { ...tender, currency: "USD" } : tender), 201.6, "PHP"), null);
+assert.deepEqual(readReceiptTenders("Card 1234\nGCash reference 0555"), []);

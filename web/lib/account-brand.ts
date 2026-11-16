@@ -1,0 +1,1265 @@
+import type { AccountCardPalette } from "../../shared/visual-identity";
+import { genericAccountColors, institutionAccountPalettes } from "../../shared/account-wallet";
+import { accountTypeIcon } from "../../shared/visual-identity";
+import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { findAdditionalBankLogo, normalizeLogoName } from "@/lib/bank-logo-catalog";
+import { getCurrentBuiltInAccountLogoUrl } from "@/lib/account-logo";
+import bundledLogoColors from "./account-logo-colors.json";
+import { inferBankNameFromText, normalizeBankName } from "@/lib/data-qa-banks";
+
+type AccountBrandInput = {
+  institution?: string | null;
+  name?: string | null;
+  type?: string | null;
+  logoUrl?: string | null;
+};
+
+export type AccountBrand = {
+  label: string;
+  logoSrc: string | null;
+  logoSrcs: string[];
+  fallbackIconSrc: string;
+  accent: string;
+  background: string;
+  logoBackground?: string;
+  logoFit?: "cover" | "contain";
+  logoPadding?: string;
+  foreground: string;
+};
+
+const normalize = (value?: string | null) => String(value ?? "").trim().toLowerCase();
+
+const parseHexColor = (value: string) => {
+  const normalized = value.trim().replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) {
+    return null;
+  }
+
+  return {
+    r: Number.parseInt(normalized.slice(0, 2), 16),
+    g: Number.parseInt(normalized.slice(2, 4), 16),
+    b: Number.parseInt(normalized.slice(4, 6), 16),
+  };
+};
+
+const toHexColor = (value: { r: number; g: number; b: number }) =>
+  `#${[value.r, value.g, value.b].map((channel) => Math.max(0, Math.min(255, Math.round(channel))).toString(16).padStart(2, "0")).join("")}`;
+
+const mixHexColors = (primary: string, secondary: string, primaryWeight = 0.5) => {
+  const first = parseHexColor(primary);
+  const second = parseHexColor(secondary);
+  if (!first || !second) {
+    return primary;
+  }
+
+  const weight = Math.max(0, Math.min(1, primaryWeight));
+  return toHexColor({
+    r: first.r * weight + second.r * (1 - weight),
+    g: first.g * weight + second.g * (1 - weight),
+    b: first.b * weight + second.b * (1 - weight),
+  });
+};
+
+const getColorLuminance = (value: string) => {
+  const parsed = parseHexColor(value);
+  if (!parsed) {
+    return 0.5;
+  }
+
+  const channels = [parsed.r, parsed.g, parsed.b].map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+};
+
+const parseColorToken = (value: string) => {
+  const trimmed = value.trim();
+  const rgbaMatch = trimmed.match(/^rgba?\(([^)]+)\)$/i);
+  if (!rgbaMatch) {
+    const hexMatch = trimmed.match(/#([0-9a-f]{6})/i);
+    return hexMatch?.[1]
+      ? {
+          r: Number.parseInt(hexMatch[1].slice(0, 2), 16),
+          g: Number.parseInt(hexMatch[1].slice(2, 4), 16),
+          b: Number.parseInt(hexMatch[1].slice(4, 6), 16),
+          a: 1,
+        }
+      : null;
+  }
+
+  const parts = rgbaMatch[1].split(",").map((part) => part.trim());
+  if (parts.length < 3) {
+    return null;
+  }
+
+  const r = Number.parseFloat(parts[0] ?? "");
+  const g = Number.parseFloat(parts[1] ?? "");
+  const b = Number.parseFloat(parts[2] ?? "");
+  const a = parts.length >= 4 ? Number.parseFloat(parts[3] ?? "1") : 1;
+
+  if ([r, g, b, a].some((channel) => Number.isNaN(channel))) {
+    return null;
+  }
+
+  return { r, g, b, a };
+};
+
+const getBackgroundLuminance = (background: string) => {
+  const tokens = Array.from(background.matchAll(/rgba?\([^)]+\)|#[0-9a-f]{6}/gi));
+  const colors = tokens
+    .map((match) => parseColorToken(match[0] ?? ""))
+    .filter((value): value is NonNullable<ReturnType<typeof parseColorToken>> => Boolean(value));
+
+  if (!colors.length) {
+    return null;
+  }
+
+  const composite = colors.map((color) => {
+    const alpha = typeof color.a === "number" ? color.a : 1;
+    const red = Math.round(color.r * alpha + 255 * (1 - alpha));
+    const green = Math.round(color.g * alpha + 255 * (1 - alpha));
+    const blue = Math.round(color.b * alpha + 255 * (1 - alpha));
+    return getColorLuminance(
+      `#${[red, green, blue]
+        .map((channel) => channel.toString(16).padStart(2, "0"))
+        .join("")}`
+    );
+  });
+
+  return composite.reduce((sum, value) => sum + value, 0) / composite.length;
+};
+
+const buildMetallicBackground = (accent: string) => {
+  const luminance = getColorLuminance(accent);
+
+  if (luminance >= 0.58) {
+    const dark = mixHexColors(accent, "#7b8794", 0.7);
+    const base = mixHexColors(accent, "#cfd6de", 0.7);
+    const highlight = mixHexColors(accent, "#f8fafc", 0.45);
+    const edge = mixHexColors(accent, "#a5b1bd", 0.75);
+    return `linear-gradient(145deg, ${edge} 0%, ${base} 34%, ${highlight} 54%, ${base} 76%, ${dark} 100%)`;
+  }
+
+  const shadow = mixHexColors(accent, "#050b14", 0.74);
+  const base = mixHexColors(accent, "#12233c", 0.88);
+  const highlight = mixHexColors(accent, "#ffffff", 0.72);
+  const edge = mixHexColors(accent, "#08111d", 0.8);
+  return `linear-gradient(145deg, ${shadow} 0%, ${base} 34%, ${highlight} 56%, ${base} 76%, ${edge} 100%)`;
+};
+
+const extractAlphaValues = (background: string) =>
+  Array.from(background.matchAll(/rgba\((?:[^,]+,){3}\s*([0-9.]+)\)/gi))
+    .map((match) => Number.parseFloat(match[1] ?? ""))
+    .filter((value) => !Number.isNaN(value));
+
+const usesLegacyTintWash = (background: string) => {
+  const alphaValues = extractAlphaValues(background);
+  return alphaValues.length > 0 && Math.max(...alphaValues) <= 0.3;
+};
+
+const inferForeground = (accent: string, background: string) => {
+  const backgroundLuminance = getBackgroundLuminance(background);
+  if (backgroundLuminance !== null) {
+    return backgroundLuminance <= 0.46 ? "#f8fafc" : "#0f172a";
+  }
+
+  const accentLuminance = getColorLuminance(accent);
+  if (accentLuminance <= 0.46) {
+    return "#f8fafc";
+  }
+
+  const backgroundHexMatch = background.match(/#([0-9a-f]{6})/i);
+  if (backgroundHexMatch?.[1]) {
+    return getColorLuminance(`#${backgroundHexMatch[1]}`) <= 0.46 ? "#f8fafc" : "#0f172a";
+  }
+
+  return "#0f172a";
+};
+
+const iconPath = (fileName: string) => `/assets/banks/${fileName}`;
+
+const philippinesLogoPath = (fileName: string) => `/assets/banks/philippines/${fileName}`;
+
+const makeBrand = (params: {
+  label: string;
+  logoSrc?: string | null;
+  logoSrcs?: string[];
+  fallbackIconSrc: string;
+  accent: string;
+  background?: string;
+  logoBackground?: string;
+  logoFit?: "cover" | "contain";
+  logoPadding?: string;
+  foreground?: string;
+}): AccountBrand => {
+  const resolvedBackground =
+    params.background && !usesLegacyTintWash(params.background) ? params.background : buildMetallicBackground(params.accent);
+
+  // Resolve text against the final card background. Some brand palettes start as
+  // translucent tints but are rendered as metallic gradients, so a hard-coded
+  // foreground can become unreadable after the background is normalized.
+  const resolvedForeground = inferForeground(params.accent, resolvedBackground);
+  return {
+    label: params.label,
+    // Native clients need one usable URL as well as the browser fallback list.
+    logoSrc: params.logoSrc ?? params.logoSrcs?.find(src => getCurrentBuiltInAccountLogoUrl(src)) ?? params.logoSrcs?.[0] ?? null,
+    logoSrcs: params.logoSrcs ?? (params.logoSrc ? [params.logoSrc] : []),
+    fallbackIconSrc: params.fallbackIconSrc,
+    accent: params.accent,
+    background: resolvedBackground,
+    logoBackground: params.logoBackground,
+    logoFit: params.logoFit,
+    logoPadding: params.logoPadding,
+    foreground: resolvedForeground,
+  };
+};
+
+const bankIcon = "/assets/account-types/bank.png";
+const cashIcon = "/assets/account-types/cash.png";
+const creditCardIcon = "/assets/account-types/credit_card.png";
+const investmentIcon = "/assets/account-types/investment.png";
+const othersIcon = "/assets/account-types/other.png";
+const walletIcon = "/assets/account-types/wallet.png";
+const liabilityIcon = "/assets/account-types/loan.png";
+const loanIcon = "/assets/account-types/loan.png";
+const mortgageIcon = "/assets/account-types/mortgage.png";
+const lineOfCreditIcon = "/assets/account-types/line_of_credit.png";
+const receivableIcon = "/assets/account-types/receivable.png";
+const payableIcon = "/assets/account-types/payable.png";
+const bnplIcon = "/assets/account-types/bnpl.png";
+const prepaidIcon = "/assets/account-types/prepaid.png";
+const insuranceIcon = "/assets/account-types/insurance.png";
+const philippinesLogo = (baseName: string) => [
+  philippinesLogoPath(`${baseName}.png`),
+  philippinesLogoPath(`${baseName}.jpg`),
+  philippinesLogoPath(`${baseName}.jpeg`),
+  philippinesLogoPath(`${baseName}.webp`),
+  philippinesLogoPath(`${baseName}.avif`),
+];
+const philippinesLogoWithVariants = (...baseNames: string[]) =>
+  baseNames.flatMap((baseName) => philippinesLogo(baseName));
+
+const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
+  {
+    match: /\b(BANK OF THE PHILIPPINE ISLANDS|BPI)\b/i,
+    brand: makeBrand({
+      label: "BPI",
+      logoSrcs: philippinesLogoWithVariants("bpi"),
+      fallbackIconSrc: bankIcon,
+      accent: "#E71F2C",
+      background: "linear-gradient(135deg, rgba(231, 31, 44, 0.16), rgba(231, 31, 44, 0.06))",
+    }),
+  },
+  {
+    match: /\b(BDO|BDO UNIBANK|BANCO DE ORO)\b/i,
+    brand: makeBrand({
+      label: "BDO",
+      logoSrcs: philippinesLogoWithVariants("bdo"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0B63CE",
+      background: "linear-gradient(135deg, rgba(11, 99, 206, 0.16), rgba(11, 99, 206, 0.06))",
+    }),
+  },
+  {
+    match: /\b(METROBANK|METROPOLITAN BANK|METROPOLITAN BANK AND TRUST COMPANY)\b/i,
+    brand: makeBrand({
+      label: "Metrobank",
+      logoSrc: philippinesLogoPath("metrobank.jpeg?v=20260511"),
+      logoSrcs: [philippinesLogoPath("metrobank.jpeg?v=20260511")],
+      fallbackIconSrc: bankIcon,
+      accent: "#00539B",
+      background: "linear-gradient(135deg, rgba(0, 49, 118, 0.28), rgba(0, 83, 155, 0.14))",
+    }),
+  },
+  {
+    match: /\b(SECURITY BANK|SECURITY BANK CORPORATION)\b/i,
+    brand: makeBrand({
+      label: "Security Bank",
+      logoSrcs: philippinesLogoWithVariants("security bank", "security-bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#1F3A5F",
+      background: "linear-gradient(135deg, rgba(31, 58, 95, 0.18), rgba(163, 230, 53, 0.08))",
+    }),
+  },
+  {
+    match: /\b(EASTWEST|EAST WEST)\b/i,
+    brand: makeBrand({
+      label: "EastWest",
+      logoSrcs: philippinesLogoWithVariants("eastwest"),
+      fallbackIconSrc: bankIcon,
+      accent: "#A3D900",
+      background: "linear-gradient(135deg, rgba(163, 217, 0, 0.18), rgba(40, 56, 104, 0.08))",
+      foreground: "#0f172a",
+    }),
+  },
+  {
+    match: /\b(RCBC|RIZAL COMMERCIAL BANKING)\b/i,
+    brand: makeBrand({
+      label: "RCBC",
+      logoSrcs: philippinesLogoWithVariants("rcbc"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0A8ED8",
+      background: "linear-gradient(135deg, #0A6FB0 0%, #0A8ED8 52%, #29B1F0 100%)",
+      foreground: "#f8fafc",
+    }),
+  },
+  {
+    match: /\b(UNIONBANK|UNION BANK)\b/i,
+    brand: makeBrand({
+      label: "UnionBank",
+      logoSrc: philippinesLogoPath("unionbank.jpg"),
+      logoSrcs: [philippinesLogoPath("unionbank.jpg")],
+      fallbackIconSrc: bankIcon,
+      accent: "#FF6A00",
+      background: "linear-gradient(135deg, rgba(255, 106, 0, 0.18), rgba(255, 106, 0, 0.06))",
+    }),
+  },
+  {
+    match: /\b(AUB|ASIA UNITED BANK)\b/i,
+    brand: makeBrand({
+      label: "AUB",
+      logoSrcs: philippinesLogoWithVariants("aub"),
+      fallbackIconSrc: bankIcon,
+      accent: "#B61B24",
+      background: "linear-gradient(135deg, #8F111B 0%, #B61B24 48%, #C62B31 100%)",
+      foreground: "#f8fafc",
+    }),
+  },
+  {
+    match: /\bAB CAPITAL SECURITIES\b|\bAB CAPITAL\b/i,
+    brand: makeBrand({
+      label: "AB Capital Securities",
+      logoSrcs: philippinesLogoWithVariants("ab capital securities"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#0F4C81",
+      background: "linear-gradient(135deg, rgba(15, 76, 129, 0.18), rgba(15, 76, 129, 0.06))",
+    }),
+  },
+  {
+    match: /\bCIMB\b/i,
+    brand: makeBrand({
+      label: "CIMB",
+      logoSrcs: philippinesLogoWithVariants("cimb"),
+      fallbackIconSrc: bankIcon,
+      accent: "#E30613",
+      background: "linear-gradient(135deg, rgba(227, 6, 19, 0.16), rgba(227, 6, 19, 0.06))",
+    }),
+  },
+  {
+    match: /\b(CHINABANK|CHINA\s*BANK|CHINA BANKING CORPORATION)\b/i,
+    brand: makeBrand({
+      label: "Chinabank",
+      logoSrc: philippinesLogoPath("chinabank.png"),
+      logoSrcs: [philippinesLogoPath("chinabank.png")],
+      fallbackIconSrc: bankIcon,
+      accent: "#C81F25",
+      background: "linear-gradient(135deg, rgba(200, 31, 37, 0.16), rgba(200, 31, 37, 0.06))",
+    }),
+  },
+  {
+    match: /\b(MAYA|MAYA BANK)\b/i,
+    brand: makeBrand({
+      label: "Maya",
+      logoSrcs: philippinesLogoWithVariants("maya"),
+      fallbackIconSrc: walletIcon,
+      accent: "#05070A",
+      background: "linear-gradient(135deg, rgba(3, 6, 10, 0.99), rgba(10, 14, 20, 0.98))",
+      foreground: "#f8fafc",
+    }),
+  },
+  {
+    match: /\bGCASH\b/i,
+    brand: makeBrand({
+      label: "GCash",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: walletIcon,
+      accent: "#1479E7",
+    }),
+  },
+  {
+    match: /\bWISE\b/i,
+    brand: makeBrand({
+      label: "Wise",
+      logoSrcs: philippinesLogoWithVariants("wise"),
+      fallbackIconSrc: walletIcon,
+      accent: "#9FE870",
+      background: "linear-gradient(145deg, #9FE870 0%, #86DF57 48%, #6FCE44 100%)",
+      foreground: "#0b1f08",
+    }),
+  },
+  {
+    match: /\bGRABPAY\b/i,
+    brand: makeBrand({
+      label: "GrabPay",
+      logoSrcs: philippinesLogoWithVariants("grabpay"),
+      fallbackIconSrc: walletIcon,
+      accent: "#00B14F",
+      background: "linear-gradient(135deg, rgba(0, 177, 79, 0.16), rgba(0, 177, 79, 0.06))",
+    }),
+  },
+  {
+    match: /\bSHOPEEPAY\b/i,
+    brand: makeBrand({
+      label: "ShopeePay",
+      logoSrcs: philippinesLogoWithVariants("shopeepay"),
+      fallbackIconSrc: walletIcon,
+      accent: "#F36D00",
+      background: "linear-gradient(135deg, rgba(243, 109, 0, 0.16), rgba(243, 109, 0, 0.06))",
+    }),
+  },
+  {
+    match: /\bPDAX\b/i,
+    brand: makeBrand({
+      label: "PDAX",
+      logoSrcs: philippinesLogoWithVariants("pdax"),
+      fallbackIconSrc: investmentIcon,
+      // Match PDAX's lime-green brand rather than treating it like a blue
+      // securities account. This applies equally to imported portfolios.
+      accent: "#9ACD32",
+      background: "linear-gradient(145deg, #b5dc61 0%, #9acd32 48%, #7eb52a 100%)",
+    }),
+  },
+  {
+    match: /\b(BANK OF COMMERCE|BANKCOM)\b/i,
+    brand: makeBrand({
+      label: "Bank of Commerce",
+      logoSrcs: philippinesLogoWithVariants("bank of commerce", "bank-of-commerce", "bankcom"),
+      fallbackIconSrc: bankIcon,
+      accent: "#E8C63D",
+      background: "linear-gradient(135deg, rgba(232, 198, 61, 0.18), rgba(13, 27, 90, 0.08))",
+    }),
+  },
+  {
+    match: /\b(BANK OF CHINA|BOC)\b/i,
+    brand: makeBrand({
+      label: "Bank of China",
+      logoSrcs: philippinesLogoWithVariants("bank of china", "bank-of-china", "boc"),
+      fallbackIconSrc: bankIcon,
+      accent: "#BF1E2E",
+      background: "linear-gradient(135deg, rgba(191, 30, 46, 0.16), rgba(191, 30, 46, 0.06))",
+    }),
+  },
+  {
+    match: /\bHSBC\b/i,
+    brand: makeBrand({
+      label: "HSBC",
+      logoSrcs: philippinesLogoWithVariants("hsbc"),
+      fallbackIconSrc: bankIcon,
+      accent: "#DB0011",
+      background: "linear-gradient(135deg, rgba(219, 0, 17, 0.16), rgba(219, 0, 17, 0.06))",
+      logoBackground: "#ffffff",
+      logoFit: "contain",
+      logoPadding: "3px",
+      foreground: "#0f172a",
+    }),
+  },
+  {
+    match: /\bLAND BANK\b|\bLANDBANK\b/i,
+    brand: makeBrand({
+      label: "LandBank",
+      logoSrcs: philippinesLogoWithVariants("landbank", "land bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#00833E",
+      background: "linear-gradient(135deg, rgba(0, 131, 62, 0.16), rgba(0, 131, 62, 0.06))",
+    }),
+  },
+  {
+    match: /\bMAYBANK\b/i,
+    brand: makeBrand({
+      label: "Maybank",
+      logoSrcs: philippinesLogoWithVariants("maybank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#FFCC00",
+      background: "linear-gradient(135deg, rgba(255, 204, 0, 0.18), rgba(255, 204, 0, 0.08))",
+      foreground: "#0f172a",
+    }),
+  },
+  {
+    match: /\bAL AMANAH\b/i,
+    brand: makeBrand({
+      label: "Al Amanah",
+      logoSrcs: philippinesLogoWithVariants("al amanah"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0F7B3A",
+      background: "linear-gradient(135deg, rgba(15, 123, 58, 0.18), rgba(15, 123, 58, 0.06))",
+    }),
+  },
+  {
+    match: /\bANZ\b|\bANZ BANK\b/i,
+    brand: makeBrand({
+      label: "ANZ Bank",
+      logoSrcs: philippinesLogoWithVariants("anz bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0052CC",
+      background: "linear-gradient(135deg, rgba(0, 82, 204, 0.18), rgba(0, 82, 204, 0.06))",
+    }),
+  },
+  {
+    match: /\b(PNB|PHILIPPINE NATIONAL BANK)\b/i,
+    brand: makeBrand({
+      label: "PNB",
+      logoSrcs: philippinesLogoWithVariants("pnb"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0055A5",
+      background: "linear-gradient(135deg, rgba(0, 85, 165, 0.16), rgba(0, 85, 165, 0.06))",
+    }),
+  },
+  {
+    match: /\b(PSBANK|PHILIPPINE SAVINGS BANK)\b/i,
+    brand: makeBrand({
+      label: "PSBank",
+      logoSrcs: philippinesLogoWithVariants("psbank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0B63CE",
+      background: "linear-gradient(135deg, rgba(11, 99, 206, 0.16), rgba(11, 99, 206, 0.06))",
+    }),
+  },
+  {
+    match: /\bDRAGONFI\b/i,
+    brand: makeBrand({
+      label: "DragonFi",
+      logoSrcs: philippinesLogoWithVariants("dragonfi"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#6D28D9",
+      background: "linear-gradient(135deg, rgba(109, 40, 217, 0.18), rgba(109, 40, 217, 0.06))",
+    }),
+  },
+  {
+    match: /\bDRAGONPAY\b/i,
+    brand: makeBrand({
+      label: "Dragonpay",
+      logoSrcs: philippinesLogoWithVariants("dragonpay"),
+      fallbackIconSrc: walletIcon,
+      accent: "#0EA5A8",
+      background: "linear-gradient(135deg, rgba(14, 165, 168, 0.18), rgba(14, 165, 168, 0.06))",
+    }),
+  },
+  {
+    match: /\bGO?TYME\b/i,
+    brand: makeBrand({
+      label: "GoTyme",
+      logoSrcs: philippinesLogoWithVariants("gotyme"),
+      fallbackIconSrc: walletIcon,
+      accent: "#00F5FA",
+      background: "linear-gradient(135deg, rgba(0, 245, 250, 0.26), rgba(0, 245, 250, 0.08))",
+    }),
+  },
+  {
+    match: /\bUCPB\b/i,
+    brand: makeBrand({
+      label: "UCPB",
+      logoSrcs: philippinesLogoWithVariants("ucpb"),
+      fallbackIconSrc: bankIcon,
+      accent: "#253C9B",
+      background: "linear-gradient(145deg, #17215F 0%, #253C9B 48%, #1EA7E1 100%)",
+      logoBackground: "linear-gradient(135deg, #ffffff 0%, #f8fbff 100%)",
+      foreground: "#f8fafc",
+    }),
+  },
+  {
+    match: /\bPHILIPPINE VETERANS BANK\b|\bPVB\b/i,
+    brand: makeBrand({
+      label: "Philippine Veterans Bank",
+      logoSrcs: philippinesLogoWithVariants("philippine veterans bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0B6E4F",
+      background: "linear-gradient(135deg, rgba(11, 110, 79, 0.18), rgba(11, 110, 79, 0.06))",
+    }),
+  },
+  {
+    match: /\bSTERLING BANK\b/i,
+    brand: makeBrand({
+      label: "Sterling Bank",
+      logoSrcs: philippinesLogoWithVariants("sterling bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#1D4ED8",
+      background: "linear-gradient(135deg, rgba(29, 78, 216, 0.18), rgba(29, 78, 216, 0.06))",
+    }),
+  },
+  {
+    match: /\bMARI?BANK\b/i,
+    brand: makeBrand({
+      label: "MariBank",
+      logoSrcs: philippinesLogoWithVariants("maribank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#F97316",
+      background: "linear-gradient(135deg, rgba(249, 115, 22, 0.18), rgba(49, 46, 129, 0.08))",
+    }),
+  },
+  {
+    match: /\bCITIBANK\b/i,
+    brand: makeBrand({
+      label: "Citibank",
+      logoSrcs: philippinesLogoWithVariants("citibank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0F5EA8",
+      background: "linear-gradient(135deg, rgba(15, 94, 168, 0.16), rgba(15, 94, 168, 0.06))",
+    }),
+  },
+  {
+    match: /\bPAYPAL\b/i,
+    brand: makeBrand({
+      label: "PayPal",
+      logoSrc: philippinesLogoPath("paypal.jpeg?v=20260511"),
+      logoSrcs: [philippinesLogoPath("paypal.jpeg?v=20260511")],
+      fallbackIconSrc: walletIcon,
+      accent: "#003087",
+      background: "linear-gradient(135deg, rgba(0, 48, 135, 0.16), rgba(0, 48, 135, 0.06))",
+    }),
+  },
+  {
+    match: /\bPAYMONGO\b/i,
+    brand: makeBrand({
+      label: "PayMongo",
+      logoSrcs: philippinesLogoWithVariants("paymongo"),
+      fallbackIconSrc: walletIcon,
+      accent: "#4338CA",
+      background: "linear-gradient(135deg, rgba(67, 56, 202, 0.16), rgba(67, 56, 202, 0.06))",
+    }),
+  },
+  {
+    match: /\bCLIQQ\b/i,
+    brand: makeBrand({
+      label: "CLIQQ",
+      logoSrcs: philippinesLogoWithVariants("cliqq"),
+      fallbackIconSrc: walletIcon,
+      accent: "#F97316",
+      background: "linear-gradient(135deg, rgba(249, 115, 22, 0.16), rgba(249, 115, 22, 0.06))",
+    }),
+  },
+  {
+    match: /\bING\b/i,
+    brand: makeBrand({
+      label: "ING",
+      logoSrcs: philippinesLogoWithVariants("ing"),
+      fallbackIconSrc: bankIcon,
+      accent: "#FF6200",
+      background: "linear-gradient(135deg, rgba(255, 98, 0, 0.18), rgba(255, 98, 0, 0.06))",
+    }),
+  },
+  {
+    match: /\bTONIK\b/i,
+    brand: makeBrand({
+      label: "Tonik",
+      logoSrcs: philippinesLogoWithVariants("tonik"),
+      fallbackIconSrc: walletIcon,
+      accent: "#7650F2",
+      background: "linear-gradient(135deg, rgba(118, 80, 242, 0.18), rgba(118, 80, 242, 0.06))",
+    }),
+  },
+  {
+    match: /\bBINANCE\b/i,
+    brand: makeBrand({
+      label: "Binance",
+      logoSrcs: philippinesLogoWithVariants("binance"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#F0B90B",
+      background: "linear-gradient(135deg, rgba(240, 185, 11, 0.18), rgba(240, 185, 11, 0.06))",
+    }),
+  },
+  {
+    match: /\bGOTRADE\b|\bGO TRADE\b/i,
+    brand: makeBrand({
+      label: "GoTrade",
+      logoSrcs: philippinesLogoWithVariants("gotrade"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#31D0A2",
+      background: "linear-gradient(145deg, #31D0A2 0%, #65E4BD 52%, #28C895 100%)",
+      foreground: "#0f172a",
+    }),
+  },
+  {
+    match: /\bGSTOCKS(?:\s+PHILIPPINES)?\b|\bGCASH\s+GSTOCKS\b/i,
+    brand: makeBrand({
+      label: "GStocks Philippines",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(145deg, #0F66CC 0%, #2389F2 52%, #126FD8 100%)",
+    }),
+  },
+  {
+    match: /\bGFUNDS\b|\bGCASH\s+GFUNDS\b/i,
+    brand: makeBrand({
+      label: "GFunds",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
+    }),
+  },
+  {
+    match: /\bATRAM\b/i,
+    brand: makeBrand({
+      label: "ATRAM",
+      logoSrcs: philippinesLogoWithVariants("atram"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#005BAC",
+      background: "linear-gradient(135deg, rgba(0, 91, 172, 0.18), rgba(0, 91, 172, 0.06))",
+    }),
+  },
+  {
+    match: /\bCOINS(?:\.PH)?\b/i,
+    brand: makeBrand({
+      label: "Coins.ph",
+      logoSrcs: philippinesLogoWithVariants("coins"),
+      fallbackIconSrc: walletIcon,
+      accent: "#1F3B7A",
+      background: "linear-gradient(135deg, rgba(31, 59, 122, 0.18), rgba(31, 59, 122, 0.06))",
+    }),
+  },
+  {
+    match: /\b(DBP|DEVELOPMENT BANK OF THE PHILIPPINES)\b/i,
+    brand: makeBrand({
+      label: "DBP",
+      logoSrcs: philippinesLogoWithVariants("dbp"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0054A6",
+      background: "linear-gradient(135deg, rgba(0, 84, 166, 0.18), rgba(0, 84, 166, 0.06))",
+    }),
+  },
+  {
+    match: /\bCEBUANA\b/i,
+    brand: makeBrand({
+      label: "Cebuana Lhuillier",
+      logoSrcs: philippinesLogoWithVariants("cebuana lhuillier"),
+      fallbackIconSrc: walletIcon,
+      accent: "#F36D00",
+      background: "linear-gradient(135deg, rgba(243, 109, 0, 0.18), rgba(243, 109, 0, 0.06))",
+    }),
+  },
+  {
+    match: /\bLAZADA\b/i,
+    brand: makeBrand({
+      label: "Lazada Wallet",
+      logoSrcs: philippinesLogoWithVariants("lazada wallet"),
+      fallbackIconSrc: walletIcon,
+      accent: "#2563EB",
+      background: "linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0.06))",
+    }),
+  },
+  {
+    match: /\bTRUEMONEY\b/i,
+    brand: makeBrand({
+      label: "TrueMoney",
+      logoSrcs: philippinesLogoWithVariants("truemoney"),
+      fallbackIconSrc: walletIcon,
+      accent: "#FF7A00",
+      background: "linear-gradient(135deg, rgba(255, 122, 0, 0.18), rgba(255, 122, 0, 0.06))",
+    }),
+  },
+  {
+    match: /\bBAYAD\b/i,
+    brand: makeBrand({
+      label: "Bayad Center",
+      logoSrcs: philippinesLogoWithVariants("bayad center"),
+      fallbackIconSrc: walletIcon,
+      accent: "#F59E0B",
+      background: "linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.06))",
+    }),
+  },
+  {
+    match: /\bOWNBANK\b/i,
+    brand: makeBrand({
+      label: "OwnBank",
+      logoSrcs: philippinesLogoWithVariants("ownbank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#111827",
+      background: "linear-gradient(135deg, rgba(17, 24, 39, 0.18), rgba(17, 24, 39, 0.06))",
+      foreground: "#111827",
+    }),
+  },
+  {
+    match: /\bUNO BANK\b|\bUNOBANK\b/i,
+    brand: makeBrand({
+      label: "Uno Bank",
+      logoSrcs: philippinesLogoWithVariants("uno bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0F172A",
+      background: "linear-gradient(135deg, rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.06))",
+      foreground: "#0f172a",
+    }),
+  },
+  {
+    match: /\bPBCOM\b/i,
+    brand: makeBrand({
+      label: "PBCOM",
+      logoSrcs: philippinesLogoWithVariants("pbcom"),
+      fallbackIconSrc: bankIcon,
+      accent: "#E53935",
+      background: "linear-gradient(135deg, rgba(229, 57, 53, 0.18), rgba(229, 57, 53, 0.06))",
+    }),
+  },
+  {
+    match: /\bPHILTRUST\b/i,
+    brand: makeBrand({
+      label: "Philtrust",
+      logoSrcs: philippinesLogoWithVariants("philtrust"),
+      fallbackIconSrc: bankIcon,
+      accent: "#1E3A8A",
+      background: "linear-gradient(135deg, rgba(30, 58, 138, 0.18), rgba(30, 58, 138, 0.06))",
+    }),
+  },
+  {
+    match: /\bMANULIFE\b/i,
+    brand: makeBrand({
+      label: "Manulife",
+      logoSrcs: philippinesLogoWithVariants("manulife"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#00833E",
+      background: "linear-gradient(135deg, rgba(0, 131, 62, 0.18), rgba(0, 131, 62, 0.06))",
+    }),
+  },
+  {
+    match: /\bCATHAY UNITED\b/i,
+    brand: makeBrand({
+      label: "Cathay United",
+      logoSrcs: philippinesLogoWithVariants("cathay united"),
+      fallbackIconSrc: bankIcon,
+      accent: "#008D4C",
+      background: "linear-gradient(135deg, rgba(0, 141, 76, 0.18), rgba(0, 141, 76, 0.06))",
+    }),
+  },
+  {
+    match: /\bCHANG HWA\b/i,
+    brand: makeBrand({
+      label: "Chang Hwa",
+      logoSrcs: philippinesLogoWithVariants("chang hwa"),
+      fallbackIconSrc: bankIcon,
+      accent: "#D50032",
+      background: "linear-gradient(135deg, rgba(213, 0, 50, 0.18), rgba(213, 0, 50, 0.06))",
+    }),
+  },
+  {
+    match: /\b(UOB|UNITED OVERSEAS BANK)\b/i,
+    brand: makeBrand({
+      label: "United Overseas Bank",
+      logoSrcs: philippinesLogoWithVariants("united overseas bank", "uob"),
+      fallbackIconSrc: bankIcon,
+      accent: "#E21B22",
+      background: "linear-gradient(135deg, rgba(226, 27, 34, 0.18), rgba(226, 27, 34, 0.06))",
+    }),
+  },
+  {
+    match: /\bSTANDARD CHARTERED\b/i,
+    brand: makeBrand({
+      label: "Standard Chartered",
+      logoSrcs: philippinesLogoWithVariants("standard chartered"),
+      fallbackIconSrc: bankIcon,
+      accent: "#005EB8",
+      background: "linear-gradient(135deg, rgba(0, 94, 184, 0.18), rgba(0, 94, 184, 0.06))",
+    }),
+  },
+  {
+    match: /\bALLBANK\b/i,
+    brand: makeBrand({
+      label: "AllBank",
+      logoSrcs: philippinesLogoWithVariants("allbank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#2F855A",
+      background: "linear-gradient(135deg, rgba(47, 133, 90, 0.18), rgba(47, 133, 90, 0.06))",
+    }),
+  },
+  {
+    match: /\bSHINHAN BANK\b|\bSHINHAN\b/i,
+    brand: makeBrand({
+      label: "Shinhan Bank",
+      logoSrcs: philippinesLogoWithVariants("shinhan bank", "shinhan"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0066B2",
+      background: "linear-gradient(135deg, rgba(0, 102, 178, 0.18), rgba(0, 102, 178, 0.06))",
+    }),
+  },
+  {
+    match: /\bJPMORGAN(?: CHASE)?\b/i,
+    brand: makeBrand({
+      label: "JPMorgan Chase",
+      logoSrcs: philippinesLogoWithVariants("jpmorganchase", "jpmorgan chase"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0A4EA2",
+      background: "linear-gradient(135deg, rgba(10, 78, 162, 0.18), rgba(10, 78, 162, 0.06))",
+    }),
+  },
+  {
+    match: /\bINDUSTRIAL BANK OF KOREA\b|\bIBK\b/i,
+    brand: makeBrand({
+      label: "Industrial Bank of Korea",
+      logoSrcs: philippinesLogoWithVariants("industrial bank of korea", "ibk"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0A5A9C",
+      background: "linear-gradient(135deg, rgba(10, 90, 156, 0.18), rgba(10, 90, 156, 0.06))",
+    }),
+  },
+  {
+    match: /\bFIRST COMMERCIAL BANK\b/i,
+    brand: makeBrand({
+      label: "First Commercial Bank",
+      logoSrcs: philippinesLogoWithVariants("first commercial bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#006B3F",
+      background: "linear-gradient(135deg, rgba(0, 107, 63, 0.18), rgba(0, 107, 63, 0.06))",
+    }),
+  },
+  {
+    match: /\bBANK OF AMERICA\b/i,
+    brand: makeBrand({
+      label: "Bank of America",
+      logoSrcs: philippinesLogoWithVariants("bank of america"),
+      fallbackIconSrc: bankIcon,
+      accent: "#B31B1B",
+      background: "linear-gradient(135deg, rgba(179, 27, 27, 0.18), rgba(0, 58, 112, 0.08))",
+    }),
+  },
+  {
+    match: /\bCTBC\b/i,
+    brand: makeBrand({
+      label: "CTBC",
+      logoSrcs: philippinesLogoWithVariants("ctbc"),
+      fallbackIconSrc: bankIcon,
+      accent: "#00A6A6",
+      background: "linear-gradient(135deg, rgba(0, 166, 166, 0.18), rgba(0, 166, 166, 0.06))",
+    }),
+  },
+  {
+    match: /\bBANGKOK BANK\b/i,
+    brand: makeBrand({
+      label: "Bangkok Bank",
+      logoSrcs: philippinesLogoWithVariants("bangkok bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#002B7F",
+      background: "linear-gradient(135deg, rgba(0, 43, 127, 0.18), rgba(0, 43, 127, 0.06))",
+    }),
+  },
+  {
+    match: /\bMUFG\b/i,
+    brand: makeBrand({
+      label: "MUFG",
+      logoSrcs: philippinesLogoWithVariants("mufg"),
+      fallbackIconSrc: bankIcon,
+      accent: "#C81E1E",
+      background: "linear-gradient(135deg, rgba(200, 30, 30, 0.18), rgba(200, 30, 30, 0.06))",
+    }),
+  },
+  {
+    match: /\bMIZUHO\b/i,
+    brand: makeBrand({
+      label: "Mizuho",
+      logoSrcs: philippinesLogoWithVariants("mizuho"),
+      fallbackIconSrc: bankIcon,
+      accent: "#001F7A",
+      background: "linear-gradient(135deg, rgba(0, 31, 122, 0.18), rgba(0, 31, 122, 0.06))",
+    }),
+  },
+  {
+    match: /\bSUMITOMO MITSUI\b/i,
+    brand: makeBrand({
+      label: "Sumitomo Mitsui",
+      logoSrcs: philippinesLogoWithVariants("sumitomo mitsui"),
+      fallbackIconSrc: bankIcon,
+      accent: "#006B4E",
+      background: "linear-gradient(135deg, rgba(0, 107, 78, 0.18), rgba(0, 107, 78, 0.06))",
+    }),
+  },
+  {
+    match: /\bHUA NAN BANK\b/i,
+    brand: makeBrand({
+      label: "Hua Nan Bank",
+      logoSrcs: philippinesLogoWithVariants("hua nan bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#E60012",
+      background: "linear-gradient(135deg, rgba(230, 0, 18, 0.18), rgba(230, 0, 18, 0.06))",
+    }),
+  },
+];
+
+const getBaseAccountBrand = (params: AccountBrandInput): AccountBrand => {
+  const rawBrandText = [params.institution, params.name].filter(Boolean).join(" ");
+  const isGSaveBackedUnoAccount =
+    /\b(?:unoready|unoboost)\b/i.test(rawBrandText) ||
+    (/\bgsave\b/i.test(rawBrandText) && /\buno\b/i.test(rawBrandText));
+  const isGSaveBackedCimbAccount =
+    (/\bgsave\b/i.test(rawBrandText) && /\bcimb\b/i.test(rawBrandText)) ||
+    (/\bcimb\b/i.test(rawBrandText) && /\bgcash\b/i.test(rawBrandText));
+
+  if (isGSaveBackedUnoAccount) {
+    return makeBrand({
+      label: "GSave",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: bankIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
+    });
+  }
+
+  if (isGSaveBackedCimbAccount) {
+    const cimbBrand = BANK_BRANDS.find((entry) => entry.brand.label === "CIMB")?.brand;
+    if (cimbBrand) {
+      return cimbBrand;
+    }
+  }
+
+  if (/\bgsave\b/i.test(rawBrandText)) {
+    return makeBrand({
+      label: "GSave",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: bankIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
+    });
+  }
+
+  if (/\bgcrypto\b/i.test(rawBrandText)) {
+    return makeBrand({
+      label: "GCrypto",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
+    });
+  }
+
+  if (/\bgfunds\b/i.test(rawBrandText)) {
+    return makeBrand({
+      label: "GFunds",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
+    });
+  }
+
+  if (/\bgcash\b/i.test(rawBrandText)) {
+    return makeBrand({
+      label: "GCash",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: walletIcon,
+      accent: "#1479E7",
+    });
+  }
+
+  const inferredInstitution = inferBankNameFromText(rawBrandText);
+  const normalizedInstitution = normalizeBankName(params.institution);
+  const institution =
+    normalizedInstitution !== "Unknown"
+      ? normalize(normalizedInstitution)
+      : normalize(inferredInstitution !== "Unknown" ? inferredInstitution : sanitizeBankNameLabel(params.institution) ?? params.institution);
+  const name = normalize(sanitizeBankNameLabel(params.name) ?? params.name);
+  const type = normalize(params.type);
+
+  if (type === "cash" || institution === "cash" || name === "cash") {
+    return makeBrand({
+      label: "Cash",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: cashIcon,
+      accent: "#0F9F5C",
+      background: "linear-gradient(135deg, #0B6E42 0%, #10A760 52%, #0E8A51 100%)",
+      foreground: "#f8fafc",
+    });
+  }
+
+  const brandInput = [params.institution, params.name, inferredInstitution]
+    .filter(Boolean)
+    .join(" ");
+  const existingBrand = BANK_BRANDS.find((entry) => entry.match.test(brandInput))?.brand;
+  // Prefer the supplied institution over an account nickname. Existing providers
+  // retain their established branding unless a regional logo is explicitly named.
+  const additionalLogo = findAdditionalBankLogo(params.institution?.trim() || params.name || "");
+  const sameExistingProvider = existingBrand && additionalLogo && [additionalLogo.label, ...additionalLogo.aliases].some((name) => normalizeLogoName(name) === normalizeLogoName(existingBrand.label));
+  if (additionalLogo && (additionalLogo.explicitRegion || !existingBrand || !sameExistingProvider)) {
+    return makeBrand({
+      label: additionalLogo.label,
+      logoSrc: additionalLogo.src,
+      fallbackIconSrc: type === "wallet" ? walletIcon : bankIcon,
+      accent: existingBrand?.accent ?? "#087D91",
+      logoBackground: "#ffffff", logoFit: "contain", logoPadding: "4px",
+    });
+  }
+  for (const entry of BANK_BRANDS) {
+    if (entry.match.test(brandInput)) {
+      return entry.brand;
+    }
+  }
+
+  if (institution === "wallet" || type === "wallet") {
+    return makeBrand({
+      label: "Wallet",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: walletIcon,
+      accent: "#0A72E8",
+      background: "linear-gradient(135deg, #0750B8 0%, #1085F5 52%, #0C67D8 100%)",
+      foreground: "#f8fafc",
+    });
+  }
+
+  if (
+    type === "credit_card" ||
+    type === "loan" ||
+    type === "mortgage" ||
+    type === "line_of_credit" ||
+    type === "payable" ||
+    type === "bnpl"
+  ) {
+    return makeBrand({
+      label:
+        params.institution?.trim() ||
+        (type === "loan"
+          ? "Loan"
+          : type === "mortgage"
+            ? "Mortgage"
+            : type === "line_of_credit"
+              ? "Line of Credit"
+              : type === "payable"
+                ? "Payable"
+                : type === "bnpl"
+                  ? "BNPL"
+              : "Credit Card"),
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc:
+        type === "credit_card"
+          ? creditCardIcon
+          : type === "loan"
+          ? loanIcon
+          : type === "mortgage"
+            ? mortgageIcon
+            : type === "line_of_credit"
+              ? lineOfCreditIcon
+              : type === "payable"
+                ? payableIcon
+                : type === "bnpl"
+                  ? bnplIcon
+                  : liabilityIcon,
+      accent: "#C63B57",
+      background: "linear-gradient(135deg, #7F1734 0%, #B12752 45%, #D3566E 100%)",
+      foreground: "#f8fafc",
+    });
+  }
+
+  if (type === "investment") {
+    return makeBrand({
+      label: params.institution?.trim() || "Investment",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: investmentIcon,
+      accent: "#5B4BFF",
+      background: "linear-gradient(135deg, #312E81 0%, #4F46E5 48%, #6D5CFF 100%)",
+      foreground: "#f8fafc",
+    });
+  }
+
+  if (type === "receivable") {
+    return makeBrand({
+      label: params.institution?.trim() || "Receivable",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: receivableIcon,
+      accent: "#0E9B7B",
+      background: "linear-gradient(135deg, #0F5F5F 0%, #118A87 46%, #15B9A4 100%)",
+      foreground: "#f8fafc",
+    });
+  }
+
+  if (type === "prepaid") {
+    return makeBrand({
+      label: params.institution?.trim() || "Prepaid",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: prepaidIcon,
+      accent: "#0A8FB2",
+      background: "linear-gradient(135deg, #0B4D6A 0%, #0F7494 48%, #10A5C6 100%)",
+      foreground: "#f8fafc",
+    });
+  }
+
+  if (type === "insurance") {
+    return makeBrand({
+      label: params.institution?.trim() || "Insurance",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: insuranceIcon,
+      accent: "#4E5FD7",
+      background: "linear-gradient(135deg, #2D3A8C 0%, #4152B8 48%, #6C7CF2 100%)",
+      foreground: "#f8fafc",
+    });
+  }
+
+  if (type === "other") {
+    return makeBrand({
+      label: params.institution?.trim() || "Other",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: othersIcon,
+      accent: "#2E5673",
+      background: "linear-gradient(135deg, #203C54, #376786)",
+      foreground: "#111827",
+    });
+  }
+
+  return makeBrand({
+    label: params.institution?.trim() || params.name?.trim() || "Account",
+    logoSrc: null,
+    logoSrcs: [],
+    fallbackIconSrc: bankIcon,
+    accent: "#2E5673",
+    background: "linear-gradient(135deg, #203C54, #376786)",
+    foreground: "#111827",
+  });
+};
+
+export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
+  const brand = getBaseAccountBrand(params);
+  if (!params.logoUrl) return brand;
+  const logoUrl = getCurrentBuiltInAccountLogoUrl(params.logoUrl) ?? params.logoUrl;
+  const isCustomImage = params.logoUrl.startsWith("data:image/");
+
+  return {
+    ...brand,
+    logoSrc: logoUrl,
+    logoSrcs: [logoUrl],
+    logoBackground: "#ffffff",
+    logoFit: isCustomImage ? "cover" : "contain",
+    logoPadding: isCustomImage ? undefined : "4px",
+  };
+};
+
+/** Accounts presentation only. Identity resolution and persisted data stay unchanged. */
+export const getAccountWalletBrand = (params: AccountBrandInput): AccountBrand => {
+  const brand = getAccountBrand(params);
+  const genericMatch = brand.logoSrc?.match(/\/assets\/(?:account-types|banks)\/(bank|cash|wallet|credit(?:%20|_| )card|investment|others?|loan|mortgage|line_of_credit|receivable|payable|bnpl|prepaid|insurance)\.png/i);
+  const generic = !brand.logoSrc || Boolean(genericMatch);
+  const key = genericMatch?.[1]?.toLowerCase().replace(/%20| /g, "_").replace(/^others?$/, "other") || accountTypeIcon(params.type || "other");
+  const logoName = brand.logoSrc?.split("/").pop()?.split(".")[0].toLowerCase() || "";
+  const palette = generic ? { colors: genericAccountColors[key] || genericAccountColors.other, foreground: "#12383D" } : institutionAccountPalettes[logoName];
+  if (palette) return { ...brand, accent: palette.colors[1], background: `linear-gradient(120deg, ${palette.colors[0]} 0%, ${palette.colors[1]} 50%, ${palette.colors[2]} 100%)`, foreground: palette.foreground };
+
+  // A saved logo choice controls the visual identity, even if the account's
+  // institution still names another bank. Preserve the logo and financial data.
+  const logoPath = decodeURIComponent(brand.logoSrc?.split("?")[0] || "");
+  const logoStem = logoPath.replace(/\.[^/.]+$/, "");
+  const selectedBrand = BANK_BRANDS.find(entry => entry.brand.logoSrcs.some(src =>
+    decodeURIComponent(src.split("?")[0]).replace(/\.[^/.]+$/, "") === logoStem,
+  ))?.brand;
+  if (selectedBrand) return { ...brand, accent: selectedBrand.accent, background: selectedBrand.background, foreground: selectedBrand.foreground };
+  const logoAccent = (bundledLogoColors as Record<string, string>)[logoPath];
+  if (!logoAccent) return brand; // Uploaded custom images retain the account's established palette.
+  const background = buildMetallicBackground(logoAccent);
+  return { ...brand, accent: logoAccent, background, foreground: inferForeground(logoAccent, background) };
+};
+
+export function accountBrandPalette(brand: AccountBrand): AccountCardPalette {
+  const stops = [...brand.background.matchAll(/(#[0-9a-f]{6})(?:\s+(\d+(?:\.\d+)?)%)?/gi)];
+  const [first, second, ...rest] = stops.map(stop => stop[1]);
+  const locations = stops.every(stop => stop[2] !== undefined)
+    ? stops.map(stop => Number(stop[2]) / 100)
+    : [];
+  const [start, next, ...remaining] = locations;
+  return {
+    colors: first && second ? [first, second, ...rest] : [brand.accent, brand.accent],
+    locations: start !== undefined && next !== undefined ? [start, next, ...remaining] : undefined,
+    foreground: brand.foreground,
+  };
+}

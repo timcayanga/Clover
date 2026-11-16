@@ -1,0 +1,9 @@
+STRUK PEMBELIAN
+KOPI KENANGAN
+Tanggal transaksi: 1 Oktober 2026 13:45 WIB
+Mata uang: IDR
+Nama produk Qty Harga Jumlah
+Kopi Susu 2 25.000 50.000
+TOTAL Rp50.000
+TUNAI Rp100.000
+KEMBALIAN Rp50.000

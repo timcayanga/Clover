@@ -1,0 +1,17 @@
+import { trialAwareUser } from "./trial-aware-tier";
+import { bankLinkAllowance } from "./bank-link-usage";
+import type { Prisma } from "@prisma/client";
+import { PLAN_CATALOG } from "../../shared/plan-catalog";
+import { hasUnlimitedPlanLimits } from "./user-limits";
+export class PlanQuotaError extends Error {}
+export async function assertPlanQuota(tx: Prisma.TransactionClient, userId: string, kind: "budgets" | "goals" | "circles" | "linkedBanks", additional = 1) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${userId}`}, 0))`;
+  const user = await trialAwareUser(tx,userId);
+  if (hasUnlimitedPlanLimits(user)) return;
+  const plan = PLAN_CATALOG[user.planTier];
+  const count = kind === "budgets" ? await tx.budget.count({where:{workspace:{userId},isActive:true}})
+    : kind === "goals" ? await tx.personalGoal.count({where:{workspace:{userId}}})
+    : kind === "circles" ? await tx.circle.count({where:{ownerUserId:userId,archivedAt:null}})
+    : (await bankLinkAllowance(tx, userId)).usedIds.size;
+  if (count + additional > plan[kind]) throw new PlanQuotaError(`${plan.name} includes ${plan[kind]} ${kind === "linkedBanks" ? "linked bank accounts" : kind === "circles" ? "Circles you create" : `active ${kind}`} across your Profiles. ${kind === "linkedBanks" ? "Unlinking does not free a slot this period. Reconnect the same account or upgrade." : "Your existing records stay accessible. Creating more or reactivating a budget requires an available slot or an upgrade."}`);
+}

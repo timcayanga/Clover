@@ -1,0 +1,22 @@
+!Account
+NReview Checking
+TBank
+^
+!Type:Bank
+D2026-09-15
+T-50.00
+PCorner Shop
+MShared basket
+SFood
+EApples
+$-20.00
+SHousehold
+ESoap
+$-30.00
+^
+D2026-09-15
+T-20.00
+PCorner Shop
+LFood
+MSecond visit
+^

@@ -1,0 +1,67 @@
+import { lineItemAdditionSchema } from "./transaction-line-item-addition";
+import { manualTransactionName, manualTransactionToday } from "../../shared/manual-transaction-defaults";
+import { z } from "zod";
+
+// Account numbers remain excluded. Investment creation enforces createOnly
+// so duplicate identities cannot mutate existing accounts or history.
+export const mobileAccountCreateSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  institution: z.string().trim().max(200).optional(),
+  type: z.enum(["bank", "wallet", "credit_card", "cash", "investment", "loan", "mortgage", "line_of_credit", "receivable", "payable", "bnpl", "prepaid", "insurance", "other"]),
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  balance: z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/).nullable(),
+  investmentSubtype: z.enum(["stock","etf","mutual_fund","money_market_fund","uitf","reit","crypto","real_world_asset","bond","time_deposit","savings","other"]).optional(),
+  investmentSymbol: z.string().trim().max(200).nullable().optional(),
+  investmentQuantity: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentCostBasis: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentPrincipal: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentInterestRate: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentMaturityValue: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{const d=new Date(`${v}T00:00:00Z`);return Number.isFinite(+d)&&d.toISOString().slice(0,10)===v;}).nullable().optional(),
+  investmentMaturityDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{const d=new Date(`${v}T00:00:00Z`);return Number.isFinite(+d)&&d.toISOString().slice(0,10)===v;}).nullable().optional(),
+}).strict().refine(value => value.type === "investment" || !Object.keys(value).some(key => key.startsWith("investment")), "Investment fields require an investment account.");
+
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}, "Choose a valid date.");
+// Accept older clients' signed input, but persist the magnitude. Type carries direction.
+const amount = z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/).transform(value => value.replace(/^-/, ""));
+export const mobileEditSchema = z.object({
+  confirmSourceMatchId: z.string().min(1).max(128).optional(),
+  dismissSourceMatchId: z.string().min(1).max(128).optional(),
+  copyReceiptFromTransactionId: z.string().min(1).max(128).optional(),
+  appendReceiptLineItem: lineItemAdditionSchema.optional(),
+  isExcluded: z.boolean().optional(),
+  receiptLineItems: z.array(z.object({
+    description: z.string().max(500),
+    quantity: z.string().max(32).nullable().optional(),
+    unitPrice: z.string().max(32).nullable().optional(),
+    amount: z.string().max(32).nullable().optional(),
+    currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(),
+  }).strict()).max(100).optional(),
+  merchantClean: z.string().trim().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  userNote: z.string().max(2000).optional(),
+  tags: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+  tagAction: z.enum(["add", "remove"]).optional(),
+  accountId: z.string().min(1).optional(),
+  categoryId: z.string().min(1).nullable().optional(),
+  date: date.optional(),
+  amount: amount.optional(),
+  type: z.enum(["income", "expense", "transfer"]).optional(),
+  currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+}).strict().refine(value => Object.keys(value).length > 0);
+
+export const mobileCreateSchema = z.object({
+  receiptLineItems: z.array(z.object({
+    description: z.string().trim().min(1).max(500),
+    amount: z.string().regex(/^\d{1,12}(\.\d{1,2})?$/),
+  }).strict()).max(100).optional(),
+  accountId: z.string().min(1), categoryId: z.string().min(1).nullable(),
+  merchantRaw: z.string().trim().max(200).optional().default(""),
+  date: z.preprocess(value => value === undefined || value === "" ? manualTransactionToday() : value, date),
+  amount: z.preprocess(value => value === undefined || value === "" ? "0" : value, amount),
+  currency: z.string().regex(/^[A-Z]{3}$/), type: z.enum(["income", "expense", "transfer"]),
+  description: z.string().max(2000).optional(), tags: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+}).strict().transform(value => ({ ...value, merchantRaw: value.merchantRaw || manualTransactionName(value.type) }));

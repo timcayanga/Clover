@@ -1,0 +1,178 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+
+type PageFileDropZoneProps = {
+  enabled?: boolean;
+  title?: string;
+  subtitle?: string;
+  illustration?: string;
+  onFilesDropped: (files: File[]) => void;
+};
+
+const isFileDrag = (event: DragEvent) => {
+  const types = Array.from(event.dataTransfer?.types ?? []);
+  return types.includes("Files");
+};
+
+const isImportModalActive = () => {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  return (
+    document.body.hasAttribute("data-clover-import-modal-visible") ||
+    document.body.hasAttribute("data-clover-import-modal-open")
+  );
+};
+
+export function PageFileDropZone({
+  enabled = true,
+  title = "Drop files anywhere",
+  subtitle = "Clover will pick them up and start importing right away.",
+  illustration = "/assets/mascots/velvet-statement.webp",
+  onFilesDropped,
+}: PageFileDropZoneProps) {
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = illustration;
+  }, [illustration]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (dragging) {
+      document.body.dataset.cloverDropActive = "true";
+    } else {
+      delete document.body.dataset.cloverDropActive;
+    }
+
+    return () => {
+      if (document.body.dataset.cloverDropActive === "true") {
+        delete document.body.dataset.cloverDropActive;
+      }
+    };
+  }, [dragging]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setDragging(false);
+      return;
+    }
+
+    let dragDepth = 0;
+
+    const handleDragEnter = (event: DragEvent) => {
+      if (isImportModalActive()) {
+        return;
+      }
+
+      if (!isFileDrag(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      dragDepth += 1;
+      setDragging(true);
+    };
+
+    const handleDragOver = (event: DragEvent) => {
+      if (isImportModalActive()) {
+        return;
+      }
+
+      if (!isFileDrag(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      setDragging(true);
+    };
+
+    const handleDragLeave = (event: DragEvent) => {
+      if (isImportModalActive()) {
+        dragDepth = 0;
+        setDragging(false);
+        return;
+      }
+
+      if (!isFileDrag(event)) {
+        return;
+      }
+
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) {
+        setDragging(false);
+      }
+      event.preventDefault();
+    };
+
+    const handleDrop = (event: DragEvent) => {
+      if (isImportModalActive()) {
+        dragDepth = 0;
+        setDragging(false);
+        return;
+      }
+
+      if (!isFileDrag(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      dragDepth = 0;
+      setDragging(false);
+      delete document.body.dataset.cloverDropActive;
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      if (files.length > 0) {
+        onFilesDropped(files);
+      }
+    };
+
+    const capture = true;
+
+    document.addEventListener("dragenter", handleDragEnter, capture);
+    document.addEventListener("dragover", handleDragOver, capture);
+    document.addEventListener("dragleave", handleDragLeave, capture);
+    document.addEventListener("drop", handleDrop, capture);
+    return () => {
+      document.removeEventListener("dragenter", handleDragEnter, capture);
+      document.removeEventListener("dragover", handleDragOver, capture);
+      document.removeEventListener("dragleave", handleDragLeave, capture);
+      document.removeEventListener("drop", handleDrop, capture);
+    };
+  }, [enabled, onFilesDropped]);
+
+  if (!enabled || !dragging) {
+    return null;
+  }
+
+  const portalTarget = typeof document === "undefined" ? null : document.body;
+  if (!portalTarget) {
+    return null;
+  }
+
+  return createPortal(
+    <div className="page-file-drop-zone" aria-hidden="true">
+      <div className="page-file-drop-zone__frame" />
+      <div className="page-file-drop-zone__corner page-file-drop-zone__corner--tl" />
+      <div className="page-file-drop-zone__corner page-file-drop-zone__corner--tr" />
+      <div className="page-file-drop-zone__corner page-file-drop-zone__corner--bl" />
+      <div className="page-file-drop-zone__corner page-file-drop-zone__corner--br" />
+      <div className="page-file-drop-zone__art" aria-hidden="true">
+        <img src={illustration} alt="" loading="eager" fetchPriority="high" decoding="async" />
+      </div>
+      <div className="page-file-drop-zone__content">
+        <p className="page-file-drop-zone__eyebrow">Upload files</p>
+        <strong>{title}</strong>
+        <span>{subtitle}</span>
+      </div>
+    </div>,
+    portalTarget
+  );
+}

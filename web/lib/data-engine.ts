@@ -1,0 +1,6031 @@
+import { readGrabReceiptTimestamp } from '@/lib/grab-email-receipt';
+import { enqueueLearningJob, processLearningJob, LearningInputError, type LearningAction, type LearningWriteContext } from "@/lib/learning-jobs";
+import { readGcashBillsPaymentTimestamp } from "@/lib/gcash-bills-receipt";
+import { readAppMigration } from "@/lib/app-migration-import";
+import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
+import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
+import { Prisma } from "@prisma/client";
+import type { AccountType, TransactionType } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
+import {
+  detectStatementMetadata,
+  detectInstitutionFromStatementSignals,
+  detectExplicitAccountTypeFromStatementText,
+  type DetectedStatementMetadata,
+  type ImportedAccountType,
+  inferAccountTypeFromStatement,
+  isStandaloneCashPaymentDescription,
+  isStatementPaymentSettlementDescription,
+  normalizePayPalAccountType,
+  normalizeInstitutionCurrency,
+  parseAmountValue,
+  parseDateValue,
+  readGcashWalletHistoryTimestamp,
+  parseNetWorthSnapshotCsv,
+  type ParsedImportRow,
+} from "@/lib/import-parser";
+import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import {
+  getSharedMerchantCategoryHint,
+  getStrongMerchantCategoryHint,
+  isLikelyPersonTransferName,
+  shouldTreatAsTransferDescription,
+} from "@/lib/merchant-category-hints";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { deriveTravelEpisodes, resolveTransactionContext } from "@/lib/context-corpus";
+import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
+
+export const DATA_ENGINE_VERSION = "v2";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v39";
+export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
+  const normalizedFileName = String(fileName ?? "");
+  if (/\.docx$/i.test(normalizedFileName)) return "v56-native-word-stored-reader";
+  if (/^915541100-.*\.pdf$/i.test(normalizedFileName)) return 'v55-seabank-dormant-opening';
+  if (/^1069029702-.*\.pdf$/i.test(normalizedFileName)) return "v54-grab-payment-reference";
+  // Re-extract only the retained legacy SeaBank PDFs whose previous cache had
+  // no complete daily-balance proof. Other trained statement caches survive.
+  if (/^(?:1028748777|895545880|884319546)-.*\.pdf$/i.test(normalizedFileName)) return "v53-seabank-id-legacy-daily";
+  if (/\.pdf$/i.test(normalizedFileName) && /(?:Seabank[-_\s]*Statement|E[-_\s]*steatmen[-_\s]*seabank)/i.test(normalizedFileName)) return "v47-seabank-native-language";
+  if (/\.pdf$/i.test(normalizedFileName) && /gcash/i.test(normalizedFileName) && /(?:history|statement|new-gcash)/i.test(normalizedFileName) && !/bill|receipt/i.test(normalizedFileName)) return "v51-gcash-complete-ledger-clocks";
+  if (/\.pdf$/i.test(normalizedFileName) && /(?:Receipt[-_\s]*Gcash|Seabank[-_\s]*Statement|DBS|(?:^|[-_])Statement\.pdf$|Sfs[-_]Bank|BCA|Notification(?:[-_\s]|\.pdf)|\d{10,25}[-_]\d+\.pdf)/i.test(normalizedFileName)) return "v46-held-native-sources";
+  if (/(?:mari[-_\s]*bank|sea[-_\s]*bank).*statement/i.test(normalizedFileName)) return "v44-maribank-native-snapshot";
+  if (/\.pdf$/i.test(normalizedFileName) && /grab[-_\s]*receipt/i.test(normalizedFileName) && !/grab.*(?:e[-_\s]*receipt|receipts)/i.test(normalizedFileName)) return "v52-grab-visual-headline";
+  if (/grab.*(?:e[-_\s]*receipt|receipts)/i.test(normalizedFileName)) return "v50-grab-printed-panels";
+  if (/cimb[-_\s]*conso[-_\s]*statement/i.test(normalizedFileName)) return "v41-cimb-consolidated";
+  if (/bukti[-_\s]*trf/i.test(normalizedFileName)) return "v41-bca-transfer-proof";
+  if (/gcash.*bills?[-_\s]*pay[-_\s]*receipt/i.test(normalizedFileName)) return "v45-gcash-bill-protect";
+  if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {
+    return "v12-bpi-card-ledger-r2";
+  }
+  if (/union[\s_-]*bank/i.test(normalizedFileName)) {
+    return "v12-unionbank-ledger-r2";
+  }
+  return /bank[\s_-]*cert|bankstatementandbankcert/i.test(normalizedFileName)
+    ? "v12-pdf-text-first"
+    : IMPORT_FILE_EXTRACTION_CACHE_VERSION;
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+type TrainingSignalRow = {
+  categoryId: string;
+  categoryName: string | null;
+  merchantKey: string;
+  merchantTokens: string[];
+  type: TransactionType;
+  source: string;
+  confidence: number;
+};
+
+const isAuthoritativeLearningSource = (source: string | null | undefined) =>
+  typeof source === "string" &&
+  (source.startsWith("deterministic_") || source === "manual" || source.startsWith("manual_"));
+const isExactLearningReason = (reason: string | null | undefined) =>
+  reason === "rule-exact" || reason === "learned-exact" || reason === "hardcoded-exact" || reason === "hardcoded-override";
+const isProtectedParserCategory = (params: {
+  institution?: string | null;
+  parserCategoryName: string;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+}) => {
+  const institution = (params.institution ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const category = params.parserCategoryName.trim().toLowerCase();
+  const text = [params.merchantRaw, params.merchantClean, params.description]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+
+  return (
+    institution === "eastwestbank" &&
+    category === "cash & atm" &&
+    /\bcash\s+deposit\b/i.test(text)
+  ) || (
+    institution === "metrobank" &&
+    (category === "transfers" || category === "financial" || category === "cash & atm" || category === "income") &&
+    /\b(?:wa\s+(?:cr|db)|et\s+(?:cr|db)\s+ibft|et\s+wdl|st\s+(?:dm|cm)\s+gen|mo\s+dm|system\s+(?:debit|credit)|miscellaneous\s+debit|interest\s+earned|interbank\s+fund\s+transfer|debit\s+send\s+to\s+other\s+bank|credit\s+received\s+from)\b/i.test(text)
+  );
+};
+
+type NegativeMerchantSignalRow = {
+  merchantKey: string;
+  merchantTokens: string[];
+  source: string;
+  confidence: number;
+};
+
+type MerchantRuleRow = {
+  merchantKey: string;
+  merchantPattern: string | null;
+  normalizedName: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  source: string;
+  status?: string;
+  version?: number;
+  confidence: number;
+  timesConfirmed: number;
+};
+
+type RowAmountProfile = {
+  medianAbsAmount: number | null;
+  p90AbsAmount: number | null;
+  maxAbsAmount: number | null;
+};
+
+type AccountRuleRow = {
+  ruleKey: string;
+  accountId: string | null;
+  accountName: string;
+  institution: string | null;
+  accountType: AccountType;
+  source: string;
+  confidence: number;
+  timesConfirmed: number;
+};
+
+type StatementTemplateRow = {
+  id?: string;
+  fingerprint: string;
+  fileType: string | null;
+  institution: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  parserVersion: string;
+  parserConfig: Prisma.JsonValue | null;
+  metadata: Prisma.JsonValue | null;
+  exampleCount: number;
+  successCount: number;
+  failureCount: number;
+  lastSeenAt: Date;
+};
+
+type ImportFileExtractionCacheRow = {
+  workspaceId: string;
+  fileFingerprint: string;
+  fileType: string;
+  importMode: string;
+  cacheVersion: string;
+  extractedText: string;
+  statementFingerprint: string | null;
+  statementFamilySignature: string | null;
+  metadata: Prisma.JsonValue | null;
+  parsedRows: Prisma.JsonValue | null;
+  pageCount: number;
+  confidence: number;
+  hitCount: number;
+  lastUsedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type EnrichedParsedImportRow = ParsedImportRow & {
+  institution?: string | null;
+  accountNumber?: string | null;
+  statementFingerprint?: string | null;
+  parserVersion?: string;
+  confidence?: number;
+  categoryReason?: string | null;
+  reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
+  parserConfidence?: number;
+  categoryConfidence?: number;
+  accountMatchConfidence?: number;
+  duplicateConfidence?: number;
+  transferConfidence?: number;
+  rowShapeConfidence?: number;
+  rowTeachabilityConfidence?: number;
+  rowAnomalyConfidence?: number;
+  rawPayload?: Prisma.InputJsonValue | null;
+  normalizedPayload?: Prisma.InputJsonValue | null;
+  learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
+  sourceRowKey?: string | null;
+};
+
+const COMMON_STOP_WORDS = new Set([
+  "and",
+  "the",
+  "for",
+  "from",
+  "with",
+  "payment",
+  "pay",
+  "card",
+  "debit",
+  "credit",
+  "transfer",
+  "bank",
+  "online",
+  "pos",
+  "inc",
+  "corp",
+  "co",
+  "ltd",
+  "llc",
+  "ph",
+]);
+
+const CATEGORY_FALLBACKS: Record<TransactionType, string> = {
+  income: "Income",
+  expense: "Other",
+  transfer: "Transfers",
+};
+
+const PARSED_TRANSACTION_COLUMNS = [
+  "id",
+  "importFileId",
+  "workspaceId",
+  "institution",
+  "accountNumber",
+  "accountName",
+  "date",
+  "amount",
+  "currency",
+  "merchantRaw",
+  "merchantClean",
+  "type",
+  "categoryName",
+  "confidence",
+  "categoryReason",
+  "parserVersion",
+  "statementFingerprint",
+  "rawPayload",
+  "createdAt",
+] as const;
+
+const STATEMENT_TEMPLATE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "fingerprint",
+  "fileType",
+  "institution",
+  "accountNumber",
+  "accountName",
+  "parserVersion",
+  "parserConfig",
+  "exampleCount",
+  "successCount",
+  "failureCount",
+  "lastSeenAt",
+  "metadata",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const DOCUMENT_IMPORT_COLUMNS = [
+  "id",
+  "workspaceId",
+  "importFileId",
+  "accountId",
+  "documentFamily",
+  "documentSubtype",
+  "institution",
+  "accountName",
+  "accountNumber",
+  "currency",
+  "pageCount",
+  "confidence",
+  "sourceMetadata",
+  "rawPayload",
+  "extractedPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const DOCUMENT_IMPORT_PAGE_COLUMNS = [
+  "id",
+  "documentImportId",
+  "pageNumber",
+  "imageName",
+  "pageType",
+  "visibleTitle",
+  "visibleDate",
+  "visibleCurrency",
+  "rawOcrText",
+  "layoutNotes",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const RECEIPT_DOCUMENT_COLUMNS = [
+  "id",
+  "workspaceId",
+  "documentImportId",
+  "accountId",
+  "transactionId",
+  "merchantRaw",
+  "merchantClean",
+  "transactionDate",
+  "transactionTime",
+  "currency",
+  "subtotal",
+  "tax",
+  "total",
+  "paymentMethod",
+  "accountMatch",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const INVESTMENT_SNAPSHOT_COLUMNS = [
+  "id",
+  "workspaceId",
+  "documentImportId",
+  "accountId",
+  "snapshotDate",
+  "portfolioName",
+  "currency",
+  "totalValue",
+  "costBasis",
+  "gainLossValue",
+  "gainLossPercent",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const INVESTMENT_HOLDING_COLUMNS = [
+  "id",
+  "workspaceId",
+  "investmentSnapshotId",
+  "documentImportId",
+  "accountId",
+  "rowIndex",
+  "assetName",
+  "assetSymbol",
+  "assetType",
+  "quantity",
+  "unitPrice",
+  "costBasis",
+  "marketValue",
+  "currentValue",
+  "gainLossValue",
+  "gainLossPercent",
+  "currency",
+  "status",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const RECURRING_PATTERN_COLUMNS = [
+  "id",
+  "workspaceId",
+  "documentImportId",
+  "accountId",
+  "merchantRaw",
+  "merchantClean",
+  "amount",
+  "currency",
+  "frequency",
+  "firstSeenDate",
+  "lastSeenDate",
+  "nextExpectedDate",
+  "transactionCount",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const IMPORT_FILE_EXTRACTION_CACHE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "fileFingerprint",
+  "fileType",
+  "importMode",
+  "cacheVersion",
+  "extractedText",
+  "statementFingerprint",
+  "statementFamilySignature",
+  "metadata",
+  "parsedRows",
+  "pageCount",
+  "confidence",
+  "hitCount",
+  "lastUsedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const MERCHANT_RULE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "merchantKey",
+  "merchantPattern",
+  "normalizedName",
+  "categoryId",
+  "categoryName",
+  "source",
+  "status",
+  "version",
+  "confidence",
+  "timesConfirmed",
+  "applicationCount",
+  "correctionCount",
+  "provenance",
+  "negativeExamples",
+  "lastEvaluatedAt",
+  "lastUsedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const ACCOUNT_RULE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "accountId",
+  "ruleKey",
+  "accountName",
+  "institution",
+  "accountType",
+  "source",
+  "confidence",
+  "timesConfirmed",
+  "lastUsedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const IMPORT_FILE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "accountId",
+  "fileName",
+  "fileType",
+  "storageKey",
+  "status",
+  "processingPhase",
+  "processingMessage",
+  "processingAttempt",
+  "processingTargetScore",
+  "processingCurrentScore",
+  "parsedRowsCount",
+  "confirmedTransactionsCount",
+  "confirmedAt",
+  "sourceFingerprint",
+  "sourceTimezone",
+  "sourceLocale",
+  "traceId",
+  "rawExpiresAt",
+  "rawPurgedAt",
+  "uploadedAt",
+  "deletedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const TRAINING_SIGNAL_COLUMNS = [
+  "id",
+  "workspaceId",
+  "importFileId",
+  "transactionId",
+  "source",
+  "merchantKey",
+  "dedupeKey",
+  "merchantTokens",
+  "categoryId",
+  "categoryName",
+  "type",
+  "confidence",
+  "teachabilityScore",
+  "approvalStatus",
+  "fieldName",
+  "previousValue",
+  "correctedValue",
+  "notes",
+  "createdAt",
+] as const;
+
+const TRANSACTION_COLUMNS = [
+  "id",
+  "workspaceId",
+  "accountId",
+  "importFileId",
+  "categoryId",
+  "reviewStatus",
+  "reviewPriority",
+  "reviewReasons",
+  "parserConfidence",
+  "categoryConfidence",
+  "accountMatchConfidence",
+  "duplicateConfidence",
+  "transferConfidence",
+  "rawPayload",
+  "normalizedPayload",
+  "learnedRuleIdsApplied",
+  "sourceRowKey",
+  "date",
+  "amount",
+  "currency",
+  "type",
+  "merchantRaw",
+  "merchantClean",
+  "description",
+  "isTransfer",
+  "isExcluded",
+  "deletedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const fnv1a = (value: string) => {
+  let hash = 0x811c9dc5;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, "0");
+};
+
+const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+export const normalizeAccountRuleKey = (accountName?: string | null, institution?: string | null) =>
+  normalizeMerchantText(
+    `${institution ?? ""} ${extractLastFourDigits(accountName) ?? normalizeWhitespace(String(accountName ?? ""))}`
+  );
+
+export const extractLastFourDigits = (value?: string | null) => {
+  if (!value) return null;
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length < 4) return null;
+  return digits.slice(-4);
+};
+
+const getHardcodedCategoryOverride = (merchantText: string) => {
+  if (needsIndonesianPaymentCategoryReview(merchantText) || getRegionalMerchantCategoryHint(merchantText) === "Other") return null;
+  const lower = merchantText.toLowerCase();
+  const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
+  const hasTravelContext =
+    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
+    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
+  const hasForeignMerchantCurrencyContext =
+    /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+  // Explicit credited-interest labels outrank the broad "interest" fee hint.
+  if (/\b(?:interest\s+earned|base\s+interest|boost\s+interest)\b/.test(lower) && !/\b(?:fee|charge|loan|debit)\b/.test(lower)) {
+    return "Income";
+  }
+  const strongHint = getStrongMerchantCategoryHint(merchantText);
+
+  if (strongHint) {
+    return strongHint;
+  }
+
+  if (shouldTreatAsTransferDescription(merchantText)) {
+    return "Transfers";
+  }
+
+  if (/withdrawn|cash withdrawal|atm withdrawal/.test(lower) || /withdrawn|cashwithdrawal|atmwithdrawal/.test(compact)) {
+    return "Cash & ATM";
+  }
+
+  if (isStandaloneCashPaymentDescription(merchantText)) {
+    return "Shopping";
+  }
+
+  const sharedCategoryHint = getSharedMerchantCategoryHint(merchantText);
+  if (sharedCategoryHint) {
+    return sharedCategoryHint;
+  }
+
+  if (
+    /incoming\s+(?:interbank\s+)?transfer|outgoing\s+(?:interbank\s+)?transfer|fund\s+transfer|interbank\s+fund\s+transfer|system\s+(?:debit|credit)|miscellaneous\s+debit|investment\s+sweep|card\s+payment|payment\s*-\s*thank\s+you/.test(lower) ||
+    /incoming(?:interbank)?transfer|outgoing(?:interbank)?transfer|fundtransfer|interbankfundtransfer|system(?:debit|credit)|miscellaneousdebit|investmentsweep|cardpayment|paymentthankyou/.test(compact) ||
+    isStatementPaymentSettlementDescription(merchantText)
+  ) {
+    return "Transfers";
+  }
+
+  if (/edl\/?mbpay/.test(lower) || /edlmbpay/.test(compact)) {
+    return "Transfers";
+  }
+
+  if (/to:\s*gcash\s+cash\s+in|gcash\s+cash\s+in/.test(lower) || /togcashcashin|gcashcashin/.test(compact)) {
+    return "Transfers";
+  }
+
+  if (
+    /atm\s+withdrawal|atm\s+withdrawal\s+acquirer\s+fee|cash\s+withdrawal|cash\s+out|expressnet|megalink/.test(lower) ||
+    /atmwithdrawal|atmwithdrawalacquirerfee|cashwithdrawal|cashout|expressnet|megalink/.test(compact)
+  ) {
+    return "Cash & ATM";
+  }
+
+  if (/office\s*365/.test(lower) || /office365/.test(compact)) {
+    return "Business";
+  }
+
+  if (/google\s+play/.test(lower) || /googleplay/.test(compact)) {
+    return "Entertainment";
+  }
+
+  if (/google\s+one/.test(lower) || /googleone/.test(compact)) {
+    return "Subscriptions";
+  }
+
+  if (/\bpayments?\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) {
+    return "Shopping";
+  }
+
+  if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) {
+    return "Shopping";
+  }
+
+  if (/sydney\s+opera\s+house/.test(lower) || /sydneyoperahouse/.test(compact)) {
+    return "Entertainment";
+  }
+
+  if (/relay\b/.test(lower)) {
+    return "Shopping";
+  }
+
+  if (/viator(?:\.com)?|news\s+travels?|great\s+ocean\s+road|locker\s+hire/.test(lower) || /viator|newstravels?|greatoceanroad|lockerhire/.test(compact)) {
+    return "Travel & Lifestyle";
+  }
+
+  if (/souvenir/.test(lower) || /souvenir/.test(compact)) {
+    return "Travel & Lifestyle";
+  }
+
+  if (
+    /sydney\s+harbour\s+gifts?|melbourne\s+souvenir|u\s+neek\s+souvenirs?|great\s+ocean\s+road|moonlit\s+sanctuary|parks?\s+victoria/.test(lower) ||
+    /sydneyharbourgifts?|melbournesouvenir|uneeksouvenirs?|greatoceanroad|moonlitsanctuary|parksvictoria/.test(compact)
+  ) {
+    return "Travel & Lifestyle";
+  }
+
+  if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal|hk\s+airport/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport/.test(compact)) {
+    return "Transport";
+  }
+
+  if (/liberty\s+oil|fuel|petrol|gas\s+station/.test(lower) || /libertyoil|fuel|petrol|gasstation/.test(compact)) {
+    return "Transport";
+  }
+
+  if (
+    /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills|great\s+ocean\s+road\s+choc|samyan\s+mitrtown/.test(lower) ||
+    /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills|greatoceanroadchoc|samyanmitrtown/.test(compact)
+  ) {
+    return "Food & Dining";
+  }
+
+  if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) {
+    return "Food & Dining";
+  }
+
+  if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) {
+    return "Education";
+  }
+
+  if (/paypal|convenience|amazon/.test(lower) || /paypal|convenience|amazon/.test(compact)) {
+    return "Shopping";
+  }
+
+  if (/citibank.*\bfin\b|bank.*\bfin\b/.test(lower) || /citibank.*fin|bank.*fin/.test(compact)) {
+    return "Transfers";
+  }
+
+  if (
+    hasTravelContext &&
+    hasForeignMerchantCurrencyContext &&
+    (/souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|great\s+ocean\s+road|parks?\s+victoria/.test(lower) ||
+      /souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|greatoceanroad|parksvictoria/.test(compact))
+  ) {
+    return "Travel & Lifestyle";
+  }
+
+  if (/shopee|puregold|price\s+club/.test(lower) || /shopee|puregold|priceclub/.test(compact)) {
+    return "Shopping";
+  }
+
+  if (/discord\s+nitro/.test(lower) || /discordnitro/.test(compact)) {
+    return "Subscriptions";
+  }
+
+  if (/mlbb\s+top\s+up|mobile\s+legends|mlbbtopup/.test(lower) || /mlbbtopup|mobilelegends/.test(compact)) {
+    return "Entertainment";
+  }
+
+  if (/foodpanda\s+ph|foodpanda/.test(lower) || /foodpandaph/.test(compact)) {
+    return "Food & Dining";
+  }
+
+  if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) {
+    return "Financial";
+  }
+
+  if (/interest\s+earned|base\s+interest|boost\s+interest|cash\/?check\s+deposit/.test(lower) || /interestearned|baseinterest|boostinterest|cashcheckdeposit/.test(compact)) {
+    return "Income";
+  }
+
+  if (/\bel\/?espay\b|\bespay\b/.test(lower) || /elespay|espay/.test(compact)) {
+    return "Income";
+  }
+
+  if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) {
+    return "Financial";
+  }
+
+  if (
+    /repayment|transfer\s+to\s+wallet|credit\s+drawdown/.test(lower) ||
+    /repayment|transfertowallet|creditdrawdown/.test(compact)
+  ) {
+    return "Transfers";
+  }
+
+  if (
+    /service\s+charge|service\s+fee|interbank\s+service\s+charge|bank\s+charge|finance\s+charges?|late\s+payment\s+fee|annual\s+fee|penalty\s+fee|late\s+penalty|documentary\s+stamp\s+tax|\bdst\b/.test(lower) ||
+    /servicecharge|servicefee|interbankservicecharge|bankcharge|financecharges?|latepaymentfee|annualfee|penaltyfee|latepenalty|documentarystamptax|dst/.test(compact)
+  ) {
+    return "Financial";
+  }
+
+  return null;
+};
+
+const isContextualCategoryOverride = (merchantText: string, categoryName: string) => {
+  if (getIndonesianMerchantCategoryHint(merchantText) === categoryName || getRegionalMerchantCategoryHint(merchantText) === categoryName) return true;
+  const lower = merchantText.toLowerCase();
+  const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
+  const hasTravelContext =
+    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
+    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
+  const hasForeignMerchantCurrencyContext =
+    /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+
+  if (categoryName === "Transport") {
+    return /transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal/.test(compact);
+  }
+
+  if (categoryName === "Travel & Lifestyle") {
+    return hasTravelContext || hasForeignMerchantCurrencyContext;
+  }
+
+  if (categoryName === "Entertainment") {
+    return /opera\s+house|ticket\s+sales/.test(lower) || /operahouse|ticketsales/.test(compact);
+  }
+
+  if (categoryName === "Food & Dining") {
+    return hasTravelContext || hasForeignMerchantCurrencyContext;
+  }
+
+  if (categoryName === "Shopping") {
+    return /relay|emmanuel\s+payments?/.test(lower) || /relay|emmanuelpayments?/.test(compact);
+  }
+
+  return false;
+};
+
+const HARDCODED_EXACT_MERCHANT_KEYS = new Set([
+  "deposit",
+  "withdrawal",
+  "atm withdrawal",
+  "transfer fee",
+  "base interest",
+  "boost interest",
+  "tax withheld",
+  "cash payment",
+  "repayment",
+  "credit drawdown",
+  "service fee",
+  "penalty fee",
+  "documentary stamp tax",
+]);
+
+const MERCHANT_FAMILY_NOISE_TOKENS = new Set([
+  "account",
+  "accounts",
+  "advance",
+  "app",
+  "auth",
+  "bank",
+  "biller",
+  "billers",
+  "bill",
+  "billing",
+  "card",
+  "cash",
+  "credit",
+  "debit",
+  "descriptor",
+  "digital",
+  "dues",
+  "ecommerce",
+  "fee",
+  "foreign",
+  "fund",
+  "incoming",
+  "instapay",
+  "interest",
+  "international",
+  "membership",
+  "merchant",
+  "mobile",
+  "monthly",
+  "online",
+  "outgoing",
+  "payment",
+  "payments",
+  "pay",
+  "premium",
+  "purchase",
+  "purchases",
+  "recurring",
+  "reference",
+  "ref",
+  "services",
+  "service",
+  "statement",
+  "subscription",
+  "top",
+  "transfer",
+  "txn",
+  "utility",
+  "wallet",
+]);
+
+export const normalizeMerchantText = (value?: string | null) =>
+  normalizeWhitespace(String(value ?? "").normalize("NFKC"))
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+export const tokenizeMerchant = (value?: string | null) =>
+  normalizeMerchantText(value)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1 && !COMMON_STOP_WORDS.has(token));
+
+export const buildMerchantFamilySignature = (value?: string | null) => {
+  const normalized = normalizeMerchantText(
+    normalizeWhitespace(String(value ?? ""))
+      .replace(/\b(?:ref(?:erence)?|trace|approval|auth(?:orization)?|txn|transaction|terminal|rrn|arn|invoice|descriptor)\s*[:#-]?\s*[A-Z0-9*X-]+(?:\s+[A-Z0-9*X-]+)*$/gi, "")
+      .replace(/\b(?:card|acct|account)\s*(?:no\.?|number|ending|ending\s+in|ending\s+with)?\s*[:#-]?\s*(?:xx|x{2,}|\*{2,})?[A-Z0-9-]*\d{2,4}$/gi, "")
+      .replace(/\b(?:visa|master\s*card|mastercard|amex|jcb)\s*(?:xx|x{2,}|\*{2,})?\d{2,4}$/gi, "")
+      .replace(/\b(?:store|branch|terminal|outlet|location|merchant)\s*[:#-]?\s*[A-Z0-9-]{2,}$/gi, "")
+      .replace(/\b(?:store|branch|terminal|outlet)\s+\d{2,}\b/gi, "")
+      .replace(/\b(?:card|pos|online|retail|e-?commerce)\s+purchase$/gi, "")
+      .replace(/\b(?:purchase|payment|transaction)\s+(?:approved|posted|complete|completed)$/gi, "")
+      .replace(/\b(?:pte\.?\s*ltd\.?|inc\.?|corp\.?|corporation|co\.?|company|limited|ltd\.?|llc)$/gi, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+  if (!normalized) {
+    return "";
+  }
+
+  const tokens = normalized
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3)
+    .filter((token) => !MERCHANT_FAMILY_NOISE_TOKENS.has(token))
+    .filter((token) => !/^\d+$/.test(token))
+    .filter((token) => !/^(?:php|ref|txn|visa|mastercard|amex|bank|fund|wallet)$/.test(token));
+
+  if (tokens.length === 0) {
+    return normalized;
+  }
+
+  return tokens.slice(0, 3).join(" ");
+};
+
+const shouldPersistMerchantFamilySignature = (value?: string | null) => {
+  const signature = buildMerchantFamilySignature(value);
+  if (!signature || signature.length < 5) {
+    return false;
+  }
+
+  if (/^(?:payment|transfer|deposit|withdrawal|cash|bank|online|service|subscription)$/.test(signature)) {
+    return false;
+  }
+
+  return tokenizeMerchant(signature).length >= 1;
+};
+
+export const buildMerchantPrototypeLabel = (merchantText: string, normalizedName?: string | null) => {
+  const base = summarizeMerchantText(merchantText);
+  const normalized = normalizeMerchantText(normalizedName ?? merchantText);
+  const prototype = normalizeWhitespace(base).trim();
+
+  if (!prototype) {
+    return null;
+  }
+
+  if (prototype.length < 4) {
+    return null;
+  }
+
+  if (normalizeMerchantText(prototype) === normalized) {
+    return null;
+  }
+
+  if (/^(?:bank transfer|cash payment|atm withdrawal|credit card payment|service charge|documentary stamp tax)$/i.test(prototype)) {
+    return null;
+  }
+
+  return prototype;
+};
+
+const stripMerchantPrototypeNoise = (value: string) =>
+  normalizeWhitespace(value)
+    .replace(/\b(?:card|acct|account|ending|ending in|ending with|ref|reference|txn|transaction)\b.*$/i, "")
+    .replace(/\b(?:visa|mastercard|amex|gcash|maya|paypal|wise)\b.*?(?:\d{4})\b/gi, (match) => match.replace(/\d{4}\b/g, "").trim())
+    .replace(/\b\d{4,}\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const splitMerchantPrototypeSegments = (value: string) =>
+  normalizeWhitespace(value)
+    .split(/(?:\s*[/*|•·,;]\s*|\s+(?:-+|–|—)\s+)/g)
+    .map((part) => normalizeWhitespace(part))
+    .filter((part) => part.length >= 3)
+    .filter((part) => !/^(?:bank|statement|payment|transfer|cash|atm|credit|debit)$/i.test(part));
+
+const stripStatementMerchantFragmentNoise = (value: string) =>
+  normalizeWhitespace(value)
+    .replace(
+      /\b(?:ref(?:erence)?|trace|approval|auth(?:orization)?|txn|transaction|terminal|rrn|arn|invoice|descriptor)\s*[:#-]?\s*[A-Z0-9*X-]+(?:\s+[A-Z0-9*X-]+)*$/gi,
+      ""
+    )
+    .replace(/\b(?:card|acct|account)\s*(?:no\.?|number|ending|ending\s+in|ending\s+with)?\s*[:#-]?\s*(?:xx|x{2,}|\*{2,})?[A-Z0-9-]*\d{2,4}$/gi, "")
+    .replace(/\b(?:visa|master\s*card|mastercard|amex|jcb)\s*(?:xx|x{2,}|\*{2,})?\d{2,4}$/gi, "")
+    .replace(/\b(?:store|branch|terminal|outlet|location|merchant)\s*[:#-]?\s*[A-Z0-9-]{2,}$/gi, "")
+    .replace(/\b(?:card|pos|online|retail|e-?commerce)\s+purchase$/gi, "")
+    .replace(/\b(?:purchase|payment|transaction)\s+(?:approved|posted|complete|completed)$/gi, "")
+    .replace(/\b(?:ph|phl|philippines|sg|singapore|hk|hong\s+kong|au|australia)\s+(?:pte\.?\s*ltd\.?|inc\.?|corp\.?|corporation|co\.?|company|limited|ltd\.?|llc)$/gi, "")
+    .replace(/\b(?:pte\.?\s*ltd\.?|inc\.?|corp\.?|corporation|co\.?|company|limited|ltd\.?|llc)$/gi, "")
+    .replace(/\b(?:store|branch|terminal|outlet)\s+\d{2,}\b/gi, "")
+    .replace(/\b\d{4,}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+export const buildMerchantPrototypeVariants = (merchantText: string, normalizedName?: string | null) => {
+  const variants = new Set<string>();
+  const addVariant = (value: string | null | undefined) => {
+    const trimmed = normalizeWhitespace(String(value ?? "")).trim();
+    if (!trimmed || trimmed.length < 4) {
+      return;
+    }
+
+    const normalized = normalizeMerchantText(trimmed);
+    if (!normalized || /^(?:bank transfer|cash payment|atm withdrawal|credit card payment|service charge|documentary stamp tax)$/i.test(trimmed)) {
+      return;
+    }
+
+    variants.add(trimmed);
+  };
+
+  const prototype = buildMerchantPrototypeLabel(merchantText, normalizedName);
+  addVariant(prototype);
+  addVariant(stripMerchantPrototypeNoise(String(prototype ?? merchantText)));
+  addVariant(stripMerchantPrototypeNoise(String(normalizedName ?? "")));
+  addVariant(summarizeMerchantText(merchantText));
+
+  for (const segment of splitMerchantPrototypeSegments(merchantText)) {
+    addVariant(segment);
+    addVariant(stripMerchantPrototypeNoise(segment));
+  }
+
+  for (const segment of splitMerchantPrototypeSegments(normalizedName ?? "")) {
+    addVariant(segment);
+    addVariant(stripMerchantPrototypeNoise(segment));
+  }
+
+  return [...variants];
+};
+
+const buildInstitutionScopedMerchantVariant = (institution: string | null | undefined, value: string | null | undefined) => {
+  const scopedInstitution = normalizeWhitespace(String(institution ?? "")).trim();
+  const scopedValue = normalizeWhitespace(String(value ?? "")).trim();
+  if (!scopedInstitution || !scopedValue) {
+    return null;
+  }
+
+  return `${scopedInstitution} ${scopedValue}`;
+};
+
+const extractMerchantHintFragments = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(String(value ?? ""));
+  if (!normalized) {
+    return [];
+  }
+
+  const stripped = stripStatementMerchantFragmentNoise(normalized)
+    .replace(
+      /\b(?:transfer|instapay|pesonet|fund|bank|wallet|payment|incoming|outgoing|interbank|send(?:ing)?|sent|receive(?:d)?|received|cash\s+in|cash\s+out|credit|debit|online|reference|ref|trace|approval|invoice|acct|account|from|to|via)\b/gi,
+      " "
+    )
+    .replace(/\b[A-Z]{1,4}\d{2,}\b/g, " ")
+    .replace(/\b\d[\dA-Z-]{3,}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!stripped) {
+    return [];
+  }
+
+  const tokens = stripped
+    .split(/\s+/)
+    .map((token) => token.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, ""))
+    .filter((token) => token.length >= 2)
+    .filter((token) => !/^(?:ph|php|txn|trf|db|cr|amt|bal|visa|mc|mstr|card|philippines|singapore|hongkong|hong|kong|australia)$/i.test(token));
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  const fragments = new Set<string>();
+  const joined = tokens.join(" ");
+  if (joined.length >= 4) {
+    fragments.add(joined);
+  }
+
+  for (let size = Math.min(3, tokens.length); size >= 1; size -= 1) {
+    for (let index = 0; index <= tokens.length - size; index += 1) {
+      const fragment = tokens.slice(index, index + size).join(" ").trim();
+      if (fragment.length >= 4) {
+        fragments.add(fragment);
+      }
+    }
+  }
+
+  return [...fragments];
+};
+
+const hasExplicitTransferRailText = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(String(value ?? ""));
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /\b(?:transfer|instapay|pesonet|ibft|fund\s+transfer|bank\s+transfer|wallet\s+transfer|cash\s+in|cash\s+out)\b/i.test(normalized) ||
+    isStatementPaymentSettlementDescription(normalized) ||
+    isStandaloneCashPaymentDescription(normalized)
+  );
+};
+
+const buildMerchantClassificationCandidates = (merchantText: string, normalizedName?: string | null, institution?: string | null) => {
+  const variants = new Set<string>();
+  const addVariant = (value: string | null | undefined) => {
+    const trimmed = normalizeWhitespace(String(value ?? "")).trim();
+    if (!trimmed || trimmed.length < 2) {
+      return;
+    }
+
+    variants.add(trimmed);
+  };
+
+  addVariant(merchantText);
+  addVariant(normalizedName);
+  addVariant(summarizeMerchantText(merchantText));
+  addVariant(stripStatementMerchantFragmentNoise(merchantText));
+  addVariant(stripStatementMerchantFragmentNoise(normalizedName ?? ""));
+  addVariant(buildInstitutionScopedMerchantVariant(institution, merchantText));
+  addVariant(buildInstitutionScopedMerchantVariant(institution, normalizedName));
+  addVariant(buildInstitutionScopedMerchantVariant(institution, summarizeMerchantText(merchantText)));
+  addVariant(buildInstitutionScopedMerchantVariant(institution, stripStatementMerchantFragmentNoise(merchantText)));
+
+  for (const fragment of extractMerchantHintFragments(merchantText)) {
+    addVariant(fragment);
+    addVariant(summarizeMerchantText(fragment));
+    addVariant(buildInstitutionScopedMerchantVariant(institution, fragment));
+  }
+
+  for (const fragment of extractMerchantHintFragments(normalizedName ?? "")) {
+    addVariant(fragment);
+    addVariant(summarizeMerchantText(fragment));
+    addVariant(buildInstitutionScopedMerchantVariant(institution, fragment));
+  }
+
+  for (const variant of buildMerchantPrototypeVariants(merchantText, normalizedName)) {
+    addVariant(variant);
+    addVariant(buildInstitutionScopedMerchantVariant(institution, variant));
+  }
+
+  return [...variants];
+};
+
+const repairKnownMerchantCategory = (params: {
+  merchantText: string;
+  categoryText?: string | null;
+  currentCategoryName: string;
+  currentType: TransactionType;
+  institution?: string | null;
+}) => {
+  const normalizedCategory = normalizeWhitespace(params.currentCategoryName).toLowerCase();
+  if (normalizedCategory !== "other" && normalizedCategory !== "transfers") {
+    return null;
+  }
+
+  const candidates = buildMerchantClassificationCandidates(
+    params.merchantText,
+    summarizeMerchantText(params.merchantText, params.institution ?? null),
+    params.institution ?? null
+  );
+  const explicitTransferRail = hasExplicitTransferRailText(`${params.categoryText ?? ""} ${params.merchantText}`);
+  const institutionPrefix = normalizeWhitespace(String(params.institution ?? "")).trim().toLowerCase();
+
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeWhitespace(candidate).trim();
+    const unscopedCandidate =
+      institutionPrefix && normalizedCandidate.toLowerCase().startsWith(`${institutionPrefix} `)
+        ? normalizedCandidate.slice(institutionPrefix.length + 1).trim()
+        : normalizedCandidate;
+    const hint = getSharedMerchantCategoryHint(unscopedCandidate);
+    if (!hint) {
+      continue;
+    }
+
+    if (hint === "Transfers") {
+      continue;
+    }
+
+    if (normalizedCategory === "transfers" && explicitTransferRail) {
+      continue;
+    }
+
+    return {
+      categoryName: hint,
+      preferredType:
+        hint === "Income"
+          ? "income"
+          : hint === "Cash & ATM"
+            ? "expense"
+            : params.currentType === "income" && hint !== "Transfers"
+              ? "expense"
+              : params.currentType === "transfer" && hint !== "Transfers"
+                ? "expense"
+                : params.currentType,
+      confidence: normalizedCategory === "other" ? 84 : 80,
+      reason: normalizedCategory === "other" ? "merchant-hint-repair-other" : "merchant-hint-repair-transfer",
+      normalizedName: summarizeMerchantText(unscopedCandidate, params.institution ?? null),
+    } as const;
+  }
+
+  return null;
+};
+
+const buildRowAmountProfile = (rows: ParsedImportRow[]): RowAmountProfile => {
+  const amounts = rows
+    .map((row) => Number(row.amount ?? NaN))
+    .filter((value) => Number.isFinite(value))
+    .map((value) => Math.abs(value))
+    .filter((value) => value > 0)
+    .sort((left, right) => left - right);
+
+  if (amounts.length === 0) {
+    return {
+      medianAbsAmount: null,
+      p90AbsAmount: null,
+      maxAbsAmount: null,
+    };
+  }
+
+  const pickQuantile = (quantile: number) => amounts[Math.min(amounts.length - 1, Math.max(0, Math.round((amounts.length - 1) * quantile)))];
+
+  return {
+    medianAbsAmount: pickQuantile(0.5),
+    p90AbsAmount: pickQuantile(0.9),
+    maxAbsAmount: amounts.at(-1) ?? null,
+  };
+};
+
+const extractAmountLikeTokensFromText = (value: string | null | undefined) => {
+  const matches = normalizeWhitespace(String(value ?? "")).match(/(?:^|[^\d])(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})|\d+(?:\.\d{1,2}))(?!\d)/g) ?? [];
+  return matches
+    .map((match) => {
+      const cleaned = match.replace(/^[^\d]+/, "").trim();
+      return parseAmountValue(cleaned);
+    })
+    .filter((amount): amount is number => Number.isFinite(amount))
+    .map((amount) => Math.abs(amount));
+};
+
+export const estimateImportLearningConfidence = (params: {
+  baseConfidence?: number | null;
+  teachabilityScore?: number | null;
+  rowShapeScore?: number | null;
+  negativeSignalCount?: number | null;
+}) => {
+  const baseConfidence = typeof params.baseConfidence === "number" && Number.isFinite(params.baseConfidence) ? Math.max(0, Math.min(100, Math.round(params.baseConfidence))) : 0;
+  const teachabilityScore =
+    typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
+      ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))
+      : 0;
+  const rowShapeScore =
+    typeof params.rowShapeScore === "number" && Number.isFinite(params.rowShapeScore)
+      ? Math.max(0, Math.min(100, Math.round(params.rowShapeScore)))
+      : 0;
+  const negativeSignalCount = Math.max(0, Math.round(params.negativeSignalCount ?? 0));
+  const teachabilityBoost = Math.round(teachabilityScore * 0.38);
+  const shapeBoost = Math.round(rowShapeScore * 0.28);
+  const teachabilityPenalty = teachabilityScore < 60 ? Math.round((60 - teachabilityScore) * 0.8) : 0;
+  const shapePenalty = rowShapeScore < 60 ? Math.round((60 - rowShapeScore) * 0.55) : 0;
+  const negativePenalty = Math.min(24, negativeSignalCount * 4);
+
+  return Math.max(
+    0,
+    Math.min(100, baseConfidence + teachabilityBoost + shapeBoost - teachabilityPenalty - shapePenalty - negativePenalty)
+  );
+};
+
+export const assessParsedRowShapeConsistency = (rows: ParsedImportRow[]) => {
+  const total = rows.length;
+  if (total === 0) {
+    return {
+      score: 0,
+      dateCoverage: 0,
+      amountCoverage: 0,
+      merchantCoverage: 0,
+      typeCoverage: 0,
+      issues: ["empty_rows"],
+    };
+  }
+
+  const parseableDateCount = rows.filter((row) => Boolean(parseDateValue(typeof row.date === "string" ? row.date : null))).length;
+  const amountCount = rows.filter((row) => Number.isFinite(Number(row.amount ?? NaN))).length;
+  const merchantCount = rows.filter((row) => {
+    const value = String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "").trim();
+    return value.length >= 2;
+  }).length;
+  const typeCount = rows.filter((row) => row.type === "income" || row.type === "expense" || row.type === "transfer").length;
+  const dateCoverage = parseableDateCount / total;
+  const amountCoverage = amountCount / total;
+  const merchantCoverage = merchantCount / total;
+  const typeCoverage = typeCount / total;
+
+  const issues: string[] = [];
+  if (dateCoverage < 0.65) issues.push("date_coverage");
+  if (amountCoverage < 0.9) issues.push("amount_coverage");
+  if (merchantCoverage < 0.75) issues.push("merchant_coverage");
+  if (typeCoverage < 0.8) issues.push("type_coverage");
+
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(dateCoverage * 35 + amountCoverage * 30 + merchantCoverage * 20 + typeCoverage * 15 - Math.max(0, issues.length - 1) * 8)
+    )
+  );
+
+  return {
+    score,
+    dateCoverage,
+    amountCoverage,
+    merchantCoverage,
+    typeCoverage,
+    issues,
+  };
+};
+
+export const scoreRowShapeLearningPenalty = (score: number) => {
+  const normalizedScore = Math.max(0, Math.min(100, Math.round(Number(score) || 0)));
+  if (normalizedScore >= 85) {
+    return 0;
+  }
+
+  if (normalizedScore >= 70) {
+    return 4;
+  }
+
+  if (normalizedScore >= 55) {
+    return 10;
+  }
+
+  return 16;
+};
+
+export const assessParsedRowTeachability = (row: ParsedImportRow) => {
+  const assessment = assessParsedRowShapeConsistency([row]);
+  const merchantText = String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "").trim();
+  const amount = Number(row.amount ?? NaN);
+  const hasMerchant = merchantText.length >= 2 && !/^(?:\?+|n\/a|null|undefined)$/i.test(merchantText);
+  const hasAmount = Number.isFinite(amount);
+  const hasType = row.type === "income" || row.type === "expense" || row.type === "transfer";
+  const hasDate = Boolean(parseDateValue(typeof row.date === "string" ? row.date : null));
+  const suspiciousTokens = /(?:\b(?:page|continued|statement|summary|account details)\b|^[^A-Za-z0-9]+$|[^\w\s]{4,})/i.test(merchantText);
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      assessment.score + (hasMerchant ? 10 : -20) + (hasAmount ? 10 : -25) + (hasType ? 8 : -12) + (hasDate ? 8 : -10) - (suspiciousTokens ? 15 : 0)
+    )
+  );
+  const issues = [...assessment.issues];
+  if (!hasMerchant) issues.push("merchant_missing");
+  if (!hasAmount) issues.push("amount_missing");
+  if (!hasDate) issues.push("date_missing");
+  if (!hasType) issues.push("type_missing");
+  if (suspiciousTokens) issues.push("merchant_noise");
+
+  return {
+    score,
+    issues,
+    hasMerchant,
+    hasAmount,
+    hasDate,
+    hasType,
+  };
+};
+
+export const assessParsedRowAnomalies = (row: ParsedImportRow) => {
+  const teachability = assessParsedRowTeachability(row);
+  const merchantText = String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "").trim();
+  const amount = Number(row.amount ?? NaN);
+  const dateValue = typeof row.date === "string" ? parseDateValue(row.date) : null;
+  const rawCategory = String(row.categoryName ?? "").trim().toLowerCase();
+  const issues = new Set<string>(teachability.issues);
+
+  if (merchantText.length === 0) {
+    issues.add("merchant_missing");
+  }
+
+  if (!Number.isFinite(amount)) {
+    issues.add("amount_missing");
+  }
+
+  if (!dateValue) {
+    issues.add("date_missing");
+  }
+
+  if (!row.type || !["income", "expense", "transfer"].includes(String(row.type))) {
+    issues.add("type_missing");
+  }
+
+  if (/^(?:statement|summary|continued|page \d+|account details|opening balance|closing balance)$/i.test(merchantText)) {
+    issues.add("merchant_header_noise");
+  }
+
+  if (/^(?:\?+|n\/a|null|undefined|unknown)$/i.test(merchantText)) {
+    issues.add("merchant_placeholder");
+  }
+
+  if (rawCategory === "other" && teachability.score < 70) {
+    issues.add("category_other_low_teachability");
+  }
+
+  const suspiciousAmount = Number.isFinite(amount) && Math.abs(amount) > 0 && Math.abs(amount) < 0.01;
+  if (suspiciousAmount) {
+    issues.add("amount_suspicious");
+  }
+
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      teachability.score -
+        (issues.has("merchant_header_noise") ? 30 : 0) -
+        (issues.has("merchant_placeholder") ? 25 : 0) -
+        (issues.has("category_other_low_teachability") ? 15 : 0) -
+        (issues.has("amount_suspicious") ? 10 : 0)
+    )
+  );
+
+  return {
+    score,
+    issues: [...issues],
+    isAnomalous: score < 50 || issues.has("merchant_header_noise") || issues.has("merchant_placeholder"),
+  };
+};
+
+const assessParsedRowAmountAnomalies = (params: {
+  row: ParsedImportRow;
+  amountProfile?: RowAmountProfile | null;
+  contextText?: string | null;
+}) => {
+  const amount = Number(params.row.amount ?? NaN);
+  const issues = new Set<string>();
+  if (!Number.isFinite(amount)) {
+    return {
+      issues: [] as string[],
+      scorePenalty: 0,
+    };
+  }
+
+  const absoluteAmount = Math.abs(amount);
+  const normalizedAmountText = String(params.row.amount ?? "").replace(/[^\d.]/g, "");
+  const integerDigits = normalizedAmountText.split(".")[0]?.replace(/^0+/, "") ?? "";
+  if (absoluteAmount >= 1_000_000_000 || integerDigits.length >= 10) {
+    issues.add("amount_implausible_extreme");
+  }
+  if (integerDigits.length >= 12) {
+    issues.add("amount_digit_overflow");
+  }
+
+  const medianAbsAmount = params.amountProfile?.medianAbsAmount ?? null;
+  const p90AbsAmount = params.amountProfile?.p90AbsAmount ?? null;
+  const maxAbsAmount = params.amountProfile?.maxAbsAmount ?? null;
+  if (
+    absoluteAmount > 0 &&
+    medianAbsAmount !== null &&
+    p90AbsAmount !== null &&
+    maxAbsAmount !== null &&
+    maxAbsAmount > 0 &&
+    absoluteAmount > Math.max(1_000_000, medianAbsAmount * 500, p90AbsAmount * 60) &&
+    absoluteAmount >= maxAbsAmount * 0.95
+  ) {
+    issues.add("amount_outlier_vs_statement");
+  }
+
+  const amountTokens = extractAmountLikeTokensFromText(
+    [
+      params.contextText ?? "",
+      params.row.merchantRaw ?? "",
+      params.row.merchantClean ?? "",
+      params.row.description ?? "",
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  if (amountTokens.length > 0) {
+    const strongestToken = Math.max(...amountTokens);
+    if (strongestToken > 0 && absoluteAmount > Math.max(10_000, strongestToken * 100)) {
+      issues.add("amount_text_mismatch");
+    }
+    const hasCloseEvidenceToken = amountTokens.some((token) => Math.abs(token - absoluteAmount) <= Math.max(0.02, absoluteAmount * 0.02));
+    if (!hasCloseEvidenceToken && amountTokens.length >= 2 && absoluteAmount > Math.max(5_000, strongestToken * 20)) {
+      issues.add("amount_row_evidence_mismatch");
+    }
+  }
+
+  const contextText = normalizeWhitespace(
+    [params.row.merchantRaw ?? "", params.row.description ?? "", params.contextText ?? ""].filter(Boolean).join(" ")
+  );
+  if (
+    (issues.has("amount_implausible_extreme") || issues.has("amount_digit_overflow")) &&
+    /\b(?:ref(?:erence)?|trace|approval|invoice|acct|account|spotify|paypal|grab|purchase)\b/i.test(contextText)
+  ) {
+    issues.add("amount_reference_join_likely");
+  }
+
+  const scorePenalty =
+    (issues.has("amount_implausible_extreme") ? 36 : 0) +
+    (issues.has("amount_digit_overflow") ? 24 : 0) +
+    (issues.has("amount_outlier_vs_statement") ? 18 : 0) +
+    (issues.has("amount_text_mismatch") ? 16 : 0) +
+    (issues.has("amount_row_evidence_mismatch") ? 20 : 0) +
+    (issues.has("amount_reference_join_likely") ? 22 : 0);
+
+  return {
+    issues: [...issues],
+    scorePenalty,
+  };
+};
+
+export const shouldPromoteTrainingSignalForLearning = (params: {
+  confidence?: number | null;
+  teachabilityScore?: number | null;
+  merchantText?: string | null;
+}) => {
+  const confidence = typeof params.confidence === "number" && Number.isFinite(params.confidence) ? Math.max(0, Math.min(100, Math.round(params.confidence))) : null;
+  const teachabilityScore =
+    typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
+      ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))
+      : null;
+  const merchantText = String(params.merchantText ?? "").trim();
+  if (!merchantText) {
+    return false;
+  }
+
+  if (teachabilityScore !== null) {
+    return teachabilityScore >= 60;
+  }
+
+  return (confidence ?? 0) >= 60;
+};
+
+export const shouldExpandMerchantPrototypeMemory = (params: {
+  confidence?: number | null;
+  teachabilityScore?: number | null;
+}) => {
+  const confidence =
+    typeof params.confidence === "number" && Number.isFinite(params.confidence)
+      ? Math.max(0, Math.min(100, Math.round(params.confidence)))
+      : null;
+  const teachabilityScore =
+    typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
+      ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))
+      : null;
+
+  if (teachabilityScore !== null) {
+    return teachabilityScore >= 70 && (confidence ?? 0) >= 75;
+  }
+
+  return (confidence ?? 0) >= 85;
+};
+
+export const buildTrainingSignalDedupeKey = (params: {
+  source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
+  transactionId?: string | null;
+  importFileId?: string | null;
+  merchantKey: string;
+  categoryId: string;
+  type: TransactionType;
+  fieldName?: string | null;
+}) =>
+  [
+    params.source,
+    params.transactionId ?? "",
+    params.importFileId ?? "",
+    params.merchantKey,
+    params.categoryId,
+    params.type,
+    params.fieldName ?? "",
+  ].join("|");
+
+export const guessCategoryFallback = (description: string, type: TransactionType) => {
+  const indonesianHint = getIndonesianIncomeCategoryHint(description, type) ?? getIndonesianMerchantCategoryHint(description);
+  if (indonesianHint) return indonesianHint;
+  const lower = description.toLowerCase();
+  const compact = normalizeWhitespace(description).replace(/\s+/g, "").toLowerCase();
+  if (isStatementPaymentSettlementDescription(description)) return "Transfers";
+  if (/tax withheld|withheld tax|taxwithheld|withheldtax/.test(lower)) return "Financial";
+  if (/interest\s+earned|interestearned/.test(lower)) return "Income";
+  if (/atm\s*withdrawal.*(?:fee|charge)|(?:fee|charge).*atm\s*withdrawal/.test(lower)) return "Financial";
+  if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal|et\s+wdl/.test(lower)) return "Cash & ATM";
+  if (type === "income" && /cash\s*\/\s*check\s+deposit|cash\s+deposit|check\s+deposit/.test(lower)) return "Income";
+  const hasTravelContext =
+    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
+    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
+  const hasForeignMerchantCurrencyContext =
+    /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+  const strongHint = getStrongMerchantCategoryHint(description);
+  if (strongHint) return strongHint;
+  const sharedCategoryHint = getSharedMerchantCategoryHint(description);
+  if (sharedCategoryHint) return sharedCategoryHint;
+  if (shouldTreatAsTransferDescription(description)) return "Transfers";
+  const override = getHardcodedCategoryOverride(description);
+  if (override) return override;
+  if (/deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/.test(lower)) return "Financial";
+  if (/google\s+play|googleplay/.test(lower) || /googleplay/.test(compact)) return "Entertainment";
+  if (/transfer|instapay|pesonet|wise to|to savings|to checking|wa\s+(?:cr|db)|et\s+(?:cr|db)\s+ibft|st\s+(?:cm|dm)\s+gen|mo\s+dm/.test(lower)) return "Transfers";
+  if (/service\s*charge|servicecharge|service\s*fee|bank\s*charge|bankcharge|svchg|finance\s+charges?|late\s+payment\s+fee|annual\s+fee/.test(lower)) return "Financial";
+  if (/tax withheld|withheld tax|taxwithheld|withheldtax/.test(lower)) return "Financial";
+  if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) return "Transfers";
+  if (/discord\s+nitro|google\s+one/.test(lower) || /discordnitro|googleone/.test(compact)) return "Subscriptions";
+  if (/mlbb\s+top\s+up|mobile\s+legends|mlbbtopup/.test(lower) || /mlbbtopup|mobilelegends/.test(compact)) return "Entertainment";
+  if (/interest\s+earned|interestearned|salary|payroll|income|deposit|cash\s*in\b|cashin\b|cash\/?check\s+deposit|received|credit memo/.test(lower)) return "Income";
+  if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
+  if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|bar leone|savory project|gokan|goken|mcdonald'?s|milksha|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|four\s+frogs|apollo\s+bay\s+seafood|wootea|iga\s+supermarkets?|caretaker'?s\s+cottage|lee'?s\s+dumplings|grocer/.test(lower)) return "Food & Dining";
+  if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
+  if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
+  if (/liberty\s+oil|petrol|gas\s+station/.test(lower) || /libertyoil|petrol|gasstation/.test(compact)) return "Transport";
+  if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
+  if (/discord\s+nitro/.test(lower) || /discordnitro/.test(compact)) return "Subscriptions";
+  if (/google\s+one/.test(lower) || /googleone/.test(compact)) return "Subscriptions";
+  if (/mlbb\s+top\s+up|mobile\s+legends|mlbbtopup/.test(lower) || /mlbbtopup|mobilelegends/.test(compact)) return "Entertainment";
+  if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify/.test(lower)) return "Bills & Utilities";
+  if (/travel|airbnb|hotel|airline|flight|tour|holiday|souvenir|harbour\s+gifts?|tourism|sanctuary|news\s+travels?|great\s+ocean\s+road\s+choc|locker\s+hire|moonlit\s+sanctuary/.test(lower)) return "Travel & Lifestyle";
+  if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox|opera\s+house|htg\s+ticket\s+sales|museum|gallery/.test(lower))
+    return "Entertainment";
+  if (
+    hasTravelContext &&
+    hasForeignMerchantCurrencyContext &&
+    (/souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|great\s+ocean\s+road|parks?\s+victoria/.test(lower) ||
+      /souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|greatoceanroad|parksvictoria/.test(compact))
+  ) {
+    return "Travel & Lifestyle";
+  }
+  if (/samyan\s+mitrtown|paypal|mitrtown|relay|locker\s+hire|viator(?:\.com)?/.test(lower) || /samyanmitrtown|paypal|mitrtown|relay|lockerhire|viator/.test(compact)) return "Shopping";
+  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera|paypal|relay/.test(lower)) return "Shopping";
+  if (/\bpayments?\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) return "Shopping";
+  if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) return "Shopping";
+  if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) return "Education";
+  if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
+  if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
+  if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
+  if (/business|invoice|client|contract/.test(lower)) return "Business";
+  if (/fee|interest|loan|financial|bank charge/.test(lower)) return "Financial";
+  return "Other";
+};
+
+const GENERIC_CATEGORY_NAMES = new Set(["other", "transfers"]);
+const GENERIC_MERCHANT_RAIL_KEYS = new Set(["paypal", "grab", "grabpay", "gcash", "maya", "visa", "mastercard", "amex"]);
+const GENERIC_NORMALIZED_MERCHANT_PATTERNS = [
+  /^(?:grabpay|gcash|maya|visa|mastercard|amex)$/,
+  /^(?:bank|fund|wallet)\s+transfer$/,
+  /^(?:incoming|outgoing)(?:\s+interbank)?\s+transfer$/,
+  /^(?:interbank|merchant)\s+payment$/,
+  /^(?:card|statement)\s+payment$/,
+  /^(?:instapay|pesonet)(?:\s+send)?$/,
+  /^(?:cash\s+in|cash\s+out)$/,
+];
+
+const isGenericCategoryName = (value: string | null | undefined) => GENERIC_CATEGORY_NAMES.has(String(value ?? "").trim().toLowerCase());
+const isGenericNormalizedMerchantLabel = (value: string | null | undefined) => {
+  const normalized = normalizeMerchantText(value);
+  if (!normalized) {
+    return false;
+  }
+
+  return GENERIC_NORMALIZED_MERCHANT_PATTERNS.some((pattern) => pattern.test(normalized));
+};
+
+const isExplicitTransferLikeDescription = (value: string | null | undefined) => {
+  if (getStrongMerchantCategoryHint(String(value ?? ""))) {
+    return false;
+  }
+
+  const lower = normalizeWhitespace(String(value ?? "")).toLowerCase();
+  const compact = lower.replace(/\s+/g, "");
+  return (
+    /transfer|instapay|pesonet|fund\s+transfer|wallet\s+transfer|bank\s+transfer|incoming\s+transfer|outgoing\s+transfer|incoming\s+interbank\s+transfer|outgoing\s+interbank\s+transfer|gcash\s+cash\s+in|cash\s+in\b/.test(
+      lower
+    ) ||
+    /incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|wallettransfer|banktransfer|gcashcashin|cashin/.test(
+      compact
+    ) ||
+    shouldTreatAsTransferDescription(lower)
+  );
+};
+
+const isStrongNonTransferCategorySignal = (categoryName: string, variant: string) => {
+  const normalizedCategory = normalizeWhitespace(categoryName).trim();
+  if (!normalizedCategory || normalizedCategory === "Transfers" || normalizedCategory === "Other") {
+    return false;
+  }
+
+  const sharedHint = getSharedMerchantCategoryHint(variant);
+  if (!sharedHint || sharedHint !== normalizedCategory) {
+    return false;
+  }
+
+  const normalizedVariant = normalizeMerchantText(variant);
+  return normalizedVariant.length >= 5 && !GENERIC_MERCHANT_RAIL_KEYS.has(normalizedVariant);
+};
+
+const rescueHeuristicCategory = (params: {
+  merchantText: string;
+  categoryText?: string | null;
+  type: TransactionType;
+  heuristicCategory: string;
+  merchantCandidates: string[];
+}) => {
+  // Removing a rail/top-up word from a candidate must not manufacture a merchant
+  // identity or turn an explicitly uncertain payment into a high-confidence row.
+  if (params.heuristicCategory === "Other" && (needsIndonesianPaymentCategoryReview(params.merchantText) || getRegionalMerchantCategoryHint(params.merchantText) === "Other")) return null;
+  const baseText = [params.categoryText, params.merchantText, ...params.merchantCandidates]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+  const explicitTransferLike = isExplicitTransferLikeDescription(baseText);
+  const categoryScores = new Map<string, number>();
+  const categoryVariant = new Map<string, string>();
+
+  const registerCategory = (category: string, variant: string, weight: number) => {
+    const key = category.trim();
+    if (!key || key.toLowerCase() === "other") {
+      return;
+    }
+
+    categoryScores.set(key, (categoryScores.get(key) ?? 0) + weight);
+    const existing = categoryVariant.get(key);
+    if (!existing || tokenizeMerchant(variant).length > tokenizeMerchant(existing).length) {
+      categoryVariant.set(key, variant);
+    }
+  };
+
+  for (const variant of params.merchantCandidates) {
+    const trimmedVariant = normalizeWhitespace(variant).trim();
+    if (!trimmedVariant) {
+      continue;
+    }
+
+    const rescuedCategory = guessCategoryFallback(trimmedVariant, params.type);
+    if (rescuedCategory === "Other") {
+      continue;
+    }
+
+    const tokens = tokenizeMerchant(trimmedVariant);
+    const tokenWeight = Math.min(4, Math.max(1, tokens.length));
+    const normalizedVariant = normalizeMerchantText(trimmedVariant);
+    const looksSpecific = normalizedVariant.length >= 4 && !/^(?:payment|deposit|withdrawal|cash|transfer|bank|credit|debit|wallet)$/.test(normalizedVariant);
+    let weight = tokenWeight + (looksSpecific ? 2 : 0);
+    if (rescuedCategory !== "Transfers") {
+      weight += 1;
+    }
+
+    registerCategory(rescuedCategory, trimmedVariant, weight);
+  }
+
+  const rankedCategories = [...categoryScores.entries()].sort((left, right) => right[1] - left[1]);
+  const winner = rankedCategories[0];
+  if (!winner) {
+    return null;
+  }
+
+  const [winnerCategory, winnerScore] = winner;
+  if (winnerCategory === "Transfers" && isGenericCategoryName(params.heuristicCategory)) {
+    return null;
+  }
+
+  const sourceVariant = categoryVariant.get(winnerCategory) ?? params.merchantText;
+  const strongNonTransferSignal = isStrongNonTransferCategorySignal(winnerCategory, sourceVariant);
+
+  if (params.heuristicCategory === "Transfers") {
+    if ((explicitTransferLike && !strongNonTransferSignal) || winnerCategory === "Transfers" || winnerScore < (strongNonTransferSignal ? 4 : 5)) {
+      return null;
+    }
+  } else if (params.heuristicCategory === "Other") {
+    if (winnerScore < 4) {
+      return null;
+    }
+  } else {
+    return null;
+  }
+
+  const normalizedName = summarizeMerchantText(sourceVariant) || summarizeMerchantText(params.merchantText);
+  return {
+    categoryName: winnerCategory,
+    normalizedName,
+    confidence: params.heuristicCategory === "Transfers" ? (strongNonTransferSignal ? 76 : 72) : 68,
+    categoryReason:
+      params.heuristicCategory === "Transfers"
+        ? strongNonTransferSignal
+          ? "heuristic-transfer-merchant-override"
+          : "heuristic-transfer-rescue"
+        : "heuristic-other-rescue",
+    categorySource: "deterministic_rescue",
+    variant: sourceVariant,
+  };
+};
+
+const pickCategoryAlignedNormalizedName = (params: {
+  targetCategory: string;
+  merchantText: string;
+  merchantCandidates: string[];
+  type: TransactionType;
+  fallbackName: string;
+  institution?: string | null;
+}) => {
+  const rankedCandidates = [...new Set(params.merchantCandidates.map((value) => normalizeWhitespace(value).trim()).filter(Boolean))].sort((left, right) => {
+    const tokenDelta = tokenizeMerchant(right).length - tokenizeMerchant(left).length;
+    return tokenDelta !== 0 ? tokenDelta : right.length - left.length;
+  });
+  const fallbackNormalized = normalizeMerchantText(params.fallbackName);
+
+  for (const candidate of rankedCandidates) {
+    const institutionScopedPrefix = normalizeWhitespace(String(params.institution ?? "")).trim();
+    const normalizedCandidate =
+      institutionScopedPrefix && candidate.toLowerCase().startsWith(`${institutionScopedPrefix.toLowerCase()} `)
+        ? candidate.slice(institutionScopedPrefix.length + 1).trim()
+        : candidate;
+    const summarized = summarizeMerchantText(normalizedCandidate);
+    const normalizedSummary = normalizeMerchantText(summarized);
+    if (!normalizedSummary || isGenericNormalizedMerchantLabel(normalizedSummary)) {
+      continue;
+    }
+
+    const candidateCategory = guessCategoryFallback(candidate, params.type);
+    if (candidateCategory === params.targetCategory) {
+      return summarized;
+    }
+  }
+
+  if (isGenericNormalizedMerchantLabel(fallbackNormalized)) {
+    for (const candidate of rankedCandidates) {
+      const institutionScopedPrefix = normalizeWhitespace(String(params.institution ?? "")).trim();
+      const normalizedCandidate =
+        institutionScopedPrefix && candidate.toLowerCase().startsWith(`${institutionScopedPrefix.toLowerCase()} `)
+          ? candidate.slice(institutionScopedPrefix.length + 1).trim()
+          : candidate;
+      const summarized = summarizeMerchantText(normalizedCandidate);
+      const normalizedSummary = normalizeMerchantText(summarized);
+      if (normalizedSummary && !isGenericNormalizedMerchantLabel(normalizedSummary)) {
+        return summarized;
+      }
+    }
+  }
+
+  return params.fallbackName;
+};
+
+export const defaultCategoryForType = (type: TransactionType) => CATEGORY_FALLBACKS[type];
+
+const normalizeImportedCategoryKey = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+
+const IMPORTED_CATEGORY_ALIASES: Record<string, string> = {
+  "bills and utilities": "Bills & Utilities",
+  bills: "Bills & Utilities",
+  utilities: "Bills & Utilities",
+  utility: "Bills & Utilities",
+  "food and groceries": "Food & Dining",
+  groceries: "Food & Dining",
+  grocery: "Food & Dining",
+  food: "Food & Dining",
+  dining: "Food & Dining",
+  restaurants: "Food & Dining",
+  meals: "Food & Dining",
+  transportation: "Transport",
+  transport: "Transport",
+  "transport and travel": "Travel & Lifestyle",
+  travel: "Travel & Lifestyle",
+  "travel and lifestyle": "Travel & Lifestyle",
+  rent: "Housing",
+  rental: "Housing",
+  mortgage: "Housing",
+  subscriptions: "Subscriptions",
+  subscription: "Subscriptions",
+  "gifts and donations": "Gifts & Donations",
+  gifts: "Gifts & Donations",
+  donations: "Gifts & Donations",
+  charity: "Gifts & Donations",
+  education: "Education",
+  tuition: "Education",
+  school: "Education",
+  shopping: "Shopping",
+  retail: "Shopping",
+  merchandise: "Shopping",
+  "health and wellness": "Health & Wellness",
+  healthcare: "Health & Wellness",
+  medical: "Health & Wellness",
+  pharmacy: "Health & Wellness",
+  "cash and atm": "Cash & ATM",
+  atm: "Cash & ATM",
+  "cash withdrawal": "Cash & ATM",
+  "cash deposit": "Cash & ATM",
+  financial: "Financial",
+  "bank fees": "Financial",
+  fees: "Financial",
+  interest: "Financial",
+  taxes: "Financial",
+  income: "Income",
+  salary: "Income",
+  payroll: "Income",
+  "interest earned": "Income",
+  transfers: "Transfers",
+  transfer: "Transfers",
+  "internal transfer": "Transfers",
+  other: "Other",
+  misc: "Other",
+  miscellaneous: "Other",
+};
+
+/** Maps common statement labels to Clover categories while keeping the source label in rawPayload. */
+export const mapImportedCategoryToCloverCategory = (
+  categoryName: string | null | undefined,
+  type: TransactionType = "expense"
+) => {
+  const sourceCategoryName = categoryName?.trim() ?? "";
+  if (!sourceCategoryName) return "";
+
+  const normalizedSourceCategoryName = normalizeImportedCategoryKey(sourceCategoryName);
+  if (normalizedSourceCategoryName === "reimbursement") {
+    return type === "income" ? "Income" : "Other";
+  }
+
+  return IMPORTED_CATEGORY_ALIASES[normalizedSourceCategoryName] ?? sourceCategoryName;
+};
+
+export const detectInstitutionFromText = (text: string | null | undefined) => {
+  const normalized = normalizeWhitespace(String(text ?? ""));
+  const detectedInstitution = detectInstitutionFromStatementSignals(normalized);
+  if (detectedInstitution) return detectedInstitution;
+
+  if (
+    /PERIOD\s+COVERED/i.test(normalized) &&
+    /ACCOUNT\s+NUMBER/i.test(normalized) &&
+    /PHILIPPINE\s+PESO/i.test(normalized) &&
+    /\b\d{1,2}\s+[A-Z]{3}\s+\d{2,4}\b/i.test(normalized)
+  ) {
+    return "Security Bank";
+  }
+
+  return null;
+};
+
+export const detectAccountNumber = (text: string | null | undefined) => {
+  const normalized = normalizeWhitespace(String(text ?? ""));
+  const labeledAccountSection =
+    normalized.match(
+      /\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i
+    )?.[1] ??
+    "";
+  const trailingDigits =
+    normalized
+      .match(/\b(?:\d[\d\s-]{10,}\d)\b/g)
+      ?.map((candidate) => candidate.replace(/\D/g, ""))
+      .filter((candidate) => candidate.length >= 8 && candidate.length <= 16)
+      .sort((left, right) => right.length - left.length)[0] ?? "";
+  const accountNumber = (labeledAccountSection || trailingDigits).replace(/\D/g, "").slice(0, 16) || null;
+  return accountNumber;
+};
+
+const isGenericStatementAccountLabel = (value?: string | null) => {
+  const normalized = normalizeWhitespace(String(value ?? ""));
+  if (!normalized) {
+    return true;
+  }
+
+  return /^(?:account|card)\s+\d{4}$/i.test(normalized) || /^(?:account|card)$/i.test(normalized);
+};
+
+const extractTrailingMoneyFromText = (text: string) => {
+  const values = Array.from(text.matchAll(/(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/g))
+    .map((match) => parseAmountValue(match[1] ?? null))
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return values.at(-1) ?? null;
+};
+
+export const detectStatementMetadataFromText = (text: string, fileName = ""): StatementMetadataSnapshot => {
+  const netWorthSnapshotRows = parseNetWorthSnapshotCsv(
+    text,
+    fileName,
+    fileName.toLowerCase().endsWith(".csv") ? "text/csv" : ""
+  );
+  if (netWorthSnapshotRows) {
+    const snapshotDate =
+      netWorthSnapshotRows
+        .map((row) => parseDateValue(row.date ?? null))
+        .filter((date): date is Date => Boolean(date))
+        .sort((left, right) => left.getTime() - right.getTime())
+        .at(-1) ?? null;
+    return {
+      institution: null,
+      accountNumber: null,
+      accountName: "Multiple Accounts",
+      accountType: "other",
+      currency: "PHP",
+      openingBalance: null,
+      endingBalance: null,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: snapshotDate?.toISOString() ?? null,
+      endDate: snapshotDate?.toISOString() ?? null,
+      confidence: 100,
+    };
+  }
+
+  const metadata = detectStatementMetadata(text, fileName);
+  // This receipt's account number belongs to the biller. An explicit absence
+  // of wallet identity must survive the generic account-number fallback.
+  if (metadata?.identityEvidence?.some(evidence => ["GCash bill receipt and reference", "cimb-consolidated-products", "bca-native-transfer-columns", "grab-receipt-payment-method-only", "maribank-native-ledger-v1"].includes(evidence))) return { ...metadata, currency: metadata.currency ?? null };
+  // Some Metrobank online PDFs preserve the MB-Online-MSOA filename but lose
+  // the bank masthead during extraction. Prefer that durable filename signal
+  // over incidental words (for example, a contact email containing "Wise").
+  const fileNameSignalsMetrobank = /\b(?:metrobank|mb[-_ ]?online[-_ ]?msoa)\b/i.test(fileName);
+  const institution = fileNameSignalsMetrobank
+    ? "Metrobank"
+    : sanitizeBankNameLabel(metadata?.institution ?? detectInstitutionFromText(text));
+  const normalizedText = normalizeWhitespace(text);
+  const cimbAccountNumbers =
+    institution === "CIMB"
+      ? Array.from(
+          new Set(
+            Array.from(normalizedText.matchAll(/GSave\s*-\s*Savings\s+Account\s+No\.\s*([0-9\s-]+)/gi))
+              .map((match) => match[1]?.replace(/\D/g, "").slice(0, 16) ?? "")
+              .filter(Boolean)
+          )
+        )
+      : [];
+  const isMultiAccountCimbStatement = cimbAccountNumbers.length > 1;
+  const accountNumber = isMultiAccountCimbStatement
+    ? null
+    : institution === "Wise"
+      ? metadata?.accountNumber ?? null
+      : metadata?.accountNumber ?? detectAccountNumber(text);
+  const metadataAccountName = sanitizeBankNameLabel(metadata?.accountName);
+  const accountName =
+    (isMultiAccountCimbStatement ? "CIMB" : metadataAccountName && !isGenericStatementAccountLabel(metadataAccountName) ? metadataAccountName : null) ??
+    (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : institution ?? null);
+  const endingBalance =
+    isMultiAccountCimbStatement
+      ? null
+      : metadata?.endingBalance ?? (institution === "Security Bank" ? extractTrailingMoneyFromText(normalizedText) : null);
+  const refinedAccountType =
+    normalizePayPalAccountType(institution, accountName, normalizedText) ??
+    detectExplicitAccountTypeFromStatementText(normalizedText) ??
+    metadata?.accountType ??
+    (institution && /maya/i.test(institution)
+      ? /\b(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|credit\s*card|card\s+ending|visa|mastercard|amex)\b/i.test(normalizedText)
+        ? "credit_card"
+        : /\b(wallet|cash\s*(?:in|out)|send\s+money|received\s+money|fund\s+transfer|transfer\s+to\s+maya\s+savings|auto\s*cash[- ]?in)\b/i.test(normalizedText)
+          ? "wallet"
+          : /\b(savings|consumer\s+savings|account\s+summary|running\s+balance|starting\s+balance|ending\s+balance|interest\s+earned)\b/i.test(normalizedText)
+            ? "bank"
+            : "bank"
+      : null) ??
+    (institution === "GoTyme" ? "bank" : null);
+  const accountType = refinedAccountType ?? inferAccountTypeFromStatement(institution, accountName, "bank");
+  const confidence =
+    metadata?.confidence ??
+    Math.min(
+      100,
+      [
+        institution ? 35 : 0,
+        accountNumber ? 35 : 0,
+        accountName ? 10 : 0,
+        accountType ? 5 : 0,
+        metadata?.startDate ? 5 : 0,
+        metadata?.endDate ? 5 : 0,
+        metadata?.paymentDueDate ? 5 : 0,
+        typeof metadata?.openingBalance === "number" ? 5 : 0,
+        typeof endingBalance === "number" ? 5 : 0,
+        typeof metadata?.totalAmountDue === "number" ? 5 : 0,
+      ].reduce((total, part) => total + part, 0)
+    );
+
+  return {
+    institution,
+    accountNumber,
+    accountName,
+    accountType,
+    currency: metadata?.currency ?? null,
+    openingBalance: isMultiAccountCimbStatement ? null : metadata?.openingBalance ?? null,
+    endingBalance,
+    creditLimit: metadata?.creditLimit ?? null,
+    ...(metadata?.statementDate ? { statementDate: metadata.statementDate } : {}),
+    paymentDueDate: metadata?.paymentDueDate ?? null,
+    totalAmountDue: metadata?.totalAmountDue ?? null,
+    startDate: metadata?.startDate ?? null,
+    endDate: metadata?.endDate ?? null,
+    confidence,
+  };
+};
+
+export const mergeStatementMetadataWithTemplate = (
+  detected: StatementMetadataSnapshot,
+  template?: {
+    institution?: string | null;
+    accountNumber?: string | null;
+    accountName?: string | null;
+    accountType?: ImportedAccountType | null;
+    currency?: string | null;
+    openingBalance?: number | null;
+    endingBalance?: number | null;
+    paymentDueDate?: string | null;
+    totalAmountDue?: number | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  } | null
+) : StatementMetadataSnapshot => {
+  if (!template) {
+    return detected;
+  }
+
+  // New source proofs retain explicit absent identity/balance fields; old templates cannot invent them.
+  if ((detected as DetectedStatementMetadata).identityEvidence?.some(e => ["grab-receipt-payment-method-only", "maribank-native-ledger-v1"].includes(e))) return { ...detected };
+
+  const detectedHasStrongIdentity = Boolean(detected.institution || detected.accountNumber || detected.accountName);
+  const detectedHasAccountNumber = Boolean(detected.accountNumber);
+  const preferTemplateIdentity = (detected.confidence ?? 0) < 80 && !detectedHasAccountNumber && !detectedHasStrongIdentity;
+  const templateIdentityConfidence = Math.min(
+    100,
+    [
+      template.institution ? 35 : 0,
+      template.accountNumber ? 35 : 0,
+      template.accountName ? 10 : 0,
+      template.accountType ? 5 : 0,
+      template.currency ? 5 : 0,
+      template.startDate ? 5 : 0,
+      template.endDate ? 5 : 0,
+      template.paymentDueDate ? 5 : 0,
+      template.openingBalance !== null ? 5 : 0,
+      template.endingBalance !== null ? 5 : 0,
+      typeof template.totalAmountDue === "number" ? 5 : 0,
+    ].reduce((total, part) => total + part, 0)
+  );
+
+  return {
+    institution:
+      preferTemplateIdentity && template.institution
+        ? template.institution
+        : detected.institution ?? template.institution ?? null,
+    accountNumber:
+      preferTemplateIdentity && template.accountNumber
+        ? template.accountNumber
+        : detected.accountNumber ?? template.accountNumber ?? null,
+    accountName:
+      preferTemplateIdentity && template.accountName
+        ? template.accountName
+        : detected.accountName ?? template.accountName ?? null,
+    accountType:
+      preferTemplateIdentity && template.accountType
+        ? template.accountType
+        : detected.accountType ?? template.accountType ?? null,
+    currency:
+      preferTemplateIdentity && template.currency
+        ? template.currency
+        : detected.currency ?? template.currency ?? null,
+    openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
+    endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
+    // A bill date belongs to this source, never an older learned template.
+    ...(detected.statementDate ? { statementDate: detected.statementDate } : {}),
+    paymentDueDate: detected.paymentDueDate ?? template.paymentDueDate ?? null,
+    totalAmountDue: detected.totalAmountDue ?? template.totalAmountDue ?? null,
+    startDate: detected.startDate ?? template.startDate ?? null,
+    endDate: detected.endDate ?? template.endDate ?? null,
+    confidence: Math.max(detected.confidence ?? 0, templateIdentityConfidence),
+  };
+};
+
+export const isMissingDatabaseRelationError = (error: unknown, tableName: string) => {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  const combined = `${code} ${message}`.toLowerCase();
+  return combined.includes(tableName.toLowerCase()) && (combined.includes("does not exist") || code === "p2021");
+};
+
+export const isMissingDatabaseColumnError = (error: unknown) => {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  const combined = `${code} ${message}`.toLowerCase();
+  return combined.includes("does not exist") && combined.includes("column") || code === "p2022";
+};
+
+export const extractMissingDatabaseColumn = (error: unknown) => {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  const match =
+    message.match(/column\s+`([^`]+)`/i) ??
+    message.match(/column\s+"([^"]+)"/i) ??
+    message.match(/column\s+([A-Za-z0-9_]+)\s+of\s+relation/i);
+  const raw = match?.[1] ?? null;
+  if (!raw) {
+    return null;
+  }
+
+  return raw.split(" of relation")[0]?.trim() || null;
+};
+
+const columnCache = new Map<string, string[]>();
+const tableExistsCache = new Map<string, boolean>();
+
+type StatementMetadataSnapshot = {
+  institution: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  accountType: ImportedAccountType | null;
+  currency: string | null;
+  openingBalance: number | null;
+  endingBalance: number | null;
+  creditLimit?: number | null;
+  statementDate?: string | null;
+  paymentDueDate?: string | null;
+  totalAmountDue?: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  confidence: number;
+};
+
+export const hasCompatibleTable = async (tableName: string) => {
+  const cached = tableExistsCache.get(tableName);
+  if (typeof cached === "boolean") {
+    return cached;
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = ${tableName}
+    ) AS "exists"
+  `;
+
+  const exists = Boolean(rows[0]?.exists);
+  tableExistsCache.set(tableName, exists);
+  return exists;
+};
+
+export const getCompatibleParsedTransactionColumns = async () => {
+  const cacheKey = "ParsedTransaction";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'ParsedTransaction'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = PARSED_TRANSACTION_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleImportFileColumns = async () => {
+  const cacheKey = "ImportFile";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'ImportFile'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = IMPORT_FILE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleTrainingSignalColumns = async () => {
+  const cacheKey = "TrainingSignal";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'TrainingSignal'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = TRAINING_SIGNAL_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleTransactionColumns = async () => {
+  const cacheKey = "Transaction";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'Transaction'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = TRANSACTION_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleStatementTemplateColumns = async () => {
+  const cacheKey = "StatementTemplate";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'StatementTemplate'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = STATEMENT_TEMPLATE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleDocumentImportColumns = async () => {
+  const cacheKey = "DocumentImport";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'DocumentImport'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = DOCUMENT_IMPORT_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleDocumentImportPageColumns = async () => {
+  const cacheKey = "DocumentImportPage";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'DocumentImportPage'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = DOCUMENT_IMPORT_PAGE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleReceiptDocumentColumns = async () => {
+  const cacheKey = "ReceiptDocument";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'ReceiptDocument'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = RECEIPT_DOCUMENT_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleInvestmentSnapshotColumns = async () => {
+  const cacheKey = "InvestmentSnapshot";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'InvestmentSnapshot'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = INVESTMENT_SNAPSHOT_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleInvestmentHoldingColumns = async () => {
+  const cacheKey = "InvestmentHolding";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'InvestmentHolding'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = INVESTMENT_HOLDING_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleRecurringPatternColumns = async () => {
+  const cacheKey = "RecurringPattern";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'RecurringPattern'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = RECURRING_PATTERN_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleImportFileExtractionCacheColumns = async () => {
+  const cacheKey = "ImportFileExtractionCache";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'ImportFileExtractionCache'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = IMPORT_FILE_EXTRACTION_CACHE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const loadStatementTemplate = async (params: {
+  workspaceId: string;
+  fingerprint: string;
+}) => {
+  const columns = await getCompatibleStatementTemplateColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  try {
+    const template = await prisma.statementTemplate.findUnique({
+      where: {
+        workspaceId_fingerprint: {
+          workspaceId: params.workspaceId,
+          fingerprint: params.fingerprint,
+        },
+      },
+    });
+
+    if (!template) {
+      return null;
+    }
+
+    return template as StatementTemplateRow;
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const loadBestStatementTemplateForInstitution = async (params: {
+  workspaceId: string;
+  institution?: string | null;
+  fileType?: string | null;
+  accountType?: ImportedAccountType | null;
+  statementFamilySignature?: string | null;
+}) => {
+  const columns = await getCompatibleStatementTemplateColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const institution = sanitizeBankNameLabel(params.institution ?? null);
+  if (!institution || institution === "Unknown") {
+    return null;
+  }
+
+  try {
+    let templates = await prisma.statementTemplate.findMany({
+      where: {
+        workspaceId: params.workspaceId,
+        institution,
+        ...(params.fileType ? { fileType: params.fileType } : {}),
+      },
+      orderBy: [{ successCount: "desc" }, { exampleCount: "desc" }, { updatedAt: "desc" }],
+      take: 5,
+    });
+
+    if (params.statementFamilySignature) {
+      const exactFamily = await prisma.statementTemplate.findMany({ where: {
+        workspaceId: params.workspaceId, institution,
+        ...(params.fileType ? { fileType: params.fileType } : {}),
+        parserConfig: { path: ["statementFamilySignature"], equals: params.statementFamilySignature },
+      } });
+      templates = [...new Map([...templates, ...exactFamily].map(template => [template.id, template])).values()];
+    }
+
+    const scoredTemplates = templates
+      .map((template) => ({
+        template,
+        score: scoreStatementTemplateCandidate({
+          template,
+          institution,
+          fileType: params.fileType ?? null,
+          accountType: params.accountType ?? null,
+          statementFamilySignature: params.statementFamilySignature ?? null,
+        }),
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    return (scoredTemplates[0]?.template ?? null) as StatementTemplateRow | null;
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return null;
+    }
+
+  throw error;
+  }
+};
+
+export const loadScoredStatementTemplatesForInstitution = async (params: {
+  workspaceId: string;
+  institution?: string | null;
+  fileType?: string | null;
+  accountType?: ImportedAccountType | null;
+  statementFamilySignature?: string | null;
+  limit?: number;
+  allowCrossInstitutionFamilyMatch?: boolean;
+}) => {
+  const columns = await getCompatibleStatementTemplateColumns();
+  if (columns.length === 0) {
+    return [] as Array<{ template: StatementTemplateRow; score: number }>;
+  }
+
+  const institution = sanitizeBankNameLabel(params.institution ?? null);
+  const take = Math.max(1, Math.min(25, Math.round(params.limit ?? 8)));
+
+  try {
+    let templates = await prisma.statementTemplate.findMany({
+      where: {
+        workspaceId: params.workspaceId,
+        ...(params.fileType ? { fileType: params.fileType } : {}),
+        ...(institution && institution !== "Unknown"
+          ? params.allowCrossInstitutionFamilyMatch
+            ? {}
+            : { institution }
+          : {}),
+      },
+      orderBy: [{ successCount: "desc" }, { exampleCount: "desc" }, { updatedAt: "desc" }],
+      take: params.allowCrossInstitutionFamilyMatch ? Math.max(take * 4, 20) : Math.max(take * 2, 12),
+    });
+
+    if (params.statementFamilySignature) {
+      const exactFamily = await prisma.statementTemplate.findMany({ where: {
+        workspaceId: params.workspaceId,
+        ...(institution && institution !== "Unknown" && !params.allowCrossInstitutionFamilyMatch ? { institution } : {}),
+        ...(params.fileType ? { fileType: params.fileType } : {}),
+        parserConfig: { path: ["statementFamilySignature"], equals: params.statementFamilySignature },
+      } });
+      templates = [...new Map([...templates, ...exactFamily].map(template => [template.id, template])).values()];
+    }
+
+    return templates
+      .map((template) => {
+        const baseScore = scoreStatementTemplateCandidate({
+          template,
+          institution,
+          fileType: params.fileType ?? null,
+          accountType: params.accountType ?? null,
+          statementFamilySignature: params.statementFamilySignature ?? null,
+        });
+        const exactInstitutionMatch =
+          institution &&
+          template.institution &&
+          normalizeMerchantText(template.institution) === normalizeMerchantText(institution);
+        const parserConfig =
+          template.parserConfig && typeof template.parserConfig === "object" && !Array.isArray(template.parserConfig)
+            ? (template.parserConfig as Record<string, unknown>)
+            : null;
+        const templateFamilySignature = typeof parserConfig?.statementFamilySignature === "string" ? parserConfig.statementFamilySignature.trim() : null;
+        const familyMatch =
+          params.statementFamilySignature &&
+          templateFamilySignature &&
+          (params.statementFamilySignature === templateFamilySignature ||
+            params.statementFamilySignature.split("|").some((part) => part && templateFamilySignature.split("|").includes(part)));
+        const crossInstitutionPenalty =
+          exactInstitutionMatch || !institution || institution === "Unknown"
+            ? 0
+            : params.allowCrossInstitutionFamilyMatch && familyMatch
+              ? 10
+              : 35;
+
+        return {
+          template: template as StatementTemplateRow,
+          score: baseScore - crossInstitutionPenalty + (familyMatch ? 6 : 0),
+        };
+      })
+      .filter((entry) => entry.score >= (params.allowCrossInstitutionFamilyMatch ? 22 : 35))
+      .sort((left, right) => right.score - left.score)
+      .slice(0, take);
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return [] as Array<{ template: StatementTemplateRow; score: number }>;
+    }
+
+    throw error;
+  }
+};
+
+export const loadImportFileExtractionCache = async (params: {
+  workspaceId: string;
+  fileFingerprint: string;
+  fileType: string;
+  importMode: string;
+  cacheVersion?: string;
+}) => {
+  const columns = await getCompatibleImportFileExtractionCacheColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT ${columns.map((column) => `"${column}"`).join(", ")}
+       FROM "ImportFileExtractionCache"
+       WHERE "workspaceId" = $1 AND "fileFingerprint" = $2 AND "fileType" = $3 AND "importMode" = $4 AND "cacheVersion" = $5
+       LIMIT 1`,
+      params.workspaceId,
+      params.fileFingerprint,
+      params.fileType,
+      params.importMode,
+      params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION
+    );
+
+    const row = rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return row as ImportFileExtractionCacheRow;
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "ImportFileExtractionCache")) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const loadRecentReceiptExtractionCaches = async (params: {
+  workspaceId: string;
+  cacheVersion?: string;
+  take?: number;
+}) => {
+  const columns = await getCompatibleImportFileExtractionCacheColumns();
+  if (columns.length === 0) return [] as ImportFileExtractionCacheRow[];
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT ${columns.map((column) => `"${column}"`).join(", ")}
+       FROM "ImportFileExtractionCache"
+       WHERE "workspaceId" = $1 AND "importMode" = 'receipt' AND "cacheVersion" = $2
+       ORDER BY "lastUsedAt" DESC
+       LIMIT $3`,
+      params.workspaceId,
+      params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+      Math.max(1, Math.min(params.take ?? 40, 100))
+    );
+    return rows as ImportFileExtractionCacheRow[];
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "ImportFileExtractionCache") || isMissingDatabaseColumnError(error)) return [];
+    throw error;
+  }
+};
+
+export const upsertImportFileExtractionCache = async (params: {
+  workspaceId: string;
+  fileFingerprint: string;
+  fileType: string;
+  importMode: string;
+  extractedText: string;
+  statementFingerprint?: string | null;
+  statementFamilySignature?: string | null;
+  metadata?: Prisma.InputJsonValue | null;
+  parsedRows?: Prisma.InputJsonValue | null;
+  pageCount?: number;
+  confidence?: number;
+  hitCount?: number;
+  lastUsedAt?: Date;
+  cacheVersion?: string;
+}) => {
+  const columns = await getCompatibleImportFileExtractionCacheColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const record: Record<string, unknown> = {};
+  if (columns.includes("id")) record.id = crypto.randomUUID();
+  if (columns.includes("workspaceId")) record.workspaceId = params.workspaceId;
+  if (columns.includes("fileFingerprint")) record.fileFingerprint = params.fileFingerprint;
+  if (columns.includes("fileType")) record.fileType = params.fileType;
+  if (columns.includes("importMode")) record.importMode = params.importMode;
+  if (columns.includes("cacheVersion")) record.cacheVersion = params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION;
+  if (columns.includes("extractedText")) record.extractedText = params.extractedText;
+  if (columns.includes("statementFingerprint")) record.statementFingerprint = params.statementFingerprint ?? null;
+  if (columns.includes("statementFamilySignature")) record.statementFamilySignature = params.statementFamilySignature ?? null;
+  if (columns.includes("metadata")) record.metadata = params.metadata ?? null;
+  if (columns.includes("parsedRows")) record.parsedRows = params.parsedRows ?? null;
+  if (columns.includes("pageCount")) record.pageCount = Math.max(0, Number(params.pageCount ?? 0));
+  if (columns.includes("confidence")) record.confidence = Math.max(0, Math.min(100, Number(params.confidence ?? 0)));
+  if (columns.includes("hitCount")) record.hitCount = Math.max(0, Number(params.hitCount ?? 0));
+  if (columns.includes("lastUsedAt")) record.lastUsedAt = params.lastUsedAt ?? new Date();
+  if (columns.includes("createdAt")) record.createdAt = new Date();
+  if (columns.includes("updatedAt")) record.updatedAt = new Date();
+
+  const recordColumns = Object.keys(record);
+  if (recordColumns.length === 0) {
+    return null;
+  }
+
+  try {
+    const jsonColumns = new Set(["metadata", "parsedRows"]);
+    const placeholders = recordColumns
+      .map((column, index) => `$${index + 1}${jsonColumns.has(column) ? "::jsonb" : ""}`)
+      .join(", ");
+    const updateColumns = recordColumns.filter(
+      (column) => !["id", "workspaceId", "fileFingerprint", "fileType", "importMode", "cacheVersion", "createdAt"].includes(column)
+    );
+    const updateClause = updateColumns
+      .map((column) =>
+        column === "parsedRows"
+          ? `"parsedRows" = CASE
+              WHEN jsonb_typeof(EXCLUDED."parsedRows") = 'array'
+                AND jsonb_array_length(EXCLUDED."parsedRows") > 0
+                THEN EXCLUDED."parsedRows"
+              WHEN jsonb_typeof("ImportFileExtractionCache"."parsedRows") = 'array'
+                AND jsonb_array_length("ImportFileExtractionCache"."parsedRows") > 0
+                THEN "ImportFileExtractionCache"."parsedRows"
+              ELSE EXCLUDED."parsedRows"
+            END`
+          : `"${column}" = EXCLUDED."${column}"`
+      )
+      .join(", ");
+
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "ImportFileExtractionCache" (${recordColumns.map((column) => `"${column}"`).join(", ")})
+       VALUES (${placeholders})
+       ON CONFLICT ("workspaceId", "fileFingerprint", "fileType", "importMode", "cacheVersion")
+       DO UPDATE SET ${updateClause || `"updatedAt" = EXCLUDED."updatedAt"`}`,
+      ...recordColumns.map((column) => {
+        const value = record[column] ?? null;
+        return jsonColumns.has(column) && value !== null ? JSON.stringify(value) : value;
+      })
+    );
+
+    return loadImportFileExtractionCache({
+      workspaceId: params.workspaceId,
+      fileFingerprint: params.fileFingerprint,
+      fileType: params.fileType,
+      importMode: params.importMode,
+      cacheVersion: params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "ImportFileExtractionCache") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+const toNullableDecimal = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? new Prisma.Decimal(String(value)) : null;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.replace(/[%,$\s]/g, "").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? new Prisma.Decimal(String(parsed)) : null;
+  }
+
+  return null;
+};
+
+export const getCompatibleMerchantRuleColumns = async () => {
+  const cacheKey = "MerchantRule";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'MerchantRule'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = MERCHANT_RULE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleAccountRuleColumns = async () => {
+  const cacheKey = "AccountRule";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'AccountRule'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = ACCOUNT_RULE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const buildImportFileInsertData = async (params: {
+  id?: string;
+  workspaceId: string;
+  accountId?: string | null;
+  fileName: string;
+  fileType: string;
+  storageKey: string;
+  status?: string;
+  rawExpiresAt?: Date | null;
+  sourceTimezone?: string | null;
+  sourceLocale?: string | null;
+}) => {
+  const columns = new Set(await getCompatibleImportFileColumns());
+  const record: Record<string, unknown> = {};
+
+  if (columns.has("id")) record.id = params.id ?? crypto.randomUUID();
+  if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
+  if (columns.has("accountId")) record.accountId = params.accountId ?? null;
+  if (columns.has("fileName")) record.fileName = params.fileName;
+  if (columns.has("fileType")) record.fileType = params.fileType;
+  if (columns.has("storageKey")) record.storageKey = params.storageKey;
+  if (columns.has("status")) record.status = params.status ?? "processing";
+  if (columns.has("rawExpiresAt")) record.rawExpiresAt = params.rawExpiresAt ?? null;
+  if (columns.has("sourceTimezone")) record.sourceTimezone = params.sourceTimezone ?? null;
+  if (columns.has("sourceLocale")) record.sourceLocale = params.sourceLocale ?? null;
+  if (columns.has("parsedRowsCount")) record.parsedRowsCount = 0;
+  if (columns.has("confirmedTransactionsCount")) record.confirmedTransactionsCount = 0;
+  if (columns.has("confirmedAt")) record.confirmedAt = null;
+  if (columns.has("uploadedAt")) record.uploadedAt = new Date();
+  if (columns.has("deletedAt")) record.deletedAt = null;
+  if (columns.has("createdAt")) record.createdAt = new Date();
+  if (columns.has("updatedAt")) record.updatedAt = new Date();
+
+  return record;
+};
+
+export const insertImportFileCompat = async (params: {
+  id?: string;
+  workspaceId: string;
+  accountId?: string | null;
+  fileName: string;
+  fileType: string;
+  storageKey: string;
+  status?: string;
+  rawExpiresAt?: Date | null;
+  sourceTimezone?: string | null;
+  sourceLocale?: string | null;
+}): Promise<any> => {
+  const record = await buildImportFileInsertData(params);
+  const columns = Object.keys(record);
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const values = columns.map((column) => record[column] ?? null);
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "ImportFile" (${columns.map((column) => `"${column}"`).join(", ")}) VALUES (${placeholders})`,
+    ...values
+  );
+
+  if (typeof record.id === "string") {
+    const inserted = await fetchImportFileCompat(record.id);
+    return inserted ?? record;
+  }
+
+  return record;
+};
+
+export const fetchImportFileCompat = async (importFileId: string): Promise<any | null> => {
+  const columns = await getCompatibleImportFileColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT ${selectColumns} FROM "ImportFile" WHERE "id" = $1 LIMIT 1`,
+    importFileId
+  );
+
+  return rows[0] ?? null;
+};
+
+const IMPORT_STATUS_COLUMNS = [
+  "id",
+  "workspaceId",
+  "status",
+  "processingPhase",
+  "processingMessage",
+  "processingAttempt",
+  "processingTargetScore",
+  "processingCurrentScore",
+  "parsedRowsCount",
+  "confirmedTransactionsCount",
+  "accountId",
+  "updatedAt",
+  "confirmedAt",
+] as const;
+
+export const fetchImportFileStatusCompat = async (importFileId: string): Promise<any | null> => {
+  const compatibleColumns = new Set(await getCompatibleImportFileColumns());
+  const columns = IMPORT_STATUS_COLUMNS.filter((column) => compatibleColumns.has(column));
+  if (!columns.includes("id") || !columns.includes("workspaceId")) {
+    return null;
+  }
+
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT ${columns.map((column) => `"${column}"`).join(", ")} FROM "ImportFile" WHERE "id" = $1 LIMIT 1`,
+    importFileId
+  );
+  return rows[0] ?? null;
+};
+
+export const listImportFilesCompat = async (workspaceId: string): Promise<any[]> => {
+  const columns = await getCompatibleImportFileColumns();
+  if (columns.length === 0) {
+    return [];
+  }
+
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  const orderBy = columns.includes("uploadedAt")
+    ? ' ORDER BY "uploadedAt" DESC'
+    : columns.includes("createdAt")
+      ? ' ORDER BY "createdAt" DESC'
+      : ' ORDER BY "id" DESC';
+
+  return prisma.$queryRawUnsafe<any[]>(
+    `SELECT ${selectColumns} FROM "ImportFile" WHERE "workspaceId" = $1${orderBy}`,
+    workspaceId
+  );
+};
+
+/** Small read-only list for native upload history; never starts recovery jobs. */
+export const listImportFileSummariesCompat = async (workspaceId: string) => {
+  const columns = await getCompatibleImportFileColumns();
+  const fields = ["id", "fileName", "status", "createdAt", "uploadedAt", "processingMessage"]
+    .filter(field => columns.includes(field));
+  if (!fields.includes("id")) return [];
+  const order = columns.includes("uploadedAt") ? "uploadedAt" : columns.includes("createdAt") ? "createdAt" : "id";
+  return prisma.$queryRawUnsafe<any[]>(
+    `SELECT ${fields.map(field => `"${field}"`).join(", ")} FROM "ImportFile" WHERE "workspaceId" = $1 ORDER BY "${order}" DESC, "id" DESC LIMIT 10`, workspaceId);
+};
+
+export const listAllImportFilesCompat = async (limit?: number): Promise<any[]> => {
+  const columns = await getCompatibleImportFileColumns();
+  if (columns.length === 0) {
+    return [];
+  }
+
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  const orderBy = columns.includes("uploadedAt")
+    ? ' ORDER BY "uploadedAt" DESC'
+    : columns.includes("createdAt")
+      ? ' ORDER BY "createdAt" DESC'
+      : ' ORDER BY "id" DESC';
+  const limitClause = Number.isFinite(limit ?? NaN) ? ` LIMIT ${Math.max(1, Number(limit))}` : "";
+
+  return prisma.$queryRawUnsafe<any[]>(`SELECT ${selectColumns} FROM "ImportFile"${orderBy}${limitClause}`);
+};
+
+export const updateImportFileCompat = async (
+  importFileId: string,
+  data: Partial<Record<string, unknown>>,
+  options: { fetchUpdated?: boolean; progressOnly?: boolean } = {}
+): Promise<any | null> => {
+  const columns = new Set(await getCompatibleImportFileColumns());
+  const entries = Object.entries(data).filter(([key, value]) => columns.has(key) && value !== undefined);
+  if (columns.has("updatedAt")) {
+    entries.push(["updatedAt", new Date()]);
+  }
+
+  if (entries.length > 0) {
+    const setClause = entries.map(([key], index) => `"${key}" = $${index + 1}`).join(", ");
+    const values = entries.map(([, value]) => value);
+    // Cosmetic writes can finish after confirmation, a refusal, or a user
+    // control. Check the persisted state atomically, rather than a stale read.
+    const progressGuard = options.progressOnly
+      ? `${columns.has("status") ? ` AND "status" <> 'done'` : ""}${columns.has("processingPhase") ? ` AND ("processingPhase" IS NULL OR "processingPhase" NOT IN ('source_review_required', 'receipt_review_required', 'password_required', 'account_match_needs_confirmation', 'pause_requested', 'paused', 'cancel_requested', 'cancelled'))` : ""}`
+      : "";
+    if (options.fetchUpdated === false) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "ImportFile" SET ${setClause} WHERE "id" = $${entries.length + 1}${progressGuard}`,
+        ...values,
+        importFileId
+      );
+      return null;
+    }
+
+    const selectColumns = [...columns].map((column) => `"${column}"`).join(", ");
+    const updatedRows = await prisma.$queryRawUnsafe<any[]>(
+      `UPDATE "ImportFile" SET ${setClause} WHERE "id" = $${entries.length + 1}${progressGuard} RETURNING ${selectColumns}`,
+      ...values,
+      importFileId
+    );
+    return updatedRows[0] ?? null;
+  }
+
+  return options.fetchUpdated === false ? null : fetchImportFileCompat(importFileId);
+};
+
+export const upsertDocumentImportCompat = async (params: {
+  workspaceId: string;
+  importFileId?: string | null;
+  accountId?: string | null;
+  documentFamily: string;
+  documentSubtype?: string | null;
+  institution?: string | null;
+  accountName?: string | null;
+  accountNumber?: string | null;
+  currency?: string | null;
+  pageCount?: number;
+  confidence?: number;
+  sourceMetadata?: Prisma.InputJsonValue | null;
+  rawPayload?: Prisma.InputJsonValue | null;
+  extractedPayload?: Prisma.InputJsonValue | null;
+}) => {
+  if (!(await hasCompatibleTable("DocumentImport")) || !params.importFileId) {
+    return null;
+  }
+
+  try {
+    return await prisma.documentImport.upsert({
+      where: {
+        importFileId: params.importFileId,
+      },
+      update: {
+        workspaceId: params.workspaceId,
+        accountId: params.accountId ?? null,
+        documentFamily: params.documentFamily,
+        documentSubtype: params.documentSubtype ?? null,
+        institution: params.institution ?? null,
+        accountName: params.accountName ?? null,
+        accountNumber: params.accountNumber ?? null,
+        currency: params.currency ?? "PHP",
+        pageCount: params.pageCount ?? 0,
+        confidence: params.confidence ?? 0,
+        sourceMetadata: params.sourceMetadata ?? undefined,
+        rawPayload: params.rawPayload ?? undefined,
+        extractedPayload: params.extractedPayload ?? undefined,
+      },
+      create: {
+        workspaceId: params.workspaceId,
+        importFileId: params.importFileId,
+        accountId: params.accountId ?? null,
+        documentFamily: params.documentFamily,
+        documentSubtype: params.documentSubtype ?? null,
+        institution: params.institution ?? null,
+        accountName: params.accountName ?? null,
+        accountNumber: params.accountNumber ?? null,
+        currency: params.currency ?? "PHP",
+        pageCount: params.pageCount ?? 0,
+        confidence: params.confidence ?? 0,
+        sourceMetadata: params.sourceMetadata ?? undefined,
+        rawPayload: params.rawPayload ?? undefined,
+        extractedPayload: params.extractedPayload ?? undefined,
+      },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "DocumentImport") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const replaceDocumentImportPagesCompat = async (params: {
+  documentImportId?: string | null;
+  pages: Array<{
+    pageNumber: number;
+    imageName?: string | null;
+    pageType?: string | null;
+    visibleTitle?: string | null;
+    visibleDate?: string | null;
+    visibleCurrency?: string | null;
+    rawOcrText?: string | null;
+    layoutNotes?: string | null;
+    confidence?: number;
+    rawPayload?: Prisma.InputJsonValue | null;
+  }>;
+}) => {
+  if (!(await hasCompatibleTable("DocumentImportPage")) || !params.documentImportId) {
+    return null;
+  }
+
+  try {
+    await prisma.documentImportPage.deleteMany({
+      where: { documentImportId: params.documentImportId },
+    });
+
+    if (params.pages.length > 0) {
+      await prisma.documentImportPage.createMany({
+        data: params.pages.map((page) => ({
+          documentImportId: params.documentImportId as string,
+          pageNumber: page.pageNumber,
+          imageName: page.imageName ?? null,
+          pageType: page.pageType ?? null,
+          visibleTitle: page.visibleTitle ?? null,
+          visibleDate: page.visibleDate ?? null,
+          visibleCurrency: page.visibleCurrency ?? null,
+          rawOcrText: page.rawOcrText ?? null,
+          layoutNotes: page.layoutNotes ?? null,
+          confidence: page.confidence ?? 0,
+          rawPayload: page.rawPayload ?? undefined,
+        })),
+      });
+    }
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "DocumentImportPage") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const upsertReceiptDocumentCompat = async (params: {
+  workspaceId: string;
+  documentImportId?: string | null;
+  accountId?: string | null;
+  transactionId?: string | null;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  transactionDate?: Date | null;
+  transactionTime?: string | null;
+  currency?: string | null;
+  subtotal?: string | number | null;
+  tax?: string | number | null;
+  total?: string | number | null;
+  paymentMethod?: string | null;
+  accountMatch?: Prisma.InputJsonValue | null;
+  confidence?: number;
+  rawPayload?: Prisma.InputJsonValue | null;
+}) => {
+  if (!(await hasCompatibleTable("ReceiptDocument")) || !params.documentImportId) {
+    return null;
+  }
+
+  try {
+    return await prisma.receiptDocument.upsert({
+      where: { documentImportId: params.documentImportId },
+      update: {
+        workspaceId: params.workspaceId,
+        accountId: params.accountId ?? null,
+        transactionId: params.transactionId ?? null,
+        merchantRaw: params.merchantRaw ?? null,
+        merchantClean: params.merchantClean ?? null,
+        transactionDate: params.transactionDate ?? null,
+        transactionTime: params.transactionTime ?? null,
+        currency: params.currency ?? "PHP",
+        subtotal: toNullableDecimal(params.subtotal),
+        tax: toNullableDecimal(params.tax),
+        total: toNullableDecimal(params.total),
+        paymentMethod: params.paymentMethod ?? null,
+        accountMatch: params.accountMatch ?? undefined,
+        confidence: params.confidence ?? 0,
+        rawPayload: params.rawPayload ?? undefined,
+      },
+      create: {
+        workspaceId: params.workspaceId,
+        documentImportId: params.documentImportId,
+        accountId: params.accountId ?? null,
+        transactionId: params.transactionId ?? null,
+        merchantRaw: params.merchantRaw ?? null,
+        merchantClean: params.merchantClean ?? null,
+        transactionDate: params.transactionDate ?? null,
+        transactionTime: params.transactionTime ?? null,
+        currency: params.currency ?? "PHP",
+        subtotal: toNullableDecimal(params.subtotal),
+        tax: toNullableDecimal(params.tax),
+        total: toNullableDecimal(params.total),
+        paymentMethod: params.paymentMethod ?? null,
+        accountMatch: params.accountMatch ?? undefined,
+        confidence: params.confidence ?? 0,
+        rawPayload: params.rawPayload ?? undefined,
+      },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "ReceiptDocument") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const upsertInvestmentSnapshotCompat = async (params: {
+  workspaceId: string;
+  documentImportId?: string | null;
+  accountId?: string | null;
+  snapshotDate?: Date | null;
+  portfolioName?: string | null;
+  currency?: string | null;
+  totalValue?: string | number | null;
+  costBasis?: string | number | null;
+  gainLossValue?: string | number | null;
+  gainLossPercent?: string | number | null;
+  confidence?: number;
+  rawPayload?: Prisma.InputJsonValue | null;
+}) => {
+  if (!(await hasCompatibleTable("InvestmentSnapshot")) || !params.documentImportId) {
+    return null;
+  }
+
+  try {
+    return await prisma.investmentSnapshot.upsert({
+      where: { documentImportId: params.documentImportId },
+      update: {
+        workspaceId: params.workspaceId,
+        accountId: params.accountId ?? null,
+        snapshotDate: params.snapshotDate ?? null,
+        portfolioName: params.portfolioName ?? null,
+        currency: params.currency ?? "PHP",
+        totalValue: toNullableDecimal(params.totalValue),
+        costBasis: toNullableDecimal(params.costBasis),
+        gainLossValue: toNullableDecimal(params.gainLossValue),
+        gainLossPercent: toNullableDecimal(params.gainLossPercent),
+        confidence: params.confidence ?? 0,
+        rawPayload: params.rawPayload ?? undefined,
+      },
+      create: {
+        workspaceId: params.workspaceId,
+        documentImportId: params.documentImportId,
+        accountId: params.accountId ?? null,
+        snapshotDate: params.snapshotDate ?? null,
+        portfolioName: params.portfolioName ?? null,
+        currency: params.currency ?? "PHP",
+        totalValue: toNullableDecimal(params.totalValue),
+        costBasis: toNullableDecimal(params.costBasis),
+        gainLossValue: toNullableDecimal(params.gainLossValue),
+        gainLossPercent: toNullableDecimal(params.gainLossPercent),
+        confidence: params.confidence ?? 0,
+        rawPayload: params.rawPayload ?? undefined,
+      },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "InvestmentSnapshot") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const replaceInvestmentHoldingsCompat = async (params: {
+  workspaceId: string;
+  investmentSnapshotId?: string | null;
+  documentImportId?: string | null;
+  accountId?: string | null;
+  holdings: Array<{
+    rowIndex?: number | null;
+    assetName: string;
+    assetSymbol?: string | null;
+    assetType?: string | null;
+    quantity?: string | number | null;
+    unitPrice?: string | number | null;
+    costBasis?: string | number | null;
+    marketValue?: string | number | null;
+    currentValue?: string | number | null;
+    gainLossValue?: string | number | null;
+    gainLossPercent?: string | number | null;
+    currency?: string | null;
+    status?: string | null;
+    confidence?: number;
+    rawPayload?: Prisma.InputJsonValue | null;
+  }>;
+}) => {
+  if (!(await hasCompatibleTable("InvestmentHolding")) || !params.investmentSnapshotId) {
+    return null;
+  }
+
+  try {
+    await prisma.investmentHolding.deleteMany({
+      where: { investmentSnapshotId: params.investmentSnapshotId },
+    });
+
+    if (params.holdings.length > 0) {
+      await prisma.investmentHolding.createMany({
+        data: params.holdings.map((holding, index) => ({
+          workspaceId: params.workspaceId,
+          investmentSnapshotId: params.investmentSnapshotId as string,
+          documentImportId: params.documentImportId ?? null,
+          accountId: params.accountId ?? null,
+          rowIndex: holding.rowIndex ?? index + 1,
+          assetName: holding.assetName,
+          assetSymbol: holding.assetSymbol ?? null,
+          assetType: holding.assetType ?? null,
+          quantity: toNullableDecimal(holding.quantity),
+          unitPrice: toNullableDecimal(holding.unitPrice),
+          costBasis: toNullableDecimal(holding.costBasis),
+          marketValue: toNullableDecimal(holding.marketValue),
+          currentValue: toNullableDecimal(holding.currentValue),
+          gainLossValue: toNullableDecimal(holding.gainLossValue),
+          gainLossPercent: toNullableDecimal(holding.gainLossPercent),
+          currency: holding.currency ?? "PHP",
+          status: holding.status ?? null,
+          confidence: holding.confidence ?? 0,
+          rawPayload: holding.rawPayload ?? undefined,
+        })),
+      });
+    }
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "InvestmentHolding") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const replaceRecurringPatternsCompat = async (params: {
+  workspaceId: string;
+  documentImportId?: string | null;
+  accountId?: string | null;
+  patterns: Array<{
+    merchantRaw: string;
+    merchantClean?: string | null;
+    amount?: string | number | null;
+    currency?: string | null;
+    frequency?: string | null;
+    firstSeenDate?: Date | null;
+    lastSeenDate?: Date | null;
+    nextExpectedDate?: Date | null;
+    transactionCount?: number;
+    confidence?: number;
+    rawPayload?: Prisma.InputJsonValue | null;
+  }>;
+}) => {
+  if (!(await hasCompatibleTable("RecurringPattern")) || !params.documentImportId) {
+    return null;
+  }
+
+  try {
+    await prisma.recurringPattern.deleteMany({
+      where: { documentImportId: params.documentImportId },
+    });
+
+    if (params.patterns.length > 0) {
+      await prisma.recurringPattern.createMany({
+        data: params.patterns.map((pattern) => ({
+          workspaceId: params.workspaceId,
+          documentImportId: params.documentImportId as string,
+          accountId: params.accountId ?? null,
+          merchantRaw: pattern.merchantRaw,
+          merchantClean: pattern.merchantClean ?? null,
+          amount: toNullableDecimal(pattern.amount),
+          currency: pattern.currency ?? "PHP",
+          frequency: (pattern.frequency ?? null) as any,
+          firstSeenDate: pattern.firstSeenDate ?? null,
+          lastSeenDate: pattern.lastSeenDate ?? null,
+          nextExpectedDate: pattern.nextExpectedDate ?? null,
+          transactionCount: pattern.transactionCount ?? 1,
+          confidence: pattern.confidence ?? 0,
+          rawPayload: pattern.rawPayload ?? undefined,
+        })),
+      });
+    }
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "RecurringPattern") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const deleteTransactionsByImportFileCompat = async (importFileId: string) => {
+  const columns = new Set(await getCompatibleTransactionColumns());
+  if (!columns.has("importFileId")) {
+    return;
+  }
+
+  await prisma.$executeRawUnsafe(`DELETE FROM "Transaction" WHERE "importFileId" = $1`, importFileId);
+};
+
+export const countTransactionsByImportFileCompat = async (importFileId: string) => {
+  const columns = new Set(await getCompatibleTransactionColumns());
+  if (!columns.has("importFileId")) {
+    return 0;
+  }
+
+  const directCount = await prisma.transaction.count({
+    where: { importFileId, deletedAt: null },
+  });
+  if (directCount > 0) {
+    return directCount;
+  }
+
+  // Older imports stored the relationship only in rawPayload. Keep that
+  // compatibility path off the indexed hot path used by current imports.
+  const result = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+    `
+      SELECT COUNT(*)::bigint AS count
+      FROM "Transaction"
+      WHERE "deletedAt" IS NULL
+        AND "rawPayload" IS NOT NULL
+        AND "rawPayload"::jsonb->>'sourceImportFileId' = $1
+    `,
+    importFileId
+  );
+  return Number(result[0]?.count ?? 0n);
+};
+
+type TransactionInsertParams = {
+  workspaceId: string;
+  accountId: string;
+  importFileId?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  reviewStatus?: string;
+  reviewPriority?: string;
+  reviewReasons?: Prisma.InputJsonValue | null;
+  parserConfidence?: number;
+  categoryConfidence?: number;
+  accountMatchConfidence?: number;
+  duplicateConfidence?: number;
+  transferConfidence?: number;
+  rawPayload?: Prisma.InputJsonValue | null;
+  normalizedPayload?: Prisma.InputJsonValue | null;
+  learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
+  sourceRowKey?: string | null;
+  date: Date;
+  amount: string | number;
+  currency: string;
+  type: TransactionType;
+  merchantRaw: string;
+  merchantClean?: string | null;
+  description?: string | null;
+  isTransfer?: boolean;
+  isExcluded?: boolean;
+};
+
+const buildTransactionInsertRecord = async (params: TransactionInsertParams, columns?: Set<string>) => {
+  const columnSet = columns ?? new Set(await getCompatibleTransactionColumns());
+  const record: Record<string, unknown> = {};
+  const amount = parseAmountValue(typeof params.amount === "number" ? String(params.amount) : params.amount ?? null);
+
+  if (amount === null) {
+    throw new Error("Invalid transaction amount.");
+  }
+
+  if (columnSet.has("id")) record.id = crypto.randomUUID();
+  if (columnSet.has("workspaceId")) record.workspaceId = params.workspaceId;
+  if (columnSet.has("accountId")) record.accountId = params.accountId;
+  if (columnSet.has("importFileId") && params.importFileId !== undefined) record.importFileId = params.importFileId ?? null;
+  if (columnSet.has("categoryId")) record.categoryId = params.categoryId ?? null;
+  if (columnSet.has("categoryName")) record.categoryName = params.categoryName ?? null;
+  if (columnSet.has("reviewStatus")) record.reviewStatus = params.reviewStatus ?? "suggested";
+  if (columnSet.has("reviewPriority")) record.reviewPriority = params.reviewPriority ?? "none";
+  if (columnSet.has("reviewReasons")) record.reviewReasons = params.reviewReasons ?? null;
+  if (columnSet.has("parserConfidence")) record.parserConfidence = params.parserConfidence ?? 0;
+  if (columnSet.has("categoryConfidence")) record.categoryConfidence = params.categoryConfidence ?? 0;
+  if (columnSet.has("accountMatchConfidence")) record.accountMatchConfidence = params.accountMatchConfidence ?? 0;
+  if (columnSet.has("duplicateConfidence")) record.duplicateConfidence = params.duplicateConfidence ?? 0;
+  if (columnSet.has("transferConfidence")) record.transferConfidence = params.transferConfidence ?? 0;
+  if (columnSet.has("rawPayload")) record.rawPayload = params.rawPayload ?? null;
+  if (columnSet.has("normalizedPayload")) {
+    const existingNormalizedPayload =
+      params.normalizedPayload && typeof params.normalizedPayload === "object" && !Array.isArray(params.normalizedPayload)
+        ? (params.normalizedPayload as Record<string, unknown>)
+        : {};
+    const existingContext =
+      existingNormalizedPayload.context &&
+      typeof existingNormalizedPayload.context === "object" &&
+      !Array.isArray(existingNormalizedPayload.context)
+        ? existingNormalizedPayload.context
+        : null;
+    // Parsed-row staging already records the context used for normalization.
+    // Reuse that audited result during confirmation instead of rescanning the
+    // full context corpus for every row in a large statement or workbook.
+    const context =
+      existingContext ??
+      resolveTransactionContext({
+        merchantRaw: params.merchantRaw,
+        merchantClean: params.merchantClean,
+        description: params.description,
+        currency: params.currency,
+      });
+    record.normalizedPayload = {
+      ...existingNormalizedPayload,
+      context,
+    } as Prisma.InputJsonValue;
+  }
+  if (columnSet.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = params.learnedRuleIdsApplied ?? null;
+  if (columnSet.has("sourceRowKey")) record.sourceRowKey = params.sourceRowKey ?? null;
+  if (columnSet.has("date")) record.date = params.date;
+  if (columnSet.has("amount")) record.amount = amount;
+  if (columnSet.has("currency")) record.currency = params.currency;
+  if (columnSet.has("type")) record.type = params.type;
+  if (columnSet.has("merchantRaw")) record.merchantRaw = params.merchantRaw;
+  if (columnSet.has("merchantClean")) record.merchantClean = params.merchantClean ?? null;
+  if (columnSet.has("description")) record.description = params.description ?? null;
+  if (columnSet.has("isTransfer")) record.isTransfer = params.isTransfer ?? false;
+  if (columnSet.has("isExcluded")) record.isExcluded = params.isExcluded ?? false;
+  if (columnSet.has("deletedAt")) record.deletedAt = null;
+  if (columnSet.has("createdAt")) record.createdAt = new Date();
+  if (columnSet.has("updatedAt")) record.updatedAt = new Date();
+
+  return {
+    record,
+    amount,
+  };
+};
+
+export const insertTransactionCompat = async (params: TransactionInsertParams, db: Pick<Prisma.TransactionClient, "$executeRawUnsafe"> = prisma) => {
+  const columns = new Set(await getCompatibleTransactionColumns());
+  const { record } = await buildTransactionInsertRecord(params, columns);
+  const keys = Object.keys(record);
+  if (keys.length === 0) {
+    return null;
+  }
+
+  // pg treats JavaScript arrays as PostgreSQL arrays. Serialize JSON fields
+  // explicitly so non-empty rule/review arrays retain their JSON shape.
+  const jsonColumns = new Set(["rawPayload", "normalizedPayload", "learnedRuleIdsApplied", "reviewReasons"]);
+  const values = keys.map(key => {
+    const value = record[key] ?? null;
+    return jsonColumns.has(key) && value !== null ? JSON.stringify(value) : value;
+  });
+  const placeholders = keys.map((key, index) => `$${index + 1}${jsonColumns.has(key) ? "::jsonb" : ""}`).join(", ");
+  await db.$executeRawUnsafe(
+    `INSERT INTO "Transaction" (${keys.map((key) => `"${key}"`).join(", ")}) VALUES (${placeholders})`,
+    ...values
+  );
+
+  return record;
+};
+
+export const insertTransactionManyCompat = async (params: {
+  records: Record<string, unknown>[];
+}) => {
+  if (params.records.length === 0) {
+    return [];
+  }
+
+  await prisma.transaction.createMany({
+    data: params.records as Prisma.TransactionCreateManyInput[],
+  });
+
+  return params.records;
+};
+
+export const resolveParsedTransactionCategoryName = (params: {
+  categoryName?: string | null;
+  type?: TransactionType | null;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+  rawPayload?: unknown;
+}) => {
+  if (readAppMigration(params.rawPayload) && params.categoryName?.trim()) return params.categoryName.trim();
+  const categoryName =
+    mapImportedCategoryToCloverCategory(params.categoryName, params.type ?? "expense") ||
+    defaultCategoryForType(params.type ?? "expense");
+  // Parsed notes can be assigned a generic shopping/bills category by the
+  // vision model even when their title or itemized evidence is clearly food.
+  // This path is used only while creating unconfirmed parsed rows; confirmed
+  // user categories are never reclassified here.
+  if (categoryName !== "Bills & Utilities" && categoryName !== "Shopping") {
+    return categoryName;
+  }
+
+  const rawPayload =
+    params.rawPayload && typeof params.rawPayload === "object" && !Array.isArray(params.rawPayload)
+      ? (params.rawPayload as Record<string, unknown>)
+      : null;
+  const evidence = [
+    params.merchantRaw,
+    params.merchantClean,
+    params.description,
+    typeof rawPayload?.notes === "string" ? rawPayload.notes : null,
+    typeof rawPayload?.sourceLine === "string" ? rawPayload.sourceLine : null,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+  const evidenceCategory = evidence ? guessCategoryFallback(evidence, params.type ?? "expense") : null;
+
+  // OpenAI can label an informal food note as a generic bill or shopping item
+  // when the note uses broad wording. Specific food evidence in the title,
+  // note, or parsed line text is stronger and should win before confirmation.
+  return evidenceCategory === "Food & Dining" ? evidenceCategory : categoryName;
+};
+
+export const buildParsedTransactionInsertData = async (params: {
+  importFileId: string;
+  workspaceId: string;
+  rows: EnrichedParsedImportRow[];
+  metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  statementFingerprint: string;
+}) => {
+  const columns = new Set(await getCompatibleParsedTransactionColumns());
+  const hasStructuredWorkbookRows = params.rows.some((row) => {
+    const payload = row.rawPayload;
+    return (
+      payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload) &&
+      (typeof (payload as Record<string, unknown>).worksheetName === "string" || Boolean(readAppMigration(payload)))
+    );
+  });
+  // Travel inference performs corpus matching per transaction. A workbook can
+  // contain hundreds of historical rows and already provides deterministic
+  // worksheet/table context, so defer travel inference rather than blocking
+  // the visible-row audit write.
+  const travelEpisodes = hasStructuredWorkbookRows
+    ? new Map<number, ReturnType<typeof deriveTravelEpisodes> extends Map<number, infer T> ? T : never>()
+    : deriveTravelEpisodes(
+        params.rows.map((row) => ({
+          date: row.date,
+          merchantRaw: row.merchantRaw,
+          merchantClean: row.merchantClean,
+          description: row.description,
+          currency: row.currency,
+        }))
+      );
+  const structuredWorkbookContextCache = new Map<string, ReturnType<typeof resolveTransactionContext>>();
+
+  return params.rows.flatMap((row, index) => {
+    const amount = parseAmountValue(row.amount ?? null);
+    if (amount === null) {
+      return [];
+    }
+    const rowRawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const isStructuredWorkbookRow = typeof rowRawPayload?.worksheetName === "string" || Boolean(readAppMigration(rowRawPayload));
+    const currency = readAppMigration(row.rawPayload) && row.currency ? row.currency :
+      normalizeInstitutionCurrency(
+        params.metadata.institution,
+        row.currency ?? params.metadata.currency ?? "PHP",
+        row.accountName ?? params.metadata.accountName ?? null
+      ) ?? "PHP";
+    const categoryName = resolveParsedTransactionCategoryName({
+      categoryName: row.categoryName,
+      type: row.type ?? "expense",
+      merchantRaw: row.merchantRaw,
+      merchantClean: row.merchantClean,
+      description: row.description,
+      rawPayload: row.rawPayload,
+    });
+
+    const record: Record<string, unknown> = {};
+    if (columns.has("id")) record.id = crypto.randomUUID();
+    if (columns.has("importFileId")) record.importFileId = params.importFileId;
+    if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
+    if (columns.has("institution")) record.institution = row.institution ?? params.metadata.institution;
+    if (columns.has("accountNumber")) {
+      record.accountNumber = isStructuredWorkbookRow
+        ? row.accountNumber ??
+          (typeof rowRawPayload?.accountNumber === "string" ? rowRawPayload.accountNumber : null)
+        : row.accountNumber ?? params.metadata.accountNumber;
+    }
+    if (columns.has("accountName")) record.accountName = row.accountName ?? null;
+    if (columns.has("date")) record.date = readGrabReceiptTimestamp(row.rawPayload) ?? readGcashBillsPaymentTimestamp(row.rawPayload) ?? readGcashWalletHistoryTimestamp(row.rawPayload) ?? parseDateValue(row.date ?? null);
+    if (columns.has("amount")) record.amount = amount;
+    if (columns.has("currency")) record.currency = currency;
+    if (columns.has("merchantRaw")) record.merchantRaw = row.merchantRaw ?? null;
+    if (columns.has("merchantClean")) record.merchantClean = row.merchantClean ?? row.merchantRaw ?? null;
+    if (columns.has("type")) record.type = row.type ?? "expense";
+    if (columns.has("categoryName")) record.categoryName = categoryName;
+    if (columns.has("confidence")) record.confidence = row.confidence ?? 0;
+    if (columns.has("categoryReason")) record.categoryReason = row.categoryReason ?? null;
+    if (columns.has("parserVersion")) record.parserVersion = row.parserVersion ?? DATA_ENGINE_VERSION;
+    if (columns.has("statementFingerprint")) record.statementFingerprint = params.statementFingerprint;
+    if (columns.has("rawPayload")) {
+      record.rawPayload = {
+        ...(row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Record<string, unknown>)
+          : {}),
+        sourceCategoryName: typeof row.categoryName === "string" ? row.categoryName.trim() || null : null,
+        normalizedCategoryName: categoryName,
+        sourceRowIndex: index + 1,
+      } as Prisma.InputJsonValue;
+    }
+    if (columns.has("reviewStatus")) record.reviewStatus = row.reviewStatus ?? "suggested";
+    if (columns.has("parserConfidence")) record.parserConfidence = row.parserConfidence ?? row.confidence ?? 0;
+    if (columns.has("categoryConfidence")) record.categoryConfidence = row.categoryConfidence ?? row.confidence ?? 0;
+    if (columns.has("accountMatchConfidence")) record.accountMatchConfidence = row.accountMatchConfidence ?? 0;
+    if (columns.has("duplicateConfidence")) record.duplicateConfidence = row.duplicateConfidence ?? 0;
+    if (columns.has("transferConfidence")) record.transferConfidence = row.transferConfidence ?? 0;
+    if (columns.has("normalizedPayload")) {
+      const context = isStructuredWorkbookRow
+        ? (() => {
+            const key = [
+              params.metadata.institution ?? "",
+              row.accountName ?? params.metadata.accountName ?? "",
+              currency,
+            ].join(":");
+            const cached = structuredWorkbookContextCache.get(key);
+            if (cached) return cached;
+            const resolved = resolveTransactionContext({
+              institution: params.metadata.institution,
+              accountName: row.accountName ?? params.metadata.accountName,
+              currency,
+            });
+            structuredWorkbookContextCache.set(key, resolved);
+            return resolved;
+          })()
+        : resolveTransactionContext({
+            institution: params.metadata.institution,
+            accountName: row.accountName ?? params.metadata.accountName,
+            merchantRaw: row.merchantRaw,
+            merchantClean: row.merchantClean,
+            description: row.description,
+            currency,
+          });
+      const travelEpisode = travelEpisodes.get(index);
+      const existingNormalizedPayload =
+        row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
+          ? (row.normalizedPayload as Record<string, unknown>)
+          : {};
+      record.normalizedPayload = {
+        ...existingNormalizedPayload,
+        context: travelEpisode ? { ...context, travelEpisode } : context,
+      } as Prisma.InputJsonValue;
+    }
+    if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = (row.learnedRuleIdsApplied ?? null) as Prisma.InputJsonValue | null;
+    if (columns.has("createdAt")) record.createdAt = new Date();
+    return [record];
+  });
+};
+
+export const insertParsedTransactionsCompat = async (params: {
+  rows: Array<Record<string, unknown>>;
+  columns: readonly string[];
+  tx: Prisma.TransactionClient;
+}) => {
+  const { rows, columns, tx } = params;
+  if (!columns.length) return;
+  // Leave headroom under PostgreSQL's bind limit. All batches belong to
+  // the caller's transaction, including replacement and count publication.
+  const batchSize = Math.max(1, Math.floor(10_000 / columns.length));
+  const names = columns.map(column => `"${column}"`).join(", ");
+  for (let offset = 0; offset < rows.length; offset += batchSize) {
+    const values: unknown[] = [];
+    const tuples = rows.slice(offset, offset + batchSize).map(row => {
+      const placeholders = columns.map(column => {
+        values.push(row[column] ?? null);
+        return `$${values.length}`;
+      });
+      return `(${placeholders.join(", ")})`;
+    });
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "ParsedTransaction" (${names}) VALUES ${tuples.join(", ")}`,
+      ...values,
+    );
+  }
+};
+
+export const fetchParsedTransactionRows = async (importFileId: string) => {
+  const columns = await getCompatibleParsedTransactionColumns();
+  if (columns.length === 0) {
+    return [];
+  }
+
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  const orderByParts: string[] = [];
+  if (columns.includes("rawPayload")) {
+    orderByParts.push(
+      `CASE
+        WHEN "rawPayload" IS NOT NULL
+          AND jsonb_typeof("rawPayload"::jsonb) = 'object'
+          AND ("rawPayload"::jsonb ? 'sourceRowIndex')
+          AND ("rawPayload"::jsonb->>'sourceRowIndex') ~ '^[0-9]+$'
+        THEN ("rawPayload"::jsonb->>'sourceRowIndex')::integer
+        ELSE NULL
+      END ASC NULLS LAST`
+    );
+  }
+  if (columns.includes("createdAt")) {
+    orderByParts.push('"createdAt" ASC');
+  }
+  if (columns.includes("id")) {
+    orderByParts.push('"id" ASC');
+  }
+  const orderBy = orderByParts.length > 0 ? ` ORDER BY ${orderByParts.join(", ")}` : "";
+  return prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT ${selectColumns} FROM "ParsedTransaction" WHERE "importFileId" = $1${orderBy}`,
+    importFileId
+  );
+};
+
+export const countParsedTransactionRows = async (importFileId: string) => {
+  const result = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+    `SELECT COUNT(*)::bigint AS count FROM "ParsedTransaction" WHERE "importFileId" = $1`,
+    importFileId
+  );
+  return Number(result[0]?.count ?? 0n);
+};
+
+export type LearningRetrievalRow = Pick<ParsedImportRow, "merchantRaw" | "merchantClean" | "description" | "institution" | "accountName">;
+
+const learningRetrievalQuery = (rows: LearningRetrievalRow[]) => {
+  const keys = new Set<string>();
+  const tokens = new Set<string>();
+  for (const row of rows) {
+    for (const text of [row.merchantRaw, row.merchantClean, row.description].filter((text): text is string => Boolean(text))) {
+      const candidates = buildMerchantClassificationCandidates(text, summarizeMerchantText(text), row.institution ?? null);
+      for (const value of [text, ...candidates, buildMerchantFamilySignature(text)]) {
+        const key = normalizeMerchantText(value);
+        if (key) keys.add(key);
+      }
+      for (const token of tokenizeMerchant(text)) if (token.length >= 3 || /[^a-z0-9]/i.test(token)) tokens.add(token);
+    }
+  }
+  return { keys: [...keys], tokens: [...tokens] };
+};
+const mergeLearningRows = <T extends { merchantKey: string }>(...groups: T[][]): T[] =>
+  [...new Map(groups.flat().map(row => [row.merchantKey, row])).values()];
+
+export const loadMerchantRules = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {
+  let rules: Array<{
+    merchantKey: string;
+    merchantPattern: string | null;
+    normalizedName: string;
+    categoryId: string | null;
+    categoryName: string | null;
+    source: string;
+    status: string;
+    version: number;
+    confidence: number;
+    timesConfirmed: number;
+    category: { name: string } | null;
+  }> = [];
+
+  try {
+    const query = learningRetrievalQuery(rows);
+    const base = await prisma.merchantRule.findMany({
+      where: { workspaceId, status: "active" }, include: { category: true },
+      orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }, { id: "asc" }], take: 500,
+    });
+    rules = base;
+    // Exact keys have no age/popularity cutoff. Chunk parameters, never input rows.
+    for (let offset = 0; offset < query.keys.length; offset += 200) {
+      const exact = await prisma.merchantRule.findMany({ where: { workspaceId, status: "active", merchantKey: { in: query.keys.slice(offset, offset + 200) } }, include: { category: true } });
+      rules = mergeLearningRows(rules, exact);
+    }
+    // Keep fuzzy work bounded, but search the full Profile before limiting results.
+    for (let offset = 0; offset < query.tokens.length; offset += 40) {
+      const relevant = await prisma.merchantRule.findMany({
+        where: { workspaceId, status: "active", OR: query.tokens.slice(offset, offset + 40).map(token => ({ merchantKey: { contains: token } })) },
+        include: { category: true }, orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }, { id: "asc" }], take: 100,
+      });
+      rules = mergeLearningRows(rules, relevant);
+    }
+  } catch (error) {
+    if (!isMissingDatabaseRelationError(error, "MerchantRule")) {
+      throw error;
+    }
+  }
+
+  return rules.map((rule) => ({
+    merchantKey: rule.merchantKey,
+    merchantPattern: rule.merchantPattern,
+    normalizedName: rule.normalizedName,
+    categoryId: rule.categoryId,
+    categoryName: rule.category?.name ?? rule.categoryName ?? null,
+    source: rule.source,
+    status: rule.status,
+    version: rule.version,
+    confidence: rule.confidence,
+    timesConfirmed: rule.timesConfirmed,
+  }));
+};
+
+// Only explicit, high-confidence corrections may replace labels on the new
+// transaction's confirmation path. Keep parsed evidence and financial identity
+// untouched; fuzzy/automatic suggestions remain in the existing review path.
+export const loadConfirmedImportLabels = async (workspaceId: string, rows: Array<Record<string, unknown>>) => {
+  const result = new Map<number, {
+    merchantClean: string; categoryId: string | null; categoryName: string | null;
+    confidence: number; ruleId: string; source: string; reason: string;
+  }>();
+  if (rows.every(row => readAppMigration(row.rawPayload))) return result;
+  const query = rows.map(row => ({
+    merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : undefined,
+    merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : undefined,
+    institution: typeof row.institution === "string" ? row.institution : undefined,
+  }));
+  const rules = (await loadMerchantRules(workspaceId, query)).filter(rule =>
+    /^manual(?:_|$)/.test(rule.source) && rule.confidence >= 85);
+  if (!rules.length) return result;
+  const categories = await prisma.category.findMany({
+    where: { workspaceId, id: { in: [...new Set(rules.flatMap(rule => rule.categoryId ? [rule.categoryId] : []))] } },
+    select: { id: true, name: true, type: true },
+  });
+  const categoryById = new Map(categories.map(category => [category.id, category]));
+  const ruleByKey = new Map(rules.map(rule => [rule.merchantKey, rule]));
+  rows.forEach((row, index) => {
+    if (readAppMigration(row.rawPayload)) return;
+    const input = query[index];
+    if (!input.merchantRaw) return;
+    const candidates = buildMerchantClassificationCandidates(input.merchantRaw, input.merchantClean, input.institution)
+      .map(normalizeMerchantText).filter(Boolean);
+    // Institution-specific corrections take precedence over a global alias.
+    const institution = normalizeMerchantText(input.institution ?? "");
+    const matched = candidates.map(key => ruleByKey.get(key)).filter((rule): rule is typeof rules[number] => Boolean(rule))
+      .sort((a, b) => Number(Boolean(institution) && b.merchantKey.startsWith(institution + " ")) - Number(Boolean(institution) && a.merchantKey.startsWith(institution + " ")));
+    const rule = matched[0];
+    if (!rule?.normalizedName.trim()) return;
+    const category = rule.categoryId ? categoryById.get(rule.categoryId) : null;
+    // A label must not change a debit/credit/transfer into another direction,
+    // nor use a category from another Profile or a deleted reference.
+    if (rule.categoryId && (!category || category.type !== row.type)) return;
+    result.set(index, {
+      merchantClean: rule.normalizedName, categoryId: category?.id ?? null, categoryName: category?.name ?? null,
+      confidence: rule.confidence, ruleId: `merchant-rule:${rule.merchantKey}:v${rule.version}`,
+      source: rule.source, reason: "confirmed-rule-exact",
+    });
+  });
+  return result;
+};
+
+export const loadAccountRules = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {
+  let rules: Array<{
+    ruleKey: string;
+    accountId: string | null;
+    accountName: string;
+    institution: string | null;
+    accountType: AccountType;
+    source: string;
+    confidence: number;
+    timesConfirmed: number;
+  }> = [];
+
+  try {
+    rules = await prisma.accountRule.findMany({
+      where: { workspaceId },
+      orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }],
+      take: 250,
+    });
+    const keys = [...new Set(rows.map(row => normalizeAccountRuleKey(row.accountName, row.institution)).filter(Boolean))];
+    for (let offset = 0; offset < keys.length; offset += 200) {
+      const exact = await prisma.accountRule.findMany({ where: { workspaceId, ruleKey: { in: keys.slice(offset, offset + 200) } } });
+      rules = [...exact, ...rules.filter(rule => !exact.some(row => row.ruleKey === rule.ruleKey))];
+    }
+
+  } catch (error) {
+    if (!isMissingDatabaseRelationError(error, "AccountRule")) {
+      throw error;
+    }
+  }
+
+  return rules.map((rule) => ({
+    ruleKey: rule.ruleKey,
+    accountId: rule.accountId,
+    accountName: rule.accountName,
+    institution: rule.institution,
+    accountType: rule.accountType,
+    source: rule.source,
+    confidence: rule.confidence,
+    timesConfirmed: rule.timesConfirmed,
+  }));
+};
+
+export const upsertMerchantRule = async (params: {
+  workspaceId: string;
+  merchantText: string;
+  normalizedName: string;
+  categoryId: string;
+  categoryName?: string | null;
+  source: string;
+  confidence?: number;
+}, context?: LearningWriteContext) => {
+  const db = context?.db ?? prisma;
+  if (!context && !await (await import("@/lib/app-preferences")).canLearnFromWorkspace(params.workspaceId)) return null;
+  const merchantKey = normalizeMerchantText(params.merchantText);
+
+  try {
+    const incomingConfidence = Math.max(0, Math.min(100, Math.round(params.confidence ?? 100)));
+    const existing = await db.merchantRule.findUnique({
+      where: { workspaceId_merchantKey: { workspaceId: params.workspaceId, merchantKey } },
+      select: { id: true, status: true, source: true, confidence: true, categoryId: true, normalizedName: true, learningObservedAt: true },
+    });
+    const incomingIsManual = /^manual(?:_|$)/i.test(params.source);
+    if (context && existing?.learningObservedAt && existing.learningObservedAt > context.observedAt) return null;
+    if (existing && !incomingIsManual && (existing.status === "suspended" || existing.status === "rejected")) {
+      return existing;
+    }
+    if (existing && !incomingIsManual && /^manual(?:_|$)/i.test(existing.source)) return existing;
+
+    const rule = await db.merchantRule.upsert({
+      where: {
+        workspaceId_merchantKey: {
+          workspaceId: params.workspaceId,
+          merchantKey,
+        },
+      },
+      update: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
+        merchantPattern: params.merchantText.trim(),
+        normalizedName: params.normalizedName.trim(),
+        categoryId: params.categoryId,
+        categoryName: params.categoryName ?? null,
+        source: params.source,
+        status: incomingIsManual ? "active" : existing?.status === "candidate" ? "candidate" : "active",
+        version: { increment: 1 },
+        confidence: incomingConfidence,
+        timesConfirmed: { increment: 1 },
+        applicationCount: { increment: 1 },
+        correctionCount: {
+          increment:
+            incomingIsManual && existing &&
+            (existing.categoryId !== params.categoryId || normalizeMerchantText(existing.normalizedName) !== normalizeMerchantText(params.normalizedName))
+              ? 1
+              : 0,
+        },
+        provenance: { source: params.source, updatedAt: new Date().toISOString() },
+        lastUsedAt: new Date(),
+      },
+      create: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
+        workspaceId: params.workspaceId,
+        merchantKey,
+        merchantPattern: params.merchantText.trim(),
+        normalizedName: params.normalizedName.trim(),
+        categoryId: params.categoryId,
+        categoryName: params.categoryName ?? null,
+        source: params.source,
+        status: "active",
+        version: 1,
+        confidence: incomingConfidence,
+        timesConfirmed: 1,
+        applicationCount: 1,
+        provenance: { source: params.source, createdAt: new Date().toISOString() },
+        lastUsedAt: new Date(),
+      },
+    });
+
+    return rule;
+  } catch (error) {
+    if (!context && isMissingDatabaseRelationError(error, "MerchantRule")) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const upsertAccountRule = async (params: {
+  workspaceId: string;
+  accountId?: string | null;
+  accountName: string;
+  institution?: string | null;
+  accountType: AccountType;
+  source: string;
+  confidence?: number;
+}, context?: LearningWriteContext) => {
+  const db = context?.db ?? prisma;
+  const ruleKey = normalizeAccountRuleKey(params.accountName, params.institution);
+
+  try {
+    const existing = await db.accountRule.findUnique({ where: { workspaceId_ruleKey: { workspaceId: params.workspaceId, ruleKey } } });
+    if (existing && ((context && existing.learningObservedAt && existing.learningObservedAt > context.observedAt) ||
+      (/^(?:manual(?:_|$)|data_qa_review$)/.test(existing.source) && !/^(?:manual(?:_|$)|data_qa_review$)/.test(params.source)))) return context ? null : existing;
+    return await db.accountRule.upsert({
+      where: {
+        workspaceId_ruleKey: {
+          workspaceId: params.workspaceId,
+          ruleKey,
+        },
+      },
+      update: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
+        accountId: params.accountId ?? existing?.accountId ?? null,
+        accountName: params.accountName.trim(),
+        institution: params.institution?.trim() || null,
+        accountType: params.accountType,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+        timesConfirmed: { increment: 1 },
+        lastUsedAt: new Date(),
+      },
+      create: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
+        workspaceId: params.workspaceId,
+        accountId: params.accountId ?? null,
+        ruleKey,
+        accountName: params.accountName.trim(),
+        institution: params.institution?.trim() || null,
+        accountType: params.accountType,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+        timesConfirmed: 1,
+        lastUsedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    if (!context && isMissingDatabaseRelationError(error, "AccountRule")) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+const scoreAccountRule = (
+  accountName: string | null | undefined,
+  institution: string | null | undefined,
+  rule: AccountRuleRow
+) => {
+  const normalizedRuleKey = normalizeAccountRuleKey(rule.accountName, rule.institution);
+  const normalizedInputKey = normalizeAccountRuleKey(accountName, institution);
+  if (normalizedRuleKey === normalizedInputKey) {
+    return 120 + rule.confidence + rule.timesConfirmed * 2;
+  }
+
+  const inputName = normalizeMerchantText(accountName ?? "");
+  const ruleName = normalizeMerchantText(rule.accountName);
+  const inputTokens = new Set(tokenizeMerchant(accountName ?? ""));
+  const ruleTokens = tokenizeMerchant(rule.accountName);
+  const ruleTokenSet = new Set(ruleTokens);
+  let overlap = 0;
+
+  for (const token of inputTokens) {
+    if (ruleTokenSet.has(token)) {
+      overlap += 1;
+    }
+  }
+
+  if (overlap === 0 && inputName !== ruleName) {
+    return 0;
+  }
+
+  return overlap * 22 + rule.confidence * 0.75 + rule.timesConfirmed;
+};
+
+const findBestAccountRule = (
+  accountName: string | null | undefined,
+  institution: string | null | undefined,
+  accountRules: AccountRuleRow[]
+) => {
+  let bestRule: AccountRuleRow | null = null;
+  let bestScore = 0;
+
+  for (const rule of accountRules) {
+    const score = scoreAccountRule(accountName, institution, rule);
+    if (score > bestScore) {
+      bestScore = score;
+      bestRule = rule;
+    }
+  }
+
+  return bestRule && bestScore >= 20
+    ? {
+        rule: bestRule,
+        score: bestScore,
+        exact: normalizeAccountRuleKey(bestRule.accountName, bestRule.institution) === normalizeAccountRuleKey(accountName, institution),
+      }
+    : null;
+};
+
+export const buildStatementFingerprint = (
+  text: string,
+  metadata: ReturnType<typeof detectStatementMetadataFromText>,
+  fileName?: string | null,
+  fileType?: string | null,
+  documentFamily?: string | null
+) => {
+  const noisyOCRInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank", "PNB", "Philippine National Bank"]);
+  const isLikelyLowQualityUnionBankStatement =
+    metadata.institution === "UnionBank" && /\b(?:word|excel|template|business_statement)\b/i.test(`${fileName ?? ""} ${documentFamily ?? ""}`);
+  const normalizedLines = text
+    .split(/\r?\n/)
+    .map((line) =>
+      normalizeWhitespace(line)
+        .replace(/\b\d{1,2}[/-][A-Za-z0-9]{1,4}[/-]\d{2,4}\b/g, "<date>")
+        .replace(/\b[A-Z]{3}\s+\d{1,2},\s+\d{4}\b/g, "<date>")
+        .replace(/[0-9][0-9,]*\.\d{2}/g, "<amount>")
+        .replace(/\b\d{4,}\b/g, "<number>")
+    )
+    .filter(Boolean)
+    .slice(0, 32);
+
+  const normalizedTextFingerprint = normalizedLines.join("\n");
+  const fallbackFileIdentity = normalizedTextFingerprint ? "" : (fileName ?? "").toLowerCase();
+  const lowQualityUnionBankFileIdentity = isLikelyLowQualityUnionBankStatement ? (fileName ?? "").toLowerCase() : "";
+  const useMetadataOnlyFingerprint = metadata.institution ? noisyOCRInstitutions.has(metadata.institution) && !isLikelyLowQualityUnionBankStatement : false;
+  const stableFingerprintSource = [
+    metadata.institution ?? "",
+    isLikelyLowQualityUnionBankStatement ? "" : metadata.accountNumber ?? "",
+    metadata.accountType ?? "",
+    metadata.startDate ?? "",
+    metadata.endDate ?? "",
+    isLikelyLowQualityUnionBankStatement ? "" : metadata.endingBalance != null ? String(metadata.endingBalance) : "",
+    (fileType ?? "").toLowerCase(),
+    (documentFamily ?? "").toLowerCase(),
+  ].join("|");
+  const fingerprintSource = [
+    metadata.institution ?? "",
+    metadata.accountNumber ?? "",
+    metadata.accountType ?? "",
+    metadata.startDate ?? "",
+    metadata.endDate ?? "",
+    lowQualityUnionBankFileIdentity || fallbackFileIdentity,
+    (fileType ?? "").toLowerCase(),
+    (documentFamily ?? "").toLowerCase(),
+    normalizedTextFingerprint,
+  ].join("|");
+
+  return `stmt_${fnv1a(useMetadataOnlyFingerprint ? stableFingerprintSource : fingerprintSource)}`;
+};
+
+export const buildStatementFamilySignature = (params: {
+  rows: ParsedImportRow[];
+  metadata?: {
+    institution?: string | null;
+    accountType?: ImportedAccountType | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  } | null;
+  fileType?: string | null;
+}) => {
+  const rows = Array.isArray(params.rows) ? params.rows : [];
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const firstRow = rows[0] ?? null;
+  const lastRow = rows.at(-1) ?? null;
+  const firstMerchant = normalizeMerchantText(firstRow?.merchantClean || firstRow?.merchantRaw || firstRow?.description || firstRow?.name || "");
+  const lastMerchant = normalizeMerchantText(lastRow?.merchantClean || lastRow?.merchantRaw || lastRow?.description || lastRow?.name || "");
+  const firstDate = parseDateValue(firstRow?.date ?? firstRow?.transactionDate ?? firstRow?.postedDate ?? null);
+  const lastDate = parseDateValue(lastRow?.date ?? lastRow?.transactionDate ?? lastRow?.postedDate ?? null);
+  const rowCountBand = rows.length < 5 ? "tiny" : rows.length < 15 ? "small" : rows.length < 50 ? "medium" : "large";
+  const hasBalance = rows.some(
+    (row) => typeof row.balance === "string" || typeof row.balance === "number" || typeof row.runningBalance === "string" || typeof row.runningBalance === "number"
+  );
+  const typeCounts = rows.reduce(
+    (counts, row) => {
+      const type = String(row.type ?? "").toLowerCase();
+      if (type === "income" || type === "expense" || type === "transfer") {
+        counts[type] += 1;
+      }
+      return counts;
+    },
+    { income: 0, expense: 0, transfer: 0 }
+  );
+  const dominantType = (Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "mixed") as "income" | "expense" | "transfer" | "mixed";
+  const institution = sanitizeBankNameLabel(params.metadata?.institution ?? null);
+  const signatureParts = [
+    institution && institution !== "Unknown" ? institution : null,
+    params.metadata?.accountType ?? null,
+    params.fileType ? params.fileType.toLowerCase() : null,
+    rowCountBand,
+    dominantType,
+    hasBalance ? "balance" : "nobalance",
+    firstDate ? firstDate.toISOString().slice(0, 10) : null,
+    lastDate ? lastDate.toISOString().slice(0, 10) : null,
+    firstMerchant || null,
+    lastMerchant || null,
+  ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+  return signatureParts.length > 0 ? signatureParts.join("|") : null;
+};
+
+export const buildStatementFamilySignatureFromText = (
+  text: string,
+  metadata?: {
+    institution?: string | null;
+    accountType?: ImportedAccountType | null;
+  } | null,
+  fileType?: string | null
+) => {
+  const normalizedLines = text
+    .split(/\r?\n/)
+    .map((line) =>
+      normalizeWhitespace(line)
+        .replace(/[|¦]/g, " ")
+        .replace(/\b\d{1,2}[/-][A-Za-z0-9]{1,4}[/-]\d{2,4}\b/g, "<date>")
+        .replace(/\b[A-Z]{3}\s+\d{1,2},\s+\d{4}\b/g, "<date>")
+        .replace(/[0-9][0-9,]*\.\d{2}/g, "<amount>")
+        .replace(/\b\d{4,}\b/g, "<number>")
+    )
+    .filter(Boolean);
+
+  if (normalizedLines.length === 0) {
+    return null;
+  }
+
+  const firstLine = normalizedLines[0] ?? "";
+  const lastLine = normalizedLines.at(-1) ?? "";
+  const rowCountBand = normalizedLines.length < 5 ? "tiny" : normalizedLines.length < 15 ? "small" : normalizedLines.length < 50 ? "medium" : "large";
+  const balanceLike = normalizedLines.some((line) => /\b(?:balance|opening|closing|ending|running|available)\b/i.test(line));
+  const amountLike = normalizedLines.some((line) => /<amount>/.test(line));
+  const institution = sanitizeBankNameLabel(metadata?.institution ?? null);
+
+  const signatureParts = [
+    institution && institution !== "Unknown" ? institution : null,
+    metadata?.accountType ?? null,
+    fileType ? fileType.toLowerCase() : null,
+    rowCountBand,
+    balanceLike ? "balance" : "nobalance",
+    amountLike ? "amount" : "noamount",
+    firstLine ? firstLine.slice(0, 80) : null,
+    lastLine ? lastLine.slice(0, 80) : null,
+  ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+  return signatureParts.length > 0 ? signatureParts.join("|") : null;
+};
+
+export const findExistingImportedStatement = async (params: {
+  workspaceId: string;
+  statementFingerprint: string;
+  sourceFingerprint?: string | null;
+  importFileId?: string | null;
+}) => {
+  // Layout fingerprints identify templates, not a particular upload.
+  const sourceFingerprint = params.sourceFingerprint;
+  if (!sourceFingerprint || !/^[a-f0-9]{64}$/.test(sourceFingerprint)) return null;
+
+  const parsedColumns = new Set(await getCompatibleParsedTransactionColumns());
+  const importFileColumns = new Set(await getCompatibleImportFileColumns());
+  const transactionColumns = new Set(await getCompatibleTransactionColumns());
+  const supportsStatusGate = importFileColumns.has("status") || importFileColumns.has("confirmedAt");
+
+  if (parsedColumns.has("statementFingerprint") && parsedColumns.has("workspaceId") && importFileColumns.has("sourceFingerprint") && supportsStatusGate) {
+    const supportsImportFileId = parsedColumns.has("importFileId");
+    const completedGateParts: string[] = [];
+    const visibleImportGateParts = transactionColumns.has("importFileId")
+      ? [
+          `EXISTS (SELECT 1 FROM "Transaction" t WHERE t."importFileId" = i."id" AND t."deletedAt" IS NULL LIMIT 1)`,
+        ]
+      : [];
+    if (importFileColumns.has("confirmedAt")) {
+      completedGateParts.push(`i."confirmedAt" IS NOT NULL`);
+    } else if (importFileColumns.has("status")) {
+      completedGateParts.push(`i."status" = 'done'`);
+    }
+
+    if (completedGateParts.length > 0 && supportsImportFileId && visibleImportGateParts.length > 0) {
+      const rows = await prisma.$queryRawUnsafe<Array<{ importFileId: string | null }>>(
+        `SELECT DISTINCT pt."importFileId" FROM "ParsedTransaction" pt INNER JOIN "ImportFile" i ON i."id" = pt."importFileId" LEFT JOIN "Account" a ON a."id" = i."accountId" WHERE pt."workspaceId" = $1 AND pt."statementFingerprint" = $2 AND i."sourceFingerprint" = $3${params.importFileId ? ' AND pt."importFileId" <> $4' : ""} AND (${completedGateParts.join(" OR ")}) AND (${visibleImportGateParts.join(" OR ")}) AND i."accountId" IS NOT NULL AND a."id" IS NOT NULL LIMIT 1`,
+        params.workspaceId, params.statementFingerprint, sourceFingerprint, ...(params.importFileId ? [params.importFileId] : [])
+      );
+
+      if (rows.length > 0 && rows[0]?.importFileId !== null) {
+        return rows[0]?.importFileId ?? "__duplicate__";
+      }
+    }
+  }
+
+  return null;
+};
+
+const scoreSignal = (tokens: string[], normalizedMerchantCandidates: Set<string>, signal: TrainingSignalRow) => {
+  const exactMatch = signal.merchantKey && normalizedMerchantCandidates.has(signal.merchantKey);
+  if (exactMatch) {
+    return 100 + signal.confidence;
+  }
+
+  const candidateFamilies = new Set([...normalizedMerchantCandidates].map((candidate) => buildMerchantFamilySignature(candidate)).filter(Boolean));
+  const signalFamily = buildMerchantFamilySignature(signal.merchantKey);
+  if (signalFamily && candidateFamilies.has(signalFamily)) {
+    return 92 + signal.confidence * 0.7;
+  }
+
+  const signalTokens = new Set(signal.merchantTokens);
+  let overlap = 0;
+
+  for (const token of tokens) {
+    if (signalTokens.has(token)) {
+      overlap += 1;
+    }
+  }
+
+  if (overlap === 0) {
+    return 0;
+  }
+
+  return overlap * 18 + signal.confidence * 0.5;
+};
+
+const scoreMerchantRule = (tokens: string[], normalizedMerchantCandidates: Set<string>, rule: MerchantRuleRow) => {
+  if (normalizedMerchantCandidates.has(rule.merchantKey)) {
+    return 120 + rule.confidence;
+  }
+
+  const candidateFamilies = new Set([...normalizedMerchantCandidates].map((candidate) => buildMerchantFamilySignature(candidate)).filter(Boolean));
+  const ruleFamily = buildMerchantFamilySignature(rule.merchantPattern || rule.normalizedName || rule.merchantKey);
+  if (ruleFamily && candidateFamilies.has(ruleFamily)) {
+    return 108 + rule.confidence * 0.7 + rule.timesConfirmed * 1.5;
+  }
+
+  const ruleTokens = tokenizeMerchant(rule.merchantPattern || rule.normalizedName || rule.merchantKey);
+  const ruleTokenSet = new Set(ruleTokens);
+  let overlap = 0;
+
+  for (const token of tokens) {
+    if (ruleTokenSet.has(token)) {
+      overlap += 1;
+    }
+  }
+
+  if (overlap === 0) {
+    return 0;
+  }
+
+  return overlap * 20 + rule.confidence * 0.75 + rule.timesConfirmed;
+};
+
+const hasFamilyMatch = (normalizedMerchantCandidates: Set<string>, ...values: Array<string | null | undefined>) => {
+  const candidateFamilies = new Set(
+    [...normalizedMerchantCandidates].map((candidate) => buildMerchantFamilySignature(candidate)).filter(Boolean)
+  );
+
+  for (const value of values) {
+    const family = buildMerchantFamilySignature(value);
+    if (family && candidateFamilies.has(family)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+export const classifyMerchant = (params: {
+  merchantText: string;
+  categoryText?: string | null;
+  institution?: string | null;
+  type: TransactionType;
+  categoryName?: string | null;
+  merchantRules: MerchantRuleRow[];
+  trainingSignals: TrainingSignalRow[];
+  negativeSignals?: NegativeMerchantSignalRow[];
+}) => {
+  const isRcbcPaymentCredit = (categoryName: string | null | undefined) =>
+    /\brcbc\b/i.test(params.institution ?? "") &&
+    params.type === "income" &&
+    /^transfers?$/i.test(categoryName?.trim() ?? "") &&
+    isStandaloneCashPaymentDescription(params.merchantText);
+  const preferredTypeForCategory = (categoryName: string | null | undefined, fallback: TransactionType, categorySource?: string | null) => {
+    if (isRcbcPaymentCredit(categoryName)) {
+      return "income";
+    }
+
+    if (categoryName?.trim().toLowerCase() === "shopping" && isStandaloneCashPaymentDescription(categorySource)) {
+      return "expense";
+    }
+
+    return coerceTransactionTypeFromCategoryName(categoryName, fallback);
+  };
+  const normalizedSummary = summarizeMerchantText(params.merchantText);
+  const merchantCandidates = buildMerchantClassificationCandidates(params.merchantText, normalizedSummary, params.institution ?? null);
+  const normalizedMerchantCandidates = new Set(merchantCandidates.map((value) => normalizeMerchantText(value)).filter(Boolean));
+  const normalizedMerchant = merchantCandidates.map((value) => normalizeMerchantText(value)).find(Boolean) ?? normalizeMerchantText(params.merchantText);
+  const categoryText = [params.categoryText, ...merchantCandidates].filter((value) => typeof value === "string" && value.trim()).join(" ");
+  const tokens = tokenizeMerchant(categoryText || params.merchantText);
+  const providedCategory = params.categoryName?.trim();
+  const hardcodedOverride = isRcbcPaymentCredit(providedCategory) || getIndonesianIncomeCategoryHint(params.merchantText, params.type)
+    ? null
+    : getHardcodedCategoryOverride(categoryText || params.merchantText);
+  const strongMerchantCategory = getIndonesianIncomeCategoryHint(params.merchantText, params.type) ??
+    getStrongMerchantCategoryHint(categoryText || params.merchantText);
+  const parsedTransferContradictedByMerchant =
+    !isRcbcPaymentCredit(providedCategory) &&
+    providedCategory?.toLowerCase() === "transfers" &&
+    Boolean(strongMerchantCategory && strongMerchantCategory !== "Transfers");
+  const heuristicCategory =
+    providedCategory && providedCategory.toLowerCase() !== "other" && !parsedTransferContradictedByMerchant
+      ? providedCategory
+      : strongMerchantCategory ?? guessCategoryFallback(categoryText || params.merchantText, params.type);
+  const rescuedHeuristic = rescueHeuristicCategory({
+    merchantText: params.merchantText,
+    categoryText,
+    type: params.type,
+    heuristicCategory,
+    merchantCandidates,
+  });
+  const finalHeuristicCategory = rescuedHeuristic?.categoryName ?? heuristicCategory;
+  const alignedNormalizedName = pickCategoryAlignedNormalizedName({
+    targetCategory: finalHeuristicCategory,
+    merchantText: params.merchantText,
+    merchantCandidates,
+    type: params.type,
+    fallbackName: rescuedHeuristic?.normalizedName || normalizedSummary,
+    institution: params.institution ?? null,
+  });
+  const negativeSignals = params.negativeSignals ?? [];
+
+  if (isRcbcPaymentCredit(providedCategory)) {
+    return {
+      categoryName: "Transfers",
+      confidence: 99,
+      categoryReason: "rcbc-statement-payment-credit",
+      categorySource: "deterministic_override",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: alignedNormalizedName,
+      preferredType: "income" as TransactionType,
+    };
+  }
+
+  let bestRule: MerchantRuleRow | null = null;
+  let bestRuleScore = 0;
+  let bestSignal: TrainingSignalRow | null = null;
+  let bestScore = 0;
+
+  const exactManualRules = params.merchantRules.filter(rule => normalizedMerchantCandidates.has(rule.merchantKey) && /^manual(?:_|$)/.test(rule.source));
+  for (const rule of exactManualRules.length ? exactManualRules : params.merchantRules) {
+    const score = scoreMerchantRule(tokens, normalizedMerchantCandidates, rule);
+    if (score > bestRuleScore) {
+      bestRuleScore = score;
+      bestRule = rule;
+    }
+  }
+
+  const bestRuleIsExact = Boolean(bestRule && normalizedMerchant === bestRule.merchantKey);
+  const bestRuleIsFamilyMatch = Boolean(
+    bestRule &&
+      !bestRuleIsExact &&
+      hasFamilyMatch(normalizedMerchantCandidates, bestRule.merchantPattern, bestRule.normalizedName, bestRule.merchantKey)
+  );
+  const authoritativeManualRule = Boolean(
+    bestRule &&
+      bestRule.confidence >= 85 &&
+      (bestRuleIsExact || bestRuleIsFamilyMatch) &&
+      isAuthoritativeLearningSource(bestRule.source)
+  );
+
+  if (hardcodedOverride && !authoritativeManualRule) {
+    const contextualOverride = isContextualCategoryOverride(categoryText || params.merchantText, hardcodedOverride);
+    return {
+      categoryName: hardcodedOverride,
+      confidence: contextualOverride ? 84 : 99,
+      categoryReason: contextualOverride ? "contextual-hardcoded-override" : "hardcoded-override",
+      categorySource: "deterministic_override",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: alignedNormalizedName,
+      preferredType: preferredTypeForCategory(hardcodedOverride, params.type, categoryText || params.merchantText),
+    };
+  }
+
+  const scoreNegativeSignal = (signal: NegativeMerchantSignalRow) => {
+    if (normalizedMerchantCandidates.has(signal.merchantKey)) {
+      return 100 + signal.confidence;
+    }
+
+    const signalTokens = new Set(signal.merchantTokens);
+    let overlap = 0;
+    for (const token of tokens) {
+      if (signalTokens.has(token)) {
+        overlap += 1;
+      }
+    }
+
+    return overlap === 0 ? 0 : overlap * 18 + signal.confidence * 0.5;
+  };
+
+  let negativePenalty = 0;
+  for (const signal of negativeSignals) {
+    negativePenalty = Math.max(negativePenalty, scoreNegativeSignal(signal));
+  }
+
+  if (bestRule && bestRuleScore >= 20) {
+    const learnedCategory = bestRule.categoryName ?? finalHeuristicCategory;
+    const exact = normalizedMerchant === bestRule.merchantKey;
+    const familyMatch = !exact && hasFamilyMatch(
+      normalizedMerchantCandidates,
+      bestRule.merchantPattern,
+      bestRule.normalizedName,
+      bestRule.merchantKey
+    );
+    const learnedType = params.trainingSignals.find((signal) => normalizedMerchantCandidates.has(signal.merchantKey))?.type ?? params.type;
+    const rawConfidence = Math.max(0, bestRuleScore) - Math.min(bestRuleScore * 0.75, negativePenalty * (exact ? 0.9 : 0.65));
+    const confidenceCap = familyMatch ? (negativePenalty > 0 ? 79 : 84) : negativePenalty > 0 ? (exact ? 85 : 88) : 99;
+    const adjustedConfidence = Math.max(20, Math.round(Math.min(confidenceCap, rawConfidence)));
+    return {
+      categoryName: learnedCategory,
+      confidence: adjustedConfidence,
+      categoryReason: exact ? "rule-exact" : familyMatch ? "rule-family" : "rule-pattern",
+      categorySource: bestRule.source,
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: bestRule.normalizedName || alignedNormalizedName,
+      preferredType: preferredTypeForCategory(learnedCategory, learnedType, categoryText || params.merchantText),
+    };
+  }
+
+  for (const signal of params.trainingSignals) {
+    const score = scoreSignal(tokens, normalizedMerchantCandidates, signal);
+    if (score > bestScore) {
+      bestScore = score;
+      bestSignal = signal;
+    }
+  }
+
+  if (bestSignal && bestScore >= 18) {
+    const learnedCategory = bestSignal.categoryName ?? finalHeuristicCategory;
+    const exact = normalizedMerchant === bestSignal.merchantKey;
+    const familyMatch = !exact && hasFamilyMatch(normalizedMerchantCandidates, bestSignal.merchantKey, bestSignal.categoryName);
+    const rawConfidence = Math.max(68, bestScore) - Math.min(bestScore * 0.6, negativePenalty * 0.45);
+    const confidenceCap = familyMatch ? (negativePenalty > 0 ? 76 : 82) : negativePenalty > 0 ? 80 : 99;
+    const confidence = Math.max(20, Math.round(Math.min(confidenceCap, rawConfidence)));
+
+    return {
+      categoryName: learnedCategory,
+      confidence,
+      categoryReason: exact ? "learned-exact" : familyMatch ? "learned-family" : "learned-pattern",
+      categorySource: bestSignal.source,
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: alignedNormalizedName,
+      preferredType: preferredTypeForCategory(learnedCategory, bestSignal.type ?? params.type, categoryText || params.merchantText),
+    };
+  }
+
+  if (HARDCODED_EXACT_MERCHANT_KEYS.has(normalizedMerchant)) {
+    return {
+      categoryName: finalHeuristicCategory,
+      confidence: 99,
+      categoryReason: "hardcoded-exact",
+      categorySource: "deterministic_exact",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: alignedNormalizedName,
+      preferredType: preferredTypeForCategory(finalHeuristicCategory, params.type, categoryText || params.merchantText),
+    };
+  }
+
+  return {
+    categoryName: finalHeuristicCategory,
+    confidence:
+      rescuedHeuristic?.confidence ??
+      (finalHeuristicCategory === "Other" ? 35 : Math.max(35, 62 - Math.min(22, Math.round(negativePenalty * 0.25)))),
+    categoryReason:
+      rescuedHeuristic?.categoryReason ??
+      (finalHeuristicCategory === "Other" ? "heuristic-other" : "heuristic-rule"),
+    categorySource: rescuedHeuristic?.categorySource ?? "deterministic_heuristic",
+    merchantKey: normalizedMerchant,
+    merchantTokens: tokens,
+    normalizedName: alignedNormalizedName,
+    preferredType: preferredTypeForCategory(finalHeuristicCategory, params.type, categoryText || params.merchantText),
+  };
+};
+
+export const loadNegativeMerchantSignals = async (workspaceId: string, inputs: LearningRetrievalRow[] = []) => {
+  try {
+    const query = learningRetrievalQuery(inputs);
+    let rows = await prisma.transaction.findMany({
+      where: {
+        workspaceId,
+        reviewStatus: "rejected",
+        deletedAt: null,
+      },
+      select: {
+        merchantRaw: true,
+        merchantClean: true,
+        description: true,
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 250,
+    });
+
+    for (let offset = 0; offset < query.tokens.length; offset += 40) {
+      rows.push(...await prisma.transaction.findMany({
+        where: { workspaceId, reviewStatus: "rejected", deletedAt: null, OR: query.tokens.slice(offset, offset + 40).flatMap(token => [
+          { merchantRaw: { contains: token, mode: "insensitive" as const } }, { merchantClean: { contains: token, mode: "insensitive" as const } },
+        ]) }, select: { merchantRaw: true, merchantClean: true, description: true }, orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: 100,
+      }));
+    }
+
+    return rows
+      .map((row) => {
+        const merchantText = row.merchantClean || row.merchantRaw || row.description || "";
+        const merchantKey = normalizeMerchantText(merchantText);
+        if (!merchantKey) {
+          return null;
+        }
+        return {
+          merchantKey,
+          merchantTokens: tokenizeMerchant(merchantText),
+          source: "rejected_transaction",
+          confidence: 80,
+        } satisfies NegativeMerchantSignalRow;
+      })
+      .filter((value): value is NegativeMerchantSignalRow => Boolean(value));
+  } catch (error) {
+    if (!isMissingDatabaseRelationError(error, "Transaction")) {
+      throw error;
+    }
+
+    return [];
+  }
+};
+
+export const loadTrainingSignals = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {
+  const columns = await getCompatibleTrainingSignalColumns();
+  if (columns.length === 0) {
+    return [];
+  }
+
+  let signals: Array<{
+    categoryId: string;
+    categoryName: string | null;
+    merchantKey: string;
+    merchantTokens: Prisma.JsonValue | null;
+    type: TransactionType;
+    source: string;
+    confidence: number;
+    category: { name: string };
+  }> = [];
+
+  try {
+    signals = await prisma.trainingSignal.findMany({
+      where: { workspaceId, approvalStatus: "active" },
+      include: {
+        category: true,
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      take: 500,
+    });
+    const query = learningRetrievalQuery(rows);
+    for (let offset = 0; offset < query.keys.length; offset += 200) {
+      // DISTINCT ON is evaluated before limits: a frequently seen merchant cannot
+      // crowd another exact key out of the candidate set.
+      const ids = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT DISTINCT ON ("merchantKey") "id" FROM "TrainingSignal"
+        WHERE "workspaceId" = ${workspaceId} AND "approvalStatus" = 'active'
+          AND "merchantKey" IN (${Prisma.join(query.keys.slice(offset, offset + 200))})
+        ORDER BY "merchantKey",
+          CASE WHEN "source" IN ('manual_recategorization', 'manual_transaction_creation') THEN 0 ELSE 1 END,
+          COALESCE("learningObservedAt", "updatedAt") DESC, "id" ASC`);
+      const exact = await prisma.trainingSignal.findMany({ where: { workspaceId, approvalStatus: "active", id: { in: ids.map(row => row.id) } }, include: { category: true } });
+      // Exact observations are placed first so equal scores prefer current evidence.
+      signals = [...exact, ...signals.filter(signal => !exact.some(row => row.merchantKey === signal.merchantKey))];
+    }
+    for (let offset = 0; offset < query.tokens.length; offset += 40) {
+      const relevant = await prisma.trainingSignal.findMany({
+        where: { workspaceId, approvalStatus: "active", OR: query.tokens.slice(offset, offset + 40).map(token => ({ merchantKey: { contains: token } })) },
+        include: { category: true }, orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: 100,
+      });
+      signals.push(...relevant.filter(row => !signals.some(signal => signal.merchantKey === row.merchantKey)));
+    }
+
+  } catch (error) {
+    if (!isMissingDatabaseRelationError(error, "TrainingSignal") && !isMissingDatabaseColumnError(error)) {
+      throw error;
+    }
+
+    return [];
+  }
+
+  return signals.map((signal) => ({
+    categoryId: signal.categoryId,
+    categoryName: signal.category.name,
+    merchantKey: signal.merchantKey,
+    merchantTokens: Array.isArray(signal.merchantTokens) ? signal.merchantTokens.filter((token): token is string => typeof token === "string") : [],
+    type: signal.type,
+    source: signal.source,
+    confidence: signal.confidence,
+  }));
+};
+
+export const upsertStatementTemplate = async (params: {
+  workspaceId: string;
+  fingerprint: string;
+  metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  fileType?: string | null;
+  parserConfig?: Prisma.InputJsonValue | null;
+}, context?: LearningWriteContext) => {
+  if (!context) {
+    const job = await enqueueLearningJob({ workspaceId: params.workspaceId, source: "statement_template", sourceId: params.fingerprint, actions: [{ kind: "template", input: params }] });
+    if (!job) return null;
+    await processLearningJob(job.id);
+    return prisma.statementTemplate.findUnique({ where: { workspaceId_fingerprint: { workspaceId: params.workspaceId, fingerprint: params.fingerprint } } });
+  }
+  const db = context.db;
+  try {
+    const existing = await db.statementTemplate.findUnique({ where: { workspaceId_fingerprint: { workspaceId: params.workspaceId, fingerprint: params.fingerprint } } });
+    const previousConfig = isPlainObject(existing?.parserConfig) ? existing.parserConfig : {};
+    const nextConfig: Record<string, unknown> = isPlainObject(params.parserConfig) ? params.parserConfig as Record<string, unknown> : {};
+    if (previousConfig.source === "data_qa_review" && nextConfig.source !== "data_qa_review") return context ? null : existing;
+    if (context && existing?.learningObservedAt && existing.learningObservedAt > context.observedAt) return null;
+    return await db.statementTemplate.upsert({
+      where: {
+        workspaceId_fingerprint: {
+          workspaceId: params.workspaceId,
+          fingerprint: params.fingerprint,
+        },
+      },
+      update: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
+        fileType: params.fileType ?? null,
+        institution: params.metadata.institution,
+        accountNumber: params.metadata.accountNumber,
+        accountName: params.metadata.accountName,
+        parserConfig: params.parserConfig ?? Prisma.DbNull,
+        metadata: params.metadata as Prisma.InputJsonValue,
+        exampleCount: { increment: 1 },
+        successCount: { increment: 1 },
+        lastSeenAt: new Date(),
+      },
+      create: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
+        workspaceId: params.workspaceId,
+        fingerprint: params.fingerprint,
+        fileType: params.fileType ?? null,
+        institution: params.metadata.institution,
+        accountNumber: params.metadata.accountNumber,
+        accountName: params.metadata.accountName,
+        parserConfig: params.parserConfig ?? Prisma.DbNull,
+        metadata: params.metadata as Prisma.InputJsonValue,
+        parserVersion: DATA_ENGINE_VERSION,
+      },
+    });
+  } catch (error) {
+    if (!context && isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const recordStatementTemplateOutcome = async (params: {
+  workspaceId: string;
+  fingerprint: string;
+  outcome: "success" | "failure";
+}) => {
+  try {
+    await prisma.statementTemplate.updateMany({
+      where: {
+        workspaceId: params.workspaceId,
+        fingerprint: params.fingerprint,
+      },
+      data:
+        params.outcome === "failure"
+          ? {
+              failureCount: { increment: 1 },
+              lastSeenAt: new Date(),
+            }
+          : {
+              successCount: { increment: 1 },
+              lastSeenAt: new Date(),
+            },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return;
+    }
+
+    throw error;
+  }
+};
+
+export const scoreStatementTemplateCandidate = (params: {
+  template: StatementTemplateRow;
+  institution?: string | null;
+  fileType?: string | null;
+  accountType?: ImportedAccountType | null;
+  statementFamilySignature?: string | null;
+}) => {
+  const institution = sanitizeBankNameLabel(params.institution ?? null);
+  let score = 0;
+
+  if (params.template.institution && institution && normalizeMerchantText(params.template.institution) === normalizeMerchantText(institution)) {
+    score += 40;
+  }
+
+  if (params.fileType && params.template.fileType && params.template.fileType === params.fileType) {
+    score += 20;
+  }
+
+  const parserConfig =
+    params.template.parserConfig && typeof params.template.parserConfig === "object" && !Array.isArray(params.template.parserConfig)
+      ? (params.template.parserConfig as Record<string, unknown>)
+      : null;
+  const templateAccountType = typeof parserConfig?.accountType === "string" ? parserConfig.accountType.trim().toLowerCase() : null;
+  const rowCount = typeof parserConfig?.rowCount === "number" ? parserConfig.rowCount : null;
+  const templateFamilySignature = typeof parserConfig?.statementFamilySignature === "string" ? parserConfig.statementFamilySignature.trim() : null;
+
+  if (params.accountType && templateAccountType === params.accountType.toLowerCase()) {
+    score += 18;
+  }
+
+  if (typeof rowCount === "number") {
+    score += Math.min(10, Math.max(0, 10 - Math.floor(Math.abs(rowCount - 20) / 5)));
+  }
+
+  if (params.statementFamilySignature && templateFamilySignature) {
+    if (params.statementFamilySignature === templateFamilySignature) {
+      score += 30;
+    } else {
+      const familyParts = params.statementFamilySignature.split("|").filter(Boolean);
+      const templateParts = templateFamilySignature.split("|").filter(Boolean);
+      const overlap = familyParts.filter((part) => templateParts.includes(part)).length;
+      score += Math.min(12, overlap * 3);
+    }
+  }
+
+  const successCount = Math.max(0, Math.round(params.template.successCount ?? 0));
+  const failureCount = Math.max(0, Math.round(params.template.failureCount ?? 0));
+  const totalRuns = successCount + failureCount;
+  const reliability = totalRuns > 0 ? successCount / totalRuns : 1;
+  const balance = successCount - failureCount;
+
+  score += Math.min(14, Math.round(successCount * 1.6 + Math.max(0, params.template.exampleCount ?? 0) * 0.75));
+  score += Math.round(reliability * 8);
+  if (failureCount > 0) {
+    score -= Math.min(18, Math.round(failureCount * 2.5 + (1 - reliability) * 8));
+  }
+  if (balance < 0) {
+    score -= Math.min(12, Math.abs(balance) * 2);
+  }
+
+  return score;
+};
+
+type UnsupervisedLearningClusterSnapshot = {
+  key: string;
+  merchantSeed: string;
+  categoryName: string | null;
+  type: TransactionType;
+  count: number;
+  avgConfidence: number;
+  avgTeachability: number;
+};
+
+export const buildUnsupervisedLearningSnapshot = (
+  rows: ParsedImportRow[],
+  options: {
+    maxClusters?: number;
+    minConfidence?: number;
+    minTeachability?: number;
+  } = {}
+) => {
+  const maxClusters = Math.max(1, Math.min(50, Math.round(options.maxClusters ?? 12)));
+  const minConfidence = Math.max(0, Math.min(100, Math.round(options.minConfidence ?? 70)));
+  const minTeachability = Math.max(0, Math.min(100, Math.round(options.minTeachability ?? 55)));
+  const buckets = new Map<string, UnsupervisedLearningClusterSnapshot & { totalConfidence: number; totalTeachability: number }>();
+
+  for (const row of rows) {
+    const merchantSeed = summarizeMerchantText(String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "").trim()) || "";
+    const confidence = typeof row.confidence === "number" && Number.isFinite(row.confidence) ? row.confidence : 0;
+    const teachability = assessParsedRowTeachability(row).score;
+    if (!merchantSeed || confidence < minConfidence || teachability < minTeachability) {
+      continue;
+    }
+
+    const categoryName = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : null;
+    const type = (row.type ?? "expense") as TransactionType;
+    const key = `${normalizeMerchantText(merchantSeed)}|${normalizeMerchantText(categoryName ?? "")}|${type}`;
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.totalConfidence += confidence;
+      existing.totalTeachability += teachability;
+      existing.avgConfidence = existing.totalConfidence / existing.count;
+      existing.avgTeachability = existing.totalTeachability / existing.count;
+      continue;
+    }
+
+    buckets.set(key, {
+      key,
+      merchantSeed,
+      categoryName,
+      type,
+      count: 1,
+      totalConfidence: confidence,
+      totalTeachability: teachability,
+      avgConfidence: confidence,
+      avgTeachability: teachability,
+    });
+  }
+
+  const clusters = [...buckets.values()]
+    .sort((left, right) => right.count - left.count || right.avgConfidence - left.avgConfidence)
+    .slice(0, maxClusters)
+    .map(({ totalConfidence: _tc, totalTeachability: _tt, ...cluster }) => cluster);
+
+  return {
+    clusterCount: clusters.length,
+    minConfidence,
+    minTeachability,
+    clusters,
+  };
+};
+
+// Candidate derivation commits with its saved template and checkpoint. Candidates
+// remain inactive, and automatic learning never resets an operator's decision.
+const writeTemplateCandidates = async (template: { id: string; workspaceId: string; parserConfig: Prisma.JsonValue }, context: LearningWriteContext) => {
+  const config = isPlainObject(template.parserConfig) ? template.parserConfig : {};
+  const snapshot = isPlainObject(config.unsupervisedLearning) ? config.unsupervisedLearning : {};
+  const clusters = Array.isArray(snapshot.clusters) ? snapshot.clusters : [];
+  const categories = await context.db.category.findMany({ where: { workspaceId: template.workspaceId }, select: { id: true, name: true } });
+  const categoryByName = new Map(categories.map(category => [normalizeMerchantText(category.name), category]));
+  for (const cluster of clusters) {
+    if (!isPlainObject(cluster)) continue;
+    const count = Number(cluster.count ?? 0), confidence = Number(cluster.avgConfidence ?? 0), teachability = Number(cluster.avgTeachability ?? 0);
+    const merchantSeed = typeof cluster.merchantSeed === "string" ? cluster.merchantSeed.trim() : "";
+    const categoryName = typeof cluster.categoryName === "string" ? cluster.categoryName.trim() : "";
+    const category = categoryByName.get(normalizeMerchantText(categoryName));
+    if (!Number.isFinite(count + confidence + teachability) || count < 2 || confidence < 85 || teachability < 70 || !merchantSeed || !category || categoryName.toLowerCase() === "other") continue;
+    const merchantKey = normalizeMerchantText(merchantSeed);
+    const existing = await context.db.merchantRule.findUnique({ where: { workspaceId_merchantKey: { workspaceId: template.workspaceId, merchantKey } } });
+    if (existing && (existing.status !== "candidate" || /^manual(?:_|$)/.test(existing.source) || (existing.learningObservedAt && existing.learningObservedAt > context.observedAt))) continue;
+    const data = { normalizedName: merchantSeed, categoryId: category.id, categoryName: category.name, confidence: Math.min(89, Math.round(confidence)), learningObservedAt: context.observedAt, provenance: { source: "unsupervised_learning", templateId: template.id, count, teachability }, lastEvaluatedAt: new Date() };
+    await context.db.merchantRule.upsert({
+      where: { workspaceId_merchantKey: { workspaceId: template.workspaceId, merchantKey } },
+      update: { ...data, version: { increment: 1 } },
+      create: { ...data, workspaceId: template.workspaceId, merchantKey, merchantPattern: merchantSeed, source: "unsupervised_learning", status: "candidate", timesConfirmed: 0, applicationCount: 0, correctionCount: 0 },
+    });
+  }
+};
+
+export type RecordTrainingSignalInput = {
+  observationId?: string | null;
+  workspaceId: string;
+  importFileId?: string | null;
+  transactionId?: string | null;
+  merchantText: string;
+  normalizedName?: string | null;
+  institution?: string | null;
+  categoryId: string;
+  categoryName?: string | null;
+  type: TransactionType;
+  source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
+  confidence?: number;
+  teachabilityScore?: number | null;
+  notes?: string | null;
+  actorUserId?: string | null;
+  fieldName?: string | null;
+  previousValue?: Prisma.InputJsonValue | null;
+  correctedValue?: Prisma.InputJsonValue | null;
+};
+
+export const recordTrainingSignal = async (params: RecordTrainingSignalInput, db?: Prisma.TransactionClient) => {
+
+  const job = await enqueueLearningJob({ workspaceId: params.workspaceId, source: params.source, sourceId: params.transactionId ?? params.importFileId, actions: [{ kind: "signal", input: params }] }, db);
+  if (db) return null; // Transactional outbox: worker runs only after the financial save commits.
+  if (job) await processLearningJob(job.id, { maxItems: 1 });
+  return prisma.trainingSignal.findUnique({ where: { workspaceId_dedupeKey: { workspaceId: params.workspaceId, dedupeKey: buildTrainingSignalDedupeKey({ ...params, merchantKey: normalizeMerchantText(params.merchantText) }) } } });
+};
+
+const writeTrainingSignal = async (params: RecordTrainingSignalInput, context: LearningWriteContext) => {
+  const db = context.db;
+
+  const teachabilityScore =
+    typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
+      ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))
+      : null;
+  if (!shouldPromoteTrainingSignalForLearning({ confidence: params.confidence ?? null, teachabilityScore, merchantText: params.merchantText })) {
+    return null;
+  }
+  const merchantKey = normalizeMerchantText(params.merchantText);
+  const merchantTokens = tokenizeMerchant(params.merchantText);
+  const normalizedMerchantLabel = params.normalizedName?.trim() || summarizeMerchantText(params.merchantText);
+  const expandMerchantPrototypeMemory = shouldExpandMerchantPrototypeMemory({
+    confidence: params.confidence ?? null,
+    teachabilityScore,
+  });
+  const dedupeKey = buildTrainingSignalDedupeKey({
+    source: params.source,
+    transactionId: params.transactionId ?? null,
+    importFileId: params.importFileId ?? null,
+    merchantKey,
+    categoryId: params.categoryId,
+    type: params.type,
+    fieldName: params.fieldName ?? null,
+  });
+
+  const existingSignal = await db.trainingSignal.findUnique({ where: { workspaceId_dedupeKey: { workspaceId: params.workspaceId, dedupeKey } } });
+  if (existingSignal && (existingSignal.approvalStatus !== "active" || existingSignal.appliedObservationKey === context.observationKey ||
+    (existingSignal.learningObservedAt && existingSignal.learningObservedAt > context.observedAt))) return null;
+
+  const signalData = {
+    appliedObservationKey: context.observationKey,
+    learningObservedAt: context.observedAt,
+    workspaceId: params.workspaceId,
+    importFileId: params.importFileId ?? null,
+    transactionId: params.transactionId ?? null,
+    source: params.source,
+    merchantKey,
+    dedupeKey,
+    merchantTokens: merchantTokens as Prisma.InputJsonValue,
+    categoryId: params.categoryId,
+    categoryName: params.categoryName ?? null,
+    type: params.type,
+    confidence: params.confidence ?? 100,
+    teachabilityScore,
+    approvalStatus: "active",
+    fieldName: params.fieldName ?? null,
+    previousValue: params.previousValue ?? Prisma.DbNull,
+    correctedValue: params.correctedValue ?? Prisma.DbNull,
+    notes: params.notes ?? null,
+  };
+
+  const signal = await db.trainingSignal.upsert({
+    where: {
+      workspaceId_dedupeKey: {
+        workspaceId: params.workspaceId,
+        dedupeKey,
+      },
+    },
+    create: signalData,
+    update: {
+      appliedObservationKey: context.observationKey,
+      learningObservedAt: context.observedAt,
+      importFileId: params.importFileId ?? null,
+      transactionId: params.transactionId ?? null,
+      source: params.source,
+      merchantKey,
+      merchantTokens: merchantTokens as Prisma.InputJsonValue,
+      categoryId: params.categoryId,
+      categoryName: params.categoryName ?? null,
+      type: params.type,
+      confidence: params.confidence ?? 100,
+      teachabilityScore,
+      approvalStatus: "active",
+      fieldName: params.fieldName ?? null,
+      previousValue: params.previousValue ?? Prisma.DbNull,
+      correctedValue: params.correctedValue ?? Prisma.DbNull,
+      notes: params.notes ?? null,
+    },
+  });
+
+  const category = await db.category.findUnique({
+    where: { id: params.categoryId },
+  });
+
+  if (category) {
+    await upsertMerchantRule({
+      workspaceId: params.workspaceId,
+      merchantText: params.merchantText,
+      normalizedName: normalizedMerchantLabel || params.merchantText,
+      categoryId: params.categoryId,
+      categoryName: params.categoryName ?? category.name,
+      source: params.source,
+      confidence: params.confidence ?? 100,
+    }, context);
+
+    if (expandMerchantPrototypeMemory) {
+      const institutionScopedMerchantText = buildInstitutionScopedMerchantVariant(params.institution ?? null, params.merchantText);
+      if (institutionScopedMerchantText) {
+        await upsertMerchantRule({
+          workspaceId: params.workspaceId,
+          merchantText: institutionScopedMerchantText,
+          normalizedName: normalizedMerchantLabel || params.merchantText,
+          categoryId: params.categoryId,
+          categoryName: params.categoryName ?? category.name,
+          source: `${params.source}:institution`,
+          confidence: Math.max(70, (params.confidence ?? 100) - 5),
+        }, context);
+      }
+
+      const prototypeVariants = buildMerchantPrototypeVariants(params.merchantText, normalizedMerchantLabel);
+      for (const [index, prototypeLabel] of prototypeVariants.entries()) {
+        await upsertMerchantRule({
+          workspaceId: params.workspaceId,
+          merchantText: prototypeLabel,
+          normalizedName: normalizedMerchantLabel || prototypeLabel,
+          categoryId: params.categoryId,
+          categoryName: params.categoryName ?? category.name,
+          source: `${params.source}:prototype${index > 0 ? `:${index + 1}` : ""}`,
+          confidence: Math.max(60, (params.confidence ?? 100) - 10 - index * 4),
+        }, context);
+
+        const institutionScopedPrototype = buildInstitutionScopedMerchantVariant(params.institution ?? null, prototypeLabel);
+        if (institutionScopedPrototype) {
+          await upsertMerchantRule({
+            workspaceId: params.workspaceId,
+            merchantText: institutionScopedPrototype,
+            normalizedName: normalizedMerchantLabel || prototypeLabel,
+            categoryId: params.categoryId,
+            categoryName: params.categoryName ?? category.name,
+            source: `${params.source}:institution:prototype${index > 0 ? `:${index + 1}` : ""}`,
+            confidence: Math.max(60, (params.confidence ?? 100) - 12 - index * 4),
+          }, context);
+        }
+      }
+
+      const merchantFamilySignature = buildMerchantFamilySignature(params.merchantText);
+      if (shouldPersistMerchantFamilySignature(merchantFamilySignature)) {
+        await upsertMerchantRule({
+          workspaceId: params.workspaceId,
+          merchantText: merchantFamilySignature,
+          normalizedName: normalizedMerchantLabel || merchantFamilySignature,
+          categoryId: params.categoryId,
+          categoryName: params.categoryName ?? category.name,
+          source: `${params.source}:family`,
+          confidence: Math.max(62, (params.confidence ?? 100) - 14),
+        }, context);
+
+        const institutionScopedFamily = buildInstitutionScopedMerchantVariant(params.institution ?? null, merchantFamilySignature);
+        if (institutionScopedFamily) {
+          await upsertMerchantRule({
+            workspaceId: params.workspaceId,
+            merchantText: institutionScopedFamily,
+            normalizedName: normalizedMerchantLabel || merchantFamilySignature,
+            categoryId: params.categoryId,
+            categoryName: params.categoryName ?? category.name,
+            source: `${params.source}:institution:family`,
+            confidence: Math.max(60, (params.confidence ?? 100) - 16),
+          }, context);
+        }
+      }
+    }
+
+  }
+
+  return signal;
+};
+
+type DataQaReviewEntry = {
+  correct?: boolean;
+  feedback?: string;
+  output?: unknown;
+};
+
+type DataQaReviewTransactionEntry = DataQaReviewEntry & {
+  output?: {
+    transactionName?: string | null;
+    normalizedName?: string | null;
+    date?: string | null;
+    category?: string | null;
+    type?: string | null;
+    amount?: string | null;
+  } | null;
+};
+
+type DataQaReviewPayload = {
+  bank?: DataQaReviewEntry;
+  accountNumber?: DataQaReviewEntry;
+  accountType?: DataQaReviewEntry;
+  accountBalance?: DataQaReviewEntry;
+  transactionCount?: DataQaReviewEntry;
+  transactions?: DataQaReviewTransactionEntry[];
+  additionalTransactions?: DataQaReviewTransactionEntry[];
+  manualFeedback?: string | null;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const normalizeReviewText = (value: unknown) => normalizeWhitespace(String(value ?? ""));
+
+const readReviewString = (value: unknown, key: string) => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const next = value[key];
+  return typeof next === "string" && next.trim() ? next.trim() : null;
+};
+
+const readReviewBoolean = (value: unknown, key: string) => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return Boolean(value[key]);
+};
+
+const readReviewOutputText = (value: unknown) => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const next = value.output;
+  if (typeof next === "string" && next.trim()) {
+    return next.trim();
+  }
+
+  if (isRecord(next)) {
+    const candidate = next.output ?? next.value ?? next.text ?? next.accountNumber ?? next.bank ?? next.amount;
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return String(candidate);
+    }
+  }
+
+  return null;
+};
+
+const normalizeImportedAccountType = (value: unknown): ImportedAccountType => {
+  const normalized = normalizeReviewText(value).toLowerCase();
+
+  if (
+    normalized === "bank" ||
+    normalized === "wallet" ||
+    normalized === "credit_card" ||
+    normalized === "cash" ||
+    normalized === "investment" ||
+    normalized === "other"
+  ) {
+    return normalized;
+  }
+
+  if (
+    normalized === "loan" ||
+    normalized === "mortgage" ||
+    normalized === "line_of_credit" ||
+    normalized === "receivable" ||
+    normalized === "payable" ||
+    normalized === "bnpl" ||
+    normalized === "prepaid" ||
+    normalized === "insurance"
+  ) {
+    return "other";
+  }
+
+  return "bank";
+};
+
+const normalizeTransactionType = (value: unknown, amount?: unknown, categoryName?: unknown): TransactionType =>
+  coerceTransactionTypeFromCategoryName(categoryName, toInternalTransactionType(value, amount));
+
+export const applyDataQaReviewLearning = async (params: {
+  workspaceId: string;
+  observationId?: string | null;
+  reviewAuthority?: "human" | "automated";
+  importFileId?: string | null;
+  accountId?: string | null;
+  fileName: string;
+  fileType: string;
+  metadata: DetectedStatementMetadata;
+  parsedRows: Array<Record<string, unknown>>;
+  fieldReviewPayload?: Prisma.JsonValue | null;
+  manualFeedback?: string | null;
+  actorUserId?: string | null;
+  statementFingerprint?: string | null;
+  statementMetadataOverride?: Partial<DetectedStatementMetadata> | null;
+}, db?: Prisma.TransactionClient) => {
+  const review = isRecord(params.fieldReviewPayload) ? (params.fieldReviewPayload as DataQaReviewPayload) : {};
+  const effectiveMetadata = {
+    ...params.metadata,
+    ...(params.statementMetadataOverride ?? {}),
+  } as DetectedStatementMetadata;
+  const bankName = readReviewOutputText(review.bank) ?? normalizeReviewText(effectiveMetadata.institution);
+  const accountName = normalizeReviewText(effectiveMetadata.accountName || effectiveMetadata.institution || params.fileName);
+  const accountNumber = readReviewOutputText(review.accountNumber) ?? normalizeReviewText(effectiveMetadata.accountNumber);
+  const accountType = normalizeImportedAccountType(readReviewOutputText(review.accountType) ?? effectiveMetadata.accountType ?? "bank");
+  const accountBalance = readReviewOutputText(review.accountBalance);
+  const reviewSeed = [
+    `bank:${bankName}`,
+    `account:${accountName}`,
+    `account_number:${accountNumber}`,
+    `account_type:${accountType}`,
+    `opening_balance:${effectiveMetadata.openingBalance ?? ""}`,
+    `ending_balance:${effectiveMetadata.endingBalance ?? ""}`,
+    `rows:${params.parsedRows.length}`,
+    ...params.parsedRows.slice(0, 12).map((row, index) => {
+      const record = isRecord(row) ? row : {};
+      return [
+        `row:${index + 1}`,
+        normalizeReviewText(record.merchantClean ?? record.merchantRaw ?? record.description ?? record.name),
+        normalizeReviewText(record.categoryName ?? record.category ?? record.normalizedCategory),
+        normalizeReviewText(record.date ?? record.transactionDate ?? record.postedDate ?? record.statementDate),
+        normalizeReviewText(record.amount ?? record.value ?? record.total),
+      ]
+        .filter((part) => part.length > 0)
+        .join("|");
+    }),
+  ]
+    .filter((part) => part.length > 0)
+    .join("\n");
+
+  const fingerprintMetadata: StatementMetadataSnapshot = {
+    institution: bankName || (effectiveMetadata.institution ?? null),
+    accountNumber: accountNumber || (effectiveMetadata.accountNumber ?? null),
+    accountName: effectiveMetadata.accountName ?? null,
+    accountType: accountType,
+    currency: effectiveMetadata.currency ?? null,
+    openingBalance: effectiveMetadata.openingBalance ?? null,
+    endingBalance: accountBalance ? parseAmountValue(accountBalance) ?? effectiveMetadata.endingBalance ?? null : effectiveMetadata.endingBalance ?? null,
+    paymentDueDate: effectiveMetadata.paymentDueDate ?? null,
+    totalAmountDue: effectiveMetadata.totalAmountDue ?? null,
+    startDate: effectiveMetadata.startDate ?? null,
+    endDate: effectiveMetadata.endDate ?? null,
+    confidence: effectiveMetadata.confidence ?? 0,
+  };
+
+  const actions: LearningAction[] = [];
+  const templateInput: Parameters<typeof upsertStatementTemplate>[0] = {
+    workspaceId: params.workspaceId,
+    fingerprint:
+      params.statementFingerprint ??
+      buildStatementFingerprint(reviewSeed, fingerprintMetadata, params.fileName, params.fileType),
+    metadata: fingerprintMetadata,
+    fileType: params.fileType,
+    parserConfig: {
+      source: params.reviewAuthority === "automated" ? "automated_qa" : "data_qa_review",
+      reviewRevision: params.observationId ?? null,
+      rowCount: params.parsedRows.length,
+      statementFamilySignature: buildStatementFamilySignature({
+        rows: params.parsedRows as ParsedImportRow[],
+        metadata: {
+          institution: fingerprintMetadata.institution ?? null,
+          accountType: fingerprintMetadata.accountType ?? null,
+          startDate: fingerprintMetadata.startDate ?? null,
+          endDate: fingerprintMetadata.endDate ?? null,
+        },
+        fileType: params.fileType,
+      }),
+      importFileId: params.importFileId ?? null,
+      accountId: params.accountId ?? null,
+      manualFeedback: Boolean(params.manualFeedback?.trim()),
+      correctedFields: {
+        bank: readReviewBoolean(review.bank, "correct"),
+        accountNumber: readReviewBoolean(review.accountNumber, "correct"),
+        accountType: readReviewBoolean(review.accountType, "correct"),
+        accountBalance: readReviewBoolean(review.accountBalance, "correct"),
+        transactionCount: readReviewBoolean(review.transactionCount, "correct"),
+        transactionRows: Array.isArray(review.transactions) ? review.transactions.filter((entry) => readReviewBoolean(entry, "correct")).length : 0,
+      },
+    } as Prisma.InputJsonValue,
+  };
+
+  const accountInput: Parameters<typeof upsertAccountRule>[0] = {
+    workspaceId: params.workspaceId,
+    accountId: params.accountId ?? null,
+    accountName,
+    institution: bankName || null,
+    accountType,
+    source: params.reviewAuthority === "automated" ? "automated_qa" : "data_qa_review",
+    confidence: readReviewBoolean(review.bank, "correct") || readReviewBoolean(review.accountNumber, "correct") || readReviewBoolean(review.accountType, "correct") ? 100 : 85,
+  };
+
+  actions.push({ kind: "template", input: templateInput }, { kind: "account", input: accountInput });
+
+  const categories = await (db ?? prisma).category.findMany({
+    where: { workspaceId: params.workspaceId },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+  const categoriesByName = new Map(categories.map((category) => [normalizeMerchantText(category.name), category] as const));
+
+  let transactionSignals = 0;
+  const transactionReviews = Array.isArray(review.transactions) ? review.transactions : [];
+
+  for (let index = 0; index < Math.min(transactionReviews.length, params.parsedRows.length); index += 1) {
+    const reviewRow = transactionReviews[index];
+    if (!readReviewBoolean(reviewRow, "correct")) {
+      continue;
+    }
+
+    const parsedRow = params.parsedRows[index];
+    const parsedRecord = isRecord(parsedRow) ? parsedRow : {};
+    const parsedMerchantText = normalizeReviewText(parsedRecord.merchantRaw ?? parsedRecord.description ?? parsedRecord.name ?? parsedRecord.merchantClean);
+    const parsedNormalizedText = normalizeReviewText(parsedRecord.merchantClean ?? parsedRecord.normalizedName ?? parsedRecord.normalizedMerchant ?? parsedRecord.merchantRaw);
+    const categoryName =
+      readReviewString(reviewRow.output, "category") ??
+      normalizeReviewText(parsedRecord.categoryName ?? parsedRecord.category ?? parsedRecord.normalizedCategory);
+    const category = categoriesByName.get(normalizeMerchantText(categoryName)) ?? null;
+    const merchantText =
+      parsedMerchantText ||
+      readReviewString(reviewRow.output, "transactionName") ||
+      readReviewString(reviewRow.output, "normalizedName") ||
+      normalizeReviewText(parsedRecord.merchantClean ?? parsedRecord.merchantRaw ?? parsedRecord.description ?? parsedRecord.name);
+    const normalizedName =
+      readReviewString(reviewRow.output, "normalizedName") ??
+      readReviewString(reviewRow.output, "transactionName") ??
+      (parsedNormalizedText || parsedMerchantText);
+    const type = normalizeTransactionType(
+      readReviewString(reviewRow.output, "type") ?? parsedRecord.type ?? parsedRecord.transactionType ?? "expense",
+      parsedRecord.amount ?? parsedRecord.value ?? parsedRecord.total,
+      categoryName
+    );
+
+    if (!category || !merchantText) {
+      continue;
+    }
+
+    const parsedRowPreview = {
+      merchantRaw: merchantText,
+      merchantClean: normalizedName ?? merchantText,
+      categoryName,
+      type,
+      amount: parsedRecord.amount ?? parsedRecord.value ?? parsedRecord.total ?? null,
+      date: parsedRecord.date ?? parsedRecord.transactionDate ?? parsedRecord.postedDate ?? parsedRecord.statementDate ?? null,
+    } as ParsedImportRow;
+    const teachability = assessParsedRowTeachability(parsedRowPreview);
+    if (teachability.score < 55) {
+      continue;
+    }
+
+    transactionSignals++;
+    actions.push({ kind: "signal", input: {
+        observationId: params.observationId ?? null,
+        workspaceId: params.workspaceId,
+        importFileId: params.importFileId ?? null,
+        merchantText,
+        normalizedName,
+        categoryId: category.id,
+        categoryName: category.name,
+        type,
+        source: params.reviewAuthority === "automated" ? "import_confirmation" : "manual_recategorization",
+        confidence: Math.max(60, (readReviewString(reviewRow, "feedback") ? 90 : 100) - scoreRowShapeLearningPenalty(teachability.score)),
+        teachabilityScore: teachability.score,
+        notes:
+          readReviewString(reviewRow, "feedback") ??
+          (params.reviewAuthority === "automated" ? "Automated QA suggestion; not human confirmation." : "Confirmed through Data QA review."),
+        actorUserId: params.actorUserId ?? null,
+      } });
+  }
+
+  const additionalTransactions = Array.isArray(review.additionalTransactions) ? review.additionalTransactions : [];
+  for (const reviewRow of additionalTransactions) {
+    const output = isRecord(reviewRow) && isRecord(reviewRow.output) ? reviewRow.output : null;
+    const categoryName =
+      readReviewString(output, "category") ??
+      normalizeReviewText((output as Record<string, unknown> | null)?.category);
+    const category = categoriesByName.get(normalizeMerchantText(categoryName)) ?? null;
+    const merchantText =
+      readReviewString(output, "transactionName") ??
+      readReviewString(output, "normalizedName") ??
+      "";
+    const normalizedName = readReviewString(output, "normalizedName") ?? null;
+    const type = normalizeTransactionType(
+      readReviewString(output, "type") ?? "expense",
+      output && isRecord(output) ? output.amount : null,
+      categoryName
+    );
+
+    if (!category || !merchantText) {
+      continue;
+    }
+
+    const parsedRowPreview = {
+      merchantRaw: merchantText,
+      merchantClean: normalizedName ?? merchantText,
+      categoryName,
+      type,
+      amount: output && isRecord(output) ? output.amount : null,
+      date: output && isRecord(output) ? output.date ?? null : null,
+    } as ParsedImportRow;
+    const teachability = assessParsedRowTeachability(parsedRowPreview);
+    if (teachability.score < 55) {
+      continue;
+    }
+
+    transactionSignals++;
+    actions.push({ kind: "signal", input: {
+        observationId: params.observationId ?? null,
+        workspaceId: params.workspaceId,
+        importFileId: params.importFileId ?? null,
+        merchantText,
+        categoryId: category.id,
+        categoryName: category.name,
+        type,
+        source: params.reviewAuthority === "automated" ? "import_confirmation" : "manual_transaction_creation",
+        confidence: Math.max(60, (readReviewBoolean(reviewRow, "correct") ? 100 : 90) - scoreRowShapeLearningPenalty(teachability.score)),
+        teachabilityScore: teachability.score,
+        notes:
+          readReviewString(reviewRow, "feedback") ??
+          "Added manually from Data QA because the parser missed this transaction.",
+        actorUserId: params.actorUserId ?? null,
+      } });
+  }
+
+  const job = await enqueueLearningJob({ workspaceId: params.workspaceId, source: params.reviewAuthority === "automated" ? "automated_qa" : "data_qa_review", sourceId: params.importFileId, actions }, db);
+  const result = job && !db ? await processLearningJob(job.id) : job;
+  return {
+    learningJobId: result?.id ?? null, status: result?.status ?? "skipped",
+    transactionSignals, appliedItems: result?.appliedItems ?? 0, processedItems: result?.nextIndex ?? 0,
+    errorCode: result?.errorCode ?? null, errorMessage: result?.errorMessage ?? null,
+  };
+};
+
+export const loadImportEnrichmentTrainingContext = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {
+  const [merchantRules, accountRules, trainingSignals, negativeSignals] = await Promise.all([
+    loadMerchantRules(workspaceId, rows),
+    loadAccountRules(workspaceId, rows),
+    loadTrainingSignals(workspaceId, rows),
+    loadNegativeMerchantSignals(workspaceId, rows),
+  ]);
+
+  return { merchantRules, accountRules, trainingSignals, negativeSignals };
+};
+
+export const enrichParsedRowsWithTraining = async (params: {
+  workspaceId: string;
+  rows: ParsedImportRow[];
+  statementConfidence?: number;
+  trainingContext?: Awaited<ReturnType<typeof loadImportEnrichmentTrainingContext>>;
+}) => {
+  // Structured app exports already contain user-chosen labels. Preserve them
+  // without loading training data or rerunning per-row merchant inference.
+  const preserveMigration = (row: ParsedImportRow): EnrichedParsedImportRow => {
+    const migration = readAppMigration(row.rawPayload)!;
+    const reason = row.rawPayload?.reviewRequired ? String(row.rawPayload.reviewReason ?? "Check the source transaction.")
+      : !migration.categoryPath.length && row.type !== "transfer" ? "Choose a category for this imported transaction." : null;
+    return {
+      ...row,
+      parserVersion: DATA_ENGINE_VERSION,
+      categoryReason: "source-app-preserved",
+      reviewStatus: reason ? "pending_review" : "suggested",
+      confidence: reason ? 55 : 100,
+      parserConfidence: reason ? 55 : 100,
+      categoryConfidence: reason ? 55 : 100,
+      accountMatchConfidence: 0,
+      duplicateConfidence: 0,
+      transferConfidence: row.type === "transfer" ? 100 : 0,
+      rawPayload: { ...row.rawPayload, ...(reason ? { reviewRequired: true, reviewReason: reason, reviewReasons: [reason] } : {}) },
+      normalizedPayload: { merchantClean: row.merchantClean ?? row.merchantRaw ?? null, categoryName: row.categoryName ?? null, type: row.type ?? null, accountName: row.accountName ?? null, sourcePreserved: true },
+    };
+  };
+  if (params.rows.length && params.rows.every(row => readAppMigration(row.rawPayload))) return params.rows.map(preserveMigration);
+  const { merchantRules, accountRules, trainingSignals, negativeSignals } =
+    params.trainingContext ?? (await loadImportEnrichmentTrainingContext(params.workspaceId, params.rows));
+  const rawStatementConfidence =
+    typeof params.statementConfidence === "number" && Number.isFinite(params.statementConfidence)
+      ? Math.max(0, Math.min(100, params.statementConfidence))
+      : 0;
+  const statementConfidence = rawStatementConfidence > 0 ? rawStatementConfidence : 100;
+  const rowShapeAssessment = assessParsedRowShapeConsistency(params.rows);
+  const normalizeConfidenceScore = (value: unknown) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return 0;
+    }
+
+    const scaled = value > 0 && value <= 1 ? value * 100 : value;
+    return Math.max(0, Math.min(100, Math.round(scaled)));
+  };
+
+  const rowShapePenalty = scoreRowShapeLearningPenalty(rowShapeAssessment.score);
+  const rowAmountProfile = buildRowAmountProfile(params.rows);
+
+  const isRowLowConfidence = (details: {
+    effectiveConfidence: number;
+    categoryName: string;
+    categoryReason?: string | null;
+    rowType?: ParsedImportRow["type"];
+    teachabilityScore?: number;
+    anomalyScore?: number;
+    anomalyIssues?: string[];
+  }) => {
+    if (!details.rowType) {
+      return true;
+    }
+
+    if (rowShapeAssessment.score < 65) {
+      return true;
+    }
+
+    if (typeof details.teachabilityScore === "number" && details.teachabilityScore < 55) {
+      return true;
+    }
+
+    if (typeof details.anomalyScore === "number" && details.anomalyScore < 55) {
+      return true;
+    }
+
+    if (Array.isArray(details.anomalyIssues) && details.anomalyIssues.some((issue) => issue === "merchant_header_noise" || issue === "merchant_placeholder")) {
+      return true;
+    }
+
+    if (!details.categoryName || details.categoryName.trim().toLowerCase() === "other") {
+      return true;
+    }
+
+    if (details.categoryReason === "contextual-hardcoded-override" && details.effectiveConfidence < 80) {
+      return true;
+    }
+
+    return details.effectiveConfidence < 70;
+  };
+
+  return params.rows.map((row) => {
+    if (readAppMigration(row.rawPayload)) return preserveMigration(row);
+    const rowWithInstitution = row as ParsedImportRow & {
+      institution?: string | null;
+      normalizedPayload?: Prisma.JsonValue | null;
+      parserConfidence?: number | null;
+      categoryConfidence?: number | null;
+    };
+    const merchantText = row.merchantRaw || row.description || row.merchantClean || "";
+    const deterministicMerchantName = summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const classificationMerchantText = deterministicMerchantName || merchantText;
+    const normalizedPayload =
+      rowWithInstitution.normalizedPayload &&
+      typeof rowWithInstitution.normalizedPayload === "object" &&
+      !Array.isArray(rowWithInstitution.normalizedPayload)
+        ? (rowWithInstitution.normalizedPayload as Record<string, unknown>)
+        : null;
+    const rawPayload =
+      rowWithInstitution.rawPayload &&
+      typeof rowWithInstitution.rawPayload === "object" &&
+      !Array.isArray(rowWithInstitution.rawPayload)
+        ? (rowWithInstitution.rawPayload as Record<string, unknown>)
+        : null;
+    const originalParserCategoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
+    // Keep the category used by the final Transaction in sync with the parsed
+    // record. Otherwise a vision-model "Shopping" label can be persisted as
+    // Food & Dining, then overwritten by the stale in-memory value during the
+    // visible transaction handoff.
+    const parserCategoryName = resolveParsedTransactionCategoryName({
+      categoryName: originalParserCategoryName,
+      type: row.type ?? "expense",
+      merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? null,
+      description: row.description ?? null,
+      rawPayload,
+    });
+    const parserCategoryWasCorrected =
+      Boolean(originalParserCategoryName) &&
+      normalizeMerchantText(originalParserCategoryName) !== normalizeMerchantText(parserCategoryName);
+    const categoryText = [
+      row.merchantRaw,
+      row.merchantClean,
+      row.description,
+      deterministicMerchantName,
+      typeof normalizedPayload?.merchantClean === "string" ? normalizedPayload.merchantClean : null,
+      typeof normalizedPayload?.categoryName === "string" ? normalizedPayload.categoryName : null,
+      typeof rawPayload?.merchantCurrency === "string" ? rawPayload.merchantCurrency : null,
+      typeof rawPayload?.accountCurrency === "string" ? rawPayload.accountCurrency : null,
+      typeof rawPayload?.merchantAmountText === "string" ? rawPayload.merchantAmountText : null,
+      typeof rawPayload?.accountAmountText === "string" ? rawPayload.accountAmountText : null,
+      typeof rawPayload?.status === "string" ? rawPayload.status : null,
+      typeof normalizedPayload?.merchantCurrency === "string" ? normalizedPayload.merchantCurrency : null,
+      typeof normalizedPayload?.accountCurrency === "string" ? normalizedPayload.accountCurrency : null,
+      typeof normalizedPayload?.merchantAmountText === "string" ? normalizedPayload.merchantAmountText : null,
+      typeof normalizedPayload?.accountAmountText === "string" ? normalizedPayload.accountAmountText : null,
+      typeof normalizedPayload?.status === "string" ? normalizedPayload.status : null,
+    ]
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .join(" ");
+    const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
+    const rowTeachability = assessParsedRowTeachability(row);
+    const rowAnomalies = assessParsedRowAnomalies(row);
+    const rowAmountAnomalies = assessParsedRowAmountAnomalies({
+      row,
+      amountProfile: rowAmountProfile,
+      contextText: categoryText,
+    });
+    const learned = rowTeachability.score < 55
+      ? {
+          categoryName: row.categoryName && row.categoryName.trim().toLowerCase() !== "other" ? row.categoryName : null,
+          confidence: Math.max(20, rowTeachability.score),
+          categoryReason: "row_teachability_blocked",
+          categorySource: null,
+          merchantKey: normalizeMerchantText(classificationMerchantText),
+          merchantTokens: tokenizeMerchant(classificationMerchantText),
+          normalizedName: deterministicMerchantName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null),
+          preferredType: row.type ?? "expense",
+        }
+      : classifyMerchant({
+          merchantText: classificationMerchantText,
+          categoryText,
+          institution: rowWithInstitution.institution ?? null,
+          type: row.type ?? "expense",
+          categoryName: parserCategoryName,
+          merchantRules,
+          trainingSignals,
+          negativeSignals,
+        });
+    const learningConfidence = estimateImportLearningConfidence({
+      baseConfidence: learned.confidence,
+      teachabilityScore: rowTeachability.score,
+      rowShapeScore: rowShapeAssessment.score,
+      negativeSignalCount: negativeSignals.length,
+    });
+    const learnedNormalizedName = typeof learned.normalizedName === "string" ? learned.normalizedName.trim() : "";
+    const deterministicNormalizedName = deterministicMerchantName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const learnedNameSource = typeof learned.categorySource === "string" ? learned.categorySource : null;
+    const learnedCategoryReason = typeof learned.categoryReason === "string" ? learned.categoryReason : null;
+    const learnedNameConflictsWithParser =
+      Boolean(deterministicNormalizedName) &&
+      Boolean(learnedNormalizedName) &&
+      normalizeMerchantText(deterministicNormalizedName) !== normalizeMerchantText(learnedNormalizedName);
+    const shouldKeepParserMerchantName =
+      learnedNameConflictsWithParser &&
+      !isAuthoritativeLearningSource(learnedNameSource);
+    const merchantClean = shouldKeepParserMerchantName
+      ? deterministicNormalizedName
+      : learnedNormalizedName || deterministicNormalizedName;
+    const accountName = row.accountName ?? null;
+    const parserSuppliedConcreteCategory = Boolean(parserCategoryName) && parserCategoryName.toLowerCase() !== "other";
+    const protectedParserCategory = isProtectedParserCategory({
+      institution: rowWithInstitution.institution ?? null,
+      parserCategoryName,
+      merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? null,
+      description: row.description ?? null,
+    });
+    const learnedCategorySource = typeof learned.categorySource === "string" ? learned.categorySource : null;
+    const learnedCategoryName = typeof learned.categoryName === "string" ? learned.categoryName.trim() : "";
+    const learnedConflictsWithParser =
+      parserSuppliedConcreteCategory &&
+      learnedCategoryName.length > 0 &&
+      normalizeMerchantText(learnedCategoryName) !== normalizeMerchantText(parserCategoryName);
+    const learnedCanSafelyReplaceOther =
+      !parserSuppliedConcreteCategory &&
+      learnedCategoryName.length > 0 &&
+      parserCategoryName.toLowerCase() === "other" &&
+      (isAuthoritativeLearningSource(learnedCategorySource) ||
+        (isExactLearningReason(learnedCategoryReason) && normalizeConfidenceScore(learned.confidence) >= 85));
+    const shouldKeepParserCategory =
+      parserCategoryWasCorrected ||
+      protectedParserCategory ||
+      (learnedConflictsWithParser && !isAuthoritativeLearningSource(learnedCategorySource)) ||
+      (!parserSuppliedConcreteCategory &&
+        parserCategoryName.toLowerCase() === "other" &&
+        learnedCategoryName.length > 0 &&
+        !learnedCanSafelyReplaceOther);
+    const categoryName = shouldKeepParserCategory
+      ? parserCategoryName
+      : learned.categoryName || parserCategoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
+    const nextType = coerceTransactionTypeFromCategoryName(
+      categoryName,
+      shouldKeepParserCategory ? row.type ?? "expense" : learned.preferredType ?? row.type ?? "expense"
+    );
+    const repairedCategory = repairKnownMerchantCategory({
+      merchantText: merchantClean || classificationMerchantText,
+      categoryText,
+      currentCategoryName: categoryName,
+      currentType: nextType,
+      institution: rowWithInstitution.institution ?? null,
+    });
+    const resolvedCategoryName = repairedCategory?.categoryName ?? categoryName;
+    const resolvedType = repairedCategory?.preferredType ?? nextType;
+    const rowConfidence = normalizeConfidenceScore(row.confidence);
+    const rowParserConfidence = normalizeConfidenceScore(rowWithInstitution.parserConfidence);
+    const rowCategoryConfidence = normalizeConfidenceScore(rowWithInstitution.categoryConfidence);
+    const deterministicParserConfidence = parserSuppliedConcreteCategory
+      ? Math.max(rowConfidence, rowParserConfidence, rowCategoryConfidence, Math.min(95, Math.max(90, statementConfidence)))
+      : 0;
+    const shapeConfidence = Math.max(0, Math.min(100, rowShapeAssessment.score));
+    const teachabilityPenalty = scoreRowShapeLearningPenalty(rowTeachability.score);
+    const amountAnomalyPenalty = rowAmountAnomalies.scorePenalty;
+    const effectiveConfidence = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.max(learningConfidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence, Math.round(shapeConfidence * 0.25)) -
+          rowShapePenalty -
+          teachabilityPenalty -
+          amountAnomalyPenalty
+      )
+    );
+    const repairedConfidence = repairedCategory ? Math.max(effectiveConfidence, repairedCategory.confidence) : effectiveConfidence;
+    const anomalyScore = Math.max(0, rowAnomalies.score - amountAnomalyPenalty);
+    const anomalyIssues = [...new Set([...rowAnomalies.issues, ...rowAmountAnomalies.issues])];
+    const anomalyPenalty = anomalyScore < 55 ? Math.max(6, 55 - anomalyScore) : 0;
+    const parserConfidence = Math.max(
+      0,
+      Math.max(rowParserConfidence, rowConfidence, statementConfidence, Math.round(shapeConfidence * 0.2)) -
+        Math.floor(rowShapePenalty * 0.5) -
+        Math.floor(teachabilityPenalty * 0.5) -
+        Math.floor(anomalyPenalty * 0.4) -
+        Math.floor(amountAnomalyPenalty * 0.45)
+    );
+    const categoryConfidence = Math.max(rowCategoryConfidence, effectiveConfidence);
+    const learnedRuleIdsApplied = [
+      ...(Array.isArray(row.learnedRuleIdsApplied) ? (row.learnedRuleIdsApplied as string[]) : []),
+      ...(accountMatch ? [`account-rule:${accountMatch.rule.ruleKey}`] : []),
+    ];
+    return {
+      ...row,
+      merchantClean: merchantClean || undefined,
+      accountName: accountMatch?.rule.accountName ?? accountName ?? undefined,
+      institution: rowWithInstitution.institution ?? accountMatch?.rule.institution ?? undefined,
+      categoryName: resolvedCategoryName,
+      confidence: repairedConfidence,
+      categoryReason: repairedCategory?.reason ?? learned.categoryReason,
+      parserVersion: DATA_ENGINE_VERSION,
+      reviewStatus: isRowLowConfidence({
+        effectiveConfidence: repairedConfidence,
+        categoryName: resolvedCategoryName,
+        categoryReason: repairedCategory?.reason ?? learned.categoryReason,
+        rowType: resolvedType,
+        teachabilityScore: rowTeachability.score,
+        anomalyScore,
+        anomalyIssues,
+      })
+        ? "pending_review"
+        : "suggested",
+      parserConfidence,
+      categoryConfidence: Math.max(rowCategoryConfidence, repairedConfidence),
+      accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.max(70, accountMatch.score))) : 0,
+      duplicateConfidence: 0,
+      transferConfidence: resolvedType === "transfer" ? 100 : 0,
+      rowShapeConfidence: shapeConfidence,
+      rowTeachabilityConfidence: rowTeachability.score,
+      rowAnomalyConfidence: anomalyScore,
+      learnedRuleIdsApplied,
+      normalizedPayload: {
+        merchantClean: merchantClean || null,
+        categoryName: resolvedCategoryName,
+        type: resolvedType,
+        accountName: accountMatch?.rule.accountName ?? accountName ?? null,
+        institution: row.institution ?? accountMatch?.rule.institution ?? null,
+      } as Prisma.InputJsonValue,
+      rawPayload: {
+        ...(row.rawPayload ?? {}),
+        classification: {
+          engineVersion: DATA_ENGINE_VERSION,
+          merchantKey: learned.merchantKey,
+          merchantTokens: learned.merchantTokens,
+          categoryReason: shouldKeepParserCategory ? "parser-category-preserved" : learned.categoryReason,
+          categorySource: learnedCategorySource,
+          sourceCategoryName: originalParserCategoryName || null,
+          normalizedCategoryName: parserCategoryName,
+          categoryMappingApplied:
+            Boolean(originalParserCategoryName) &&
+            normalizeMerchantText(originalParserCategoryName) !== normalizeMerchantText(parserCategoryName),
+          learnedCategoryName: learnedCategoryName || null,
+          repairedCategoryName: repairedCategory?.categoryName ?? null,
+          repairedCategoryReason: repairedCategory?.reason ?? null,
+          merchantNameSource: learnedNameSource,
+          learnedMerchantName: learnedNormalizedName || null,
+          merchantNameReason: shouldKeepParserMerchantName ? "parser-merchant-preserved" : learned.categoryReason,
+          confidence: repairedConfidence,
+          accountRuleKey: accountMatch?.rule.ruleKey ?? null,
+          accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,
+          statementConfidence,
+          normalizedName: merchantClean || null,
+          preferredType: resolvedType,
+          rowTeachability: {
+            score: rowTeachability.score,
+            issues: rowTeachability.issues,
+          },
+          rowAmountProfile,
+          rowAnomalies: {
+            score: anomalyScore,
+            issues: anomalyIssues,
+            amountIssues: rowAmountAnomalies.issues,
+          },
+        },
+      },
+      type: resolvedType,
+    } satisfies EnrichedParsedImportRow;
+  });
+};
+
+export async function applyLearningAction(action: LearningAction, context: LearningWriteContext): Promise<boolean> {
+  const { db } = context;
+  const input = action.input;
+  if (action.kind === "signal") {
+    const signal = action.input;
+    const category = await db.category.findFirst({ where: { id: signal.categoryId, workspaceId: signal.workspaceId } });
+    if (!category) throw new LearningInputError("CATEGORY_UNAVAILABLE", "The learning category is missing or belongs to another Profile.");
+    if (signal.importFileId && !await db.importFile.findFirst({ where: { id: signal.importFileId, workspaceId: signal.workspaceId, status: { not: "deleted" } }, select: { id: true } })) {
+      throw new LearningInputError("SOURCE_UNAVAILABLE", "The source import is missing, removed or belongs to another Profile.");
+    }
+    if (signal.transactionId) {
+      const transaction = await db.transaction.findFirst({ where: { id: signal.transactionId, workspaceId: signal.workspaceId } });
+      if (!transaction) throw new LearningInputError("SOURCE_UNAVAILABLE", "The source transaction is missing or belongs to another Profile.");
+      if (transaction.deletedAt || ["rejected", "duplicate_skipped"].includes(transaction.reviewStatus)) return false;
+      // An old queued edit must never teach over a newer saved correction.
+      if (signal.observationId && signal.observationId !== transaction.updatedAt.toISOString()) {
+        // Notes, tags and other unrelated edits also advance updatedAt. Only
+        // superseded learning values invalidate this saved observation.
+        const currentNames = [transaction.merchantRaw, transaction.merchantClean].filter(Boolean).map(value => value!.trim());
+        if (transaction.categoryId !== signal.categoryId || transaction.type !== signal.type || !currentNames.includes(signal.merchantText.trim()) ||
+          (signal.normalizedName && signal.normalizedName.trim() !== (transaction.merchantClean || transaction.merchantRaw).trim())) return false;
+      }
+      if (/^manual/.test(signal.source) && (!(["confirmed", "edited"] as string[]).includes(transaction.reviewStatus) || transaction.categoryId !== signal.categoryId || transaction.type !== signal.type)) return false;
+    }
+    return Boolean(await writeTrainingSignal(signal, context));
+  }
+  if (action.kind === "account") {
+    if (action.input.accountId) {
+      const account = await db.account.findFirst({ where: { id: action.input.accountId, workspaceId: input.workspaceId } });
+      if (!account) throw new LearningInputError("ACCOUNT_UNAVAILABLE", "The learning account is missing or belongs to another Profile.");
+      if (/^manual/.test(action.input.source) && (account.name !== action.input.accountName || account.type !== action.input.accountType || account.institution !== (action.input.institution ?? null))) return false;
+    }
+    return Boolean(await upsertAccountRule(action.input, context));
+  }
+  if (action.kind === "template") {
+    if (action.sourceImportFileId) {
+      const source = await db.importFile.findFirst({ where: { id: action.sourceImportFileId, workspaceId: input.workspaceId }, select: { status: true, transactions: { select: { reviewStatus: true, deletedAt: true } } } });
+      if (!source || ["deleted", "failed"].includes(source.status)) throw new LearningInputError("SOURCE_UNAVAILABLE", "The template source is missing, removed or needs import repair.");
+      if (action.requireCompletedSource && source.status !== "done") throw new LearningInputError("SOURCE_NOT_READY", "Template learning is waiting for the source import to finish.");
+      if (action.requireReviewedTransactions && (!source.transactions.length || source.transactions.some(row => row.deletedAt || row.reviewStatus === "pending_review"))) throw new LearningInputError("SOURCE_NOT_READY", "Template learning is waiting for receipt review.");
+    }
+    const config=action.input.parserConfig;
+    if (action.sourceImportFileId && action.requireCompletedSource &&
+      action.input.fileType?.toLowerCase()==='application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+      config && typeof config==='object' && !Array.isArray(config) && (config as Record<string,unknown>).rowCount===0) {
+      throw new LearningInputError('SUPERSEDED_SOURCE','This job described an empty Word parse. Its input is retained for audit; use the corrected source learning job.');
+    }
+    const template = await upsertStatementTemplate(action.input, context);
+    if (template && action.learnCandidates) await writeTemplateCandidates(template, context);
+    return Boolean(template);
+  }
+  throw new LearningInputError("INVALID_INPUT", "This learning action is not supported.");
+}

@@ -1,0 +1,85 @@
+import Link from "next/link";
+import { AdminSignOut } from "./admin-sign-out";
+import type { ReactNode } from "react";
+
+type AdminPageChromeProps = {
+  active:
+    | "work-queue"
+    | "security"
+    | "approvals"
+    | "home"
+    | "content"
+    | "campaigns"
+    | "notifications"
+    | "users"
+    | "support"
+    | "operations"
+    | "analytics"
+    | "analysis"
+    | "logs"
+    | "errors"
+    | "inquiries"
+    | "data-qa";
+  title: string;
+  kicker?: string;
+  subtitle?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+};
+
+const adminNavItems = [
+  { key: "work-queue", href: "/admin/work-queue", label: "Work queue" },
+  { key: "security", href: "/admin/security", label: "Security & access" },
+  { key: "approvals", href: "/admin/approvals", label: "Approvals" },
+  { key: "home", href: "/admin", label: "Overview" },
+  { key: "content", href: "/admin/content", label: "Content" },
+  { key: "users", href: "/admin/users", label: "Users" },
+  {
+    key: "campaigns",
+    href: "/admin/campaigns",
+    label: "Campaigns & Referrals",
+  },
+  {
+    key: "notifications",
+    href: "/admin/notifications",
+    label: "Notifications",
+  },
+  { key: "support", href: "/admin/support", label: "Support" },
+  { key: "operations", href: "/admin/operations", label: "Import operations" },
+  { key: "analytics", href: "/admin/analytics", label: "Analytics" },
+  { key: "analysis", href: "/admin/analysis", label: "Analysis" },
+  { key: "logs", href: "/admin/logs", label: "Audit logs" },
+  { key: "errors", href: "/admin/errors", label: "Errors" },
+  { key: "inquiries", href: "/admin/inquiries", label: "Inquiries" },
+  { key: "data-qa", href: "/admin/data-qa", label: "Data quality" },
+] as const;
+
+export function AdminPageChrome({
+  active,
+  title,
+  actions,
+  children,
+}: AdminPageChromeProps) {
+  return (
+    <div className="admin-page-shell">
+      <header className="admin-page-header">
+        <h1>{title}</h1>
+        <div className="admin-page-chrome__actions">{actions}<AdminSignOut /></div>
+      </header>
+      <nav className="admin-section-nav" aria-label="Admin sections">
+        {adminNavItems.map((item) => (
+          <Link
+            key={item.key}
+            href={item.href}
+            prefetch={false}
+            className={`admin-section-nav__link${item.key === active ? " is-active" : ""}`}
+            aria-current={item.key === active ? "page" : undefined}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+      <div className="admin-page__content">{children}</div>
+    </div>
+  );
+}

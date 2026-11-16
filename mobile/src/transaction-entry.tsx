@@ -1,0 +1,776 @@
+import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, validManualTransactionDate } from "../../shared/manual-transaction-defaults";
+import { entryExample } from "../../shared/entry-examples";
+import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
+import { applicableCategorySuggestion, type CategorySuggestion } from "../../shared/category-suggestion";
+import { AccountBrandLogo } from "./account-brand-logo";
+import { beginTelemetry } from "../../shared/analytics";
+import { Text } from "./app-text";
+import {
+  parseAddFormDraft,
+  type AddFormDraft,
+} from "../../shared/add-form-draft";
+import { suggestLocalCategory } from "./offline/local-tools";
+import type { Transaction } from "./types";
+import * as ImagePicker from "expo-image-picker";
+import { AdviserInputTools } from "./adviser-input-tools";
+import { ApiError } from "./api";
+import * as Crypto from "expo-crypto";
+import type { EntryAccount, EntryDraft, EntryFormContext } from "./adviser-entry-types";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Platform, Pressable, View } from "react-native";
+import { useSession } from "./session";
+import { Body, Button, Card, Field, Notice, Icon, CategoryMark, useTheme } from "./ui";
+
+export type TransactionDraft = {
+  adviserEntry?: EntryDraft;
+  receiptLineItems?: { description: string; amount: string }[];
+  widgetAccountId?: string;
+  widgetCategory?: string;
+  widgetPanel?: "account" | "category";
+  accountId: string;
+  categoryId: string | null;
+  merchantRaw: string;
+  date: string;
+  amount: string;
+  currency: string;
+  type: "expense" | "income" | "transfer";
+  description: string;
+};
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+export const emptyTransaction = (): TransactionDraft => ({
+  accountId: "",
+  categoryId: null,
+  merchantRaw: "",
+  date: today(),
+  amount: "",
+  currency: "PHP",
+  type: "expense",
+  description: "",
+});
+type Options = {
+  accounts: { transactionCount?: number; id: string; name: string; currency: string; institution?: string | null; type?: string; brandLogoUrl?: string | null }[];
+  categories: { id: string; name: string; type: string }[];
+};
+export function Choices({
+  options,
+  value,
+  onChange,
+  pill = false,
+}: {
+  pill?: boolean;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { colors, styles, dark } = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        flexWrap: pill ? "nowrap" : "wrap",
+        gap: 8,
+      }}
+    >
+      {options.map((option) => (
+        <Pressable
+          key={option.value}
+          accessibilityRole="button"
+          accessibilityState={{ selected: value === option.value }}
+          onPress={() => onChange(option.value)}
+          style={{
+            minHeight: 44,
+            minWidth: 0,
+            maxWidth: "100%",
+            paddingVertical: 8,
+            justifyContent: "center",
+            paddingHorizontal: pill ? 8 : 14,
+            flex: pill ? 1 : undefined,
+            alignItems: "center",
+            borderRadius: pill ? 24 : 12,
+            borderWidth: 1,
+            borderColor: value === option.value ? colors.teal : colors.line,
+            backgroundColor:
+              value === option.value ? colors.pale : colors.white,
+          }}
+        >
+          <Text style={{ color: colors.ink, textAlign: "center", flexShrink: 1, fontSize: pill ? 12 : undefined }}>
+            {option.label}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+export function ChoiceField({ label, options, value, onChange, disabled = false, initiallyOpen = false }: {
+  label: string;
+  options: { value: string; label: string; icon?: ReactNode; group?: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  initiallyOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(initiallyOpen);
+  const { colors } = useTheme();
+  const selected = options.find(option => option.value === value);
+  const row = { minHeight: 48, paddingVertical: 10, paddingHorizontal: 12, flexDirection: "row" as const, alignItems: "center" as const, gap: 10 };
+  return <View style={{ gap: 6 }}>
+    <Text style={{ color: colors.muted, fontSize: 13 }}>{label}</Text>
+    <Pressable disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label ?? "Choose"}`} accessibilityState={{ expanded: open, disabled }} onPress={() => setOpen(!open)} style={{ ...row, borderWidth: 1, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.white }}>
+      {selected?.icon}<Text style={{ flex: 1, color: colors.ink, fontSize: 15 }}>{selected?.label ?? `Choose ${label.toLowerCase()}`}</Text><Icon line name={open ? "chevron-up" : "chevron-down"} size={16}/>
+    </Pressable>
+    {open ? <View style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 14, overflow: "hidden", backgroundColor: colors.white }}>
+      {options.map((option, index) => <View key={option.value}>
+        {option.group && option.group !== options[index - 1]?.group ? <Text style={{ padding: 12, color: colors.muted, fontSize: 12, fontFamily: "Poppins-SemiBold" }}>{option.group}</Text> : null}
+        <Pressable disabled={disabled} accessibilityRole="button" accessibilityState={{ selected: option.value === value, disabled }} onPress={() => { onChange(option.value); setOpen(false); }} style={{ ...row, backgroundColor: option.value === value ? colors.pale : colors.white }}>
+          {option.icon}<Text style={{ flex: 1, color: colors.ink, fontSize: 15 }}>{option.label}</Text>{option.value === value ? <Icon line name="checkmark" size={16}/> : null}
+        </Pressable>
+      </View>)}
+    </View> : null}
+  </View>;
+}
+export function ManualTransaction({
+  draft,
+  onChange,
+  onSaved,
+}: {
+  draft: TransactionDraft;
+  onChange: (draft: TransactionDraft) => void;
+  onSaved?: () => void;
+}) {
+  const session = useSession();
+  const [localRows, setLocalRows] = useState<Transaction[]>([]);
+  useEffect(() => {
+    let active = true;
+    setLocalRows([]);
+    void session.offline
+      ?.downloadedTransactions(session.profileId)
+      .then((v) => {
+        if (active) setLocalRows(v.rows);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [session.offline, session.profileId]);
+  const [options, setOptions] = useState<Options | null>(null);
+  const [categorySuggestion, setCategorySuggestion] = useState<CategorySuggestion | null>(null);
+  const categoryTouched = useRef(false);
+  const autoCategory = useRef<string | null>(null);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [moreDetails, setMoreDetails] = useState(false);
+  const [savedPending, setSavedPending] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  const [retry, setRetry] = useState(0);
+  const latest = useRef({ draft, onChange, busy, uncertain });
+  latest.current = { draft, onChange, busy, uncertain };
+  const draftedAccounts = draft.adviserEntry?.accounts ?? [];
+  const availableAccounts = [...(options?.accounts ?? []), ...draftedAccounts.map(account => ({ ...account, id: `new:${account.key}`, name: `New: ${account.name}` }))];
+  useEffect(() => {
+    if (!draft.merchantRaw && !draft.amount) { categoryTouched.current = false; autoCategory.current = null; }
+  }, [draft.merchantRaw, draft.amount]);
+  useEffect(() => {
+    setCategorySuggestion(null);
+    const merchantText = draft.merchantRaw.trim();
+    const type = draft.type;
+    if (merchantText.length < 2 || type === "transfer" || !options || categoryTouched.current) return;
+    let live = true;
+    const controller = new AbortController();
+    const apply = (suggestion: CategorySuggestion | null) => {
+      const current = latest.current;
+      if (!live || current.busy || current.uncertain || current.draft.merchantRaw.trim() !== merchantText || current.draft.type !== type ||
+        !applicableCategorySuggestion(suggestion, options.categories, type, categoryTouched.current)) return;
+      // A draft received from Ask Clover may already contain a category to review.
+      if (current.draft.categoryId && current.draft.categoryId !== autoCategory.current && !/^(other|uncategorized|income)$/i.test(options.categories.find(category => category.id === current.draft.categoryId)?.name ?? "")) return;
+      setCategorySuggestion(suggestion);
+      autoCategory.current = suggestion.categoryId;
+      if (current.draft.categoryId !== suggestion.categoryId) current.onChange({ ...current.draft, categoryId: suggestion.categoryId });
+    };
+    const local = suggestLocalCategory(merchantText, localRows.filter(row => row.type === type));
+    const localCategory = local && options.categories.find(category => category.name === local.category && category.type === type);
+    if (local && localCategory) apply({ categoryId: localCategory.id, categoryName: localCategory.name, confidence: local.confidence, source: "training_signal", sourceLabel: "confirmed transaction history", reason: local.reason });
+    const timer = setTimeout(() => {
+      if (session.demo || !session.offlineStatus.online) return;
+      void session.request<{ suggestion: CategorySuggestion | null }>(`transaction-category-suggestions?workspaceId=${encodeURIComponent(session.profileId)}`, {
+        method: "POST", body: JSON.stringify({ merchantText, type }), signal: controller.signal,
+      }).then(result => apply(result.suggestion)).catch(() => {});
+    }, 250);
+    return () => { live = false; clearTimeout(timer); controller.abort(); };
+  }, [draft.merchantRaw, draft.type, options, localRows, session.profileId, session.request, session.demo, session.offlineStatus.online]);
+  useEffect(() => {
+    let live = true;
+    const load = session.demo
+      ? Promise.resolve({
+          accounts: [
+            { id: "sample-cash", name: "Sample cash", currency: "PHP" },
+          ],
+          categories: [],
+        })
+      : session.request<Options>(
+          `options?workspaceId=${encodeURIComponent(session.profileId)}`,
+        );
+    void load
+      .then((data) => {
+        if (live) {
+          setOptions(data);
+          setError("");
+        }
+      })
+      .catch((e: Error) => {
+        if (live) setError(e.message);
+      });
+    return () => {
+      live = false;
+    };
+  }, [session.demo, session.profileId, session.request, retry]);
+  useEffect(() => {
+    // Resolve widget hints against current Profile options before using them.
+    if (!options || draft.adviserEntry) return;
+    const hintedAccount = options.accounts.find(account => account.id === draft.widgetAccountId);
+    const preferred = hintedAccount ?? (!draft.accountId ? mostUsedTransactionAccount(options.accounts) : undefined);
+    const category = options.categories.find(item => item.type === draft.type && item.name === draft.widgetCategory);
+    if (category) categoryTouched.current = true;
+    if (!preferred && !draft.widgetCategory && !draft.widgetAccountId) return;
+    onChange({ ...draft,
+      ...(preferred ? { accountId: preferred.id, currency: preferred.currency } : {}),
+      ...(category ? { categoryId: category.id } : {}),
+      widgetAccountId: undefined, widgetCategory: undefined,
+    });
+  }, [options, draft, onChange]);
+  useEffect(() => {
+    if (!options || categoryTouched.current || draft.widgetCategory) return;
+    const categoryId = manualTransactionCategoryId(options.categories, draft.type, draft.categoryId) || null;
+    if (categoryId !== draft.categoryId) onChange({ ...draft, categoryId });
+  }, [options, draft, onChange]);
+  const change = (patch: Partial<TransactionDraft>) => {
+    if (busy || uncertain) return;
+    if (Object.hasOwn(patch, "type")) { categoryTouched.current = false; autoCategory.current = null; setCategorySuggestion(null); }
+    else if (Object.hasOwn(patch, "categoryId")) { categoryTouched.current = true; autoCategory.current = null; setCategorySuggestion(null); }
+    if (Object.hasOwn(patch, "merchantRaw") && autoCategory.current === draft.categoryId && !categoryTouched.current) {
+      patch = { ...patch, categoryId: null }; autoCategory.current = null; setCategorySuggestion(null);
+    }
+    onChange({ ...draft, ...patch });
+    setSaved(false);
+  };
+  const updateDraftAccount = (key: string, patch: Partial<EntryAccount>) => {
+    if (!draft.adviserEntry) return;
+    change({
+      ...(patch.currency && draft.accountId === `new:${key}` ? { currency: patch.currency } : {}),
+      adviserEntry: { ...draft.adviserEntry,
+        accounts: draftedAccounts.map(account => account.key === key ? { ...account, ...patch } : account),
+        transactions: draft.adviserEntry.transactions.map(row => patch.currency && row.accountId === `new:${key}` ? { ...row, currency: patch.currency } : row),
+      },
+    });
+  };
+  const save = async (another = false) => {
+    if (lock.current) return;
+    const receiptLineItems = (draft.type === "transfer" ? [] : draft.receiptLineItems ?? []).map(item => ({ description: item.description.trim(), amount: item.amount.trim() }));
+    if (receiptLineItems.some(item => !item.description || !/^\d{1,12}(\.\d{1,2})?$/.test(item.amount))) {
+      setError("Enter a description and valid amount for each line item.");
+      setMoreDetails(true);
+      return;
+    }
+    const entryDraft = { ...draft, receiptLineItems: receiptLineItems.length ? receiptLineItems : undefined, merchantRaw: draft.merchantRaw.trim() || manualTransactionName(draft.type),
+      date: draft.date.trim() || today(), amount: draft.amount.trim() || "0",
+      categoryId: manualTransactionCategoryId(options?.categories ?? [], draft.type, draft.categoryId) || null };
+    if (
+      !availableAccounts.some((account) => account.id === entryDraft.accountId) ||
+      !/^\d{1,12}(\.\d{1,2})?$/.test(entryDraft.amount) ||
+      Number(entryDraft.amount) < 0 ||
+      !validManualTransactionDate(entryDraft.date)
+    ) {
+      setError(
+        "Choose an account, a valid date, and a zero or positive amount.",
+      );
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    setSaved(false);
+    setSavedPending(false);
+    try {
+      if (!session.demo) {
+        if (entryDraft.adviserEntry) {
+          if (entryDraft.type === "transfer")
+            throw new Error("Use a new Manual transaction for transfers.");
+          const entry = entryDraft.adviserEntry;
+          await session.request(
+            `adviser/entries?workspaceId=${encodeURIComponent(session.profileId)}`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                ...entry,
+                accounts: entry.accounts.filter(account => [entryDraft.accountId, ...entry.transactions.slice(1).map(row => row.accountId)].includes(`new:${account.key}`)).map(account => ({ ...account, balance: account.balance.trim() || "0" })),
+                receipts: [],
+                transactions: entry.transactions.map((row, index) => index === 0 ? {
+                    ...row,
+                    accountId: entryDraft.accountId,
+                    categoryId: entryDraft.categoryId ?? "",
+                    merchant: entryDraft.merchantRaw,
+                    amount: entryDraft.amount,
+                    currency: entryDraft.currency,
+                    type: entryDraft.type,
+                    date: entryDraft.date,
+                    description: entryDraft.description,
+                  } : row),
+              }),
+            },
+          );
+        } else {
+          const result = await session.request<{ pendingSync?: boolean }>(
+            `transactions?workspaceId=${encodeURIComponent(session.profileId)}`,
+            { method: "POST", body: JSON.stringify(entryDraft) },
+          );
+          setSavedPending(Boolean(result.pendingSync));
+        }
+      }
+      setUncertain(false);
+      setSaved(true);
+      onChange(emptyTransaction());
+      session.refresh();
+      if (!another) onSaved?.();
+    } catch (e) {
+      if (entryDraft.adviserEntry && (!(e instanceof ApiError) || e.status >= 500))
+        setUncertain(true);
+      setError((e as Error).message);
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={{ gap: 18 }}>
+      {saved ? (
+        <Notice>
+          {session.demo
+            ? "Sample completed. No financial record was saved."
+            : savedPending
+              ? "Saved on this device. View pending changes in Sync & Offline."
+              : "Transaction saved."}
+        </Notice>
+      ) : null}
+      <Choices
+        pill
+        options={[
+          { value: "expense", label: "Expense" },
+          { value: "income", label: "Income" },
+          ...(!draft.adviserEntry
+            ? [{ value: "transfer", label: "Transfer" }]
+            : []),
+        ]}
+        value={draft.type}
+        onChange={(type) =>
+          change({ type: type as TransactionDraft["type"], categoryId: null })
+        }
+      />
+      <Field
+        label={`Amount (${draft.currency})`}
+        style={{ fontSize: 28, lineHeight: 42, fontFamily: "Poppins-SemiBold", minHeight: 80, paddingVertical: 16, textAlignVertical: "center", includeFontPadding: false }}
+        value={draft.amount}
+        onChangeText={(amount) => change({ amount })}
+        keyboardType="decimal-pad"
+        placeholder="0.00"
+      />
+      <Field
+        label="What was it for?"
+        value={draft.merchantRaw}
+        onChangeText={(merchantRaw) => change({ merchantRaw })}
+        placeholder={manualTransactionPlaceholder(draft.type)}
+        maxLength={200}
+      />
+      {options ? (
+        availableAccounts.length ? (
+          <ChoiceField
+            label="Account"
+            initiallyOpen={draft.widgetPanel === "account"}
+            options={availableAccounts.map((a) => ({
+              value: a.id,
+              label: `${a.name} · ${a.currency}`,
+              icon: <AccountBrandLogo account={{...a,type:a.type ?? "bank",institution:a.institution ?? null,balance:null}} size={24}/>,
+            }))}
+            value={draft.accountId}
+            onChange={(accountId) =>
+              change({
+                accountId,
+                currency:
+                  availableAccounts.find((a) => a.id === accountId)?.currency ??
+                  "PHP",
+              })
+            }
+          />
+        ) : (
+          <Notice>
+            Add an account in Account before creating a transaction.
+          </Notice>
+        )
+      ) : error ? (
+        <Button title="Retry loading accounts" secondary onPress={() => {setError("");setRetry((n) => n + 1);}}/>
+      ) : <Body>Loading accounts…</Body>}
+      {draftedAccounts.map(newAccount => <Card key={newAccount.key}>
+        <Body muted={false}>New account · {newAccount.name}</Body>
+        <Body>Created together with this transaction when you confirm. Starting balance defaults to 0.</Body>
+        <Field label="Account name" value={newAccount.name} maxLength={200} onChangeText={name => updateDraftAccount(newAccount.key, { name })} />
+        <ChoiceField label="Account type" value={newAccount.type} options={[{ value: "bank", label: "Bank & Savings" }, { value: "wallet", label: "Wallet" }, { value: "cash", label: "Cash" }, { value: "credit_card", label: "Credit Card" }]} onChange={type => updateDraftAccount(newAccount.key, { type: type as EntryAccount["type"] })} />
+        <Field label="Currency" value={newAccount.currency} maxLength={3} autoCapitalize="characters" onChangeText={currency => updateDraftAccount(newAccount.key, { currency: currency.toUpperCase() })} />
+        <Field label="Starting balance" value={newAccount.balance} keyboardType="decimal-pad" placeholder="0" onChangeText={balance => updateDraftAccount(newAccount.key, { balance })} />
+      </Card>)}
+      {options && draft.type !== "transfer" ? (
+        <>
+          <ChoiceField
+            label="Category"
+            initiallyOpen={draft.widgetPanel === "category"}
+            options={[
+              { value: "", label: "Uncategorized" },
+              ...options.categories
+                .filter((c) => c.type === draft.type)
+                .map((c) => ({ value: c.id, label: c.name, icon: <CategoryMark name={c.name} size={24}/> })),
+            ]}
+            value={draft.categoryId ?? ""}
+            onChange={(categoryId) =>
+              change({ categoryId: categoryId || null })
+            }
+          />
+        </>
+      ) : null}
+      <Field
+        label="Date"
+        value={draft.date}
+        onChangeText={(date) => change({ date })}
+        maxLength={10}
+      />
+      {categorySuggestion ? <Body>Suggested category: {categorySuggestion.categoryName} · {categorySuggestion.confidence}% confidence. Change it above if needed.</Body> : null}
+      {draft.adviserEntry?.transactions[0]?.lines.length ? (
+        <Card>
+          <Body>Receipt details retained in this draft</Body>
+          {draft.adviserEntry.transactions[0].lines.map((line, index) => (
+            <Body key={index}>
+              {line.description} · {line.quantity} × {line.unitPrice}
+            </Body>
+          ))}
+        </Card>
+      ) : null}
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: moreDetails }} onPress={() => setMoreDetails(value => !value)} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Body>More details</Body><Icon line name={moreDetails ? "chevron-up" : "chevron-down"} size={18} />
+      </Pressable>
+      {moreDetails ? (
+        <>
+        <Field
+          label="Notes (optional)"
+          value={draft.description}
+          onChangeText={(description) => change({ description })}
+          multiline
+          maxLength={2000}
+        />
+        {!draft.adviserEntry && draft.type !== "transfer" ? <>
+          <Body muted={false}>Line items</Body>
+          {(draft.receiptLineItems ?? []).map((item, index) => {
+            const update = (patch: Partial<typeof item>) => change({ receiptLineItems: draft.receiptLineItems?.map((row, i) => i === index ? { ...row, ...patch } : row) });
+            return <Card key={index}>
+              <Field label="Description" value={item.description} maxLength={500} onChangeText={description => update({ description })} editable={!busy && !uncertain} />
+              <Field label={`Amount (${draft.currency})`} value={item.amount} maxLength={15} keyboardType="decimal-pad" onChangeText={amount => update({ amount })} editable={!busy && !uncertain} />
+              <Button title="Remove line item" secondary disabled={busy || uncertain} onPress={() => change({ receiptLineItems: draft.receiptLineItems?.filter((_, i) => i !== index) })} />
+            </Card>;
+          })}
+          <Button title="Add line item" icon="add" secondary disabled={busy || uncertain || (draft.receiptLineItems?.length ?? 0) >= 100} onPress={() => change({ receiptLineItems: [...(draft.receiptLineItems ?? []), { description: "", amount: "" }] })} />
+        </> : null}
+        </>
+      ) : null}
+      {draft.adviserEntry?.transactions.slice(1).map((row, index) => {
+        const update = (patch: Partial<typeof row>) => change({ adviserEntry: { ...draft.adviserEntry!, transactions: draft.adviserEntry!.transactions.map(item => item.key === row.key ? { ...item, ...patch } : item) } });
+        return <Card key={row.key}>
+          <Body muted={false}>Transaction {index + 2} · review before confirming</Body>
+          <Field label="What was it for?" value={row.merchant} onChangeText={merchant => update({ merchant })} maxLength={200} />
+          <Field label={`Amount (${row.currency})`} value={row.amount} onChangeText={amount => update({ amount })} keyboardType="decimal-pad" />
+          <ChoiceField label="Account" value={row.accountId} options={availableAccounts.map(account => ({ value: account.id, label: `${account.name} · ${account.currency}`, icon: <AccountBrandLogo account={{ ...account, type: account.type ?? "bank", institution: account.institution ?? null }} size={24}/> }))} onChange={accountId => update({ accountId, currency: availableAccounts.find(account => account.id === accountId)?.currency ?? row.currency })} />
+          <ChoiceField label="Category" value={row.categoryId} options={[{ value: "", label: "Uncategorized" }, ...(options?.categories ?? []).filter(category => category.type === row.type).map(category => ({ value: category.id, label: category.name }))]} onChange={categoryId => update({ categoryId })} />
+          <Field label="Date" value={row.date} onChangeText={date => update({ date })} maxLength={10} />
+          {row.lines.length ? <Body>Receipt items: {row.lines.map(line => `${line.description} (${line.quantity} × ${line.unitPrice})`).join(", ")}</Body> : null}
+        </Card>;
+      })}
+      {uncertain ? (
+        <Notice>
+          The save result is uncertain. Retry this unchanged draft; Clover
+          prevents duplicate confirmation.
+        </Notice>
+      ) : null}
+      {error ? <Notice>{error}</Notice> : null}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+      <Button
+        title={
+          busy
+            ? "Saving…"
+            : uncertain
+              ? "Retry confirmation"
+              : (draft.adviserEntry?.transactions.length ?? 0) > 1 ? "Add transactions" : "Add transaction"
+        }
+        disabled={busy || !availableAccounts.length}
+        onPress={() => void save()}
+      />
+      <Button title="Add another" textOnly disabled={busy || uncertain || !availableAccounts.length} onPress={() => void save(true)} />
+      </View>
+    </View>
+  );
+}
+
+type Message = { role: "user" | "assistant"; content: string };
+type Suggestion = {
+  id: string;
+  description: string;
+  payload: Partial<TransactionDraft>;
+};
+export function TransactionChat({
+  onReview,
+  context,
+  page = "transactions",
+  intro,
+  onDraft,
+  onReviewForm,
+  active = true,
+}: {
+  onReview: (draft: TransactionDraft) => void;
+  context?: EntryFormContext;
+  page?: string;
+  intro?: string;
+  onDraft?: (draft: EntryDraft) => void;
+  onReviewForm?: (draft: AddFormDraft) => void;
+  active?: boolean;
+}) {
+  const [preparedForm, setPreparedForm] = useState<AddFormDraft | null>(null);
+  const [prepared, setPrepared] = useState<EntryDraft | null>(null);
+  const { colors, styles, dark } = useTheme();
+  const session = useSession();
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [actions, setActions] = useState<Suggestion[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [attachments, setAttachments] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [attaching, setAttaching] = useState(false);
+  const takePhoto = async () => {
+    if (session.demo) {
+      setError(
+        "Sign in to attach a photo. Sample mode never uploads your files.",
+      );
+      return;
+    }
+    if (attaching || busy || attachments.length >= 3) return;
+    setError("");
+    setAttaching(true);
+    const finishInput = beginTelemetry("input", {
+      input_method: "camera",
+      surface: "adviser",
+    });
+    try {
+      if (!(await ImagePicker.requestCameraPermissionsAsync()).granted) {
+        finishInput("failed", { reason: "permission_denied" });
+        setError("Camera permission is needed to photograph a receipt.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.75,
+        exif: false,
+      });
+      finishInput(result.canceled ? "canceled" : "completed");
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if ((asset.fileSize ?? 0) > 3.5 * 1024 * 1024) {
+        setError("Choose a photo smaller than 3.5 MB.");
+        return;
+      }
+      const form = new FormData();
+      if (Platform.OS === "web")
+        form.append(
+          "file",
+          await (await fetch(asset.uri)).blob(),
+          "receipt.jpg",
+        );
+      else
+        form.append("file", {
+          uri: asset.uri,
+          name: "receipt.jpg",
+          type: asset.mimeType ?? "image/jpeg",
+        } as unknown as Blob);
+      const response = await session.request<{
+        attachment: { id: string; name: string };
+      }>(
+        `adviser/attachments?workspaceId=${encodeURIComponent(session.profileId)}`,
+        { method: "POST", body: form },
+      );
+      setAttachments((current) => [...current, response.attachment]);
+    } catch (e) {
+      finishInput("failed", { reason: "camera_unavailable" });
+      setError(e instanceof Error ? e.message : "Unable to attach the photo.");
+    } finally {
+      setAttaching(false);
+    }
+  };
+  const lock = useRef(false);
+  const send = async () => {
+    if (lock.current || attaching || (!input.trim() && !attachments.length))
+      return;
+    if (session.demo) {
+      setError(
+        "Ask Clover uses your signed-in account. Sample mode never sends your message.",
+      );
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    const next: Message[] = [
+      ...messages,
+      {
+        role: "user",
+        content:
+          input.trim() ||
+          "Read this receipt and suggest transactions for me to review.",
+      },
+    ];
+    try {
+      const result = await session.request<{
+        reply: string;
+        entryDraft?: EntryDraft;
+        formDraft?: AddFormDraft;
+      }>(`adviser/chat?workspaceId=${encodeURIComponent(session.profileId)}`, {
+        method: "POST",
+        body: JSON.stringify({
+          messages: next.slice(-6),
+          page,
+          formContext: context,
+          entryDraft: prepared || undefined,
+          clientDate: today(),
+          attachmentIds: attachments.map((item) => item.id),
+        }),
+      });
+      setMessages([...next, { role: "assistant", content: result.reply }]);
+      const entry = result.entryDraft;
+      setPrepared(entry || null);
+      setPreparedForm(parseAddFormDraft(result.formDraft));
+      setActions(
+        entry?.transactions.slice(0, entry.accounts.length ? 1 : undefined).map((transaction) => ({
+          id: transaction.key,
+          description: transaction.merchant || "Transaction draft",
+          payload: {
+            accountId: transaction.accountId,
+            categoryId: transaction.categoryId || null,
+            merchantRaw: transaction.merchant,
+            description: transaction.description,
+            amount: transaction.amount,
+            currency: transaction.currency,
+            type: transaction.type,
+            date: transaction.date,
+            adviserEntry: {
+              ...entry,
+              id: Crypto.randomUUID(),
+              accounts: entry.accounts,
+              receipts: [],
+              transactions: entry.accounts.length ? entry.transactions : [transaction],
+            },
+          },
+        })) ?? [],
+      );
+      setInput("");
+      setAttachments([]);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={{ gap: 16 }}>
+      <AdviserInputTools
+        active={active}
+        expanded
+        placeholder={entryExample(context?.kind || page)}
+        value={input}
+        onChangeText={setInput}
+        onSend={() => void send()}
+        disabled={busy || attaching}
+        onText={(text) =>
+          setInput((current) => `${current}${current ? " " : ""}${text}`)
+        }
+        onPhoto={() => void takePhoto()}
+      />
+      {attachments.map((item) => (
+        <Button
+          key={item.id}
+          title={`Remove ${item.name}`}
+          secondary
+          onPress={() =>
+            setAttachments((current) =>
+              current.filter((value) => value.id !== item.id),
+            )
+          }
+        />
+      ))}
+      {attaching ? <Body>Reading photo…</Body> : null}
+      <Body muted={false}>Tell Clover what to add</Body>
+      <Body>
+        {intro ||
+          "For example: Lunch ₱250 with cash, groceries ₱1,200 from BPI. Review each draft before saving."}
+      </Body>
+      {messages.map((message, index) => (
+        <Card
+          key={index}
+          style={{
+            backgroundColor:
+              message.role === "user" ? colors.pale : colors.white,
+          }}
+        >
+          <Body muted={false}>{message.content}</Body>
+        </Card>
+      ))}
+      {preparedForm && onReviewForm ? (
+        <Button
+          title="Review in Manual"
+          onPress={() => {
+            onReviewForm(preparedForm);
+            setPreparedForm(null);
+          }}
+        />
+      ) : null}
+      {prepared && onDraft ? (
+        <Button
+          title="Review draft in Manual"
+          onPress={() => {
+            onDraft(prepared);
+            setPrepared(null);
+          }}
+        />
+      ) : null}
+      {(onDraft ? [] : actions).map((action) => (
+        <Card key={action.id}>
+          <Body>{action.description}</Body>
+          <Button
+            title={(action.payload.adviserEntry?.transactions.length ?? 0) > 1 ? "Review accounts and transactions" : "Review transaction"}
+            onPress={() => {
+              onReview({
+                ...emptyTransaction(),
+                ...action.payload,
+                amount: String(Math.abs(Number(action.payload.amount) || 0)),
+                date: String(action.payload.date ?? today()).slice(0, 10),
+              });
+              setActions((current) =>
+                current.filter((a) => a.id !== action.id),
+              );
+              setPrepared(null);
+            }}
+          />
+        </Card>
+      ))}
+      {error ? <Notice>{error}</Notice> : null}
+      {busy ? <Body>Clover is preparing your draft…</Body> : null}
+    </View>
+  );
+}

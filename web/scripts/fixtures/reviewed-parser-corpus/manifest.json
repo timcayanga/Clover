@@ -1,0 +1,4136 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "901b242f1bce74ebf73fabdff3608c30ead6e03a",
+  "cases": [
+    {
+      "id": "seabank-id-legacy-daily",
+      "source": "seabank-id-legacy-daily.txt",
+      "sha256": "6cac1b670a6434f9afc82a6679eba874e36d1c2eeeaf345e1fdad822c65d7c62",
+      "kind": "statement",
+      "representation": "synthetic PDF text-layer transcription plus reviewed native column proof",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-16",
+        "status": "reviewed",
+        "basis": "Full February calendar, two exact repeated payments, daily interest credited on its explicit date, 28 previous-day balances, both monthly totals and closing balance. Layout checked against three retained SeaBank Indonesia PDFs; no personal source data in fixture."
+      },
+      "expected": [
+        {
+          "date": "2026-02-01",
+          "amount": "1000.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000789",
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "sourceRowIndex": 0,
+            "reconciliation": {
+              "version": "seabank-id-legacy-daily-v1",
+              "openingBalance": 100,
+              "endingBalance": 101,
+              "totalIncoming": 1001,
+              "totalOutgoing": 1000,
+              "dailyRows": 28,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-02-01",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000789",
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "sourceRowIndex": 1,
+            "reconciliation": {
+              "version": "seabank-id-legacy-daily-v1",
+              "openingBalance": 100,
+              "endingBalance": 101,
+              "totalIncoming": 1001,
+              "totalOutgoing": 1000,
+              "dailyRows": 28,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-02-02",
+          "amount": "500.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000789",
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "sourceRowIndex": 2,
+            "reconciliation": {
+              "version": "seabank-id-legacy-daily-v1",
+              "openingBalance": 100,
+              "endingBalance": 101,
+              "totalIncoming": 1001,
+              "totalOutgoing": 1000,
+              "dailyRows": 28,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-02-02",
+          "amount": "500.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000789",
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "sourceRowIndex": 3,
+            "reconciliation": {
+              "version": "seabank-id-legacy-daily-v1",
+              "openingBalance": 100,
+              "endingBalance": 101,
+              "totalIncoming": 1001,
+              "totalOutgoing": 1000,
+              "dailyRows": 28,
+              "physicalPages": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "bdo-full-month-ledger",
+      "source": "bdo-full-month-ledger.txt",
+      "sha256": "a87866f65e442740d56570acbfcc5a54aac0910f59e5241cdf51c54e26f7ffe6",
+      "kind": "statement",
+      "representation": "synthetic PDF text-layer transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Synthetic amounts and identity; layout independently checked against the historical BDO PDF. Four 1000 deposits minus four 900 withdrawals = closing 400. Full source years, split balance line and spaced thousands must survive."
+      },
+      "expected": [
+        {
+          "date": "2023-09-10",
+          "amount": "1000.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 1000
+          }
+        },
+        {
+          "date": "2023-09-10",
+          "amount": "900.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 100
+          }
+        },
+        {
+          "date": "2023-09-25",
+          "amount": "1000.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 1100
+          }
+        },
+        {
+          "date": "2023-09-25",
+          "amount": "900.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 200
+          }
+        },
+        {
+          "date": "2023-10-10",
+          "amount": "1000.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 1200
+          }
+        },
+        {
+          "date": "2023-10-10",
+          "amount": "900.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 300
+          }
+        },
+        {
+          "date": "2023-10-25",
+          "amount": "1000.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 1300
+          }
+        },
+        {
+          "date": "2023-10-25",
+          "amount": "900.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 400
+          }
+        }
+      ]
+    },
+    {
+      "id": "repeated-and-multicurrency",
+      "source": "repeated-and-multicurrency.csv",
+      "sha256": "91987759a8ccfcbff3a037abb87178d91da5976f2e4a530731045b5153c8ff1b",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Two identical purchases have no duplicate reference. Preserve both and keep leading-zero account IDs and the original PHP/USD currencies."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "repeated-and-multicurrency-tsv",
+      "source": "repeated-and-multicurrency-tsv.tsv",
+      "sha256": "e60013d005c0959149a89adf9e7233ae09b8564cca7e6276c4d04d62714daed1",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Same independently specified ledger, tab-delimited encoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "qif-split-and-repeat",
+      "source": "qif-split-and-repeat.qif",
+      "sha256": "05d27c90e13abab41d5cf9b6e0b690d5a7da9dcf107298dc5025b53e0eabfdf7",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Two parts sum to the 50 parent. The separate 20 purchase survives. Currency comes only from explicit import context."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "20.00",
+          "currency": "CAD",
+          "type": "expense",
+          "accountName": "Review Checking",
+          "rawPayload": {
+            "currencyEvidence": "import_context",
+            "qifRecord": {
+              "parentAmount": -50,
+              "splitIndex": 1,
+              "splitCount": 2,
+              "lines": [
+                "D2026-09-15",
+                "T-50.00",
+                "PCorner Shop",
+                "MShared basket",
+                "SFood",
+                "EApples",
+                "$-20.00",
+                "SHousehold",
+                "ESoap",
+                "$-30.00"
+              ]
+            }
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "30.00",
+          "currency": "CAD",
+          "type": "expense",
+          "accountName": "Review Checking",
+          "rawPayload": {
+            "currencyEvidence": "import_context",
+            "qifRecord": {
+              "parentAmount": -50,
+              "splitIndex": 2,
+              "splitCount": 2,
+              "lines": [
+                "D2026-09-15",
+                "T-50.00",
+                "PCorner Shop",
+                "MShared basket",
+                "SFood",
+                "EApples",
+                "$-20.00",
+                "SHousehold",
+                "ESoap",
+                "$-30.00"
+              ]
+            }
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "20.00",
+          "currency": "CAD",
+          "type": "expense",
+          "accountName": "Review Checking"
+        }
+      ],
+      "context": {
+        "currency": "CAD"
+      }
+    },
+    {
+      "id": "ofx-distinct-references",
+      "source": "ofx-distinct-references.ofx",
+      "sha256": "2b21e6c12f6cb37934ef02009246bd58a941a99031734876be6c1bb18f141321",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Different provider IDs prove two equal purchases; neither account leading zeros nor FITIDs may be lost."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "USD",
+          "type": "expense",
+          "accountNumber": "000123",
+          "rawPayload": {
+            "fitId": "purchase-1"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "USD",
+          "type": "expense",
+          "accountNumber": "000123",
+          "rawPayload": {
+            "fitId": "purchase-2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mt940-original-currencies",
+      "source": "mt940-original-currencies.mt940",
+      "sha256": "46745f70b0119a82a361493b8d76e9f57186218dfc2b1d04d649da86290e5c37",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Two statement sections have distinct currencies and accounts. Decimal comma amounts are 12.50 and 20, not 1250 or 2000."
+      },
+      "expected": [
+        {
+          "date": "2026-09-02",
+          "amount": "12.50",
+          "currency": "EUR",
+          "type": "expense",
+          "accountNumber": "DE00000000000000000001",
+          "rawPayload": {
+            "directionCode": "D",
+            "rawAmount": -12.5
+          }
+        },
+        {
+          "date": "2026-09-02",
+          "amount": "20.00",
+          "currency": "GBP",
+          "type": "expense",
+          "accountNumber": "GB00000000000000000002",
+          "rawPayload": {
+            "directionCode": "D",
+            "rawAmount": -20
+          }
+        }
+      ]
+    },
+    {
+      "id": "camt-debit-credit",
+      "source": "camt-debit-credit.xml",
+      "sha256": "274cdaabf3d4eb8bb8a470b745806ea1c41b8d4788a45be79b2f498f278dbf95",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Explicit DBIT/CRDT determine direction; preserve account and EUR, 850-24.90 = 825.10 movement."
+      },
+      "expected": [
+        {
+          "date": "2026-09-02",
+          "amount": "24.90",
+          "currency": "EUR",
+          "type": "expense",
+          "accountNumber": "DE00000000000000000001",
+          "rawPayload": {
+            "creditDebitIndicator": "DBIT",
+            "rawAmount": -24.9
+          }
+        },
+        {
+          "date": "2026-09-03",
+          "amount": "850.00",
+          "currency": "EUR",
+          "type": "income",
+          "accountNumber": "DE00000000000000000001",
+          "rawPayload": {
+            "creditDebitIndicator": "CRDT",
+            "rawAmount": 850
+          }
+        }
+      ]
+    },
+    {
+      "id": "json-original-currency",
+      "source": "json-original-currency.json",
+      "sha256": "80a417a2be28313653bb7df160d79f71c67d02f98ab4f3c375bdc7cbbbc8d7b9",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Structured debit and credit fields, SGD and leading zeros are explicit in source."
+      },
+      "expected": [
+        {
+          "date": "2026-09-02",
+          "amount": "6.25",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "000123",
+          "rawPayload": {
+            "sourceRecord": {
+              "transaction_date": "2026-09-02",
+              "transactionName": "Coffee",
+              "debit_amount": "6.25"
+            }
+          }
+        },
+        {
+          "date": "2026-09-03",
+          "amount": "1000.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "000123",
+          "rawPayload": {
+            "sourceRecord": {
+              "transaction_date": "2026-09-03",
+              "transactionName": "Salary",
+              "credit_amount": "1000"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "timestamped-screenshot",
+      "source": "timestamped-screenshot.txt",
+      "sha256": "ea9e987d67db991561d5d3919879fdce4651112e6d52bcec193e17e5c8acb1ef",
+      "kind": "screenshot",
+      "representation": "synthetic screenshot OCR transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Three timestamps identify three purchases. Generic OCR must preserve source and require review."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "reviewRequired": true
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "reviewRequired": true
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "reviewRequired": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "receipt-php-items",
+      "source": "receipt-php-items.txt",
+      "sha256": "4616a17c8048af59a6eeec5b1aeb01df2a5f6d0dec5de37ebc8e33811dec6492",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manual arithmetic: 2x50 + 30 + 3x10 = 160; tax12.80 gives172.80, explicitly PHP. Item-name cleanup is outside this arithmetic contract; the current quantity marker may remain in the displayed item name."
+      },
+      "expected": {
+        "total": "172.80",
+        "currency": "PHP",
+        "billDate": "2026-01-12T00:00:00.000Z",
+        "items": [
+          {
+            "amount": "100.00",
+            "quantity": 2
+          },
+          {
+            "amount": "30.00"
+          },
+          {
+            "amount": "30.00",
+            "quantity": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "receipt-currency-unresolved",
+      "source": "receipt-currency-unresolved.txt",
+      "sha256": "3c1a31a5ce1cb642cb53487693ffc9d76d021e36f196fb7243fee6455fba37bf",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "No currency evidence: total55 remains useful but currency must stay unresolved with a warning and capped confidence."
+      },
+      "expected": {
+        "total": "55.00",
+        "currency": "MIXED",
+        "maxConfidence": 45,
+        "requiresCurrencyWarning": true,
+        "items": [
+          {
+            "description": "Coffee",
+            "amount": "25.00"
+          },
+          {
+            "description": "Sandwich",
+            "amount": "30.00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "receipt-idr",
+      "source": "receipt-idr.txt",
+      "sha256": "6c8726aaeaa6a18185df96d86ec368c9560df97de9f90e904ceabe1f8f2a2c36",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Explicit Rp and tender minus change confirm 10000 rupiah, not10."
+      },
+      "expected": {
+        "total": "10000.00",
+        "currency": "IDR"
+      }
+    },
+    {
+      "id": "migration-confirmation-is-not-review",
+      "source": "migration-confirmation-is-not-review.csv",
+      "sha256": "04afc0b73ec3de7c13def134d063331c9019bb3be477a3c0f924462eb79a6db6",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "YNAB opening balance is not income; Cleared/Reconciled is source evidence, never Clover user confirmation. Category and memo checks also run through the worker."
+      },
+      "expected": [
+        {
+          "date": "2026-09-02",
+          "amount": "45.25",
+          "currency": "USD",
+          "type": "expense",
+          "accountName": "QA Checking"
+        },
+        {
+          "date": "2026-09-03",
+          "amount": "2500.00",
+          "currency": "USD",
+          "type": "income",
+          "accountName": "QA Checking"
+        }
+      ]
+    },
+    {
+      "id": "workbook-xlsx",
+      "source": "workbook-xlsx.xlsx",
+      "sha256": "0bf108283286f885893e1d6cc052ae42ffefba892038b8c900bb963e323e33e1",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as xlsx. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "workbook-xls",
+      "source": "workbook-xls.xls",
+      "sha256": "5f0fef909b32e383864b2732f54f61864b847c691ca1291ada9afeed425c8d0c",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as xls. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "workbook-xlsm",
+      "source": "workbook-xlsm.xlsm",
+      "sha256": "bb1a4208f99b4b2bc0bb454f67773be8739636fee14a6866b7edccd5c3b4256e",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as xlsm. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "workbook-xlsb",
+      "source": "workbook-xlsb.xlsb",
+      "sha256": "ed22e4a9aaf9515aca37cfbca18447e583057e1c3cae5dfccbf39f869988cb54",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as xlsb. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "workbook-ods",
+      "source": "workbook-ods.ods",
+      "sha256": "ff5b0db5e18e8363d9331df45dc3a4f54f3907ccf7074211be36a69826061797",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as ods. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "receipt-decimal-bill-amount",
+      "source": "receipt-decimal-bill-amount.txt",
+      "sha256": "8c1beaaece9ebc771005d93f1d51707cc2ce7158c7218de4e6d73fdcfd713519",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "25 + 30 = 55 decimal units. Bill Amount is the financial summary; Total Qty is not. Preserve the dated receipt while requiring review of its absent currency."
+      },
+      "expected": {
+        "total": "55.00",
+        "currency": "MIXED",
+        "billDate": "2026-01-12T00:00:00.000Z",
+        "maxConfidence": 45,
+        "requiresCurrencyWarning": true,
+        "items": [
+          {
+            "amount": "25.00"
+          },
+          {
+            "amount": "30.00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "receipt-decimal-total-amount",
+      "source": "receipt-decimal-total-amount.txt",
+      "sha256": "bc28a560510bd99ba3ecfd47aea7bb00b074fb665d1c60ab404a31c1c5bae0b6",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "25 + 30 = 55 decimal units. Total Amount is the financial summary; Total Qty is not. Preserve the dated receipt while requiring review of its absent currency."
+      },
+      "expected": {
+        "total": "55.00",
+        "currency": "MIXED",
+        "billDate": "2026-01-12T00:00:00.000Z",
+        "maxConfidence": 45,
+        "requiresCurrencyWarning": true,
+        "items": [
+          {
+            "amount": "25.00"
+          },
+          {
+            "amount": "30.00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "chinabank-adjacent-account-balances",
+      "source": "chinabank-adjacent-account-balances.txt",
+      "sha256": "03e3848e8fddef45724088088e21db267fc123341ead0171497db04a11f27b5d",
+      "kind": "statement",
+      "representation": "synthetic complete OCR table transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Synthetic leading-zero 4-2-5-1 account sits beside summary balances. Twenty explicit 100 credits take 1000 to 3000 across two monthly periods. Two identical date/amount occurrences per month are legitimate. Expectations come from these source cells and arithmetic."
+      },
+      "expected": [
+        {
+          "date": "2026-07-01",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 01 Cash Deposit 0.00 100.00 1,100.00",
+            "balance": 1100
+          }
+        },
+        {
+          "date": "2026-07-01",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 01 Cash Deposit 0.00 100.00 1,200.00",
+            "balance": 1200
+          }
+        },
+        {
+          "date": "2026-07-02",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 02 Cash Deposit 0.00 100.00 1,300.00",
+            "balance": 1300
+          }
+        },
+        {
+          "date": "2026-07-03",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 03 Cash Deposit 0.00 100.00 1,400.00",
+            "balance": 1400
+          }
+        },
+        {
+          "date": "2026-07-04",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 04 Cash Deposit 0.00 100.00 1,500.00",
+            "balance": 1500
+          }
+        },
+        {
+          "date": "2026-07-05",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 05 Cash Deposit 0.00 100.00 1,600.00",
+            "balance": 1600
+          }
+        },
+        {
+          "date": "2026-07-06",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 06 Cash Deposit 0.00 100.00 1,700.00",
+            "balance": 1700
+          }
+        },
+        {
+          "date": "2026-07-07",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 07 Cash Deposit 0.00 100.00 1,800.00",
+            "balance": 1800
+          }
+        },
+        {
+          "date": "2026-07-08",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 08 Cash Deposit 0.00 100.00 1,900.00",
+            "balance": 1900
+          }
+        },
+        {
+          "date": "2026-07-09",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 09 Cash Deposit 0.00 100.00 2,000.00",
+            "balance": 2000
+          }
+        },
+        {
+          "date": "2026-08-01",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 01 Cash Deposit 0.00 100.00 2,100.00",
+            "balance": 2100
+          }
+        },
+        {
+          "date": "2026-08-01",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 01 Cash Deposit 0.00 100.00 2,200.00",
+            "balance": 2200
+          }
+        },
+        {
+          "date": "2026-08-02",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 02 Cash Deposit 0.00 100.00 2,300.00",
+            "balance": 2300
+          }
+        },
+        {
+          "date": "2026-08-03",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 03 Cash Deposit 0.00 100.00 2,400.00",
+            "balance": 2400
+          }
+        },
+        {
+          "date": "2026-08-04",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 04 Cash Deposit 0.00 100.00 2,500.00",
+            "balance": 2500
+          }
+        },
+        {
+          "date": "2026-08-05",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 05 Cash Deposit 0.00 100.00 2,600.00",
+            "balance": 2600
+          }
+        },
+        {
+          "date": "2026-08-06",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 06 Cash Deposit 0.00 100.00 2,700.00",
+            "balance": 2700
+          }
+        },
+        {
+          "date": "2026-08-07",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 07 Cash Deposit 0.00 100.00 2,800.00",
+            "balance": 2800
+          }
+        },
+        {
+          "date": "2026-08-08",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 08 Cash Deposit 0.00 100.00 2,900.00",
+            "balance": 2900
+          }
+        },
+        {
+          "date": "2026-08-09",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 09 Cash Deposit 0.00 100.00 3,000.00",
+            "balance": 3000
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "China Bank",
+        "accountNumber": "0123-00-00042-1",
+        "openingBalance": 1000,
+        "endingBalance": 3000
+      }
+    },
+    {
+      "id": "eastwest-template-blank-account",
+      "source": "eastwest-template-blank-account.txt",
+      "sha256": "f551ac1ddad0831f9c3684dad97861ebb72bd1e9560cee48cf982a5048f46204",
+      "kind": "statement",
+      "representation": "synthetic OCR template reproduction; suggestions must remain under review",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Synthetic identifier and reference cells. Retains fifteen learned template suggestions while testing blank versus explicit account identity, original source evidence and mandatory low confidence. Final Cash Deposit label contradicts its debit/balance: these suggestions are not certified financial labels or human confirmations."
+      },
+      "expected": [
+        {
+          "date": "2022-01-20",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-01-24",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-01-31",
+          "amount": "30000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-02",
+          "amount": "4500.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-02",
+          "amount": "24000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-04",
+          "amount": "500.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-07",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-09",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-10",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-14",
+          "amount": "3000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-17",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-21",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-22",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-22",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-24",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "EastWest Bank",
+        "accountNumber": null,
+        "openingBalance": 0,
+        "endingBalance": 9000,
+        "maxConfidence": 45
+      }
+    },
+    {
+      "id": "eastwest-template-explicit-account",
+      "source": "eastwest-template-explicit-account.txt",
+      "sha256": "8764fbf0652605f6d3296c00ef8099f4b46b4977997c04c6f6fe9201905377cf",
+      "kind": "statement",
+      "representation": "synthetic OCR template reproduction; suggestions must remain under review",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Synthetic identifier and reference cells. Retains fifteen learned template suggestions while testing blank versus explicit account identity, original source evidence and mandatory low confidence. Final Cash Deposit label contradicts its debit/balance: these suggestions are not certified financial labels or human confirmations."
+      },
+      "expected": [
+        {
+          "date": "2022-01-20",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-01-24",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-01-31",
+          "amount": "30000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-02",
+          "amount": "4500.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-02",
+          "amount": "24000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-04",
+          "amount": "500.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-07",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-09",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-10",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-14",
+          "amount": "3000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-17",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-21",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-22",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-22",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-24",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "EastWest Bank",
+        "accountNumber": "000000000042",
+        "openingBalance": 0,
+        "endingBalance": 9000,
+        "maxConfidence": 45
+      }
+    },
+    {
+      "id": "posb-column-ledger",
+      "source": "posb-column-ledger.txt",
+      "expected": [
+        {
+          "date": "2025-12-09",
+          "amount": "10.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balance": 90
+          }
+        },
+        {
+          "date": "2025-12-09",
+          "amount": "10.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balance": 80
+          }
+        },
+        {
+          "date": "2025-12-10",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balance": 75
+          }
+        },
+        {
+          "date": "2025-12-27",
+          "amount": "5.20",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "incoming",
+            "balance": 80.2
+          }
+        },
+        {
+          "date": "2025-12-31",
+          "amount": "0.02",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "incoming",
+            "balance": 80.22
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "POSB",
+        "accountNumber": "000-00123-4",
+        "accountType": "bank",
+        "currency": "SGD",
+        "openingBalance": 100,
+        "endingBalance": 80.22
+      },
+      "sha256": "87fb9cb9f11b4f07ad53e7ca70bdbd4678641a5fcddf28be98034e851df9c8c8",
+      "kind": "statement",
+      "representation": "synthetic extracted PDF column evidence",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented source and identity. Two distinct same-day10 withdrawals and one ATM5 from100, salary5.20 and interest0.02 end80.22. Wise counterparty cannot replace POSB identity; year2025/SGD persist. Existing cash counterpart for ATM5 remains a derived transaction linked to its source, not an extra parsed row."
+      }
+    },
+    {
+      "id": "gcash-bill-fee-email",
+      "source": "gcash-bill-fee-email.txt",
+      "expected": [
+        {
+          "date": "2025-02-01T18:09:19+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "institution": "GCash",
+          "categoryName": "Utilities",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "bill",
+            "billerAccountNumber": "0000012345",
+            "totalAmount": 123.25,
+            "billAmount": 120,
+            "feeAmount": 3.25
+          }
+        },
+        {
+          "date": "2025-02-01T18:09:19+08:00",
+          "amount": "3.25",
+          "currency": "PHP",
+          "type": "expense",
+          "institution": "GCash",
+          "categoryName": "Financial",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "fee",
+            "billerAccountNumber": "0000012345",
+            "totalAmount": 123.25,
+            "billAmount": 120,
+            "feeAmount": 3.25
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "accountName": "GCash",
+        "accountNumber": null,
+        "currency": "PHP",
+        "accountType": "wallet"
+      },
+      "sha256": "9f78aa48462fa1c00aacb4b251582f66881d80eda1e2721f923eaa8871632aed",
+      "kind": "statement",
+      "representation": "synthetic native/OCR email receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented biller identity, account and values. Printed bill120 plus fee3.25 equals total123.25. Repeated header totals do not create extra transactions. Recipient biller number must not become payer wallet identity; payment timestamp outranks email timestamp."
+      }
+    },
+    {
+      "id": "maribank-retained-column-repeats",
+      "source": "maribank-retained-column-repeats.txt",
+      "expected": [
+        {
+          "date": "2025-03-11",
+          "amount": "50.00",
+          "type": "income",
+          "rawPayload": {
+            "direction": "incoming",
+            "accountNumber": "00012345678"
+          }
+        },
+        {
+          "date": "2025-03-28",
+          "amount": "20.00",
+          "type": "expense",
+          "rawPayload": {
+            "direction": "outgoing",
+            "accountNumber": "00012345678"
+          }
+        },
+        {
+          "date": "2025-03-28",
+          "amount": "20.00",
+          "type": "expense",
+          "rawPayload": {
+            "direction": "outgoing",
+            "accountNumber": "00012345678"
+          }
+        },
+        {
+          "date": "2025-03-31",
+          "amount": "2.00",
+          "type": "income",
+          "rawPayload": {
+            "direction": "incoming",
+            "accountNumber": "00012345678"
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00012345678",
+        "openingBalance": 10,
+        "endingBalance": 22,
+        "currency": "PHP"
+      },
+      "sha256": "261f2d36d13722c6f97d147438851e711fbc85e2a1e49f79f5d22de3e40671ba",
+      "kind": "statement",
+      "representation": "synthetic extracted PDF column evidence",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented source and values retaining the established column behavior. Opening10 plus incoming52 minus outgoing40 ends22. Both same-day20 transfers survive. Monthly aggregate interest keeps existing statement-end-date policy; it is not a printed transaction day."
+      }
+    },
+    {
+      "id": "gcash-bill-native-body",
+      "source": "gcash-bill-native-body.txt",
+      "expected": [
+        {
+          "date": "2025-02-01T18:09:19+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "institution": "GCash",
+          "categoryName": "Utilities",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "bill",
+            "billerAccountNumber": "0000012345",
+            "totalAmount": 123.25,
+            "billAmount": 120,
+            "feeAmount": 3.25
+          },
+          "merchantRaw": "INVENTED ELECTRIC COOPERATIVE, INC (SAMPLE)"
+        },
+        {
+          "date": "2025-02-01T18:09:19+08:00",
+          "amount": "3.25",
+          "currency": "PHP",
+          "type": "expense",
+          "institution": "GCash",
+          "categoryName": "Financial",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "fee",
+            "billerAccountNumber": "0000012345",
+            "totalAmount": 123.25,
+            "billAmount": 120,
+            "feeAmount": 3.25
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "accountName": "GCash",
+        "accountNumber": null,
+        "currency": "PHP",
+        "accountType": "wallet"
+      },
+      "sha256": "cc90b29f2f7916cecaac127bf38fba43853bb482eb80b50aec988c6d8e1966e0",
+      "kind": "statement",
+      "representation": "synthetic native PDF body with image-only email header and interleaved label",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Same independently invented ledger as the email receipt: bill120 plus fee3.25 equals123.25. The selectable PDF body omits the email subject and splits the biller name around its label. Preserve the full invented biller, payment timestamp, one reference and biller-account vs wallet distinction; this is another representation, not another real financial example."
+      }
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF column transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented identity and values. Separate Fast Plus zero snapshot and GSave ledger: opening20+deposits102-withdrawal1=closing121. Four movements including two legitimate identical cash adjustments with distinct references. Never create a closing-balance transaction or combine account identities. Physical PDF page count must match the complete printed page count; unrelated extra pages are not silently ignored."
+      },
+      "id": "cimb-consolidated-zero-account",
+      "source": "cimb-consolidated-zero-account.txt",
+      "expectedMetadata": {
+        "institution": "CIMB",
+        "accountNumber": null,
+        "currency": "PHP",
+        "openingBalance": null,
+        "endingBalance": null
+      },
+      "expected": [
+        {
+          "date": "2025-11-30",
+          "amount": "0.00",
+          "currency": "PHP",
+          "accountNumber": "00000123450000",
+          "rawPayload": {
+            "kind": "account_snapshot_marker",
+            "source": "cimb_consolidated_snapshot",
+            "balance": 0,
+            "snapshotDate": "2025-11-30"
+          }
+        },
+        {
+          "date": "2025-11-01",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE001",
+            "balance": "120.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-02",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE002",
+            "balance": "121.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-02",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE003",
+            "balance": "122.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-03",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE004",
+            "balance": "121.00",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "sha256": "0e30a152ee7b14164afa35082179ee2741059cb9da6171175a38f338034ab13d"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF column transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented KlikBCA native-column proof. One outgoing30 IDR transfer plus2 IDR fee totals32. Leading-zero payer001-1234567 differs from recipient90012345678. EXAMPLE HOLDING is the payer label, not merchant/payee. Preserve printed time without inventing a timezone or source balance. Physical PDF page count must match the complete printed page count; unrelated extra pages are not silently ignored."
+      },
+      "id": "bca-transfer-components",
+      "source": "bca-transfer-components.txt",
+      "expectedMetadata": {
+        "institution": "BCA",
+        "accountNumber": "001-1234567",
+        "currency": "IDR",
+        "openingBalance": null,
+        "endingBalance": null
+      },
+      "expected": [
+        {
+          "date": "2025-04-10",
+          "amount": "30.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "principal",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        },
+        {
+          "date": "2025-04-10",
+          "amount": "2.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "fee",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        }
+      ],
+      "sha256": "bebb8a00c356a2afabba2c8f2304ea4da40076919756ea8314d23235cd7f9016"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented three-page receipt: two distinct payments, one duplicate image. Principal110 and fee5; principal200 and fee5. Duplicate reference has identical fields, so only four financial components. Local clocks use Philippine +08:00; split P M glyphs remain valid. Biller AB001 never becomes payer identity."
+      },
+      "id": "gcash-multiple-native-receipts",
+      "source": "gcash-multiple-native-receipts.txt",
+      "expected": [
+        {
+          "date": "2025-04-10T07:11:45+08:00",
+          "amount": "110.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "referenceNumber": "000001111",
+            "component": "bill",
+            "billerAccountNumber": "AB001"
+          }
+        },
+        {
+          "date": "2025-04-10T07:11:45+08:00",
+          "amount": "5.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "referenceNumber": "000001111",
+            "component": "fee",
+            "billerAccountNumber": "AB001"
+          }
+        },
+        {
+          "date": "2025-04-11T16:21:15+08:00",
+          "amount": "200.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "referenceNumber": "000002222",
+            "component": "bill",
+            "billerAccountNumber": "AB001"
+          }
+        },
+        {
+          "date": "2025-04-11T16:21:15+08:00",
+          "amount": "5.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "referenceNumber": "000002222",
+            "component": "fee",
+            "billerAccountNumber": "AB001"
+          }
+        }
+      ],
+      "sha256": "60cf975318ead38d585eadc60e39ac264d991b14b5cda24d1b43d22609ebbec3"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented government bill155 with explicitly printed fee0. Wrapped payment date crosses the Date/Time field label; preserve seconds and Philippine +08:00. Alphanumeric biller identity is payment evidence, not payer wallet identity. Zero fee is not an additional transaction."
+      },
+      "id": "gcash-wrapped-zero-fee",
+      "source": "gcash-wrapped-zero-fee.txt",
+      "expected": [
+        {
+          "date": "2022-09-07T13:06:22+08:00",
+          "amount": "155.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "component": "bill",
+            "referenceNumber": "000003333",
+            "billerAccountNumber": "EX0AMPLE"
+          }
+        }
+      ],
+      "sha256": "609f6740aa425ae752c760b6361a5e3a3af20334c2174f6b791d0be22627b730"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Independent invented derivative: four active UPSave movements100,1,1,-1 and one zero Fast Plus snapshot. Repeated1 entries remain distinct. Summary withdrawal label is wrapped with its PHP prefix. Only the zero-activity account may have a later Nov15 opening anchor inside the Nov1\u201330 period; active20 opening remains at start."
+      },
+      "id": "cimb-upsave-wrapped-summary",
+      "source": "cimb-upsave-wrapped-summary.txt",
+      "expected": [
+        {
+          "date": "2025-11-30",
+          "amount": "0.00",
+          "currency": "PHP",
+          "accountNumber": "00000123450000",
+          "rawPayload": {
+            "kind": "account_snapshot_marker",
+            "source": "cimb_consolidated_snapshot",
+            "balance": 0,
+            "snapshotDate": "2025-11-30"
+          }
+        },
+        {
+          "date": "2025-11-01",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE001",
+            "balance": "120.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-02",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE002",
+            "balance": "121.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-02",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE003",
+            "balance": "122.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-03",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE004",
+            "balance": "121.00",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "sha256": "bc562b03602d9b51a40f0b66144140701daa033a0087c6ff361e6750613b5c11"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented single FastPlus statement: opening10 plus interest.04 minus tax.01 closes10.03. Opening/closing anchors and generated-on date are not transactions. The same interest reference has two legitimate different components, both retained. Physical page, full identity, summary totals and each running balance must agree."
+      },
+      "id": "cimb-single-native-interest",
+      "source": "cimb-single-native-interest.txt",
+      "expected": [
+        {
+          "date": "2026-05-01",
+          "amount": "0.04",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123459999",
+          "rawPayload": {
+            "ref": "EXAMPLEINT001",
+            "balanceReconciled": true,
+            "direction": "incoming"
+          }
+        },
+        {
+          "date": "2026-05-01",
+          "amount": "0.01",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00000123459999",
+          "rawPayload": {
+            "ref": "EXAMPLEINT001",
+            "balanceReconciled": true,
+            "direction": "outgoing"
+          }
+        }
+      ],
+      "sha256": "1e44e0d8a6751240c74bbfc3d32ba06de1ecfcd254e2f67b3c44f88934c089ad"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented leap-February SGD ledger: -1.33+20-5-5-10-2=-3.33. Two same-day5 transfers remain separate. Only explicit cash10 produces a derived cash counterpart; ATM withdrawal fee2 is Financial. Zero interest is retained source disclosure without creating income. Trailing minus signs are negative balance evidence."
+      },
+      "id": "posb-negative-zero-interest",
+      "source": "posb-negative-zero-interest.txt",
+      "expected": [
+        {
+          "date": "2024-02-06",
+          "amount": "20.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-23456-7",
+          "balance": 18.67,
+          "categoryName": "Income"
+        },
+        {
+          "date": "2024-02-07",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "balance": 13.67,
+          "categoryName": "Transfers"
+        },
+        {
+          "date": "2024-02-07",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "balance": 8.67,
+          "categoryName": "Transfers"
+        },
+        {
+          "date": "2024-02-08",
+          "amount": "10.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "balance": -1.33,
+          "categoryName": "Cash & ATM"
+        },
+        {
+          "date": "2024-02-08",
+          "amount": "2.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "balance": -3.33,
+          "categoryName": "Financial"
+        }
+      ],
+      "sha256": "b9779d5f6397c7529fe570404a201004d522a3f2d01d1164b5e4a952e652c260"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented derivative of previously reviewed30 principal plus2 fee. The complete one-page printout has a native KlikBCA URL and1/1 browser footer; no copyright label. Every native transfer column, success, reference and date still must validate. A footer alone cannot establish financial fields."
+      },
+      "id": "bca-alternate-print-footer",
+      "source": "bca-alternate-print-footer.txt",
+      "expected": [
+        {
+          "date": "2025-04-10",
+          "amount": "30.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "principal",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        },
+        {
+          "date": "2025-04-10",
+          "amount": "2.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "fee",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        }
+      ],
+      "sha256": "6454a8bef15e95da43446fb8addcc40d0a25e15e1cdbc769367f1ef2b2121f45"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented same-bank native transfer: payer001-1234567 and recipient002-7654321 have distinct owners; payer name is never merchant. Explicit zero fee produces only principal30. No bank balance or timezone is printed; preserve source clock separately from calendar-date normalization."
+      },
+      "id": "bca-same-bank-zero-fee",
+      "source": "bca-same-bank-zero-fee.txt",
+      "expected": [
+        {
+          "date": "2025-04-10",
+          "amount": "30.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "recipientIdentifier": "002-7654321",
+            "recipientOwner": "EXAMPLE RECIPIENT",
+            "component": "principal",
+            "fee": 0,
+            "totalDebit": 30
+          }
+        }
+      ],
+      "sha256": "ad7cf6002d453ced5ed267259b8ba618a6674f7d402177bb9b56288baca82e07"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented two-page notification mirrors one40 IDR event in Indonesian and English. Both complete blocks must match amount, reference, accounts, date and clock, and status must succeed in both. Fee is absent and remains unknown, not zero; no balance anchor or timezone is inferred."
+      },
+      "id": "bca-bilingual-notification",
+      "source": "bca-bilingual-notification.txt",
+      "expected": [
+        {
+          "date": "2026-06-19",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "reference": "20260619001234",
+            "recipientIdentifier": "002-7654321",
+            "transferTime": "16:25:13",
+            "component": "principal",
+            "fee": null,
+            "totalDebit": null
+          }
+        }
+      ],
+      "sha256": "f52dbccddac77d963cfe17de2663426d2428b6da7149daecdbb2d6604a6f8b06"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native receipt field transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented155 PHP bill with zero fee, a separate plain Account phone field and a labeled alphanumeric biller identifier between Account and Number. Preserve seconds/+08:00, retain EX0AMPLE as biller evidence, leave payer wallet ID absent. Older structured nulls must be retrieved read-only from the unchanged complete source, never patched into confirmed raw data."
+      },
+      "id": "gcash-split-biller-account",
+      "source": "gcash-split-biller-account.txt",
+      "expected": [
+        {
+          "date": "2022-09-07T13:06:22+08:00",
+          "amount": "155.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "bill",
+            "referenceNumber": "000004444",
+            "billerAccountNumber": "EX0AMPLE"
+          }
+        }
+      ],
+      "sha256": "6dca8a7745400b21042d62ed07566dd79edc6ba866a249b5111c9c2dae3ddae8"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented source transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented bill120+fee5 equals125. Native two NUL separators are visible clock colons within the complete labeled payment timestamp only. Keep seconds/PH timezone, raw transcript and leading-zero biller identity; account name is not payer wallet identity."
+      },
+      "id": "gcash-native-null-clock",
+      "source": "gcash-native-null-clock.txt",
+      "expected": [
+        {
+          "date": "2024-07-16T10:45:19+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "component": "bill",
+            "referenceNumber": "0000912345",
+            "billerAccountNumber": "000012345678"
+          }
+        },
+        {
+          "date": "2024-07-16T10:45:19+08:00",
+          "amount": "5.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "component": "fee",
+            "referenceNumber": "0000912345",
+            "billerAccountNumber": "000012345678"
+          }
+        }
+      ],
+      "sha256": "1dfa7dd5525dbdb2883cada86584ef435e98ed3d58259e2cf7e8279aa6a6ca9e"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented source transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented tax bill135, zero fee; TIN/branch/return period are source tax fields, never payer/biller Account Number or payment date. One outgoing movement; raw tax evidence preserved."
+      },
+      "id": "gcash-tax-receipt-no-wallet",
+      "source": "gcash-tax-receipt-no-wallet.txt",
+      "expected": [
+        {
+          "date": "2020-06-07T17:12:55+08:00",
+          "amount": "135.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": null,
+            "referenceNumber": "0000333344",
+            "component": "bill"
+          }
+        }
+      ],
+      "sha256": "43c9c1216b4fd8c2a9cdc017a775662afda33a00d4c14ee4b899be82f55fb041",
+      "expectedMetadata": {
+        "institution": "GCash",
+        "accountNumber": null,
+        "currency": "PHP"
+      }
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented source transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented20 SIN address is not a date. A signed negative withdrawal is an incoming reversal5, distinct from original and later legitimate repeated5. Opening10+20-5-5+5-5=20. Zero interest stays a disclosure. No cash movement/counterpart."
+      },
+      "id": "posb-address-signed-reversal",
+      "source": "posb-address-signed-reversal.txt",
+      "expected": [
+        {
+          "date": "2024-02-01",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-98765-4",
+          "balance": 5
+        },
+        {
+          "date": "2024-02-01",
+          "amount": "20.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-98765-4",
+          "balance": 25
+        },
+        {
+          "date": "2024-02-02",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-98765-4",
+          "balance": 20
+        },
+        {
+          "date": "2024-02-02",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-98765-4",
+          "balance": 25
+        },
+        {
+          "date": "2024-02-02",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-98765-4",
+          "balance": 20
+        }
+      ],
+      "sha256": "cdcea1facd1ed073d371bc0997472662513fc9ef8a4f6a21c71dd1233b4ce1b3"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented source transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented bilingual principal100+fee2.90 equals102.90; mirrored fields and success match. Email Date/GMT+8 is delivery metadata; source transfer calendar/date clock preserved without timezone inference. Exact authorization labels, full source/recipient roles and leading zero remain distinct. Missing/conflicting fee side must fail closed."
+      },
+      "id": "bca-bilingual-authorized-fee",
+      "source": "bca-bilingual-authorized-fee.txt",
+      "expected": [
+        {
+          "date": "2025-02-14",
+          "amount": "100.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "recipientIdentifier": "0019876543",
+            "reference": "20250214999999",
+            "component": "principal",
+            "fee": 2.9,
+            "totalDebit": 102.9
+          }
+        },
+        {
+          "date": "2025-02-14",
+          "amount": "2.90",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "recipientIdentifier": "0019876543",
+            "reference": "20250214999999",
+            "component": "fee",
+            "fee": 2.9,
+            "totalDebit": 102.9
+          }
+        }
+      ],
+      "sha256": "dc24b15e716857c294cf078e325bea8c6a243e8ce88862af7df60b2d8cfc27e7"
+    },
+    {
+      "id": "bca-native-english-page-footer",
+      "kind": "statement",
+      "source": "bca-native-english-page-footer.txt",
+      "sha256": "472de5b3c154d66b19796b49afac70adf252972f38e8dea09996717b7a6c427d",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented reviewed30 principal plus2 fee and complete native columns; Page1of1 English print footer has the same completeness contract as Halaman1dari1. Physical1 and exactly one full success proof still required. Multiple/conflicting page footers fail review."
+      },
+      "expected": [
+        {
+          "date": "2025-04-10",
+          "amount": "30.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "principal",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        },
+        {
+          "date": "2025-04-10",
+          "amount": "2.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "fee",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        }
+      ]
+    },
+    {
+      "id": "grab-food-gcash-clock",
+      "kind": "statement",
+      "source": "grab-food-gcash-clock.txt",
+      "sha256": "dc6d0a46ccaa1cb3db37e9955aa783161568efa4ba5deff1e46b2629eb93bab1",
+      "representation": "Independently invented complete native receipt pages",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented subtotal120+delivery20 equals140. One purchase, no extra fee transaction or duplicated headline total; full original page evidence and explicit GCash method without payer wallet ID. Pickup timestamp19:30+08 is used instead of email delivery clock; ALL in footer is not Albanian currency."
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T11:30:00.000Z",
+          "amount": "140.00",
+          "currency": "PHP",
+          "type": "expense",
+          "merchantRaw": "Example Kitchen - Metro Manila",
+          "accountName": "GCash",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "A-INVENTEDFOOD001",
+            "payerAccountNumber": null,
+            "sourceTimestamp": "2026-08-14T19:30:00+08:00",
+            "components": [
+              {
+                "label": "Subtotal",
+                "amount": "120.00"
+              },
+              {
+                "label": "Delivery Fee",
+                "amount": "20.00"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "openingBalance": null,
+        "endingBalance": null
+      }
+    },
+    {
+      "id": "grab-cash-date-only",
+      "kind": "statement",
+      "source": "grab-cash-date-only.txt",
+      "sha256": "de6807c542cea3ca4a91242c94e5633dd1c2897876e53174bbc32d2aafb7c3fa",
+      "representation": "Independently invented complete native receipt pages",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented cash120 fare45+25+20+30. Calendar-only pickup retains no invented clock; duplicated receipt art with same booking is one event. Driver/passenger/booking identifiers are not bank accounts and no opening/closing balance is inferred."
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T12:00:00.000Z",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "merchantRaw": "Grab",
+          "accountName": "Cash",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "A-INVENTEDCASH001",
+            "sourceTimestamp": null,
+            "payerAccountNumber": null
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "openingBalance": null,
+        "endingBalance": null
+      }
+    },
+    {
+      "id": "grab-legacy-distinct-bookings",
+      "kind": "statement",
+      "source": "grab-legacy-distinct-bookings.txt",
+      "sha256": "331d62c58c8ea11127c90493c3d3a47156910ef475fc1d384f65fef5d6f78b12",
+      "representation": "Independently invented complete native receipt pages",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Two invented cash rides of100, each fare40+40+30-discount10=100. Same amount, merchant and calendar day with distinct booking/time are two legitimate events. Preserve the negative promotion and actual pickup offsets, source reference and absence of bank balance/identity."
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T03:00:00.000Z",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountName": "Cash",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "ADR-INVENTED-RIDE-1",
+            "totalAmount": 100,
+            "payerAccountNumber": null
+          }
+        },
+        {
+          "date": "2026-08-14T03:02:00.000Z",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountName": "Cash",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "ADR-INVENTED-RIDE-2",
+            "totalAmount": 100,
+            "payerAccountNumber": null
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "openingBalance": null,
+        "endingBalance": null
+      }
+    },
+    {
+      "id": "maribank-native-repeated-columns",
+      "kind": "statement",
+      "source": "maribank-native-repeated-columns.txt",
+      "sha256": "fd2227e9f479bdc5832f7c5776f42c13fd56f65f8a1bc9fca820d45a41b73db8",
+      "representation": "Independently invented complete native PDF columns and page transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented opening50 + monthly net interest1 + salary59 - two legitimate identical20 payments = closing70. Every source occurrence remains separate; daily interest/tax disclosures are not extra movements. Full leading-zero Philippine account, PHP columns and every physical/printed page are required. Older SeaBank branding maps to the existing MariBank family without replacing customized current identities or balances."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 0,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-10",
+          "amount": "59.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 1,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "20.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 2,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "20.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 3,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 50,
+        "endingBalance": 70
+      }
+    },
+    {
+      "id": "seabank-native-php-alias",
+      "kind": "statement",
+      "source": "seabank-native-php-alias.txt",
+      "sha256": "598f818cb48ef21aae434fad58cad487ba8776bd38fdfdcf0371b6232cb3b9d1",
+      "representation": "Independently invented complete native PDF columns and page transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented opening50 + monthly net interest1 + salary59 - two legitimate identical20 payments = closing70. Every source occurrence remains separate; daily interest/tax disclosures are not extra movements. Full leading-zero Philippine account, PHP columns and every physical/printed page are required. Older SeaBank branding maps to the existing MariBank family without replacing customized current identities or balances."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 0,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-10",
+          "amount": "59.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 1,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "20.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 2,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "20.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 3,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 50,
+        "endingBalance": 70
+      }
+    },
+    {
+      "id": "maribank-empty-zero-snapshot",
+      "kind": "statement",
+      "source": "maribank-empty-zero-snapshot.txt",
+      "sha256": "b7de14da70f31c5c576a828fff93ac0dfb5e3d8e570d9af8b1169f11f72c6e19",
+      "representation": "Independently invented complete native page and empty ledger transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Explicit empty ledger, zero incoming/outgoing and equal opening/closing balances. Two complete pages and full leading-zero PHP bank identity. Exactly one source snapshot marker, zero financial movements. Nonzero retained balance is not income; illustrations are not account evidence."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "0.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "kind": "account_snapshot_marker",
+            "balance": 0,
+            "sourceEmptyLedgerLabel": "NO RECENT TRANSACTION",
+            "sourceRowIndex": 0,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 0,
+        "endingBalance": 0
+      }
+    },
+    {
+      "id": "seabank-empty-retained-balance",
+      "kind": "statement",
+      "source": "seabank-empty-retained-balance.txt",
+      "sha256": "ac47e900380d354f83f2ac2a1adef112bd32912c6fa42a4f70b01c1385b60c7e",
+      "representation": "Independently invented complete native page and empty ledger transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Explicit empty ledger, zero incoming/outgoing and equal opening/closing balances. Two complete pages and full leading-zero PHP bank identity. Exactly one source snapshot marker, zero financial movements. Nonzero retained balance is not income; illustrations are not account evidence."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "0.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "kind": "account_snapshot_marker",
+            "balance": 12.34,
+            "sourceEmptyLedgerLabel": "NO RECENT TRANSACTION",
+            "sourceRowIndex": 0,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 12.34,
+        "endingBalance": 12.34
+      }
+    },
+    {
+      "id": "maribank-native-atm-fees",
+      "kind": "statement",
+      "source": "maribank-native-atm-fees.txt",
+      "sha256": "f49c43ef2d06dc30763e0f73e25da92a019340a9268cbf8c6b8717c27930fb63",
+      "representation": "Independently invented native MariBank cash withdrawals and separate fee columns",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Opening500 + interest1 - two legitimate100 cash withdrawals - two separate15 fees = closing271. Five source movements. Normalization creates exactly two same-currency Cash counterparts; fees remain expenses, never cash movements. Full original occurrence order and evidence remain traceable."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 0,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 1,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "15.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 2,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 3,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "15.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 4,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 500,
+        "endingBalance": 271
+      }
+    },
+    {
+      "id": "posb-native-everyday-alias",
+      "kind": "statement",
+      "source": "posb-native-everyday-alias.txt",
+      "sha256": "7f0ad4eed769b4acdef9b00d06109f6e80634ace427c8d86e8f2e293f2742a84",
+      "representation": "Independently invented POSB eEveryday savings native columns and complete two-page balance anchors",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Existing POSB Payroll column/reconciliation protocol reused for the explicit eEveryday Savings product. Opening100 + salary250 - cash50 - fee2 + interest0.01 = closing298.01. Four source events and one same-currency Cash counterpart; fee remains an expense. Full leading-zero source account and page/date coverage retained."
+      },
+      "expected": [
+        {
+          "date": "2026-09-01",
+          "amount": "250.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-23456-7",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-09-02",
+          "amount": "50.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-09-02",
+          "amount": "2.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-09-30",
+          "amount": "0.01",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-23456-7",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "POSB",
+        "accountNumber": "001-23456-7",
+        "currency": "SGD",
+        "openingBalance": 100,
+        "endingBalance": 298.01
+      }
+    },
+    {
+      "id": "gcash-explicit-bill-protect",
+      "kind": "statement",
+      "source": "gcash-explicit-bill-protect.txt",
+      "sha256": "1f0c0a692231c022de4dd54cf7956ccd61e704ced7f53791431dcf69e77190b9",
+      "representation": "Independently invented native receipt transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented explicit utility bill120, separately labeled GInsure10, fee0 or7; sum130 or137. Each component is an expense; biller identifier is never payer wallet identity. Source payment clock retained. Expected values specified independently."
+      },
+      "expected": [
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "bill",
+            "billProtectAmount": 10
+          }
+        },
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "10.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "bill_protect",
+            "billProtectAmount": 10
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "GCash",
+        "accountNumber": null,
+        "currency": "PHP"
+      }
+    },
+    {
+      "id": "gcash-bill-protect-and-fee",
+      "kind": "statement",
+      "source": "gcash-bill-protect-and-fee.txt",
+      "sha256": "27384cd797e96faad61c92f9dd802bd0d6e8a31afb66094b6f98bf7245ec06cf",
+      "representation": "Independently invented native receipt transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented explicit utility bill120, separately labeled GInsure10, fee0 or7; sum130 or137. Each component is an expense; biller identifier is never payer wallet identity. Source payment clock retained. Expected values specified independently. Native amount interrupts only the two-line GInsure label; preserve original source text."
+      },
+      "expected": [
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "bill",
+            "billProtectAmount": 10
+          }
+        },
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "7.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "fee",
+            "billProtectAmount": 10
+          }
+        },
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "10.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "bill_protect",
+            "billProtectAmount": 10
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "GCash",
+        "accountNumber": null,
+        "currency": "PHP"
+      }
+    },
+    {
+      "id": "seabank-indonesia-columns",
+      "source": "seabank-indonesia-columns.txt",
+      "sha256": "2324d063efed1fac38e138f36992d6893536a50c521cea73cb0875a37fbcfb31",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented integer IDR ledger: opening100 + incoming1001 - outgoing220 =881. Five occurrences include identical purchases; every native running balance, twelve-digit identity and physical/printed pages independently specified."
+      },
+      "expected": [
+        {
+          "date": "2026-01-07",
+          "amount": "1000.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 0,
+            "balance": 1100,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-07",
+          "amount": "100.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 1,
+            "balance": 1000,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-07",
+          "amount": "100.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 2,
+            "balance": 900,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-08",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 3,
+            "balance": 901,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-08",
+          "amount": "20.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 4,
+            "balance": 881,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "SeaBank Indonesia",
+        "accountNumber": "901000000123",
+        "currency": "IDR",
+        "openingBalance": 100,
+        "endingBalance": 881
+      }
+    },
+    {
+      "id": "dbs-my-account-zero",
+      "source": "dbs-my-account-zero.txt",
+      "sha256": "4b3318f2391ee8530d7a978d07d8ab8b28f3ca8781a9f8e5bbe57e89eb482093",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented full DBS three-page single SGD account snapshot. Summary/ledger identity and date match, dated row has only a zero balance, both movement totals and both balances are zero. One marker, zero financial movements."
+      },
+      "expected": [
+        {
+          "date": "2026-01-31",
+          "amount": "0.00",
+          "currency": "SGD",
+          "accountNumber": "120-000123-4",
+          "rawPayload": {
+            "source": "dbs_native_zero",
+            "kind": "account_snapshot_marker",
+            "balance": 0
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "DBS",
+        "accountNumber": "120-000123-4",
+        "currency": "SGD",
+        "openingBalance": 0,
+        "endingBalance": 0
+      }
+    },
+    {
+      "id": "dbs-digivault-zero",
+      "source": "dbs-digivault-zero.txt",
+      "sha256": "f3de366abcae4c0fa7b607c8821ea83515f84427e2e70ef1feedc46e06755a6a",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented full DBS three-page single SGD account snapshot. Summary/ledger identity and date match, dated row has only a zero balance, both movement totals and both balances are zero. One marker, zero financial movements."
+      },
+      "expected": [
+        {
+          "date": "2026-01-31",
+          "amount": "0.00",
+          "currency": "SGD",
+          "accountNumber": "272-000456-7",
+          "rawPayload": {
+            "source": "dbs_native_zero",
+            "kind": "account_snapshot_marker",
+            "balance": 0
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "DBS",
+        "accountNumber": "272-000456-7",
+        "currency": "SGD",
+        "openingBalance": 0,
+        "endingBalance": 0
+      }
+    },
+    {
+      "id": "bca-recipient-income",
+      "source": "bca-recipient-income.txt",
+      "sha256": "15e62310764cce50e782afafd0ce037d4101ae457663859c651a947ad585c3cb",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented one-page complete bilingual recipient notification. Both labels agree on recipient, sender, local clock, IDR12345 and full reference. One income on destination; no payer account, fee, UTC timestamp or bank balance invented."
+      },
+      "expected": [
+        {
+          "date": "2026-01-02",
+          "amount": "12345.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "123-0004567",
+          "rawPayload": {
+            "direction": "incoming",
+            "sourceAccount": null,
+            "recipientIdentifier": "123-0004567",
+            "reference": "000000000000123456",
+            "fee": null,
+            "transferTime": "10:20:30",
+            "source": "bca_transfer_proof"
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "BCA",
+        "accountNumber": "123-0004567",
+        "currency": "IDR",
+        "endingBalance": null
+      }
+    },
+    {
+      "id": "gcash-ocr-wrapped-biller",
+      "source": "gcash-ocr-wrapped-biller.txt",
+      "sha256": "34f28a4f8f56f81d4f1c26a6ce1b1466233e1fd11854cbe69c3bf5375e4896c1",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Independently invented OCR-shaped receipt with principal100, fee15, total115. Wrapped Account identifier then Number selects biller ID while distinct plain Account field is not wallet identity. Exact seconds and +08 clock independently specified."
+      },
+      "expected": [
+        {
+          "date": "2026-03-09T14:41:55+08:00",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "bill",
+            "billerAccountNumber": "CA20260001",
+            "referenceNumber": "000123456"
+          }
+        },
+        {
+          "date": "2026-03-09T14:41:55+08:00",
+          "amount": "15.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "fee",
+            "billerAccountNumber": "CA20260001",
+            "referenceNumber": "000123456"
+          }
+        }
+      ]
+    },
+    {
+      "id": "bca-legacy-closed-bilingual",
+      "source": "bca-legacy-closed-bilingual.txt",
+      "sha256": "47db49994a223098de61f0701951863c83ad846936da2ad89bc4b4c315296ac9",
+      "kind": "statement",
+      "representation": "Independently invented native complete legacy bilingual notification",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented complete closed two-page legacy bilingual transfer. Both native financial blocks and both formal closings are present with no hidden quotes or partial tax-note block. Matched IDR240 outgoing on full payer ID; fee, timezone and bank balance remain absent."
+      },
+      "expected": [
+        {
+          "date": "2021-11-30",
+          "amount": "240.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "123-0001234",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "fee": null,
+            "recipientIdentifier": "234-0002345",
+            "reference": "000000000000987654",
+            "parserEvidence": {
+              "version": "bca-bilingual-legacy-closed-v1"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "bca-compact-current-event",
+      "source": "bca-compact-current-event.txt",
+      "sha256": "5dcc6fe67a26773b8aac184b25d15bdd873d8584cf645513441263c3f8c77ecd",
+      "kind": "statement",
+      "representation": "Independently invented one-page native current-event email print",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented complete printed1/1 native bilingual current payment. All visible source/recipient/date/clock/reference/status/amount fields match. Current IDR150 is one outgoing event; hidden earlier quoted email is explicitly not parsed/countable, and missing fee/timezone/bank balance remain unknown. Existing incomplete modern one-page fixtures retain their guard."
+      },
+      "expected": [
+        {
+          "date": "2026-01-15",
+          "amount": "150.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "123-0001234",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "fee": null,
+            "reference": "000000000001234567",
+            "parserEvidence": {
+              "version": "bca-compact-current-event-v1",
+              "hiddenQuotedEmail": true,
+              "proofScope": "visible current event only; hidden history is not parsed"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "seabank-id-english-columns",
+      "source": "seabank-id-english-columns.txt",
+      "sha256": "dcd202b955a9028defa8cf51e095a3fcaaca0a90e0e76d2e1fc25442ea710fde",
+      "kind": "statement",
+      "representation": "Invented native en column proof with bounded 3+9 digit identity split",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Independent paper contract: opening250 plus400+1 less40+40+10 equals561. Repeated40 purchases remain separate; complete physical/printed pages, IDR integers, exact full identity and each running balance are fixed before parser execution. Voucher is a ledger counterparty description; complete proof must outrank the promotion heuristic."
+      },
+      "expected": [
+        {
+          "date": "2026-01-05",
+          "amount": "400.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 0,
+            "balance": 650,
+            "balanceReconciled": true
+          },
+          "merchantRaw": "Voucher Wallet Transfer"
+        },
+        {
+          "date": "2026-01-05",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 1,
+            "balance": 610,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-05",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 2,
+            "balance": 570,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-06",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 3,
+            "balance": 571,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-06",
+          "amount": "10.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 4,
+            "balance": 561,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "SeaBank Indonesia",
+        "accountNumber": "901000000456",
+        "currency": "IDR",
+        "openingBalance": 250,
+        "endingBalance": 561
+      }
+    },
+    {
+      "id": "seabank-id-spaced-identity",
+      "source": "seabank-id-spaced-identity.txt",
+      "sha256": "7f6611312a4e8245bea2daf7a58183add3c7b567a1ae870e1bd1b020321eccd5",
+      "kind": "statement",
+      "representation": "Invented native id column proof with bounded 3+9 digit identity split",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Independent paper contract: opening250 plus400+1 less40+40+10 equals561. Repeated40 purchases remain separate; complete physical/printed pages, IDR integers, exact full identity and each running balance are fixed before parser execution."
+      },
+      "expected": [
+        {
+          "date": "2026-01-05",
+          "amount": "400.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 0,
+            "balance": 650,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-05",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 1,
+            "balance": 610,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-05",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 2,
+            "balance": 570,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-06",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 3,
+            "balance": 571,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-06",
+          "amount": "10.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 4,
+            "balance": 561,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "SeaBank Indonesia",
+        "accountNumber": "901000000456",
+        "currency": "IDR",
+        "openingBalance": 250,
+        "endingBalance": 561
+      }
+    },
+    {
+      "id": "grab-split-grabpay-wallet",
+      "kind": "statement",
+      "source": "grab-split-grabpay-wallet.txt",
+      "sha256": "a6e4fd07564efcbd469dc9814b513071e02384e5b74618852189cf8cb5bf5c95",
+      "representation": "Independently invented complete native receipt pages",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-15",
+        "status": "reviewed",
+        "basis": "Invented P-only Philippine GrabPay Wallet ride; paid-by label crosses native PDF page boundary; fare100+toll20 equals gross120. Payer wallet number and bank balances are absent."
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T12:00:00.000Z",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "merchantRaw": "Grab",
+          "accountName": "GrabPay Wallet",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "A-INVENTEDSPLIT001",
+            "paymentMethod": "GrabPay Wallet",
+            "payerAccountNumber": null,
+            "components": [
+              {
+                "label": "Fare",
+                "amount": "100.00"
+              },
+              {
+                "label": "Toll",
+                "amount": "20.00"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "openingBalance": null,
+        "endingBalance": null
+      }
+    },
+    {
+      "id": "grab-unspecified-instrument",
+      "source": "grab-unspecified-instrument.txt",
+      "sha256": "812a9793170efc44033068ea85a93f9e3f9d19ea11121f4013072dc3ae12da84",
+      "kind": "statement",
+      "representation": "Independently invented complete native receipt pages with an unidentified payment reference",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-25",
+        "status": "reviewed",
+        "basis": "Invented Philippine receipt: fare125 plus toll20 equals two145 totals and the paid amount. The native payment panel provides only a four-digit reference. No issuer, full account number, account type, clock or bank balance is invented; finance requires explicit existing account selection."
+      },
+      "expectedMetadata": {
+        "institution": null,
+        "accountNumber": null,
+        "accountType": null,
+        "currency": "PHP",
+        "openingBalance": null,
+        "endingBalance": null
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T12:00:00.000Z",
+          "amount": "145.00",
+          "currency": "PHP",
+          "type": "expense",
+          "merchantRaw": "Grab",
+          "accountName": "Payment account ending 4821",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "kind": "payment_instrument_transaction",
+            "paymentMethod": "Unspecified payment instrument",
+            "accountType": null,
+            "payerAccountNumber": null,
+            "paymentAccountSuffix": "4821",
+            "paymentAccountSelectionRequired": true,
+            "sourceTimestamp": null,
+            "components": [
+              {
+                "label": "Fare",
+                "amount": "125.00"
+              },
+              {
+                "label": "Toll",
+                "amount": "20.00"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "grab-native-word",
+      "kind": "statement",
+      "source": "grab-native-word.docx",
+      "sha256": "9df908fe2f7d3d835dff1d30cd017f6a60127228cb862e2ac19b10461b3ee2de",
+      "representation": "Invented native Word receipt with mutually exclusive drawing copies",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-25",
+        "status": "reviewed",
+        "basis": "Independently invented Philippine cash ride: base100 plus distance65.25 plus time50 plus surge34.75 equals headline, summary and cash250. XML compatibility copies are one receipt; no bank identity, balance or pickup clock exists."
+      },
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "accountType": "cash",
+        "openingBalance": null,
+        "endingBalance": null
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T12:00:00.000Z",
+          "amount": "250.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountName": "Cash",
+          "merchantRaw": "Grab",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "sourceContainer": "docx",
+            "referenceNumber": "A-INVENTEDWORD0001",
+            "paymentMethod": "Cash",
+            "payerAccountNumber": null,
+            "sourceTimestamp": null,
+            "components": [
+              {
+                "label": "Base fare",
+                "amount": "100.00"
+              },
+              {
+                "label": "Distance",
+                "amount": "65.25"
+              },
+              {
+                "label": "Time",
+                "amount": "50.00"
+              },
+              {
+                "label": "Surge charges",
+                "amount": "34.75"
+              }
+            ],
+            "parserEvidence": {
+              "fullNativePages": false,
+              "fullWordParts": true,
+              "reconciled": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "seabank-id-dormant-opening",
+      "kind": "statement",
+      "source": "seabank-id-dormant-opening.txt",
+      "sha256": "5a1782fd989e44e80fad5ed8d3e51309a5666f13710f6d04f31afb6b6ea947c9",
+      "representation": "Independently invented complete zero-opening English Indonesian SeaBank pages with foreign postal address and stale serial",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-25",
+        "status": "reviewed",
+        "basis": "Invented two incoming500 occurrences on30May2026 and interest1 on31May2026 reconcile zero opening, no outgoing and1001 closing. Complete active-day daily evidence and all native movement totals prove zero activity before30May. The Indonesian legal issuer/contact and explicit IDR columns establish bank jurisdiction; mailing country does not. Repeated explicit period/publication establish financial dates; stale serial is retained as a review flag and confidence capped85."
+      },
+      "expectedMetadata": {
+        "institution": "SeaBank Indonesia",
+        "accountNumber": "901000000654",
+        "currency": "IDR",
+        "openingBalance": 0,
+        "endingBalance": 1001,
+        "confidence": 85
+      },
+      "expected": [
+        {
+          "date": "2026-05-30",
+          "amount": "500.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000654",
+          "confidence": 85,
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "kind": "bank_transaction",
+            "sourceRowIndex": 0,
+            "dormantOpeningProof": {
+              "firstActiveDate": "2026-05-30",
+              "zeroPriorActivityProved": true,
+              "serialPeriodConflict": true,
+              "sourceMetadataNeedsReview": true,
+              "issuerCountry": "ID"
+            },
+            "reconciliation": {
+              "version": "seabank-id-legacy-dormant-v1",
+              "openingBalance": 0,
+              "endingBalance": 1001,
+              "dailyRows": 2,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-05-30",
+          "amount": "500.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000654",
+          "confidence": 85,
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "kind": "bank_transaction",
+            "sourceRowIndex": 1,
+            "dormantOpeningProof": {
+              "firstActiveDate": "2026-05-30",
+              "zeroPriorActivityProved": true,
+              "serialPeriodConflict": true,
+              "sourceMetadataNeedsReview": true,
+              "issuerCountry": "ID"
+            },
+            "reconciliation": {
+              "version": "seabank-id-legacy-dormant-v1",
+              "openingBalance": 0,
+              "endingBalance": 1001,
+              "dailyRows": 2,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-05-31",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000654",
+          "confidence": 85,
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "kind": "daily_interest",
+            "sourceRowIndex": 2,
+            "dormantOpeningProof": {
+              "firstActiveDate": "2026-05-30",
+              "zeroPriorActivityProved": true,
+              "serialPeriodConflict": true,
+              "sourceMetadataNeedsReview": true,
+              "issuerCountry": "ID"
+            },
+            "reconciliation": {
+              "version": "seabank-id-legacy-dormant-v1",
+              "openingBalance": 0,
+              "endingBalance": 1001,
+              "dailyRows": 2,
+              "physicalPages": 2
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

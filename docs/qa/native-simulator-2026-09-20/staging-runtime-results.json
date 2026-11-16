@@ -1,0 +1,16 @@
+{
+  "upload": {
+    "bytes": 5259637,
+    "progress": 100,
+    "parsedRows": 3,
+    "transactions": 3,
+    "income": 56.78,
+    "spending": 35.79
+  },
+  "invitation": {
+    "role": "member",
+    "members": 2,
+    "pending": 0
+  },
+  "cancelResumeRejected": true
+}

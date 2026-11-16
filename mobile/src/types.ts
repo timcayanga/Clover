@@ -1,0 +1,92 @@
+export type Transaction = {
+  importFileId?: string | null;
+  sourceMatches?: import("../../shared/transaction-source-match").TransactionSourceMatch[];
+  merchantLogoUrl?: string | null;
+  merchantLogoNameKey?: string;
+  splitBill?: { id: string; title: string } | null;
+  source?: string;
+  userNote?: string | null;
+  parsedNote?: string | null;
+  receiptLineItems?: { description: string; quantity?: string | null; unitPrice?: string | null; amount?: string | null; currency?: string | null }[];
+  updatedAt?: string;
+  createdAt?: string;
+  pendingSync?: boolean;
+  isTransfer?: boolean;
+  isExcluded?: boolean;
+  id: string;
+  workspaceId: string;
+  accountId: string;
+  accountName: string;
+  accountType?: string;
+  institution?: string | null;
+  brandLogoUrl?: string | null;
+  lastFour?: string;
+  date: string;
+  amount: string;
+  currency: string;
+  type: "income" | "expense" | "transfer";
+  merchantRaw: string;
+  merchantClean: string | null;
+  description: string | null;
+  categoryName: string | null;
+  categoryId?: string | null;
+  confidenceScore?: number | null;
+  reviewStatus: string | null;
+  reviewReasons?: string[];
+  tags?: { id: string; name: string }[];
+};
+export type TransactionPage = {
+  summary?: {
+    currencyTotals?: Record<
+      string,
+      { income: number; spending: number; transfers: number }
+    >;
+  };
+  transactions: Transaction[];
+  totalCount: number;
+  totalCountIsExact?: boolean;
+  hasMore?: boolean;
+  page: number;
+};
+export type Profile = { id: string; name: string };
+export type Bootstrap = {
+  defaultCurrency?: string;
+  offlineEpoch?: string | null;
+  preferences?: import("../../shared/app-preferences").AppPreferences;
+  needsOnboarding?: boolean;
+  currencyChoices?: { code: string; name: string }[];
+  firstName: string | null;
+  profiles: Profile[];
+  entitlement: {
+    trial?: import("../../shared/signup-trial").SignupTrialSnapshot | null;
+    hasPaidSubscription?: boolean;
+    analytics?: Record<string, string | number | boolean | null>;
+    planTier: "free" | "pro" | "premium";
+    fullFeatureAccess?: boolean;
+    accessEndsAt: string | null;
+    renewing: boolean;
+    nativePurchasesAvailable: boolean;
+  };
+};
+export type ImportStatus = {
+  commitAgeMs?: number;
+  receiptTransactionId?: string | null;
+  receiptTransaction?: Transaction;
+  pdfVisibilityTarget?: { attemptId: string; transactionId: string } | null;
+  canResume?: boolean;
+  statementSelfHeal?: { reason?: string };
+  nativeUploadReceived?: boolean;
+  nativeUploadFinalizing?: boolean;
+  progress?: number;
+  importFile: {
+    id: string;
+    fileName: string;
+    status: string;
+    processingMessage?: string;
+    processingPhase?: string;
+  };
+  visibleImportComplete?: boolean;
+  settledImportComplete?: boolean;
+  confirmedTransactionsCount?: number;
+  parsedRowsCount?: number;
+};

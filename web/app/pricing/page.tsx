@@ -1,0 +1,57 @@
+import { SwitchOfferNotice } from "@/components/switch-campaign";
+import { headers } from "next/headers";
+import { PublicPlanView, PublicPlanLink } from "@/components/pricing-funnel";
+import { paddlePlusPricing } from "@/lib/billing-offer-rules";
+import { JourneyHeader } from "@/app/landing-preview/landing-journey";
+import { PublicFooter } from "@/components/public-footer";
+import { PlanComparisonTable } from "@/components/plan-comparison-table";
+import { plannedProPrices, plannedPremiumPrices } from "@/lib/public-plan-comparison";
+import { PostHogEvent } from "@/components/posthog-analytics";
+import { analyticsOnceKey } from "@/lib/analytics";
+import { getSessionContext } from "@/lib/auth";
+import cardSurface from "@/components/plan-card-surface.module.css";
+import styles from "./pricing.module.css";
+
+export const metadata = {
+  title: { absolute: "Clover: Personal Finance Pricing" },
+  description: "Compare Clover Free, Plus and Pro features and regional pricing.",
+  alternates: { canonical: "https://clover.ph/pricing" },
+};
+
+export default async function PricingPage() {
+  const country = (await headers()).get("x-vercel-ip-country")?.toUpperCase();
+  const market = country === "PH" ? "ph" : "global";
+  const currency = paddlePlusPricing[market].currency;
+  const prices = plannedProPrices(market);
+  const premium = plannedPremiumPrices(market);
+  const session = await getSessionContext().catch(() => null);
+  const signedIn = Boolean(session?.userId);
+  const proHref = signedIn ? "/settings/plan?plan_source=pricing" : "/sign-up?intent=pro&interval=annual";
+  return <main className={styles.page} data-pricing-market={market} data-analytics-section="pricing">
+    <JourneyHeader />
+    <PublicPlanView currency={currency} />
+    <PostHogEvent event="upgrade_prompt_viewed" onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${signedIn ? "signed-in" : "guest"}`)} properties={{ prompt_location: "pricing_page", cta_href: proHref }} />
+    <div className={styles.content}>
+      <h1 className={styles.srOnly}>Clover pricing</h1>
+      <section className={styles.plans} aria-label="Clover plans">
+        <article className={`${styles.pro} ${cardSurface.surface} ${cardSurface.premium}`}><h2>Pro</h2><strong>{premium.monthly}<small> / month</small></strong><p>Or {premium.annual} per year</p><PublicPlanLink tier="premium" currency={currency} href={signedIn ? "/settings/plan?plan_source=pricing" : "/sign-up?intent=premium"}>Explore Pro →</PublicPlanLink></article>
+        <article className={`${styles.plus} ${cardSurface.surface} ${cardSurface.pro}`}><h2>Plus</h2><strong>{prices.monthly}<small> / month</small></strong><p>Or {prices.annual} per year</p><PublicPlanLink tier="pro" currency={currency} href={proHref}>Explore Plus →</PublicPlanLink></article>
+        <article className={`${styles.free} ${cardSurface.surface} ${cardSurface.free}`}><h2>Free</h2><strong>₱0<small> forever</small></strong><p>Organize your finances with Clover’s core tools.</p><PublicPlanLink tier="free" currency="PHP" href={signedIn ? "/home" : "/sign-up"}>{signedIn ? "Open Clover" : "Start free"} →</PublicPlanLink></article>
+      </section>
+      <SwitchOfferNotice />
+      <PlanComparisonTable variant="full" paidFirst className={styles.table} />
+      <section className={styles.notes} aria-label="Plan details">
+        <h2>How the allowances work</h2>
+        <ul>
+          <li>Statement and receipt uploads are included in all plans. AI-assisted processing uses your shared token allowance.</li>
+          <li>All plans include Ask Clover help with creating budgets, goals, and Circles. Plus and Pro add external information and interactive Ask Clover visuals.</li>
+          <li>Limits apply across your Profiles combined. Inactive budgets do not count toward the budget limit. Saved personal goals count toward the goal limit.</li>
+          <li>Circle allowances count Circles you create, not invitations you accept.</li>
+          <li>AI allowances reset monthly, with a separate rolling 24-hour cap. Cloud and on-device AI share this allowance; offline devices reserve tokens before use.</li>
+        <li>Linked bank accounts use Finverse and count toward your financial account allowance. Free supports manual financial accounts without bank linking.</li>
+        </ul>
+      </section>
+    </div>
+    <PublicFooter />
+  </main>;
+}

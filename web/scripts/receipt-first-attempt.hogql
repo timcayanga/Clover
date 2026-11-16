@@ -1,0 +1,32 @@
+-- Accepted native camera photos and receipt-routed web images are separate cohorts, including attempts
+-- with no terminal event. A retry after a review/failure cannot become a hit.
+WITH attempts AS (
+  SELECT properties.platform AS platform, properties.operation_id AS scan_id,
+    minIf(timestamp, properties.outcome = 'accepted') AS accepted_at,
+    countIf(properties.outcome = 'accepted') AS accepted,
+    countIf(properties.outcome != 'accepted') AS results,
+    argMinIf(toString(properties.outcome), timestamp, properties.outcome != 'accepted') AS first_outcome,
+    argMinIf(toString(properties.within_target), timestamp, properties.outcome != 'accepted') AS first_within_target
+  FROM events
+  WHERE event = 'receipt_first_attempt'
+    AND timestamp >= now() - INTERVAL 30 DAY
+    AND properties.analytics_environment = 'production'
+    AND properties.analytics_audience = 'customer'
+    AND coalesce(toString(properties.analytics_excluded), 'false') NOT IN ('true', '1')
+    AND properties.platform IN ('ios', 'android', 'mobile_web', 'desktop_web')
+    AND properties.operation_id IS NOT NULL
+  GROUP BY platform, scan_id
+  HAVING accepted > 0 AND accepted_at <= now() - INTERVAL 10 SECOND
+)
+SELECT platform, count() AS accepted_images,
+  countIf(first_outcome = 'visible' AND first_within_target IN ('true', '1')) AS visible_within_10s,
+  round(100.0 * visible_within_10s / accepted_images, 1) AS percent_visible_within_10s,
+  countIf(first_outcome = 'visible' AND first_within_target NOT IN ('true', '1')) AS visible_slow_or_unverified,
+  countIf(first_outcome = 'review_required') AS needed_review,
+  countIf(first_outcome = 'failed') AS failed,
+  countIf(first_outcome = 'canceled') AS canceled,
+  countIf(first_outcome = 'not_seen_24h' OR (results = 0 AND accepted_at <= now() - INTERVAL 24 HOUR)) AS unobserved_after_24h,
+  countIf(results = 0 AND accepted_at > now() - INTERVAL 24 HOUR) AS unresolved_under_24h
+FROM attempts
+GROUP BY platform
+ORDER BY platform

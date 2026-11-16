@@ -1,0 +1,19 @@
+REVIEW FIXTURE OWNER
+BDO Unibank, Inc.
+Account Number 001-0000-000-01
+For Sep 10- Oct 25, 2023
+Account Summary
+Balance P 400.00
+Withdrawals P 3,600.00
+Deposits P 4,000.00
+Date Details Withdrawals Debit Deposits Balance
+September 10, 2023 Fund Transfer 1,000.00P
+1,000.00P
+September 10, 2023 ATM Withdrawal 900.00 100.00P
+September 25, 2023 Fund Transfer 1, 000.00 P 1,100.00P
+September 25, 2023 ATM Withdrawal 900.00 200.00P
+October 10, 2023 Fund Transfer 1, 000.00 P 1,200.00P
+October 10, 2023 ATM Withdrawal 900.00 300.00P
+October 25, 2023 Fund Transfer 1, 000.00 P 1,300.00P
+October 25, 2023 ATM Withdrawal 900.00 400.00P
+Closing Balance Total 400.00P

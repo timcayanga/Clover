@@ -1,0 +1,50 @@
+import assert from "node:assert/strict";
+import { mobileCreateSchema, mobileEditSchema, mobileAccountCreateSchema } from "../lib/mobile-edit-schema";
+import { mobileApiResponse } from "../lib/mobile-api-response";
+import { getRecordedTransactionConfidence } from "../lib/transaction-confidence";
+import { createTransactionRequestGate } from "../lib/transaction-request-gate";
+for (const type of ["expense", "income", "transfer"]) {
+  for (const amount of ["123.45", "-123.45", "0.00", "999999999999.99"]) {
+    const row = mobileCreateSchema.parse({ accountId: "qa", categoryId: null, merchantRaw: "QA", date: "2026-09-08", amount, type, currency: "PHP" });
+    assert.equal(row.amount, amount.replace(/^-/, ""));
+    assert.equal(mobileEditSchema.parse({ amount, type }).amount, row.amount);
+  }
+}
+assert.deepEqual(mobileEditSchema.parse({ userNote: "note only" }), { userNote: "note only" });
+assert.deepEqual(mobileEditSchema.parse({ type: "income" }), { type: "income" });
+for (const amount of ["1e3", "NaN", "-", "1.234", "1000000000000", "--2"]) assert.equal(mobileEditSchema.safeParse({ amount }).success, false);
+assert.equal(mobileAccountCreateSchema.parse({ name: "QA", type: "credit_card", currency: "PHP", balance: "-123.45" }).balance, "-123.45");
+const high = { parserConfidence: 98, categoryConfidence: 100, accountMatchConfidence: 90, duplicateConfidence: 0, transferConfidence: 0, type: "expense" };
+assert.equal(getRecordedTransactionConfidence(high), 96);
+assert.equal(getRecordedTransactionConfidence({ ...high, type: "transfer" }), 72);
+assert.equal(getRecordedTransactionConfidence({ parserConfidence: 40, categoryConfidence: 50 }), 45);
+assert.equal(getRecordedTransactionConfidence({}), null);
+const response = mobileApiResponse("transaction", { transaction: { ...high, id: "qa", reviewStatus: "pending_review", rawPayload: { secret: "raw data" } } }) as { transaction: Record<string, unknown> };
+assert.equal(response.transaction.confidenceScore, 96);
+assert.equal(response.transaction.reviewStatus, "pending_review");
+assert.equal("rawPayload" in response.transaction, false);
+const gate = createTransactionRequestGate();
+gate.select("all");
+const all = gate.begin("all", false)!;
+assert.equal(gate.begin("all", true), null);
+gate.finish(all, true);
+assert.equal(gate.canAppend("all"), true);
+const oldAppend = gate.begin("all", true)!;
+gate.select("today");
+assert.equal(gate.isCurrent(oldAppend), false);
+assert.equal(gate.canAppend("today"), false);
+assert.equal(gate.begin("today", true), null, "Cannot request filtered page 2 before page 1");
+const today = gate.begin("today", false)!;
+gate.finish(oldAppend, true);
+assert.equal(gate.canAppend("today"), false);
+gate.finish(today, true);
+assert.equal(gate.canAppend("today"), true);
+const refresh = gate.begin("today", false)!;
+assert.equal(gate.begin("today", true), null);
+gate.finish(refresh, false);
+assert.equal(gate.canAppend("today"), true);
+gate.select("empty");
+const empty = gate.begin("empty", false)!;
+gate.finish(empty, false);
+assert.equal(gate.canAppend("empty"), false);
+console.log("Transactions QA fixes regression passed");

@@ -1,0 +1,72 @@
+{
+  "name": "healthy-bank-statement",
+  "input": {
+    "workspaceId": "workspace-test",
+    "importFileId": "import-healthy",
+    "source": "local_training",
+    "fileName": "bpi-statement.pdf",
+    "fileType": "application/pdf",
+    "parserVersion": "v2",
+    "parsedRows": [
+      {
+        "date": "2026-01-07",
+        "amount": "-129.5",
+        "merchantRaw": "STARBUCKS 001",
+        "merchantClean": "Starbucks",
+        "categoryName": "Food & Dining",
+        "type": "expense",
+        "confidence": 97
+      },
+      {
+        "date": "2026-01-08",
+        "amount": "2500.00",
+        "merchantRaw": "SALARY",
+        "merchantClean": "Salary",
+        "categoryName": "Income",
+        "type": "income",
+        "confidence": 98
+      }
+    ],
+    "metadata": {
+      "institution": "BPI",
+      "accountNumber": "1234567890",
+      "accountName": "BPI 7890",
+      "accountType": "bank",
+      "openingBalance": 1000,
+      "endingBalance": 3370.5,
+      "startDate": "2026-01-01",
+      "endDate": "2026-01-31",
+      "confidence": 96
+    },
+    "account": {
+      "id": "account-test",
+      "name": "BPI 7890",
+      "institution": "BPI",
+      "type": "bank",
+      "balance": "3370.50"
+    },
+    "checkpoint": {
+      "openingBalance": "1000.00",
+      "endingBalance": "3370.50",
+      "rowCount": 2,
+      "status": "reconciled"
+    },
+    "timings": {
+      "totalMs": 1250,
+      "parsingMs": 850,
+      "usedDeterministicParser": true
+    }
+  },
+  "expectations": {
+    "minScore": 80,
+    "maxScore": 100,
+    "requiredFindingCodes": [],
+    "forbiddenFindingCodes": [
+      "transactions.empty",
+      "statement.identity_missing"
+    ],
+    "metrics": {
+      "uiTransactionsReady": true
+    }
+  }
+}

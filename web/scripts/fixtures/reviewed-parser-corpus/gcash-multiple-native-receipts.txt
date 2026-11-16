@@ -1,0 +1,25 @@
+GCash Bills Pay Receipt
+Biller Name Example Utility
+Total Name PHP 115.00
+Amount Paid PHP 110.00
+Fee PHP 5.00
+Account Number AB001
+Date/Time 10 April 2025 07:11:45 AM
+GCash Ref. No. 000001111
+GCash Bills Pay Receipt
+Biller Name Example Utility
+Total Name PHP 205.00
+Amount Paid PHP 200.00
+Fee PHP 5.00
+Account Number AB001
+Date/Time 11 April 2025 04:21:15 P M
+GCash Ref. No. 000002222
+GCash Bills Pay Receipt
+Biller Name Example Utility
+Total Name PHP 115.00
+Amount Paid PHP 110.00
+Fee PHP 5.00
+Account Number AB001
+Date/Time 10 April 2025 07:11:45 AM
+GCash Ref. No. 000001111
+GCASH_BILLS_NATIVE {"physicalPages":3,"pages":[{"page":1,"text":"GCash Bills Pay Receipt\nBiller Name Example Utility\nTotal Name PHP 115.00\nAmount Paid PHP 110.00\nFee PHP 5.00\nAccount Number AB001\nDate/Time 10 April 2025 07:11:45 AM\nGCash Ref. No. 000001111"},{"page":2,"text":"GCash Bills Pay Receipt\nBiller Name Example Utility\nTotal Name PHP 205.00\nAmount Paid PHP 200.00\nFee PHP 5.00\nAccount Number AB001\nDate/Time 11 April 2025 04:21:15 P M\nGCash Ref. No. 000002222"},{"page":3,"text":"GCash Bills Pay Receipt\nBiller Name Example Utility\nTotal Name PHP 115.00\nAmount Paid PHP 110.00\nFee PHP 5.00\nAccount Number AB001\nDate/Time 10 April 2025 07:11:45 AM\nGCash Ref. No. 000001111"}]}

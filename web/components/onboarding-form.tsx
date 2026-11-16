@@ -1,0 +1,462 @@
+"use client";
+
+import { getEntryMethodIconSrc } from "@/lib/entry-method-icons";
+
+import dynamic from "next/dynamic";
+import type { ChangeEvent, CSSProperties } from "react";
+import { UploadSourceButtons } from "@/components/upload-source-buttons";
+import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { PageFileDropZone } from "@/components/page-file-drop-zone";
+import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
+import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import { getFinancialExperienceDefinition, type FinancialExperienceLevel } from "@/lib/goals";
+import { plannedProPrices, type PricingMarket } from "@/lib/public-plan-comparison";
+import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
+import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
+import { CurrencySelector } from "@/components/currency-selector";
+import { getCurrencyCatalogCodes, getCurrencyCatalogOption } from "@/lib/currencies";
+import {
+  normalizeRegionalPreferences,
+  persistRegionalPreferences,
+  type RegionalPreferences,
+} from "@/lib/regional-preferences";
+
+const ImportFilesModal = dynamic(
+  () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
+  { ssr: false }
+);
+
+type ExperienceOption = {
+  value: FinancialExperienceLevel;
+  title: string;
+  description: string;
+  icon: string;
+};
+
+type OnboardingStep = "upgrade" | "experience" | "upload";
+
+const EXPERIENCE_OPTIONS: ExperienceOption[] = [
+  {
+    value: "beginner",
+    title: "Still learning",
+    description: "Keep the language simple and show me what matters first.",
+    icon: "/assets/3d%20icons/beginner.png?v=20260724",
+  },
+  {
+    value: "comfortable",
+    title: "Comfortable",
+    description: "I understand budgets, statements, and general money tracking.",
+    icon: "/assets/3d%20icons/intermediate.png?v=20260724",
+  },
+  {
+    value: "advanced",
+    title: "Very comfortable",
+    description: "Give me the numbers, trends, and short explanations.",
+    icon: "/assets/3d%20icons/advanced.png?v=20260724",
+  },
+];
+
+type OnboardingFormProps = {
+  workspaceId: string;
+  billingCustomerId: string;
+  workspaceAccounts: Array<{
+    id: string;
+    name: string;
+    institution: string | null;
+    type: string;
+  }>;
+  currentExperience?: string | null;
+  upgradeForPro?: boolean;
+  upgradeInterval?: "monthly" | "annual";
+  paypalClientId?: string | null;
+  paypalMonthlyPlanId?: string | null;
+  paypalAnnualPlanId?: string | null;
+  paypalBuyerCountry?: string | null;
+  pricingMarket?: PricingMarket;
+  completionUrl?: string;
+  regionalDefaults: RegionalPreferences;
+};
+
+const jsonHeaders = { "Content-Type": "application/json" };
+
+export function OnboardingForm({
+  workspaceId,
+  billingCustomerId,
+  workspaceAccounts,
+  currentExperience = null,
+  upgradeForPro = false,
+  upgradeInterval = "annual",
+  paypalClientId = null,
+  paypalMonthlyPlanId = null,
+  paypalAnnualPlanId = null,
+  paypalBuyerCountry = null,
+  pricingMarket = "global",
+  completionUrl = "/dashboard",
+  regionalDefaults,
+}: OnboardingFormProps) {
+  const router = useRouter();
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const libraryInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [experience, setExperience] = useState<FinancialExperienceLevel | null>(
+    (currentExperience as FinancialExperienceLevel | null) ?? null,
+  );
+  const [step, setStep] = useState<OnboardingStep>(upgradeForPro ? "upgrade" : "experience");
+  const [message, setMessage] = useState(
+    upgradeForPro ? "Choose Plus now or continue with Clover Free. You can upgrade later." : null,
+  );
+  const [isPending, startTransition] = useTransition();
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [accountMethod, setAccountMethod] = useState<"connect" | "upload" | "manual">("upload");
+  const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
+  const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>(regionalDefaults);
+  const [currencyError, setCurrencyError] = useState<string | null>(null);
+  const [isSavingCurrency, setIsSavingCurrency] = useState(false);
+  const [selectedUpgradeInterval, setSelectedUpgradeInterval] = useState<"monthly" | "annual">(upgradeInterval);
+  const getBrowserRegionalDefaults = () =>
+    normalizeRegionalPreferences({
+      ...regionalPreferences,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || regionalPreferences.timeZone,
+      locale: navigator.languages?.[0] || navigator.language || regionalPreferences.locale,
+    });
+
+  useEffect(() => {
+    const resolved = normalizeRegionalPreferences({
+      ...regionalDefaults,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || regionalDefaults.timeZone,
+      locale: navigator.languages?.[0] || navigator.language || regionalDefaults.locale,
+    });
+    setRegionalPreferences(resolved);
+    persistRegionalPreferences(resolved);
+    // The server-provided defaults change only when this onboarding page is recreated.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regionalDefaults]);
+
+  const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
+  const selectedCurrency = getCurrencyCatalogOption(regionalPreferences.baseCurrency);
+
+  const upgradePlanId = selectedUpgradeInterval === "annual" ? paypalAnnualPlanId : paypalMonthlyPlanId;
+
+  const persistOnboarding = async (startAction: "import" | "skip" | "connect" | "manual") => {
+    const preferences = getBrowserRegionalDefaults();
+    persistRegionalPreferences(preferences);
+    const payload = JSON.stringify({
+      experience,
+      startAction,
+      skipped: startAction === "skip",
+      regionalPreferences: preferences,
+    });
+
+    const response = await fetch("/api/onboarding", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: payload,
+      keepalive: true,
+    });
+    if (!response.ok) {
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(result?.error || "Unable to finish Clover setup.");
+    }
+  };
+
+  const saveRegionalPreferences = async () => {
+    const preferences = getBrowserRegionalDefaults();
+    persistRegionalPreferences(preferences);
+    const response = await fetch("/api/onboarding", {
+      method: "PATCH",
+      headers: jsonHeaders,
+      body: JSON.stringify({ regionalPreferences: preferences }),
+    });
+    if (!response.ok) {
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(result?.error || "Unable to save your default currency.");
+    }
+    return preferences;
+  };
+
+  const openImportFiles = (files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
+
+    startTransition(() => {
+      setMessage(`Opening ${files.length === 1 ? files[0].name : `${files.length} files`}...`);
+      setImportSeedFiles(files);
+      setImportOpen(true);
+    });
+  };
+
+  const handleFilePickerChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    openImportFiles(files);
+  };
+
+  const handleSkip = () => {
+    setIsCompleting(true);
+    setMessage(completionUrl === "/dashboard" ? "Opening your dashboard..." : "Opening your Circle invitation...");
+    void persistOnboarding("skip")
+      .then(() => router.replace(completionUrl))
+      .catch((error) => {
+        setIsCompleting(false);
+        setMessage(error instanceof Error ? error.message : "Unable to finish Clover setup.");
+      });
+  };
+
+  const experienceStep = (
+    <>
+      <h3>How comfortable are you with financial management?</h3>
+      <div className="onboarding-grid onboarding-grid--experience" role="group" aria-label="Financial experience">
+        {EXPERIENCE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`onboarding-option onboarding-option--experience onboarding-option--experience-${option.value} ${experience === option.value ? "is-selected" : ""}`}
+            onClick={() => {
+              setExperience(option.value);
+              setMessage(option.description);
+            }}
+
+            aria-pressed={experience === option.value}
+          >
+            <span className="onboarding-option__icon" aria-hidden="true">
+            <img src={option.icon} alt="" loading="eager" decoding="async" />
+            </span>
+            <span className="onboarding-option__content">
+              <span className="onboarding-option__title-row">
+                <span className="onboarding-option__title">{option.title}</span>
+                {experience === option.value ? <span className="onboarding-option__badge">Selected</span> : null}
+              </span>
+              <span className="onboarding-option__copy">{option.description}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="onboarding-currency">
+        <div className="onboarding-currency__copy">
+          <strong>Default currency</strong>
+          <span>
+            {regionalPreferences.detectionSource === "manual"
+              ? `${selectedCurrency.name} will be used for your starter Cash account.`
+              : `Suggested from your location or device. You can change it now.`}
+          </span>
+        </div>
+        <CurrencySelector
+          value={regionalPreferences.baseCurrency}
+          options={getCurrencyCatalogCodes()}
+          onChange={(baseCurrency) => {
+            setCurrencyError(null);
+            setRegionalPreferences((current) => ({
+              ...current,
+              baseCurrency,
+              detectionSource: "manual",
+            }));
+          }}
+          showFullName
+          ariaLabel="Select your default currency"
+          className="onboarding-currency__selector"
+          buttonClassName="onboarding-currency__button"
+          menuClassName="onboarding-currency__menu"
+          showGroupedSections
+          portalMenu
+        />
+      </div>
+      {currencyError ? <p className="onboarding-currency__error" role="alert">{currencyError}</p> : null}
+
+      <div className="onboarding-actions onboarding-actions--single">
+        <div className="onboarding-actions__group onboarding-actions__group--primary">
+          <button
+            className="button button-primary"
+            type="button"
+            disabled={isPending || isSavingCurrency || experience === null}
+            onClick={() => {
+              setIsSavingCurrency(true);
+              setCurrencyError(null);
+              void saveRegionalPreferences()
+                .then((preferences) => {
+                  setRegionalPreferences(preferences);
+                  setStep("upload");
+                  setMessage(null);
+                })
+                .catch((error) => {
+                  setCurrencyError(error instanceof Error ? error.message : "Unable to save your default currency.");
+                })
+                .finally(() => setIsSavingCurrency(false));
+            }}
+          >
+            {isSavingCurrency ? "Saving..." : "Continue"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
+  const uploadStep = (
+    <>
+      <h3>Record your first transaction</h3>
+      <div className="transaction-creation-tabs" role="tablist" aria-label="Add your accounts"
+        style={{ "--entry-tab-index": ["connect", "upload", "manual"].indexOf(accountMethod), "--entry-tab-count": 3 } as CSSProperties}>
+        {(["connect", "upload", "manual"] as const).map((method, index, methods) => <button type="button" role="tab" key={method}
+          id={`onboarding-${method}`} aria-controls={`onboarding-${method}-panel`} aria-selected={accountMethod === method} tabIndex={accountMethod === method ? 0 : -1}
+          onClick={() => setAccountMethod(method)} onKeyDown={event => {
+            const next = event.key === "ArrowRight" ? (index + 1) % 3 : event.key === "ArrowLeft" ? (index + 2) % 3 : event.key === "Home" ? 0 : event.key === "End" ? 2 : null;
+            if (next !== null) { event.preventDefault(); setAccountMethod(methods[next]); document.getElementById(`onboarding-${methods[next]}`)?.focus(); }
+          }}><img src={getEntryMethodIconSrc(method)} width="20" height="20" alt="" />{method === "connect" ? "Connect" : method === "upload" ? "Upload" : "Manual"}</button>)}
+      </div>
+      <div role="tabpanel" id={`onboarding-${accountMethod}-panel`} aria-labelledby={`onboarding-${accountMethod}`} className="onboarding-account-method">
+        {accountMethod === "upload" ? <>
+          <h4>Add a statement or receipt</h4>
+          <PageFileDropZone enabled={!importOpen} title="Add a statement or receipt" subtitle="Drop a file to get started." onFilesDropped={openImportFiles} />
+          <button type="button" className="onboarding-desktop-drop" onClick={() => fileInputRef.current?.click()} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); openImportFiles(Array.from(event.dataTransfer.files)); }}>Drop files here or choose files</button>
+          <div className="onboarding-mobile-sources"><UploadSourceButtons onFiles={() => fileInputRef.current?.click()} onCamera={() => photoInputRef.current?.click()} onLibrary={() => libraryInputRef.current?.click()} /></div>
+          <input ref={photoInputRef} className="sr-only" type="file" accept="image/*" capture="environment" onChange={handleFilePickerChange} />
+          <input ref={libraryInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={handleFilePickerChange} />
+          <input ref={fileInputRef} className="sr-only" type="file" accept={PUBLIC_IMPORT_ACCEPT} multiple onChange={handleFilePickerChange} />
+        </> : <>
+          <h4>{accountMethod === "connect" ? "Connect a supported bank" : "Add a transaction manually"}</h4>
+          <p className="onboarding-card__copy">{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Record something you spent or earned. You can use Cash and add other accounts later."}</p>
+          {accountMethod === "connect" ? <p className="onboarding-card__copy onboarding-card__copy--subtle">Available with Plus and Pro</p> : null}
+          <button className="button button-primary" type="button" disabled={isCompleting} onClick={() => {
+            const method = accountMethod;
+            setIsCompleting(true);
+            void persistOnboarding(method).then(() => router.replace(method === "manual" ? "/transactions?manual=1" : `/accounts?add=1&onboarding=${method}`)).catch(error => { setIsCompleting(false); setMessage(error instanceof Error ? error.message : "Unable to continue setup."); });
+          }}>{accountMethod === "connect" ? "Connect a bank" : "Add transaction"}</button>
+        </>}
+      </div>
+
+      <div className="onboarding-actions onboarding-actions--upload">
+        <div className="onboarding-actions__group onboarding-actions__group--secondary">
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              setStep("experience");
+              setMessage(selectedExperienceDefinition.description);
+            }}
+          >
+            Back
+          </button>
+          <button className="button button-secondary" type="button" disabled={isPending} onClick={handleSkip}>
+            Skip for now
+          </button>
+        </div>
+        <div className="onboarding-actions__group onboarding-actions__group--primary" aria-hidden="true" />
+      </div>
+    </>
+  );
+
+  const upgradeStep = (
+    <>
+      <p className="eyebrow">Clover Plus</p>
+      <h3>Get more room when you need it.</h3>
+      <p className="onboarding-card__copy">
+        Choose monthly or annual billing now, or continue with Free and upgrade later. Your choice will not stop you from finishing setup.
+      </p>
+
+      <div className="onboarding-upgrade__interval" role="group" aria-label="Plus billing frequency">
+        {(["monthly", "annual"] as const).map((option) => (
+          <button
+            key={option}
+            className={selectedUpgradeInterval === option ? "is-selected" : ""}
+            type="button"
+            aria-pressed={selectedUpgradeInterval === option}
+            onClick={() => setSelectedUpgradeInterval(option)}
+          >
+            {option === "monthly" ? "Monthly" : "Annually"} · {plannedProPrices(pricingMarket)[option]}
+          </button>
+        ))}
+      </div>
+
+      <div className="onboarding-upgrade__actions">
+        {paypalClientId && upgradePlanId ? (
+          <PayPalSubscribeButton
+            clientId={paypalClientId}
+            planId={upgradePlanId}
+            customId={billingCustomerId}
+            buyerCountry={paypalBuyerCountry}
+            fundingSource="card"
+            className="onboarding-upgrade__paypal"
+            entryPoint="onboarding"
+            interval={selectedUpgradeInterval}
+            displayedCurrency="USD"
+            onApproved={() => {
+              setMessage("Plus is being confirmed. Continue setting up Clover while we finish that step.");
+              setStep("experience");
+            }}
+          />
+        ) : (
+          <p className="onboarding-card__copy onboarding-card__copy--subtle">Payment setup is not available in this environment yet.</p>
+        )}
+        <button className="button button-secondary" type="button" onClick={() => setStep("experience")}>
+          Upgrade later
+        </button>
+      </div>
+    </>
+  );
+
+  if (isCompleting) {
+    return <CloverRouteLoadingScreen label="Clover" viewport />;
+  }
+
+  return (
+    <>
+      <PostHogEvent
+        event="onboarding_started"
+        onceKey={analyticsOnceKey("onboarding_started", "session")}
+        properties={{
+          current_experience: currentExperience ?? null,
+        }}
+      />
+      <section className="glass onboarding-card">
+        <div className="onboarding-icon-preload" aria-hidden="true">
+          {EXPERIENCE_OPTIONS.map((option) => (
+            <img key={option.value} src={option.icon} alt="" width={1} height={1} loading="eager" decoding="async" />
+          ))}
+        </div>
+        <div className="onboarding-card__brand" aria-label="Clover">
+          <img className="onboarding-card__mark" src={step === "experience" ? "/assets/mascots/velvet-chat.webp" : accountMethod === "connect" ? "/assets/mascots/velvet-banks.webp" : accountMethod === "upload" ? "/assets/mascots/velvet-receipt.webp" : "/assets/mascots/velvet-manual.webp"} alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
+        </div>
+
+        {step === "upgrade" ? upgradeStep : step === "experience" ? experienceStep : uploadStep}
+        {message && step !== "experience" ? <p className="onboarding-card__message">{message}</p> : null}
+      </section>
+
+      {importOpen ? (
+        <ImportFilesModal
+          open
+          workspaceId={workspaceId}
+          accounts={workspaceAccounts}
+          defaultAccountId={workspaceAccounts.find((account) => account.type !== "cash")?.id ?? workspaceAccounts[0]?.id ?? null}
+          showManualTransactionLink={false}
+          initialFiles={importSeedFiles}
+          onInitialFilesConsumed={() => setImportSeedFiles(null)}
+          onClose={() => {
+            setImportOpen(false);
+            setImportSeedFiles(null);
+            setMessage("");
+          }}
+          onImported={async (summary: UploadInsightsSummary) => {
+            if (summary.optimistic) {
+              return;
+            }
+
+            try {
+              setIsCompleting(true);
+              await persistOnboarding("import");
+              setMessage(completionUrl === "/dashboard" ? "Import complete. Taking you to the dashboard." : "Import complete. Opening your Circle invitation.");
+              router.replace(completionUrl);
+            } catch (error) {
+              setIsCompleting(false);
+              setMessage(error instanceof Error ? error.message : "Unable to finish Clover setup.");
+            }
+          }}
+        />
+      ) : null}
+    </>
+  );
+}

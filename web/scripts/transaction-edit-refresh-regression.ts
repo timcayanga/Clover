@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import { hasTransactionUserEdits } from "../lib/transaction-user-edits";
+import { getTransactionDisplayType } from "../lib/transaction-display-type";
+import { mergeImportedWorkspaceTransactions } from "../lib/workspace-cache";
+import { buildTransactionQuerySearchParams, parseTransactionQueryFilters, buildTransactionQueryWhere } from "../lib/transaction-query";
+import { getTransactionUserNoteValue, getTransactionParsedNoteValue } from "../lib/transaction-notes";
+
+const original = { id: "test-transaction", accountId: "old", merchantRaw: "Raw transfer", merchantClean: "Old name", categoryId: "old-category", categoryName: "Transfers", amount: "100", currency: "PHP", type: "transfer" as const, isTransfer: true, description: "Imported narrative", rawPayload: { transferFromAccountNumber: "1234", transferToAccountNumber: "5678" } };
+const saved = { ...original, accountId: "new", merchantClean: "My edited name", categoryId: null, categoryName: null, amount: "250", type: "expense" as const, isTransfer: false, description: "", reviewStatus: "edited", normalizedPayload: { source: "manual_edit", userNote: "" }, tags: [{ id: "tag-work", name: "Work" }] };
+assert.equal(hasTransactionUserEdits(original), false);
+assert.equal(hasTransactionUserEdits(saved), true);
+assert.equal(getTransactionDisplayType(saved, "1234", new Set(["1234", "5678"])), "expense", "Raw transfer evidence must not override a saved user edit");
+const merged = mergeImportedWorkspaceTransactions([original], [saved]);
+assert.deepEqual(merged[0], saved, "Server edits, cleared fields and tags must replace cached values");
+const params = buildTransactionQuerySearchParams("workspace", { tagIds: ["tag-work", "tag-family"] });
+assert.deepEqual(parseTransactionQueryFilters(params).tagIds, ["tag-work", "tag-family"]);
+assert.deepEqual(buildTransactionQueryWhere("workspace", parseTransactionQueryFilters(params)).transactionTags, { some: { tagId: { in: ["tag-work", "tag-family"] } } });
+const imported = { source: "upload", importFileId: "test-file", merchantRaw: "Raw merchant", description: "Parsed statement narrative" };
+assert.equal(getTransactionUserNoteValue(imported), "");
+assert.equal(getTransactionUserNoteValue({ source: "manual", description: "Existing user note", normalizedPayload: { userNote: null } }), "Existing user note");
+assert.equal(getTransactionUserNoteValue({ source: "manual", description: "Old note", normalizedPayload: { userNote: "" } }), "", "An explicitly cleared user note must stay blank");
+assert.equal(getTransactionParsedNoteValue(imported), "Parsed statement narrative");
+assert.equal(getTransactionUserNoteValue({ ...imported, normalizedPayload: { userNote: "Keep this user note" } }), "Keep this user note");
+console.log("Transaction refresh, edit precedence, tag query and notes regression passed.");

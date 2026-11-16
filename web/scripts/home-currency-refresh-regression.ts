@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import { homeCurrencyScope } from "../../shared/home-currency-scope";
+import { convertHomeTotal } from "../lib/home-currency-total";
+import { refreshScreen, registerScreenRefresh } from "../../mobile/src/screen-refresh";
+const rows = [{ currency: "PHP", amount: 560 }, { currency: "USD", amount: 10 }];
+const original = JSON.stringify(rows);
+assert.equal(homeCurrencyScope(undefined, "USD").selected, "USD");
+assert.equal(homeCurrencyScope("invalid", "USD").selected, "USD");
+const usd = homeCurrencyScope("USD", "PHP");
+assert.equal(usd.displayCurrency, "USD");
+assert.deepEqual(rows.filter(r => usd.includes(r.currency)), [rows[1]]);
+assert.equal(convertHomeTotal(rows.filter(r => usd.includes(r.currency)), { USD: 1 }), "10.00");
+const all = homeCurrencyScope("all", "USD");
+assert.equal(all.selected, "ALL");
+assert.equal(all.displayCurrency, "USD");
+assert.equal(convertHomeTotal(rows.filter(r => all.includes(r.currency)), { USD: 1, PHP: 1 / 56 }), "20.00");
+assert.equal(convertHomeTotal(rows.filter(r => all.includes(r.currency)), { USD: 1 }), null);
+assert.equal(JSON.stringify(rows), original);
+async function main() {
+  let completed = false, unrelated = 0, finished = false;
+  let release!: () => void;
+  const slow = new Promise<void>(resolve => { release = resolve; });
+  const unregister = registerScreenRefresh("/home", async () => { await slow; completed = true; });
+  const removeFailure = registerScreenRefresh("/home", async () => { throw Error("Offline"); });
+  const removeOther = registerScreenRefresh("/accounts", async () => { unrelated++; });
+  const refresh = refreshScreen("/home").then(() => { finished = true; });
+  await Promise.resolve();
+  assert.equal(finished, false, "Spinner must await the slow data loader, including when another loader fails");
+  release(); await refresh;
+  assert.equal(completed, true); assert.equal(unrelated, 0);
+  unregister(); removeFailure(); removeOther(); completed = false;
+  await refreshScreen("/home"); assert.equal(completed, false, "Unmounted screens must not reload");
+  console.log("Home currency isolation, All conversion, missing FX, source preservation, refresh completion and route isolation passed.");
+}
+void main();

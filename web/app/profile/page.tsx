@@ -1,0 +1,29 @@
+import { redirect } from "next/navigation";
+import { CloverShell } from "@/components/clover-shell";
+import { ProfileCenter } from "@/components/profile-center";
+import { getPageSessionContext } from "@/lib/page-auth";
+import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+
+export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Account",
+};
+
+export default async function ProfilePage() {
+  const session = await getPageSessionContext();
+  const user = await getOrCreateCurrentUser(session.userId);
+  if (!session.isGuest && !hasCompletedOnboarding(user)) {
+    redirect("/onboarding");
+  }
+
+  return (
+    <CloverShell
+      active="profile"
+      title="Account"
+      kicker="Account hub"
+      subtitle="Your identity and account shortcuts live here, while profile switching and settings stay one click away."
+    >
+      <ProfileCenter canSignOut={!session.isGuest} />
+    </CloverShell>
+  );
+}

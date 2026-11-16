@@ -1,0 +1,9708 @@
+"use client";
+import { FirstUseActivation } from "@/components/first-use-activation";
+import { TransactionSourceMatches } from "@/components/transaction-source-matches";
+import { TransactionConversion, QuickAddLineItem, TransactionLineItemRow } from "@/components/transaction-detail-extras";
+
+import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, manualTransactionToday } from "../../../shared/manual-transaction-defaults";
+import { useDraftCategorySuggestion } from "@/lib/use-draft-category-suggestion";
+import { CloverMascot } from "@/components/clover-mascot";
+import { getEntryMethodIconSrc } from "@/lib/entry-method-icons";
+import { TransactionReviewControls } from "@/components/transaction-review-controls";
+import { mostUsedTransactionAccount } from "../../../shared/default-transaction-account";
+import { usePullRefresh } from "@/lib/pull-refresh";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
+import { FinverseConnectButton } from "@/components/finverse-connect-button";
+import { reconcileTransactionTotal } from "@/lib/transaction-mobile-pagination";
+import { TransactionTableEntry } from "@/components/transaction-table-entry";
+import { TransactionDetailLabel } from "@/components/transaction-detail-label";
+import { addTransactionCurrencyAmount, withTransactionCurrencyDelta } from "@/lib/transaction-currency-summary";
+import { UploadSourceButtons, UploadSecurityCopy } from "@/components/upload-source-buttons";
+import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
+import { TransactionColumns, TransactionTagPreview, useTransactionColumns } from "@/components/transaction-columns";
+import { organizeAccountLabels } from "@/lib/organize-account-label";
+import { InterfaceIcon } from "@/components/interface-icon";
+import { AdviserChat } from "@/components/adviser-chat";
+import { formatTransactionAccountName } from "@/lib/transaction-account-sort";
+import { containDialogFocus } from "@/lib/dialog-focus";
+import { getRecordedTransactionConfidence } from "@/lib/transaction-confidence";
+import { normalizeTransactionAmountInput, transactionAmountFormatMessage } from "@/lib/transaction-amount-input";
+import { createTransactionRequestGate } from "@/lib/transaction-request-gate";
+import { readTransactionListContext, writeTransactionListContext } from "@/lib/transaction-list-context";
+import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
+import { useEnlargedText } from "@/lib/use-enlarged-text";
+
+import { usePendingReceiptDetails } from "@/lib/use-pending-receipt-details";
+import { ImportFileInput } from "@/components/import-file-input";
+import dynamic from "next/dynamic";
+import {
+  useCallback,
+  useLayoutEffect,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
+import { createPortal, flushSync } from "react-dom";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CloverShell, useCloverChrome } from "@/components/clover-shell";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
+import { AccountBrandMark } from "@/components/account-brand-mark";
+import { MerchantLogo } from "@/components/merchant-logo";
+import { CategoryBrandMark } from "@/components/category-brand-mark";
+import { CurrencySelector } from "@/components/currency-selector";
+import { PlanLimitNudge } from "@/components/plan-limit-nudge";
+import { PageFileDropZone } from "@/components/page-file-drop-zone";
+import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
+import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
+import { TransactionCrossFeatureActions } from "@/components/transaction-cross-feature-actions";
+import { TransactionCategoryPicker, type TransactionPickerCategory } from "@/components/transaction-category-picker";
+import { TransactionAccountPicker, type TransactionPickerAccount } from "@/components/transaction-account-picker";
+import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/components/transaction-name-autocomplete";
+import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
+import { TransactionBulkDestination } from "@/components/transaction-bulk-destination";
+import { TransactionsHeaderOverlay, TransactionFilterRow } from "@/components/transactions-header-overlay";
+import { subscribeWorkspaceDataChanges } from "@/lib/workspace-data-sync";
+import { observeWebImportRows } from "@/lib/pdf-visibility-client";
+import { useTransactionLongPress } from "@/components/use-transaction-long-press";
+import { TransactionSelectionToolbar } from "@/components/transaction-selection-toolbar";
+import { getCategoryIconTone } from "@/lib/category-icons";
+import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
+import type { ImportImageMode } from "@/lib/import-image-mode";
+import {
+  analyticsOnceKey,
+  capturePostHogClientEvent,
+  capturePostHogClientEventOnce,
+} from "@/components/posthog-analytics";
+import {
+  buildTransactionCategoryUpdatedMessage,
+  resolveTransactionCategoryChange,
+} from "@/lib/transaction-category-feedback";
+import { buildTransactionInlineRelationPatches } from "@/lib/transaction-inline-relation-patches";
+import {
+  buildTransactionDetailDraft,
+  mergeRefreshedTransactionDetailDraft,
+  type TransactionDetailDraftValue,
+} from "@/lib/transaction-detail-draft";
+import { applyTransactionPatchToDetailDraft } from "@/lib/transaction-detail-draft-patch";
+import { hasTransactionDetailDraftChanges } from "@/lib/transaction-detail-draft-changes";
+import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload";
+import {
+  createEmptyReceiptLineItem,
+  getManualReceiptLineItemTotal,
+  getReceiptLineItemComputedAmount,
+  parseReceiptLineItemsFromPayload,
+  receiptLineItemToDraft,
+  sanitizeReceiptLineItems,
+} from "@/lib/receipt-line-items";
+import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import type { AccountType } from "@/lib/domain-types";
+import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
+import { getAccountBrand } from "@/lib/account-brand";
+import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/financial-classification";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { getTransactionReviewReason, getTransactionReviewReasons, transactionNeedsReview } from "@/lib/transaction-review-reasons";
+import { buildTransactionQuerySearchParams, parseTransactionQueryFilters } from "@/lib/transaction-query";
+import {
+  getKnownMobileTransactionTotal,
+  getNextMobileTransactionPage,
+  isMobileTransactionPaginationExhausted,
+} from "@/lib/transaction-mobile-pagination";
+import {
+  getTransactionParsedNoteValue,
+  getTransactionUserNoteValue,
+  normalizeTransactionNoteValue,
+} from "@/lib/transaction-notes";
+import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+import { hasTransactionUserEdits } from "@/lib/transaction-user-edits";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { getTransactionDisplayType } from "@/lib/transaction-display-type";
+import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
+import {
+  chooseWorkspaceId,
+  persistSelectedCurrency,
+  persistSelectedWorkspaceId,
+  readSelectedCurrency,
+  readSelectedWorkspaceId,
+  selectedWorkspaceKey,
+} from "@/lib/workspace-selection";
+import {
+  clearImportActivity,
+  importActivityHasCompletedRows,
+  readImportActivity,
+  subscribeImportActivity,
+  type ImportActivitySnapshot,
+} from "@/lib/import-activity";
+import { subscribeImportedSummary, subscribeExternalImportRefresh } from "@/lib/imported-summary-events";
+import {
+  buildFinalizingNoticeDismissalKey,
+  dismissFinalizingNotice,
+  isFinalizingNoticeDismissed,
+} from "@/lib/finalizing-notice-dismissal";
+import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
+import {
+  applyOptimisticWorkspaceTransactionDeletion,
+  clearAccountsWorkspaceCache,
+  deriveCachedCategoriesFromTransactions,
+  mergeImportedWorkspaceTransactions,
+  getDeletedWorkspaceAccountIds,
+  getDeletingWorkspaceAccountIds,
+  normalizeImportedAccountKey,
+  matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
+  persistTransactionsWorkspaceCache as persistTransactionsWorkspaceCacheShared,
+  transactionsWorkspaceCacheKey,
+  workspaceCacheUpdatedEventName,
+  type WorkspaceCacheUpdatedEventDetail,
+  type ImportedWorkspaceTransaction,
+} from "@/lib/workspace-cache";
+import { clearJsonRequestCache, fetchJsonOnce } from "@/lib/request-dedupe";
+import { useWorkspaceCacheVersion } from "@/lib/use-workspace-cache-version";
+import { formatReceiptLineItemAmount, formatTransactionRecordAmount, formatTransactionRecordDate } from "../../../shared/transaction-record-display";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { useDefaultCurrency } from "@/lib/use-default-currency";
+import { convertAmount, useExchangeRates } from "@/lib/use-exchange-rates";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import type { UserLimits } from "@/lib/user-limits";
+import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
+import {
+  appendImportedAccountLastFour,
+  appendWiseWalletCurrency,
+  isWiseWalletWithoutVisibleAccountNumber,
+} from "@/lib/imported-account-identity";
+import {
+  mergeAccountsWithOptimisticImports as mergeAccountsWithOptimisticImportsShared,
+  mergeImportedPreviewTransactions,
+  mergeOptimisticImportedAccount as mergeOptimisticImportedAccountShared,
+  resolvePersistedImportedAccountId as resolvePersistedImportedAccountIdShared,
+} from "@/lib/imported-account-ui";
+
+type PlanUsage = {
+  accountCount: number;
+  monthlyUploadCount: number;
+  transactionCount: number;
+};
+
+const loadImportFilesModal = () =>
+  import("@/components/import-files-modal").then((module) => module.ImportFilesModal);
+
+const ImportFilesModal = dynamic(
+  loadImportFilesModal,
+  { ssr: false }
+);
+
+const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 2 * 60 * 1000;
+const RECENT_TRANSACTION_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+const SYNCING_EMPTY_STATE_REFRESH_DELAY_MS = 250;
+const WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS = 2_500;
+
+type Workspace = {
+  id: string;
+  name: string;
+  type: string;
+};
+
+type Account = {
+  transactionCount?: number;
+  id: string;
+  name: string;
+  institution: string | null;
+  accountNumber?: string | null;
+  type: AccountType;
+  currency: string;
+  source?: string;
+  balance?: string | null;
+  investmentSubtype?: string | null;
+};
+
+const transactionInvestmentIdentityPattern = /\b(?:gsave|gcrypto|gfunds?|gstocks?|gotrade)\b/i;
+const transactionAccountTypes = new Set<AccountType>(["bank", "wallet", "credit_card", "cash"]);
+
+const isTransactionAccount = (
+  account: Pick<Account, "type" | "name" | "institution" | "investmentSubtype">
+) => {
+  if (!transactionAccountTypes.has(account.type) || Boolean(account.investmentSubtype)) {
+    return false;
+  }
+
+  // Older imports can retain a bank-shaped shadow row for an investment
+  // institution. Keep those rows out of transaction entry without deleting
+  // their audit history or confirmed records.
+  return !transactionInvestmentIdentityPattern.test(`${account.name} ${account.institution ?? ""}`);
+};
+
+const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
+  const optimisticAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+  if (!optimisticAccountId || !summary.accountName) {
+    return null;
+  }
+
+  const displayName = formatUploadAccountDisplayName(
+    summary.accountName,
+    summary.institution,
+    summary.accountNumber ?? null,
+    summary.accountType ?? null
+  );
+  const importedCurrency = String(
+    summary.currency ?? summary.previewTransactions?.[0]?.currency ?? "PHP"
+  )
+    .trim()
+    .toUpperCase() || "PHP";
+
+  return {
+    id: optimisticAccountId,
+    name: displayName,
+    institution: summary.institution,
+    accountNumber: summary.accountNumber ?? null,
+    type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    currency: importedCurrency,
+    source: "upload",
+    balance: summary.balance,
+  };
+};
+
+const resolvePersistedImportedAccountId = (summary: UploadInsightsSummary, accounts: Account[]) => {
+  return resolvePersistedImportedAccountIdShared(
+    summary,
+    accounts,
+    summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank")
+  );
+};
+
+
+const getTransactionAccountFilterKey = (account: Account) => {
+  if (account.type === "cash") {
+    return `cash:${formatCurrencyCode(account.currency || "PHP")}`;
+  }
+
+  return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
+};
+
+const buildTransactionAccountLabels = (accounts: Account[]) => organizeAccountLabels(accounts);
+
+const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
+  const labels = organizeAccountLabels(accounts);
+  const seenKeys = new Set<string>();
+
+  return accounts
+    .flatMap((account) => {
+      const key = getTransactionAccountFilterKey(account);
+      if (seenKeys.has(key)) {
+        return [];
+      }
+
+      seenKeys.add(key);
+      const isCash = account.type === "cash";
+      return [
+        {
+          value: account.id,
+          label: labels.get(account.id) ?? account.name,
+        },
+      ];
+    })
+    .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true }));
+};
+
+const formatTransactionAccountDisplayName = (
+  transaction: { accountName?: string | null; institution?: string | null; accountNumber?: string | null; currency?: string | null },
+  account?: Account | null
+) => {
+  if (account) {
+    return formatTransactionAccountName(account);
+  }
+
+  const accountLabel = formatUploadAccountDisplayName(
+    transaction.accountName,
+    transaction.institution,
+    transaction.accountNumber ?? null,
+    null
+  );
+
+  if (isWiseWalletWithoutVisibleAccountNumber(transaction)) {
+    return appendWiseWalletCurrency(accountLabel, transaction.currency);
+  }
+
+  return accountLabel;
+};
+
+const formatEditableAmount = (transaction: { amount: string }) => {
+  const amount = Math.abs(Number(transaction.amount));
+  if (!Number.isFinite(amount)) {
+    return transaction.amount;
+  }
+
+  return `${amount}`;
+};
+
+const matchesImportedAccountIdentity = (left: Account, right: Account) => {
+  return isImportedAccountIdentityMatch(left, right);
+};
+
+const transactionsEmptyStateIllustration = "/assets/mascots/velvet-statement.webp";
+
+const isImageImportFile = (file: File) =>
+  /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
+
+const buildImportedSummaryDedupKey = (summary: UploadInsightsSummary) => {
+  const previewCount = Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0;
+  const previewIds = Array.isArray(summary.previewTransactions)
+    ? summary.previewTransactions
+        .map((transaction) => transaction.id)
+        .filter((value) => typeof value === "string" && value.trim().length > 0)
+        .slice(0, 5)
+        .join("|")
+    : "";
+
+  return [
+    summary.fileName,
+    summary.accountId ?? "",
+    summary.optimisticAccountId ?? "",
+    String(summary.rowsImported ?? 0),
+    String(previewCount),
+    previewIds,
+  ].join("::");
+};
+const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
+  return mergeAccountsWithOptimisticImportsShared(fetchedAccounts, currentAccounts);
+};
+
+const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAccount: Account) => {
+  return mergeOptimisticImportedAccountShared(currentAccounts, optimisticAccount);
+};
+
+const accountMatchesTransaction = (transaction: Transaction, account: Account) =>
+  transaction.accountId === account.id;
+
+const isGenericAccountBrand = (brand: ReturnType<typeof getAccountBrand>) => {
+  const label = brand.label.trim().toLowerCase();
+  return (
+    !brand.logoSrc &&
+    brand.logoSrcs.length === 0 &&
+    (label === "bank" || label === "account" || label === "other" || label === "wallet" || label === "investment")
+  );
+};
+
+const pickPreferredAccountBrand = (
+  primaryBrand: ReturnType<typeof getAccountBrand> | null | undefined,
+  fallbackBrand: ReturnType<typeof getAccountBrand>
+) => {
+  if (!primaryBrand) {
+    return fallbackBrand;
+  }
+
+  const primaryHasLogo = Boolean(primaryBrand.logoSrc || primaryBrand.logoSrcs.length > 0);
+  const fallbackHasLogo = Boolean(fallbackBrand.logoSrc || fallbackBrand.logoSrcs.length > 0);
+
+  if (!primaryHasLogo && fallbackHasLogo) {
+    return fallbackBrand;
+  }
+
+  if (isGenericAccountBrand(primaryBrand) && !isGenericAccountBrand(fallbackBrand)) {
+    return fallbackBrand;
+  }
+
+  return primaryBrand;
+};
+
+type Category = TransactionPickerCategory & { type: "income" | "expense" | "transfer" };
+
+type Transaction = {
+  sourceMatches?: import("../../../shared/transaction-source-match").TransactionSourceMatch[];
+  createdAt?: string;
+  id: string;
+  workspaceId: string;
+  accountId: string;
+  accountName: string;
+  institution?: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
+  parserConfidence?: number | null;
+  categoryConfidence?: number | null;
+  accountMatchConfidence?: number | null;
+  duplicateConfidence?: number | null;
+  transferConfidence?: number | null;
+  date: string;
+  amount: string;
+  currency: string;
+  type: "income" | "expense" | "transfer";
+  merchantRaw: string;
+  merchantClean: string | null;
+  description?: string | null;
+  tags?: Array<{ id: string; name: string }>;
+  isTransfer: boolean;
+  isExcluded: boolean;
+  splitBill?: { id: string; title: string } | null;
+  source?: string | null;
+  importFileId?: string | null;
+  importFileName?: string | null;
+  warningReason?: string | null;
+  rawPayload?: unknown;
+  normalizedPayload?: unknown;
+};
+
+type TransactionPageMeta = {
+  totalCount: number;
+  income: number;
+  spending: number;
+  transfers: number;
+  review: number;
+  currencyCodes: string[];
+  currencyTotals?: Record<string, { income: number; spending: number; transfers: number }>;
+  topCategory: [string, number] | null;
+  topAccount: [string, number] | null;
+  firstTransactionDate: string | null;
+  lastTransactionDate: string | null;
+  firstReviewTransaction: Transaction | null;
+  firstReviewTransactionIndex: number | null;
+};
+
+type TransactionListPayload = {
+  totalCountIsExact?: boolean;
+  transactions?: Transaction[];
+  totalCount?: number;
+  summary?: TransactionPageMeta;
+  currencyCodes?: string[];
+};
+
+type TransactionPrefetchEntry = {
+  payload: TransactionListPayload;
+  expiresAt: number;
+};
+
+type ImportFile = {
+  id: string;
+  fileName: string;
+  status: string;
+  uploadedAt: string;
+  accountId?: string | null;
+  enrichmentJob?: {
+    status?: string | null;
+    phase?: string | null;
+    processedRows?: number | null;
+    totalRows?: number | null;
+    updatedAt?: string | Date | null;
+  } | null;
+};
+
+type TransactionsWorkspaceCacheSnapshot = {
+  workspaceId: string;
+  accounts: Account[];
+  categories: Category[];
+  transactions: Transaction[];
+  imports: ImportFile[];
+  page?: number;
+  pageSize?: number;
+  totalCount?: number;
+  currencyCodes?: string[];
+  summary?: TransactionPageMeta;
+  updatedAt: number;
+};
+
+type TransactionsWorkspaceCacheState = {
+  selectedWorkspaceId: string;
+  snapshots: Record<string, TransactionsWorkspaceCacheSnapshot>;
+};
+
+type DateFilterMode = "ltd" | "day" | "week" | "month" | "quarter" | "year" | "custom";
+type TransactionSortField = "date" | "name" | "account" | "category" | "amount";
+type TransactionSortDirection = "asc" | "desc";
+type TransactionTypeFilter = "debit" | "credit" | "transfer";
+
+type ManualTransactionForm = {
+  date: string;
+  accountId: string;
+  categoryId: string;
+  currency: string;
+  amount: string;
+  type: "debit" | "credit" | "transfer";
+  destinationAccountId: string;
+  feeAmount: string;
+  merchantRaw: string;
+  description: string;
+  tags: string[];
+  receiptLineItems: ReceiptLineItemDraft[];
+};
+
+type BulkEditForm = {
+  accountId: string;
+  categoryId: string;
+  type: "" | "debit" | "credit" | "transfer";
+};
+
+type TransactionDetailDraft = TransactionDetailDraftValue;
+
+type ReceiptLineItemDraft = {
+  description: string;
+  quantity: string;
+  currency: string;
+  unitPrice: string;
+  amount: string;
+};
+
+type ReceiptLineItem = {
+  description: string;
+  quantity?: string | null;
+  currency?: string | null;
+  unitPrice?: string | null;
+  amount?: string | null;
+};
+
+type EditableTransactionField = "name" | "date" | "accountId" | "categoryId" | "amount" | "currency";
+
+type InlineEditableCellProps = {
+  value: string;
+  displayValue: string;
+  ariaLabel: string;
+  kind: "text" | "date" | "number" | "select";
+  onCommit: (value: string) => Promise<void> | void;
+  options?: Array<{ value: string; label: string }>;
+  className?: string;
+};
+
+type TransactionHistoryEntry = {
+  before: Transaction;
+  after: Transaction;
+};
+
+type TransactionConfidenceSignal = {
+  label: string;
+  value: number;
+  note: string;
+};
+
+type TransactionReviewChip = {
+  label: string;
+  tone: "clear" | "warn" | "danger" | "neutral";
+};
+
+type MerchantRenameSuggestion = {
+  sourceTransactionId: string;
+  sourceMerchantRaw: string;
+  targetMerchantClean: string;
+  matchingTransactionIds: string[];
+};
+
+type CategorySuggestion = {
+  categoryId: string;
+  categoryName: string;
+  confidence: number;
+  source: "merchant_rule" | "training_signal" | "heuristic";
+  sourceLabel: string;
+  reason: string;
+};
+
+const isAutoApplyCategorySuggestion = (suggestion: CategorySuggestion | null): suggestion is CategorySuggestion => {
+  if (!suggestion?.categoryId) {
+    return false;
+  }
+
+  if (suggestion.categoryName.trim().toLowerCase() === "other") {
+    return false;
+  }
+
+  if (suggestion.source !== "heuristic") {
+    return true;
+  }
+
+  return suggestion.confidence >= 60;
+};
+
+type UpdateTransactionOptions = {
+  recordHistory?: boolean;
+  historyBefore?: Transaction | null;
+  refreshSummary?: boolean;
+};
+
+const todayIso = new Date().toISOString().slice(0, 10);
+// Preview rows make the import visible immediately. Keep settlement checks
+// sparse so a busy database can recover instead of receiving a retry burst.
+const importedTransactionsRefreshDelays = [400];
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+
+const formatTransactionAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+
+const getCurrencyCodes = (transactions: Array<{ currency: string }>) =>
+  Array.from(new Set(transactions.map((transaction) => formatCurrencyCode(transaction.currency))));
+
+const getWorkspaceCurrencyCodes = (transactions: Array<{ currency: string }>) => getCurrencyCodes(transactions);
+
+const formatTransactionAggregate = (value: number, transactions: Array<{ currency: string }>) => {
+  const currencies = getCurrencyCodes(transactions);
+  if (currencies.length === 0) {
+    return formatTransactionAmount(value, "PHP");
+  }
+
+  if (currencies.length === 1) {
+    return formatTransactionAmount(value, currencies[0]);
+  }
+
+  return "Mixed currencies";
+};
+
+const normalizeDigits = (value?: string | null) => String(value ?? "").replace(/\D/g, "");
+
+const buildVisibleTransactionSummary = (
+  transactions: Transaction[],
+  fallback?: Partial<TransactionPageMeta> | null,
+  accountNumberById?: Map<string, string | null>
+): TransactionPageMeta => {
+  const workspaceAccountNumbers = new Set(
+    Array.from(accountNumberById?.values() ?? [])
+      .map((value) => normalizeDigits(value ?? null))
+      .filter(Boolean)
+  );
+  const summary: TransactionPageMeta = {
+    totalCount: fallback?.totalCount ?? transactions.length,
+    income: 0,
+    spending: 0,
+    transfers: 0,
+    review: fallback?.review ?? 0,
+    currencyCodes: fallback?.currencyCodes ?? getWorkspaceCurrencyCodes(transactions),
+    currencyTotals: {},
+    topCategory: fallback?.topCategory ?? null,
+    topAccount: fallback?.topAccount ?? null,
+    firstTransactionDate: fallback?.firstTransactionDate ?? null,
+    lastTransactionDate: fallback?.lastTransactionDate ?? null,
+    firstReviewTransaction: fallback?.firstReviewTransaction ?? null,
+    firstReviewTransactionIndex: fallback?.firstReviewTransactionIndex ?? null,
+  };
+
+  for (const transaction of transactions) {
+    if (transaction.isExcluded) {
+      continue;
+    }
+
+    const amount = Math.abs(Number(transaction.amount));
+    if (!Number.isFinite(amount)) {
+      continue;
+    }
+
+    const effectiveType = getTransactionDisplayType(
+      transaction,
+      accountNumberById?.get(transaction.accountId) ?? null,
+      workspaceAccountNumbers
+    );
+
+    addTransactionCurrencyAmount(summary.currencyTotals!, transaction.currency, effectiveType, amount);
+    if (effectiveType === "income") {
+      summary.income += amount;
+    } else if (effectiveType === "transfer") {
+      summary.transfers += amount;
+    } else {
+      summary.spending += amount;
+    }
+  }
+
+  return summary;
+};
+
+const createEmptyManualForm = (accountId = "", categoryId = "", currency = "PHP"): ManualTransactionForm => ({
+  date: todayIso,
+  accountId,
+  categoryId,
+  currency,
+  amount: "",
+  type: "debit",
+  destinationAccountId: "",
+  feeAmount: "",
+  merchantRaw: "",
+  description: "",
+  tags: [],
+  receiptLineItems: [],
+});
+
+const getOtherCategoryId = (categoryList: Category[]) =>
+  categoryList.find((category) => category.name.trim().toLowerCase() === "other")?.id ?? "";
+
+const getCategoryIdByName = (categoryList: Category[], categoryName: string) =>
+  categoryList.find((category) => category.name.trim().toLowerCase() === categoryName.trim().toLowerCase())?.id ?? "";
+
+const getCategoryNameById = (categoryList: Category[], categoryId: string | null | undefined) =>
+  categoryList.find((category) => category.id === categoryId)?.name ?? null;
+
+const normalizeCategoryName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+const ENRICHMENT_JOB_ACTIVE_STALE_MS = 10 * 60 * 1000;
+
+const isImportFinalizingTransaction = (transaction: Transaction) => {
+  if (!transaction.importFileId) {
+    return false;
+  }
+
+  const categoryName = normalizeCategoryName(transaction.categoryName);
+  return (
+    transaction.reviewStatus === "pending_review" ||
+    transaction.reviewStatus === "suggested" ||
+    (typeof transaction.categoryConfidence === "number" && transaction.categoryConfidence < 90) ||
+    !categoryName ||
+    categoryName === "other" ||
+    categoryName === "needs category review"
+  );
+};
+
+const isActiveEnrichmentJob = (importFile: ImportFile) => {
+  const status = importFile.enrichmentJob?.status;
+  if (!status || status === "done" || status === "failed") {
+    return false;
+  }
+
+  const updatedAt = importFile.enrichmentJob?.updatedAt;
+  const updatedAtMs = updatedAt ? new Date(updatedAt).getTime() : 0;
+  return !Number.isFinite(updatedAtMs) || updatedAtMs <= 0 || Date.now() - updatedAtMs < ENRICHMENT_JOB_ACTIVE_STALE_MS;
+};
+
+const isFailedEnrichmentJob = (importFile: ImportFile) => importFile.enrichmentJob?.status === "failed";
+
+const getEnrichmentNoticeState = (importFiles: ImportFile[], nowMs: number) => {
+  const activeJobs = importFiles.filter(isActiveEnrichmentJob);
+  if (activeJobs.length === 0) {
+    const failedJobs = importFiles.filter(isFailedEnrichmentJob);
+    return {
+      label: failedJobs.length > 0 ? "Needs review" : "Review suggested",
+      detail: failedJobs.length > 0 ? "couldn't finalize automatically; please review" : "some details may need a quick look",
+      needsReview: true,
+    };
+  }
+
+  const remainingRows = activeJobs.reduce((total, importFile) => {
+      const totalRows = Number(importFile.enrichmentJob?.totalRows ?? 0);
+      const processedRows = Number(importFile.enrichmentJob?.processedRows ?? 0);
+      return total + Math.max(0, totalRows - processedRows);
+    }, 0);
+  const latestUpdatedAtMs = activeJobs.reduce((latest, importFile) => {
+    const updatedAt = importFile.enrichmentJob?.updatedAt;
+    const timestamp = updatedAt ? new Date(updatedAt).getTime() : 0;
+    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+  }, 0);
+
+  const estimatedSeconds = Math.max(30, Math.min(600, Math.ceil(remainingRows / 50) * 60));
+  const elapsedSeconds = latestUpdatedAtMs > 0 ? Math.max(0, Math.floor((nowMs - latestUpdatedAtMs) / 1000)) : 0;
+  const remainingSeconds = estimatedSeconds - elapsedSeconds;
+
+  if (remainingRows <= 0) {
+    return {
+      label: "Enriching data",
+      detail: "finishing now",
+      needsReview: false,
+    };
+  }
+
+  if (remainingSeconds <= -60 || elapsedSeconds >= 300) {
+    return {
+      label: "Enriching data",
+      detail: "taking longer than expected",
+      needsReview: false,
+    };
+  }
+
+  if (remainingSeconds <= 60) {
+    return {
+      label: "Enriching data",
+      detail: "less than 1 min left",
+      needsReview: false,
+    };
+  }
+
+  const minutes = Math.max(1, Math.ceil(remainingSeconds / 60));
+  return {
+    label: "Enriching data",
+    detail: `about ${minutes} min${minutes === 1 ? "" : "s"} left`,
+    needsReview: false,
+  };
+};
+
+function InlineEditableCell({
+  value,
+  displayValue,
+  ariaLabel,
+  kind,
+  onCommit,
+  options = [],
+  className,
+}: InlineEditableCellProps) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const savingRef = useRef(false);
+  const cancelBlurRef = useRef(false);
+  const [draft, setDraft] = useState(value);
+  const fieldRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft(value);
+    }
+  }, [editing, value]);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+
+    const field = fieldRef.current;
+    field?.focus();
+    if (field instanceof HTMLInputElement) {
+      field.select();
+    }
+  }, [editing]);
+
+  const openEditor = () => {
+    cancelBlurRef.current = false;
+    setDraft(kind === "date" ? displayValue : value);
+    setError("");
+    setEditing(true);
+  };
+
+  const cancelEditor = () => {
+    cancelBlurRef.current = true;
+    setDraft(value);
+    setEditing(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  const commit = async (nextValue = draft) => {
+    if (savingRef.current) return;
+    const normalized =
+      kind === "text"
+        ? nextValue.trim()
+        : kind === "date"
+          ? parseInlineDate(nextValue)
+          : nextValue;
+    if (normalized === null) {
+      setError("Enter a valid date.");
+      return;
+    }
+    if (normalized === value) {
+      setEditing(false);
+      return;
+    }
+
+    savingRef.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      await onCommit(normalized);
+      setEditing(false);
+      requestAnimationFrame(() => triggerRef.current?.focus());
+    } catch {
+      setError("Could not save. Try again.");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  if (kind === "select") {
+    const normalizedDisplayValue = displayValue.trim();
+    const optionForValue = options.find((option) => option.value === value);
+    const displayOptions = optionForValue
+      ? options.map((option) =>
+          option.value === value &&
+          normalizedDisplayValue &&
+          option.label !== normalizedDisplayValue &&
+          !option.label.startsWith(`${normalizedDisplayValue} ·`)
+            ? { ...option, label: normalizedDisplayValue }
+            : option
+        )
+      : normalizedDisplayValue
+        ? [{ value, label: normalizedDisplayValue }, ...options]
+        : options;
+
+    return (
+      <select
+        ref={(node) => {
+          fieldRef.current = node;
+        }}
+        className={className}
+        value={draft}
+        aria-label={ariaLabel}
+        title={displayValue}
+        onFocus={() => setDraft(value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            setDraft(next);
+            if (next === value) {
+              return;
+            }
+
+            void Promise.resolve(onCommit(next)).catch(() => {
+              setDraft(value);
+            });
+          }}
+      >
+        {displayOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (editing) {
+    return (
+      <>
+      <input
+        ref={(node) => {
+          fieldRef.current = node;
+        }}
+        className={className}
+        value={draft}
+        aria-label={ariaLabel}
+        type={kind === "date" ? "text" : kind}
+        placeholder={kind === "date" ? "Jul 24, 2026" : undefined}
+        onChange={(event) => setDraft(event.target.value)}
+        disabled={saving}
+        aria-invalid={Boolean(error)}
+        title={error || ariaLabel}
+        onBlur={() => { if (!cancelBlurRef.current) void commit(); }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void commit();
+          }
+
+          if (event.key === "Escape") {
+            event.preventDefault();
+            cancelEditor();
+          }
+        }}
+      />
+      {error ? <span className="sr-only" role="alert">{error}</span> : null}
+      </>
+    );
+  }
+
+  return (
+    <button ref={triggerRef} type="button" className={className} onClick={openEditor} aria-label={ariaLabel} title={displayValue}>
+      {displayValue}
+    </button>
+  );
+}
+
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString("en-PH", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+const parseInlineDate = (value: string) => {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const parsed = new Date(`${trimmed} 12:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const MOBILE_TRANSACTIONS_BATCH_SIZE = 12;
+
+const appendUniqueTransactions = <T extends { id: string }>(current: T[], incoming: T[]) => {
+  if (incoming.length === 0) {
+    return current;
+  }
+
+  const knownIds = new Set(current.map((transaction) => transaction.id));
+  const appended = incoming.filter((transaction) => !knownIds.has(transaction.id));
+
+  return appended.length > 0 ? [...current, ...appended] : current;
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
+
+const dateAtNoon = (value: string) => new Date(`${value.slice(0, 10)}T12:00:00`);
+
+const startOfWeekIso = (value: string) => {
+  const date = dateAtNoon(value);
+  const day = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - day);
+  return toIsoDate(date);
+};
+
+const endOfWeekIso = (value: string) => {
+  const date = dateAtNoon(value);
+  const day = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() + (6 - day));
+  return toIsoDate(date);
+};
+
+const startOfMonthIso = (value: string) => {
+  const date = dateAtNoon(value);
+  date.setDate(1);
+  return toIsoDate(date);
+};
+
+const endOfMonthIso = (value: string) => {
+  const date = dateAtNoon(value);
+  date.setMonth(date.getMonth() + 1, 0);
+  return toIsoDate(date);
+};
+
+const startOfQuarterIso = (value: string) => {
+  const date = dateAtNoon(value);
+  const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+  date.setMonth(quarterStartMonth, 1);
+  return toIsoDate(date);
+};
+
+const endOfQuarterIso = (value: string) => {
+  const date = dateAtNoon(value);
+  const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+  date.setMonth(quarterStartMonth + 3, 0);
+  return toIsoDate(date);
+};
+
+const startOfYearIso = (value: string) => {
+  const date = dateAtNoon(value);
+  date.setMonth(0, 1);
+  return toIsoDate(date);
+};
+
+const endOfYearIso = (value: string) => {
+  const date = dateAtNoon(value);
+  date.setMonth(11, 31);
+  return toIsoDate(date);
+};
+
+const getDateFilterLabel = (mode: DateFilterMode, anchor: string, customStart: string, customEnd: string) => {
+  switch (mode) {
+    case "day":
+      return "Today";
+    case "week":
+      return "This week";
+    case "month":
+      return "This month";
+    case "quarter":
+      return "This quarter";
+    case "year":
+      return "This year";
+    case "custom":
+      return customStart && customEnd ? `${formatDate(customStart)} - ${formatDate(customEnd)}` : "Custom range";
+    default:
+      return "Lifetime to date";
+  }
+};
+
+const createEmptyBulkEditForm = (): BulkEditForm => ({
+  accountId: "",
+  categoryId: "",
+  type: "",
+});
+
+const normalizeFilterValue = (value: string) => value.trim().toLowerCase();
+
+const readSearchParamValues = (searchParams: { getAll: (key: string) => string[] } | null, key: string) =>
+  (searchParams?.getAll(key) ?? [])
+    .flatMap((entry) => splitMerchantFilters(entry))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const findMatchingId = (value: string, items: Array<{ id: string; name: string }>) => {
+  const normalizedValue = normalizeFilterValue(value);
+  return items.find((item) => item.id === value || normalizeFilterValue(item.name) === normalizedValue)?.id ?? "";
+};
+
+const toggleFilterValue = (values: string[], value: string) =>
+  values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
+
+const toggleTypedFilterValue = <T extends string>(values: T[], value: T) =>
+  values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
+
+const splitMerchantFilters = (value: string) =>
+  value
+    .split(/[,;\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const normalizeTransactionSearch = (value: string) => value.trim().toLowerCase();
+
+const startOfUtcDay = (value: string) => new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+
+const endOfUtcDay = (value: string) => new Date(`${value.slice(0, 10)}T23:59:59.999Z`);
+
+const startOfUtcWeek = (value: string) => {
+  const date = startOfUtcDay(value);
+  const day = date.getUTCDay();
+  const offset = (day + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - offset);
+  return date;
+};
+
+const endOfUtcWeek = (value: string) => {
+  const date = startOfUtcWeek(value);
+  date.setUTCDate(date.getUTCDate() + 6);
+  date.setUTCHours(23, 59, 59, 999);
+  return date;
+};
+
+const startOfUtcMonth = (value: string) => {
+  const date = startOfUtcDay(value);
+  date.setUTCDate(1);
+  return date;
+};
+
+const endOfUtcMonth = (value: string) => {
+  const date = startOfUtcMonth(value);
+  date.setUTCMonth(date.getUTCMonth() + 1, 0);
+  date.setUTCHours(23, 59, 59, 999);
+  return date;
+};
+
+const startOfUtcQuarter = (value: string) => {
+  const date = startOfUtcDay(value);
+  const quarterStartMonth = Math.floor(date.getUTCMonth() / 3) * 3;
+  date.setUTCMonth(quarterStartMonth, 1);
+  return date;
+};
+
+const endOfUtcQuarter = (value: string) => {
+  const date = startOfUtcQuarter(value);
+  date.setUTCMonth(date.getUTCMonth() + 3, 0);
+  date.setUTCHours(23, 59, 59, 999);
+  return date;
+};
+
+const startOfUtcYear = (value: string) => {
+  const date = startOfUtcDay(value);
+  date.setUTCMonth(0, 1);
+  return date;
+};
+
+const endOfUtcYear = (value: string) => {
+  const date = startOfUtcYear(value);
+  date.setUTCMonth(11, 31);
+  date.setUTCHours(23, 59, 59, 999);
+  return date;
+};
+
+const formatUtcDateKey = (value: Date) => value.toISOString().slice(0, 10);
+
+const matchesDateFilter = (
+  transactionDate: string,
+  mode: DateFilterMode,
+  anchor: string,
+  customStart: string,
+  customEnd: string
+) => {
+  if (mode === "ltd") {
+    return true;
+  }
+
+  const date = formatUtcDateKey(new Date(transactionDate));
+  const normalizedAnchor = anchor?.trim() || todayIso;
+
+  const range =
+    mode === "day"
+      ? { start: formatUtcDateKey(startOfUtcDay(normalizedAnchor)), end: formatUtcDateKey(endOfUtcDay(normalizedAnchor)) }
+      : mode === "week"
+        ? { start: formatUtcDateKey(startOfUtcWeek(normalizedAnchor)), end: formatUtcDateKey(endOfUtcWeek(normalizedAnchor)) }
+        : mode === "month"
+          ? { start: formatUtcDateKey(startOfUtcMonth(normalizedAnchor)), end: formatUtcDateKey(endOfUtcMonth(normalizedAnchor)) }
+          : mode === "quarter"
+            ? { start: formatUtcDateKey(startOfUtcQuarter(normalizedAnchor)), end: formatUtcDateKey(endOfUtcQuarter(normalizedAnchor)) }
+            : mode === "year"
+              ? { start: formatUtcDateKey(startOfUtcYear(normalizedAnchor)), end: formatUtcDateKey(endOfUtcYear(normalizedAnchor)) }
+              : {
+                  start: customStart.trim() ? formatUtcDateKey(startOfUtcDay(customStart)) : "",
+                  end: customEnd.trim() ? formatUtcDateKey(endOfUtcDay(customEnd)) : "",
+                };
+
+  if (!range.start && !range.end) {
+    return true;
+  }
+
+  if (range.start && date < range.start) {
+    return false;
+  }
+
+  if (range.end && date > range.end) {
+    return false;
+  }
+
+  return true;
+};
+
+const matchesTransactionSearch = (transaction: Transaction, searchText: string) => {
+  if (!searchText) {
+    return true;
+  }
+
+  const haystack = [
+    transaction.merchantClean ?? "",
+    transaction.merchantRaw,
+    transaction.accountName,
+    transaction.categoryName ?? "",
+    transaction.description ?? "",
+    getTransactionUserNoteValue(transaction),
+    ...(transaction.tags ?? []).map((tag) => tag.name),
+    transaction.date,
+    transaction.currency,
+    String(transaction.amount),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(searchText);
+};
+
+const matchesTransactionFilters = (
+  transaction: Transaction,
+  filters: {
+    currencyFilter: string;
+    categoryFilters: string[];
+    tagFilters: string[];
+    reportMerchants: string[];
+    accountFilters: string[];
+    typeFilters: TransactionTypeFilter[];
+    dateFilterMode: DateFilterMode;
+    dateFilterAnchor: string;
+    customStart: string;
+    customEnd: string;
+    amountMin: string;
+    amountMax: string;
+    reviewFilter: string; sourceFilter: string; confidenceFilter: string;
+    otherCategoryId: string;
+    categoryNameById: Map<string, string>;
+  },
+  accountNumberById: Map<string, string | null>
+) => {
+  const workspaceAccountNumbers = new Set(
+    Array.from(accountNumberById.values())
+      .map((value) => normalizeDigits(value ?? null))
+      .filter(Boolean)
+  );
+
+  if (filters.reviewFilter === "confirmed" && !["confirmed", "edited"].includes(transaction.reviewStatus ?? "")) return false;
+  if (filters.reviewFilter === "pending" && !transactionNeedsReview(transaction)) return false;
+  if (filters.sourceFilter === "manual" && transaction.importFileId) return false;
+  if (filters.sourceFilter === "upload" && !transaction.importFileId) return false;
+  const recordedConfidence = Number(transaction.parserConfidence ?? 0);
+  if (filters.confidenceFilter === "high" && recordedConfidence < 85) return false;
+  if (filters.confidenceFilter === "medium" && (recordedConfidence < 65 || recordedConfidence >= 85)) return false;
+  if (filters.confidenceFilter === "low" && recordedConfidence >= 65) return false;
+  if (filters.reportMerchants.length && !filters.reportMerchants.includes(transaction.merchantClean || transaction.merchantRaw || "Other")) return false;
+  if (filters.tagFilters.length && !transaction.tags?.some((tag) => filters.tagFilters.includes(tag.id))) return false;
+
+  if (filters.currencyFilter && formatCurrencyCode(transaction.currency) !== formatCurrencyCode(filters.currencyFilter)) {
+    return false;
+  }
+
+  if (filters.categoryFilters.length > 0) {
+    const effectiveCategoryName =
+      hasTransactionUserEdits(transaction) ? transaction.categoryName ?? "Other" : getEffectiveTransactionCategoryName({
+        categoryName: transaction.categoryName ?? null,
+        rawPayload: transaction.rawPayload as never,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        description: transaction.description,
+        institution: transaction.institution ?? null,
+        source: transaction.source ?? null,
+        type: transaction.type,
+      }) ?? "";
+    const normalizedEffectiveCategoryName = effectiveCategoryName.trim().toLowerCase();
+    const selectedCategoryNames = new Set(
+      filters.categoryFilters
+        .map((categoryId) => filters.categoryNameById.get(categoryId) ?? categoryId)
+        .map((categoryName) => categoryName.trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    if (!normalizedEffectiveCategoryName || !selectedCategoryNames.has(normalizedEffectiveCategoryName)) {
+      return false;
+    }
+  }
+
+  if (filters.accountFilters.length > 0 && !filters.accountFilters.includes(transaction.accountId)) {
+    return false;
+  }
+
+  if (filters.typeFilters.length > 0) {
+    const effectiveType = getTransactionDisplayType(
+      transaction,
+      accountNumberById.get(transaction.accountId) ?? null,
+      workspaceAccountNumbers
+    );
+    const normalizedType = effectiveType === "income" ? "credit" : effectiveType === "transfer" ? "transfer" : "debit";
+    if (!filters.typeFilters.includes(normalizedType)) {
+      return false;
+    }
+  }
+
+  if (!matchesDateFilter(transaction.date, filters.dateFilterMode, filters.dateFilterAnchor, filters.customStart, filters.customEnd)) {
+    return false;
+  }
+
+  const amount = Number(transaction.amount);
+  const minAmount = filters.amountMin.trim() ? Number(filters.amountMin) : null;
+  const maxAmount = filters.amountMax.trim() ? Number(filters.amountMax) : null;
+
+  if (minAmount !== null && Number.isFinite(minAmount) && amount < minAmount) {
+    return false;
+  }
+
+  if (maxAmount !== null && Number.isFinite(maxAmount) && amount > maxAmount) {
+    return false;
+  }
+
+  return true;
+};
+
+const getLocalStorage = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
+const getSessionStorage = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
+  const readFromStorage = (storage: Storage | null): TransactionsWorkspaceCacheState | null => {
+    if (!storage) {
+      return null;
+    }
+
+    const stored = storage.getItem(transactionsWorkspaceCacheKey);
+    if (!stored) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as Partial<TransactionsWorkspaceCacheState>;
+      if (!parsed || typeof parsed !== "object") {
+        return null;
+      }
+
+      const selectedWorkspaceId = typeof parsed.selectedWorkspaceId === "string" ? parsed.selectedWorkspaceId : "";
+      const snapshots = parsed.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots : {};
+      return {
+        selectedWorkspaceId,
+        snapshots: Object.fromEntries(
+          Object.entries(snapshots).filter(([, snapshot]) => {
+            return (
+              snapshot &&
+              typeof snapshot === "object" &&
+              typeof snapshot.workspaceId === "string" &&
+              Array.isArray(snapshot.accounts) &&
+              Array.isArray(snapshot.categories) &&
+              Array.isArray(snapshot.transactions) &&
+              Array.isArray(snapshot.imports) &&
+              (!("currencyCodes" in snapshot) || Array.isArray(snapshot.currencyCodes))
+            );
+          })
+      ) as Record<string, TransactionsWorkspaceCacheSnapshot>,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  return readFromStorage(getLocalStorage()) ?? readFromStorage(getSessionStorage());
+};
+
+const getCachedTransactionsWorkspace = (workspaceId: string): TransactionsWorkspaceCacheSnapshot | null => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const cache = readTransactionsWorkspaceCache();
+  const snapshot = cache?.snapshots[workspaceId] ?? null;
+  if (!snapshot) {
+    return null;
+  }
+
+  const deletedAccountIds = new Set([
+    ...getDeletedWorkspaceAccountIds(workspaceId),
+    ...getDeletingWorkspaceAccountIds(workspaceId),
+  ]);
+
+  if (deletedAccountIds.size === 0) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    accounts: snapshot.accounts.filter((account) => {
+      const accountId = typeof account.id === "string" ? account.id : "";
+      return !deletedAccountIds.has(accountId);
+    }),
+    transactions: snapshot.transactions.filter((transaction) => {
+      const accountId = typeof transaction.accountId === "string" ? transaction.accountId : "";
+      return !deletedAccountIds.has(accountId);
+    }),
+    imports: snapshot.imports.filter((importFile) => {
+      const accountId = typeof importFile.accountId === "string" ? importFile.accountId : "";
+      return !accountId || !deletedAccountIds.has(accountId);
+    }),
+  };
+};
+
+const hasCachedTransactionsWorkspaceEvidence = (workspaceId: string) => {
+  const snapshot = getCachedTransactionsWorkspace(workspaceId);
+  if (!snapshot) {
+    return false;
+  }
+
+  const summaryTotalCount =
+    snapshot.summary && typeof snapshot.summary === "object" && typeof snapshot.summary.totalCount === "number"
+      ? snapshot.summary.totalCount
+      : 0;
+
+  return Boolean(
+    snapshot.transactions.length > 0 ||
+      (snapshot.totalCount ?? 0) > 0 ||
+      summaryTotalCount > 0
+  );
+};
+
+const hasRecentWorkspaceImportEvidence = (
+  activity: ImportActivitySnapshot | null,
+  workspaceId: string
+) => {
+  if (!workspaceId || !activity || activity.workspaceId !== workspaceId) {
+    return false;
+  }
+
+  const isFresh = Date.now() - Number(activity.updatedAt ?? 0) <= IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS;
+  if (!isFresh) {
+    return false;
+  }
+
+  return activity.status === "active" || importActivityHasCompletedRows(activity);
+};
+
+const getImportActivityExpectedRows = (activity: ImportActivitySnapshot | null) => {
+  if (!activity?.summary || activity.status === "error") {
+    return 0;
+  }
+
+  const summaryRows = Number(activity.summary.rowsImported ?? 0);
+  const accountSummaryRows = Array.isArray(activity.summary.accountSummaries)
+    ? activity.summary.accountSummaries.reduce((total, accountSummary) => total + Number(accountSummary.rowsImported ?? 0), 0)
+    : 0;
+
+  return Math.max(
+    Number.isFinite(summaryRows) ? summaryRows : 0,
+    Number.isFinite(accountSummaryRows) ? accountSummaryRows : 0
+  );
+};
+
+const isCanceledWorkspaceImport = (
+  activity: ImportActivitySnapshot | null,
+  workspaceId: string
+) => {
+  if (!workspaceId || !activity || activity.workspaceId !== workspaceId || activity.status !== "error") {
+    return false;
+  }
+
+  const statusText = [activity.detail, activity.errorTitle, activity.errorMessage]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+
+  return statusText.includes("upload canceled") || statusText.includes("upload cancelled");
+};
+
+const hasImportedTransactionIdentity = (transaction: Transaction) => {
+  if (typeof transaction.importFileId === "string" && transaction.importFileId.trim()) {
+    return true;
+  }
+
+  const rawPayload = transaction.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return false;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  return (
+    (typeof payload.sourceStatementFingerprint === "string" && payload.sourceStatementFingerprint.trim().length > 0) ||
+    (typeof payload.sourceImportFileId === "string" && payload.sourceImportFileId.trim().length > 0) ||
+    typeof payload.sourceRowIndex === "number" ||
+    (typeof payload.sourceRowIndex === "string" && payload.sourceRowIndex.trim().length > 0)
+  );
+};
+
+const getTransactionImportFileId = (transaction: Transaction) => {
+  if (typeof transaction.importFileId === "string" && transaction.importFileId.trim()) {
+    return transaction.importFileId.trim();
+  }
+
+  const rawPayload = transaction.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const sourceImportFileId = (rawPayload as Record<string, unknown>).sourceImportFileId;
+  return typeof sourceImportFileId === "string" && sourceImportFileId.trim() ? sourceImportFileId.trim() : null;
+};
+
+const getImportedTransactionsToPreserve = (transactions: Transaction[]) =>
+  transactions.filter(hasImportedTransactionIdentity);
+
+const persistTransactionsWorkspaceCache = (
+  workspaceId: string,
+  snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">,
+  options?: Parameters<typeof persistTransactionsWorkspaceCacheShared>[2]
+) => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const cache = readTransactionsWorkspaceCache();
+  const existingSnapshot = cache?.snapshots[workspaceId] ?? null;
+  if (options && (existingSnapshot?.updatedAt ?? 0) > options.expectedUpdatedAt) return 0;
+  const incomingHasData =
+    snapshot.accounts.length > 0 ||
+    snapshot.transactions.length > 0 ||
+    snapshot.imports.length > 0;
+  const existingHasData =
+    existingSnapshot !== null &&
+    (existingSnapshot.accounts.length > 0 ||
+      existingSnapshot.transactions.length > 0 ||
+      existingSnapshot.imports.length > 0);
+
+  if (existingHasData && !incomingHasData) {
+    return existingSnapshot.updatedAt;
+  }
+
+  // Persist exactly what the UI currently trusts. Older cache snapshots may
+  // contain optimistic import rows from a previous refresh, and merging them
+  // back after the server has returned a settled list can resurrect duplicates.
+  const mergedTransactions = snapshot.transactions;
+
+  // Route all writes through the shared capped cache. It keeps the live
+  // in-memory snapshot, persists to one browser storage tier, and progressively
+  // reduces transaction history if the device is under storage pressure.
+  return persistTransactionsWorkspaceCacheShared(workspaceId, {
+    ...snapshot,
+    transactions: mergedTransactions,
+    totalCount: snapshot.totalCount,
+  }, options);
+};
+
+const getTransactionUserNote = (
+  transaction:
+    | Pick<Transaction, "description" | "source" | "importFileId" | "normalizedPayload">
+    | null
+    | undefined
+) =>
+  getTransactionUserNoteValue({
+    normalizedPayload: transaction?.normalizedPayload,
+    description: transaction?.description,
+    source: transaction?.source,
+    importFileId: transaction?.importFileId,
+  });
+
+const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
+  if (!isRecord(rawPayload)) {
+    return "";
+  }
+
+  for (const key of keys) {
+    const candidate = rawPayload[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return "";
+};
+
+const getTransactionParsedNote = (
+  transaction:
+    | Pick<Transaction, "rawPayload" | "normalizedPayload" | "description" | "merchantRaw" | "merchantClean" | "source" | "importFileId">
+    | null
+    | undefined
+) =>
+  getTransactionParsedNoteValue({
+    rawPayload: transaction?.rawPayload,
+    normalizedPayload: transaction?.normalizedPayload,
+    description: transaction?.description,
+    merchantRaw: transaction?.merchantRaw,
+    merchantClean: transaction?.merchantClean,
+    source: transaction?.source,
+    importFileId: transaction?.importFileId,
+  });
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const normalizeMerchantGroupKey = (value: string) =>
+  value
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+const summarizeTransactionMerchantText = (value: string, institution?: string | null) =>
+  summarizeMerchantText(value, institution);
+
+const getConfidenceLabel = (value: number) => {
+  if (value >= 85) {
+    return "High";
+  }
+
+  if (value >= 65) {
+    return "Medium";
+  }
+
+  return "Low confidence";
+};
+
+const inferTransactionConfidenceSignals = (transaction: Transaction, warningReason: string | null): TransactionConfidenceSignal[] => {
+  const source = transaction.source ?? "upload";
+  const hasWarning = Boolean(warningReason);
+  const isDuplicateWarning = warningReason === "Review similar transaction";
+  const sourceBoost = source === "manual" ? 6 : source === "upload" ? 0 : -4;
+
+  const nameValue = Math.max(
+    40,
+    Math.min(98, (transaction.merchantClean?.trim() ? 88 : 74) + sourceBoost + (transaction.merchantRaw.trim() ? 4 : -10))
+  );
+  const accountValue = Math.max(40, Math.min(98, (transaction.accountId ? 92 : 58) + sourceBoost + (transaction.accountName ? 2 : -6)));
+  const categoryValue = Math.max(
+    20,
+    Math.min(
+      98,
+      (!transaction.categoryId ? 28 : 86) +
+        sourceBoost +
+        (isDuplicateWarning ? -8 : 0) +
+        (warningReason === "Needs category review" ? -20 : 0) +
+        (hasWarning && !isDuplicateWarning ? -4 : 0)
+    )
+  );
+
+  return [
+    {
+      label: "Name",
+      value: nameValue,
+      note: transaction.merchantClean?.trim() ? "Cleaned merchant name present" : "Using the raw statement label",
+    },
+    {
+      label: "Account",
+      value: accountValue,
+      note: transaction.accountName ? "Account match is present" : "Account needs a closer look",
+    },
+    {
+      label: "Category",
+      value: categoryValue,
+      note: !transaction.categoryId
+        ? "No category assigned yet"
+        : warningReason === "Needs category review"
+          ? "Category still needs review"
+          : "Category has a strong match",
+    },
+  ];
+};
+
+const getTransactionConfidenceScore = (transaction: Transaction, warningReason: string | null) => {
+  const recorded = getRecordedTransactionConfidence(transaction);
+  if (recorded !== null) return recorded;
+
+  const inferredSignals = inferTransactionConfidenceSignals(transaction, warningReason);
+  return Math.round(inferredSignals.reduce((sum, signal) => sum + signal.value, 0) / inferredSignals.length);
+};
+
+const getTransactionReviewReasonsForDisplay = (transaction: Transaction) => getTransactionReviewReasons(transaction);
+
+const getTransactionReviewChips = (transaction: Transaction, warningReason: string | null): TransactionReviewChip[] => {
+  const confidenceScore = getTransactionConfidenceScore(transaction, warningReason);
+  const reviewReasons = getTransactionReviewReasonsForDisplay(transaction);
+  const hasReviewSignal = reviewReasons.length > 0;
+
+  const chips: TransactionReviewChip[] = [];
+
+  if (confidenceScore >= 85 && !hasReviewSignal) {
+    chips.push({ label: "High confidence", tone: "clear" });
+  }
+
+  for (const reason of reviewReasons) {
+    const tone =
+      reason === "Review similar transaction"
+        ? "danger"
+        : reason === "Ignored from totals"
+          ? "neutral"
+          : reason === "Could not identify merchant"
+            ? "neutral"
+            : "warn";
+    chips.push({ label: reason, tone });
+  }
+
+  if (chips.length === 0) {
+    chips.push({ label: getConfidenceLabel(confidenceScore), tone: confidenceScore >= 85 ? "clear" : "neutral" });
+  }
+
+  return chips;
+};
+
+const summarizeTransactionChange = (before: Transaction, after: Transaction, accountNames: Map<string, string>, categoryNames: Map<string, string>) => {
+  const changes: string[] = [];
+  const beforeName = before.merchantClean ?? before.merchantRaw;
+  const afterName = after.merchantClean ?? after.merchantRaw;
+  if (beforeName !== afterName) {
+    changes.push(`Name: ${beforeName} → ${afterName}`);
+  }
+
+  const beforeDate = before.date.slice(0, 10);
+  const afterDate = after.date.slice(0, 10);
+  if (beforeDate !== afterDate) {
+    changes.push(`Date: ${formatDate(beforeDate)} → ${formatDate(afterDate)}`);
+  }
+
+  if (before.accountId !== after.accountId) {
+    changes.push(`Account: ${accountNames.get(before.accountId) ?? before.accountName} → ${accountNames.get(after.accountId) ?? after.accountName}`);
+  }
+
+  if ((before.categoryId ?? "") !== (after.categoryId ?? "")) {
+    changes.push(
+      `Category: ${categoryNames.get(before.categoryId ?? "") ?? before.categoryName ?? "Other"} → ${
+        categoryNames.get(after.categoryId ?? "") ?? after.categoryName ?? "Other"
+      }`
+    );
+  }
+
+  if (before.amount !== after.amount) {
+    changes.push(
+      `Amount: ${formatTransactionAmount(Number(before.amount), before.currency)} → ${formatTransactionAmount(Number(after.amount), after.currency)}`
+    );
+  }
+
+  if (before.currency !== after.currency) {
+    changes.push(`Currency: ${before.currency} → ${after.currency}`);
+  }
+
+  if (before.isExcluded !== after.isExcluded) {
+    changes.push(after.isExcluded ? "Excluded from totals" : "Included in totals");
+  }
+
+  if (before.isTransfer !== after.isTransfer) {
+    changes.push(after.isTransfer ? "Marked as transfer" : "Marked as non-transfer");
+  }
+
+  return changes;
+};
+
+const createDetailDraft = (
+  transaction: Transaction,
+  options: { categoryId?: string | null; type?: Transaction["type"] } = {}
+): TransactionDetailDraft => {
+  const effectiveCategoryName =
+    getEffectiveTransactionCategoryName({
+      categoryName: transaction.categoryName ?? null,
+      rawPayload: transaction.rawPayload as never,
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: transaction.merchantClean,
+      institution: transaction.institution ?? null,
+      source: transaction.source ?? null,
+      type: transaction.type,
+    }) ?? transaction.categoryName ?? null;
+  const effectiveType =
+    options.type ?? (hasTransactionUserEdits(transaction) ? transaction.type : coerceTransactionTypeFromCategoryName(effectiveCategoryName, transaction.type, transaction.amount, transaction.isTransfer));
+
+  return buildTransactionDetailDraft(transaction, {
+    merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
+    effectiveType,
+    categoryId: options.categoryId,
+    isTransfer: transaction.isTransfer,
+  });
+};
+
+const toolbarChipStyle = {
+  backgroundColor: "var(--surface-2)",
+  borderColor: "var(--stroke-strong)",
+  color: "var(--text)",
+  boxShadow: "none",
+} as const;
+
+const transactionsMenuStyle = {
+  position: "relative",
+  zIndex: 20,
+  display: "inline-flex",
+  alignItems: "center",
+  flex: "0 0 auto",
+} as const;
+
+const transactionsLayoutStyle = {
+  flex: "1 1 auto",
+  minHeight: 0,
+} as const;
+
+const transactionsShellActionsStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: "6px",
+  flexWrap: "nowrap",
+  minWidth: 0,
+  width: "auto",
+  flex: "0 0 auto",
+} as const;
+
+const transactionsFooterStyle = {
+  background: "transparent",
+  borderTop: "1px solid rgba(219, 227, 232, 0.72)",
+  boxShadow: "none",
+  backdropFilter: "none",
+  WebkitBackdropFilter: "none",
+} as const;
+
+const transactionsFooterNetMetricStyle = {
+  borderColor: "var(--stroke)",
+  background: "rgba(255, 255, 255, 0.94)",
+} as const;
+
+function ActionIcon({
+  name,
+}: {
+  name:
+    | "plus"
+    | "chevron-left"
+    | "chevron-down"
+    | "chevron-right"
+    | "undo"
+    | "redo"
+    | "search"
+    | "calendar"
+    | "currency"
+    | "filters"
+    | "summary"
+    | "save"
+    | "download"
+    | "upload"
+    | "more"
+    | "account";
+}) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "plus":
+      return (
+        <svg {...common}>
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+      );
+    case "chevron-left":
+      return (
+        <svg {...common}>
+          <path d="m15 6-6 6 6 6" />
+        </svg>
+      );
+    case "chevron-down":
+      return (
+        <svg {...common}>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      );
+    case "chevron-right":
+      return (
+        <svg {...common}>
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+      );
+    case "undo":
+      return <InterfaceIcon name="undo" size={14} />;
+    case "redo":
+      return <InterfaceIcon name="redo" size={14} />;
+    case "search":
+      return (
+        <svg {...common}>
+          <circle cx="11" cy="11" r="5.5" />
+          <path d="m16 16 4 4" />
+        </svg>
+      );
+    case "calendar":
+      return <InterfaceIcon name="date" size={14} />;
+    case "currency":
+      return (
+        <svg {...common}>
+          <path d="M12 5v14" />
+          <path d="M15.5 8c0-1.7-1.6-3-3.5-3s-3.5 1.3-3.5 3 1.6 2.5 3.5 3 3.5 1.3 3.5 3-1.6 3-3.5 3-3.5-1.3-3.5-3" />
+        </svg>
+      );
+    case "filters":
+      return (
+        <svg {...common}>
+          <path d="M4 7h16" />
+          <path d="M7 12h10" />
+          <path d="M10 17h4" />
+        </svg>
+      );
+    case "summary":
+      return (
+        <svg {...common}>
+          <rect x="5" y="4" width="14" height="16" rx="2" />
+          <path d="M8 8h8" />
+          <path d="M8 12h8" />
+          <path d="M8 16h5" />
+        </svg>
+      );
+    case "save":
+      return (
+        <svg {...common}>
+          <path d="M5 5h11l3 3v11H5z" />
+          <path d="M8 5v5h8V5" />
+          <path d="M9 19v-6h6v6" />
+        </svg>
+      );
+    case "download":
+      return <InterfaceIcon name="download" size={14} />;
+    case "upload":
+      return <InterfaceIcon name="upload" size={14} />;
+    case "more":
+      return (
+        <svg {...common}>
+          <circle cx="6" cy="12" r="1.4" />
+          <circle cx="12" cy="12" r="1.4" />
+          <circle cx="18" cy="12" r="1.4" />
+        </svg>
+      );
+    case "account":
+      return (
+        <svg {...common}>
+          <rect x="4" y="5" width="16" height="14" rx="3" />
+          <path d="M8 9h8" />
+          <path d="M8 13h6" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+function TransactionsManageMenu({ compact = false }: { compact?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={rootRef}
+      className={`transactions-manage-menu${compact ? " transactions-manage-menu--mobile-leading" : ""}`}
+    >
+      <button
+        className={`button button-secondary button-small transactions-manage-menu__trigger${compact ? " transactions-manage-icon-button" : ""}`}
+        type="button"
+        aria-label={compact ? "Manage transaction organization" : undefined}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={compact ? "Manage" : undefined}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {compact ? <ActionIcon name="summary" /> : "Manage"}
+      </button>
+      {open ? (
+        <div className="transactions-manage-menu__popover" role="menu">
+          <Link href="/transactions/categories" role="menuitem" onClick={() => setOpen(false)}>
+            {compact ? "Categories" : "Manage categories"}
+          </Link>
+          <Link href="/transactions/tags" role="menuitem" onClick={() => setOpen(false)}>
+            {compact ? "Tags" : "Manage tags"}
+          </Link>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MultiSelectFilterGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+  onClear,
+}: {
+  label: string;
+  options: Array<{ value: string; label: string; icon?: React.ReactNode }>;
+  selected: string[];
+  onToggle: (value: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <TransactionFilterRow label={label} summary={options.filter((option) => selected.includes(option.value)).map((option) => option.label).join(", ") || "All"}>
+    <div className="transactions-filter-group" role="group" aria-label={label}>
+      <div className="transactions-filter-group__head">
+        <span className="transactions-filter-group__label">{label}</span>
+        {selected.length ? (
+          <button className="transactions-filter-group__clear" type="button" onClick={onClear}>
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <div className="transactions-filter-group__options">
+        {options.map((option) => {
+          const isSelected = selected.includes(option.value);
+          return (
+            <button
+              key={option.value}
+              className={`pill pill-interactive transactions-filter-pill ${isSelected ? "pill-is-selected" : ""}`}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={() => onToggle(option.value)}
+            >
+              {option.icon ? <span className="transaction-filter-option-icon" aria-hidden="true">{option.icon}</span> : null}{option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+    </TransactionFilterRow>
+  );
+}
+
+function MerchantFilterGroup({
+  merchants,
+  input,
+  onInputChange,
+  onAddMerchants,
+  onRemoveMerchant,
+  onClear,
+}: {
+  merchants: string[];
+  input: string;
+  onInputChange: (value: string) => void;
+  onAddMerchants: (value: string) => void;
+  onRemoveMerchant: (value: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="transactions-filter-group transactions-filter-group--merchants" role="group" aria-label="Merchants">
+      <div className="transactions-filter-group__head">
+        <span className="transactions-filter-group__label">Merchants</span>
+        {merchants.length ? (
+          <button className="transactions-filter-group__clear" type="button" onClick={onClear}>
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <div className="transactions-merchant-filter">
+        <input
+          value={input}
+          onChange={(event) => onInputChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === ",") {
+              event.preventDefault();
+              onAddMerchants(input);
+            }
+          }}
+          placeholder="Type one or more merchants, then press Enter"
+        />
+        <button className="button button-secondary button-small" type="button" onClick={() => onAddMerchants(input)}>
+          Add
+        </button>
+      </div>
+      {merchants.length ? (
+        <div className="transactions-filter-group__options transactions-filter-group__options--wrap">
+          {merchants.map((merchant) => (
+            <button
+              key={merchant}
+              className="pill pill-interactive pill-is-selected transactions-filter-pill transactions-filter-pill--merchant"
+              type="button"
+              aria-label={`Remove merchant filter ${merchant}`}
+              onClick={() => onRemoveMerchant(merchant)}
+            >
+              <span>{merchant}</span>
+              <span aria-hidden="true">×</span>
+            </button>
+          ))}
+          </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CategorySuggestionChip({
+  suggestion,
+  applied,
+  onApply,
+}: {
+  suggestion: CategorySuggestion;
+  applied: boolean;
+  onApply?: () => void;
+}) {
+  const chip = (
+    <>
+      <span className="transactions-suggestion-chip__label">{applied ? "Applied suggestion" : "Suggested category"}</span>
+      <strong>{suggestion.categoryName}</strong>
+      <span className="transactions-suggestion-chip__meta">
+        {suggestion.sourceLabel} · {suggestion.confidence}%
+      </span>
+    </>
+  );
+
+  if (!onApply || applied) {
+    return <div className={`transactions-suggestion-chip ${applied ? "transactions-suggestion-chip--applied" : ""}`}>{chip}</div>;
+  }
+
+  return (
+    <button className="transactions-suggestion-chip transactions-suggestion-chip--button" type="button" onClick={onApply}>
+      {chip}
+      <span className="transactions-suggestion-chip__action">Use suggestion</span>
+    </button>
+  );
+}
+
+export default function TransactionsPage() {
+  useEffect(() => {
+    document.title = "Clover | Transactions";
+  }, []);
+
+  return <TransactionsPageContent />;
+}
+
+function TransactionsPageContent() {
+  const columnSettings = useTransactionColumns();
+  const defaultCurrency = useDefaultCurrency();
+  const { closeChrome } = useCloverChrome();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
+  const manualDialogRef = useRef<HTMLElement>(null);
+  const bulkEditDialogRef = useRef<HTMLElement>(null);
+  const manualNameInputRef = useRef<HTMLInputElement>(null);
+  const manualCategoryButtonRef = useRef<HTMLButtonElement>(null);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+  const addMenuPanelRef = useRef<HTMLDivElement>(null);
+  const addFileInputRef = useRef<HTMLInputElement>(null);
+  const addPhotoInputRef = useRef<HTMLInputElement>(null);
+  const addPhotoLibraryInputRef = useRef<HTMLInputElement>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
+  const initialCachedWorkspace = null;
+
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
+  const activeAccountWorkspaceRef = useRef(selectedWorkspaceId);
+  useLayoutEffect(() => {
+    activeAccountWorkspaceRef.current = selectedWorkspaceId;
+  }, [selectedWorkspaceId]);
+  const [accounts, setAccounts] = useState<Account[]>(
+    () => []
+  );
+  const [categories, setCategories] = useState<Category[]>(
+    () => []
+  );
+  const [transactions, setTransactions] = useState<Transaction[]>(
+    () => []
+  );
+  const transactionsRef = useRef<Transaction[]>([]);
+  const publishingTransactionsCacheRef = useRef(false);
+  const [imports, setImports] = useState<ImportFile[]>(
+    () => []
+  );
+  const [transactionsSummary, setTransactionsSummary] = useState<TransactionPageMeta>(
+    () => ({
+      totalCount: 0,
+      income: 0,
+      spending: 0,
+      transfers: 0,
+      review: 0,
+      currencyCodes: ["PHP"],
+      topCategory: null,
+      topAccount: null,
+      firstTransactionDate: null,
+      lastTransactionDate: null,
+      firstReviewTransaction: null,
+      firstReviewTransactionIndex: null,
+    })
+  );
+  const [transactionsPageSize, setTransactionsPageSize] = useState(25);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [summaryScope, setSummaryScope] = useState("");
+  const transactionTableRef = useRef<HTMLDivElement>(null);
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const transactionPrefetchRef = useRef<Map<string, TransactionPrefetchEntry>>(new Map());
+  const inlineCategoryPickerButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [query, setQuery] = useState("");
+  const [currencyFilter, setCurrencyFilter] = useState("");
+  const [sortField, setSortField] = useState<TransactionSortField>("date");
+  const [sortDirection, setSortDirection] = useState<TransactionSortDirection>("desc");
+  const [activeHeaderSort, setActiveHeaderSort] = useState<{
+    field: TransactionSortField;
+    direction: TransactionSortDirection;
+  } | null>(null);
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [reviewFilter, setReviewFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [confidenceFilter, setConfidenceFilter] = useState("");
+  const [reportMerchants, setReportMerchants] = useState<string[]>([]);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [filterTags, setFilterTags] = useState<Array<{ id: string; name: string }>>([]);
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [accountFilters, setAccountFilters] = useState<string[]>([]);
+  const [typeFilters, setTypeFilters] = useState<TransactionTypeFilter[]>([]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addMenuPortalStyle, setAddMenuPortalStyle] = useState<React.CSSProperties | null>(null);
+  const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importSessionId, setImportSessionId] = useState(0);
+  const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
+  const [importSeedMode, setImportSeedMode] = useState<ImportImageMode>("statement");
+  const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [tableMode, setTableMode] = useState(false);
+  const [tableLocked, setTableLocked] = useState(false);
+  const [creationTab, setCreationTab] = useState<"manual" | "ask" | "upload" | "sync">("manual");
+  const [syncVisited, setSyncVisited] = useState(false);
+  const [creationChatVisited, setCreationChatVisited] = useState(false);
+  const enlargedText = useEnlargedText();
+  const [manualSaveError, setManualSaveError] = useState("");
+  const mobileCreation = useMobileCreationRoute(manualOpen, setManualOpen, "/transactions");
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const tagsDialogRef = useRef<HTMLElement>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [tagAction, setTagAction] = useState<"add" | "remove">("add");
+  const [tagError, setTagError] = useState("");
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
+  const selectedRowsRef = useRef<{ workspaceId: string; rows: Map<string, Transaction> }>({
+    workspaceId: selectedWorkspaceId,
+    rows: new Map(),
+  });
+  useEffect(() => {
+    const previous = selectedRowsRef.current;
+    const visible = new Map(transactions.map((transaction) => [transaction.id, transaction]));
+    const rows = new Map<string, Transaction>();
+    // Server pagination replaces transactions; retain only explicitly selected rows.
+    if (previous.workspaceId === selectedWorkspaceId) {
+      for (const id of selectedTransactionIds) {
+        const transaction = visible.get(id) ?? previous.rows.get(id);
+        if (transaction) rows.set(id, transaction);
+      }
+    }
+    selectedRowsRef.current = { workspaceId: selectedWorkspaceId, rows };
+  }, [transactions, selectedTransactionIds, selectedWorkspaceId]);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const transactionDetailRefreshRequestRef = useRef(0);
+  const selectedTransactionCount = selectedTransactionIds.length;
+  const hasSelectedTransactions = selectedTransactionCount > 0;
+  const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
+  const [detailTags, setDetailTags] = useState<string[]>([]);
+  const [detailEditing, setDetailEditing] = useState(false);
+  const [detailActionMenuOpen, setDetailActionMenuOpen] = useState(false);
+  const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] = useState(false);
+  const [transactionSplitBillOpen, setTransactionSplitBillOpen] = useState(false);
+  const [transactionSplitBillDraft, setTransactionSplitBillDraft] = useState<SplitBillTransactionLinkDraft>({
+    groupId: "",
+    participantNames: [],
+  });
+  const [transactionSplitBillSaving, setTransactionSplitBillSaving] = useState(false);
+  const [transactionSplitBillError, setTransactionSplitBillError] = useState<string | null>(null);
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("ltd");
+  const [dateFilterAnchor, setDateFilterAnchor] = useState(todayIso);
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>(createEmptyBulkEditForm());
+  const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
+  const [isSaving, setIsSaving] = useState(false);
+  const manualSaveInFlightRef = useRef(false);
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "premium" | "unknown">("unknown");
+  const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
+  const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
+  const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
+  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
+  const [transactionsLoadFailed, setTransactionsLoadFailed] = useState(false);
+  const transactionsAutoRetryRef = useRef(0);
+  const [, setHasInitialTransactionsLoaded] = useState(false);
+  const [hasLoadedWorkspaceList, setHasLoadedWorkspaceList] = useState(false);
+  const [workspaceCurrencyCodes, setWorkspaceCurrencyCodes] = useState<string[]>([]);
+  const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
+  const [isApplyingHistory, setIsApplyingHistory] = useState(false);
+  const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
+  const [importActivitySnapshot, setImportActivitySnapshot] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
+  const canceledImportWorkspaceIdsRef = useRef(new Set<string>());
+  const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
+  const searchText = useMemo(() => normalizeTransactionSearch(query), [query]);
+
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
+  useEffect(() => {
+    setImportActivitySnapshot(readImportActivity());
+    return subscribeImportActivity(() => {
+      const snapshot = readImportActivity();
+      if (snapshot?.workspaceId && snapshot.status === "active") {
+        canceledImportWorkspaceIdsRef.current.delete(snapshot.workspaceId);
+        if (snapshot.workspaceId === selectedWorkspaceId) setMessage("");
+      }
+      if (isCanceledWorkspaceImport(snapshot, snapshot?.workspaceId ?? "") && snapshot?.workspaceId) {
+        canceledImportWorkspaceIdsRef.current.add(snapshot.workspaceId);
+        if (snapshot.workspaceId === selectedWorkspaceId) {
+          setIsWorkspaceDataReady(true);
+          setTransactionsLoadFailed(false);
+          setHasInitialTransactionsLoaded(true);
+        }
+      }
+      setImportActivitySnapshot(snapshot);
+    });
+  }, [selectedWorkspaceId]);
+  const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
+  const [manualMoreOpen, setManualMoreOpen] = useState(false);
+  const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
+  const manualCategorySuggestion = useDraftCategorySuggestion({ workspaceId: selectedWorkspaceId, merchantText: manualForm.merchantRaw, categoryId: manualForm.categoryId,
+    type: manualForm.type === "credit" ? "income" : manualForm.type === "debit" ? "expense" : "transfer", categories,
+    enabled: manualOpen && creationTab === "manual" && !isSaving, manuallyChosen: manualCategoryTouched,
+    onApply: categoryId => setManualForm(current => ({ ...current, categoryId })),
+  });
+  useEffect(() => { if (!manualOpen || (!manualForm.merchantRaw && !manualForm.amount)) setManualCategoryTouched(false); }, [manualOpen, manualForm.merchantRaw, manualForm.amount]);
+  const [manualAccountMenuOpen, setManualAccountMenuOpen] = useState(false);
+  const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
+  const [mobileVisibleCount, setMobileVisibleCount] = useState(MOBILE_TRANSACTIONS_BATCH_SIZE);
+  const [isMobileLoadingMore, setIsMobileLoadingMore] = useState(false);
+  const [mobilePaginationExhausted, setMobilePaginationExhausted] = useState(false);
+  const [postImportRefreshVersion, setPostImportRefreshVersion] = useState(0);
+  const transactionRowRefs = useRef(new Map<string, HTMLElement>());
+  const warningPopoverRefs = useRef(new Map<string, HTMLDivElement | null>());
+  const selectionActionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const transactionsLoadRequestRef = useRef(0);
+  const requestGateRef = useRef(createTransactionRequestGate());
+  const hasActiveTransactionFilters = Boolean(reportMerchants.length || query.trim() || currencyFilter || categoryFilters.length || tagFilters.length ||
+    accountFilters.length || typeFilters.length || dateFilterMode !== "ltd" || customStart || customEnd || amountMin || amountMax || reviewFilter || sourceFilter || confidenceFilter);
+  const financialScopeKey = JSON.stringify([
+    selectedWorkspaceId, query, currencyFilter, categoryFilters, tagFilters, reportMerchants,
+    accountFilters, typeFilters, dateFilterMode, dateFilterAnchor, customStart, customEnd,
+    sortField, sortDirection, amountMin, amountMax, reviewFilter, sourceFilter, confidenceFilter,
+  ]);
+  const transactionQueryKey = JSON.stringify([
+    selectedWorkspaceId, query, currencyFilter, categoryFilters, tagFilters, reportMerchants,
+    accountFilters, typeFilters, dateFilterMode, dateFilterAnchor, customStart,
+    customEnd, sortField, sortDirection, amountMin, amountMax, reviewFilter, sourceFilter, confidenceFilter, transactionsPage, transactionsPageSize, summaryOpen,
+  ]);
+  const skipContextWriteRef = useRef(true);
+  const [contextRestoreVersion, setContextRestoreVersion] = useState(0);
+  useEffect(() => {
+    if (skipContextWriteRef.current) { skipContextWriteRef.current = false; return; }
+    const context = {
+      query, categoryFilters, tagFilters, accountFilters, typeFilters,
+      dateFilterMode, dateFilterAnchor, customStart, customEnd, amountMin, amountMax, reviewFilter, sourceFilter, confidenceFilter, sortField, sortDirection,
+    };
+    if (selectedWorkspaceId) writeTransactionListContext(selectedWorkspaceId, context);
+  }, [transactionQueryKey, contextRestoreVersion]);
+  useLayoutEffect(() => {
+    requestGateRef.current.select(transactionQueryKey);
+  }, [transactionQueryKey]);
+
+  const authoritativeCurrencyWorkspaceRef = useRef("");
+  const deletedTransactionIdsRef = useRef(new Set<string>());
+  const transactionsHydrationVersionRef = useRef(new Map<string, number>());
+  const transactionCacheVersion = useWorkspaceCacheVersion(selectedWorkspaceId);
+  const mobileLoadMoreRef = useRef<HTMLButtonElement | null>(null);
+  const mobileLoadMoreInFlightRef = useRef(false);
+  const transactionDetailScrollYRef = useRef<number | null>(null);
+  const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  const importRefreshInFlightRef = useRef(false);
+  const handledImportedSummaryKeysRef = useRef(new Set<string>());
+  const reviewTransactionParamRef = useRef<string | null>(null);
+  const drilldownParamRef = useRef<string | null>(null);
+  const detailTransactionParamRef = useRef<string | null>(null);
+  const [previewQuery, setPreviewQuery] = useState<string | null>(null);
+  const firstRowsStartedAt = useRef<number | null>(null);
+  const firstRowsReported = useRef(false);
+  useLayoutEffect(() => {
+    firstRowsStartedAt.current ??= performance.now();
+  }, []);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
+  const [activeWarningTransactionId, setActiveWarningTransactionId] = useState<string | null>(null);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | null>(null);
+  const [headerMenuPosition, setHeaderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const headerMenuRef = useRef<HTMLDivElement | null>(null);
+  const manualModalStyle = useMemo<React.CSSProperties>(
+    () => ({
+      width: isCompactViewport ? "100vw" : tableMode ? "1160px" : "640px",
+      maxWidth: isCompactViewport ? "100vw" : "calc(100vw - 28px)",
+      maxHeight: isCompactViewport ? "100dvh" : "calc(100dvh - 24px)",
+      overflow: "auto",
+    }),
+    [isCompactViewport, tableMode]
+  );
+
+  const markTransactionsHydrated = useCallback((workspaceId: string, updatedAt?: number | null) => {
+    if (!workspaceId || !updatedAt || !Number.isFinite(updatedAt)) {
+      return;
+    }
+
+    transactionsHydrationVersionRef.current.set(workspaceId, updatedAt);
+  }, []);
+
+  const shouldHydrateTransactionsSnapshot = useCallback(
+    (workspaceId: string) => {
+      if (!workspaceId) {
+        return false;
+      }
+
+      const cachedSnapshot = getCachedTransactionsWorkspace(workspaceId);
+      if (!cachedSnapshot) {
+        return true;
+      }
+
+      const previousVersion = transactionsHydrationVersionRef.current.get(workspaceId) ?? 0;
+      return Number(cachedSnapshot.updatedAt ?? 0) > previousVersion;
+    },
+    []
+  );
+
+  useEffect(() => {
+    document.body.classList.toggle("transactions-manual-open", manualOpen);
+
+    return () => {
+      document.body.classList.remove("transactions-manual-open");
+    };
+  }, [manualOpen]);
+
+  useEffect(() => {
+    setTagFilters([]);
+    setFilterTags([]);
+  }, [selectedWorkspaceId]);
+  useEffect(() => {
+    if (!filterOpen || !selectedWorkspaceId) return;
+    const controller = new AbortController();
+    fetch(`/api/tags?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => { if (!response.ok) throw new Error("Unable to load tags"); return response.json(); })
+      .then((payload) => setFilterTags(payload.tags ?? []))
+      .catch(() => { if (!controller.signal.aborted) setMessage("Unable to load tag filters. Close and reopen Filters to retry."); });
+    const close = (event: PointerEvent) => {
+      if (event.target instanceof Element && !event.target.closest(".transactions-inline-filters, .transaction-selection-toolbar, .transactions-filter-currency__menu")) setFilterOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFilterOpen(false);
+        document.querySelector<HTMLButtonElement>(".transaction-selection-toolbar__filter")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", escape);
+    return () => { controller.abort(); document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); };
+  }, [filterOpen, selectedWorkspaceId]);
+
+  const longPress = useTransactionLongPress((id) => { setSelectedTransactionIds((current) => current.includes(id) ? current : [...current, id]); setFilterOpen(false); });
+  const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
+  const workspaceTransactionCount = transactions.length;
+  const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
+  const accountNumberById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account.accountNumber ?? null] as const)),
+    [accounts]
+  );
+  const workspaceAccountNumbers = useMemo(
+    () =>
+      new Set(
+        Array.from(accountNumberById.values())
+          .map((value) => normalizeDigits(value ?? null))
+          .filter(Boolean)
+      ),
+    [accountNumberById]
+  );
+  const accountInstitutionById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account.institution ?? null] as const)),
+    [accounts]
+  );
+  const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account] as const)), [accounts]);
+  const accountNameById = useMemo(() => organizeAccountLabels(accounts), [accounts]);
+  const selectableTransactionAccounts = useMemo(() => {
+    const hiddenAccountIds = new Set([
+      ...getDeletedWorkspaceAccountIds(selectedWorkspaceId),
+      ...getDeletingWorkspaceAccountIds(selectedWorkspaceId),
+    ]);
+    const seenKeys = new Set<string>();
+
+    return accounts.filter((account) => {
+      if (hiddenAccountIds.has(account.id) || !isTransactionAccount(account)) {
+        return false;
+      }
+
+      const key = getTransactionAccountFilterKey(account);
+      if (seenKeys.has(key)) {
+        return false;
+      }
+      seenKeys.add(key);
+      return true;
+    });
+  }, [accounts, selectedWorkspaceId]);
+  const selectableTransactionAccountLabels = useMemo(
+    () => buildTransactionAccountLabels(selectableTransactionAccounts),
+    [selectableTransactionAccounts]
+  );
+  const getDisplayAccountNameForTransaction = useCallback(
+    (transaction: Transaction) =>
+      accountNameById.get(transaction.accountId) ??
+      formatTransactionAccountDisplayName(transaction, accountById.get(transaction.accountId) ?? null),
+    [accountById, accountNameById]
+  );
+  const accountBrandById = useMemo(
+    () => {
+      const brandById = new Map(
+        accounts.map(
+          (account) =>
+            [
+              account.id,
+              getAccountBrand({
+                institution: account.institution ?? null,
+                name: account.name,
+                type: account.type,
+              }),
+            ] as const
+        )
+      );
+
+      for (const transaction of transactions) {
+        const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+        const transactionInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
+        const transactionBrand = getAccountBrand({
+          institution: transactionInstitution,
+          name: accountDisplayName,
+          type: inferAccountTypeFromStatement(transactionInstitution, accountDisplayName, "bank"),
+        });
+        const currentBrand = brandById.get(transaction.accountId);
+        const accountLooksLikeGcash = /\bgcash\b/i.test(accountDisplayName) || /\bgcash\b/i.test(transactionInstitution ?? "");
+
+        if (
+          !currentBrand ||
+          isGenericAccountBrand(currentBrand) ||
+          (!currentBrand.logoSrc && currentBrand.logoSrcs.length === 0 && transactionBrand.logoSrcs.length > 0) ||
+          (accountLooksLikeGcash && transactionBrand.label === "GCash" && currentBrand.label !== "GCash")
+        ) {
+          brandById.set(transaction.accountId, transactionBrand);
+        }
+      }
+
+      return brandById;
+    },
+    [accounts, transactions, accountInstitutionById, accountNameById]
+  );
+  const transactionAccountPickerOptions = useMemo<TransactionPickerAccount[]>(
+    () =>
+      selectableTransactionAccounts
+        .map((account) => ({
+          id: account.id,
+          label: selectableTransactionAccountLabels.get(account.id) ?? formatTransactionAccountName(account),
+          subtitle: account.institution ?? account.type.replaceAll("_", " "),
+          brand: accountBrandById.get(account.id) ?? getAccountBrand(account),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true })),
+    [accountBrandById, selectableTransactionAccountLabels, selectableTransactionAccounts]
+  );
+
+  useEffect(() => {
+    const sources = new Set<string>();
+    for (const brand of accountBrandById.values()) {
+      for (const source of [...brand.logoSrcs, brand.logoSrc, brand.fallbackIconSrc]) {
+        if (source) {
+          sources.add(source);
+        }
+      }
+    }
+
+    for (const source of sources) {
+      const image = new Image();
+      image.loading = "eager";
+      image.fetchPriority = "high";
+      image.decoding = "async";
+      image.src = source;
+    }
+  }, [accountBrandById]);
+
+  const accountKeyById = useMemo(
+    () =>
+      new Map(
+        accounts.map((account) => [account.id, getTransactionAccountFilterKey(account)] as const)
+      ),
+    [accounts]
+  );
+  const accountFilterOptions = useMemo(
+    () => buildTransactionAccountFilterOptions(selectableTransactionAccounts),
+    [selectableTransactionAccounts]
+  );
+  const manualAccountOptions = useMemo(
+    () =>
+      selectableTransactionAccounts.map((account) => ({
+        account,
+        label: selectableTransactionAccountLabels.get(account.id) ?? formatTransactionAccountName(account),
+      })),
+    [selectableTransactionAccountLabels, selectableTransactionAccounts]
+  );
+  const manualSelectedAccount = useMemo(
+    () => accounts.find((account) => account.id === manualForm.accountId) ?? null,
+    [accounts, manualForm.accountId]
+  );
+  const manualSelectedCategoryId = manualTransactionCategoryId(categories, manualForm.type, manualForm.categoryId) || otherCategoryId;
+  const manualSelectedCategory = useMemo(
+    () => categories.find((category) => category.id === manualSelectedCategoryId) ?? null,
+    [categories, manualSelectedCategoryId]
+  );
+  const manualSelectedAccountBrand = useMemo(
+    () =>
+      accountBrandById.get(manualForm.accountId) ??
+      getAccountBrand({
+        institution: manualSelectedAccount?.institution ?? null,
+        name: manualSelectedAccount?.name ?? "Cash",
+        type: manualSelectedAccount?.type ?? "cash",
+      }),
+    [accountBrandById, manualForm.accountId, manualSelectedAccount]
+  );
+  const manualTransferDestinationOptions = useMemo(
+    () =>
+      manualAccountOptions.filter(
+        ({ account }) =>
+          account.id !== manualForm.accountId &&
+          formatCurrencyCode(account.currency || "PHP") ===
+            formatCurrencyCode(manualForm.currency || manualSelectedAccount?.currency || "PHP")
+      ),
+    [manualAccountOptions, manualForm.accountId, manualForm.currency, manualSelectedAccount?.currency]
+  );
+  const manualTransferDestinationPickerOptions = useMemo<TransactionPickerAccount[]>(
+    () =>
+      manualTransferDestinationOptions.map(({ account, label }) => ({
+        id: account.id,
+        label,
+        subtitle: account.institution ?? account.type.replaceAll("_", " "),
+        brand: accountBrandById.get(account.id) ?? getAccountBrand(account),
+      })),
+    [accountBrandById, manualTransferDestinationOptions]
+  );
+  const expandedAccountFilters = useMemo(() => {
+    if (accountFilters.length === 0) {
+      return accountFilters;
+    }
+
+    const selectedKeys = new Set(
+      accountFilters.map((accountId) => accountKeyById.get(accountId)).filter((value): value is string => Boolean(value))
+    );
+
+    if (selectedKeys.size === 0) {
+      return accountFilters;
+    }
+
+    return accounts
+      .filter((account) => selectedKeys.has(getTransactionAccountFilterKey(account)))
+      .map((account) => account.id);
+  }, [accountFilters, accountKeyById, accounts]);
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name] as const)),
+    [categories]
+  );
+
+  const loadWorkspaces = async () => {
+    try {
+      const response = await fetchJsonOnce<{ workspaces?: Workspace[] }>({
+        key: "workspaces:list",
+        route: "transactions.workspaces",
+        input: "/api/workspaces",
+        timeoutMs: 5000,
+      });
+      if (!response.ok) {
+        throw new Error("Unable to load workspaces.");
+      }
+      const items = Array.isArray(response.json?.workspaces) ? response.json.workspaces : [];
+      setWorkspaces(items);
+      setSelectedWorkspaceId((current) => {
+        return chooseWorkspaceId(items, current);
+      });
+    } catch {
+      const fallbackWorkspaceId = readSelectedWorkspaceId();
+      if (fallbackWorkspaceId) {
+        setSelectedWorkspaceId((current) => current || fallbackWorkspaceId);
+      }
+    } finally {
+      setHasLoadedWorkspaceList(true);
+    }
+  };
+
+  const loadWorkspaceMetadata = async (workspaceId: string, options?: { skipImports?: boolean; background?: boolean }) => {
+    if (!workspaceId) {
+      setAccounts([]);
+      setCategories([]);
+      setImports([]);
+      return;
+    }
+
+    const hasResilientFallbackEvidence = () =>
+      hasCachedTransactionsWorkspaceEvidence(workspaceId) ||
+      hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
+
+    try {
+      const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
+        fetchJsonOnce<{ accounts?: Account[] }>({
+          key: `transactions:accounts:${workspaceId}`,
+          route: "transactions.accounts",
+          workspaceId,
+          detail: options?.background ? "background" : "foreground",
+          input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&cleanupEmptyCashAccounts=true`,
+        }),
+        fetchJsonOnce<{ categories?: Category[] }>({
+          key: `transactions:categories:${workspaceId}:defaults-v2`,
+          route: "transactions.categories",
+          workspaceId,
+          detail: options?.background ? "background" : "foreground",
+          input: `/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`,
+        }),
+        options?.skipImports
+          ? Promise.resolve(null)
+          : fetchJsonOnce<{ importFiles?: ImportFile[] }>({
+              key: `transactions:imports:${workspaceId}`,
+              route: "transactions.imports",
+              workspaceId,
+              detail: options?.background ? "background" : "foreground",
+              input: `/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`,
+            }),
+      ]);
+
+      if (accountsResponse.ok) {
+        const fetchedAccounts = Array.isArray(accountsResponse.json?.accounts) ? (accountsResponse.json.accounts as Account[]) : [];
+        const cachedWorkspaceAccounts = getCachedTransactionsWorkspace(workspaceId)?.accounts as Account[] | undefined;
+        setAccounts((current) =>
+          mergeAccountsWithOptimisticImports(
+            fetchedAccounts,
+            current.length > 0 ? current : cachedWorkspaceAccounts ?? []
+          )
+        );
+      }
+
+      if (categoriesResponse.ok) {
+        const payload = categoriesResponse.json;
+        const cachedWorkspaceCategories = getCachedTransactionsWorkspace(workspaceId)?.categories as Category[] | undefined;
+        const nextCategories =
+          Array.isArray(payload?.categories) && payload.categories.length > 0 ? (payload.categories as Category[]) : cachedWorkspaceCategories ?? [];
+        setCategories(nextCategories);
+      } else {
+        const cachedWorkspaceCategories = getCachedTransactionsWorkspace(workspaceId)?.categories as Category[] | undefined;
+        setCategories((current) => (current.length > 0 ? current : cachedWorkspaceCategories ?? current));
+      }
+
+      if (importResponse && importResponse.ok) {
+        setImports(Array.isArray(importResponse.json?.importFiles) ? importResponse.json.importFiles : []);
+      }
+    } catch {
+      if (!options?.background) {
+        if (hasResilientFallbackEvidence()) {
+          setMessage("");
+          window.setTimeout(() => {
+            void loadWorkspaceMetadata(workspaceId, { skipImports: options?.skipImports, background: true });
+          }, WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS);
+        } else {
+          setMessage("Unable to load workspace metadata.");
+        }
+      }
+    }
+  };
+
+  usePullRefresh(() => loadTransactionsPage(selectedWorkspaceId, { background: true }));
+
+  const loadTransactionsPage = async (
+    workspaceId: string,
+    options?: {
+      background?: boolean;
+      append?: boolean;
+      includeAll?: boolean;
+      pageOverride?: number;
+      pageSizeOverride?: number;
+      summaryMode?: "light" | "full";
+      summaryOnly?: boolean;
+      prefetchOnly?: boolean;
+      preserveKnownTotal?: boolean;
+    }
+  ) => {
+    if (dateFilterMode === "custom" && customStart && customEnd && customStart > customEnd) return;
+    const requestToken = options?.prefetchOnly || options?.summaryOnly ? null : requestGateRef.current.begin(transactionQueryKey, Boolean(options?.append));
+    if (!options?.prefetchOnly && !options?.summaryOnly && !requestToken) return;
+    const requestId = options?.prefetchOnly || options?.summaryOnly ? transactionsLoadRequestRef.current : ++transactionsLoadRequestRef.current;
+    if (!options?.background && !options?.prefetchOnly && !options?.summaryOnly) setIsPageLoading(true);
+    if (options?.summaryOnly) setIsSummaryLoading(true);
+    const hasResilientFallbackEvidence = () =>
+      hasCachedTransactionsWorkspaceEvidence(workspaceId) ||
+      hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
+
+    if (!workspaceId) {
+      setTransactions([]);
+      setTransactionsLoadFailed(false);
+      transactionsAutoRetryRef.current = 0;
+      setTransactionsSummary({
+        totalCount: 0,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        currencyCodes: ["PHP"],
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      });
+      setIsWorkspaceDataReady(true);
+      setHasInitialTransactionsLoaded(true);
+      return;
+    }
+
+    if (!options?.background) {
+      const hasImmediateFallbackRows =
+        transactionsRef.current.length > 0 || hydrateWorkspaceFromCache(workspaceId);
+      setIsWorkspaceDataReady(hasImmediateFallbackRows);
+    }
+
+    // Explicit background refreshes follow imports/edits and must bypass the
+    // short navigation cache. Summary-only requests still share it across pages.
+    if (options?.background && !options?.summaryOnly && !options?.prefetchOnly) {
+      clearJsonRequestCache(`transactions:list:${workspaceId}:`);
+    }
+    const requestPage = options?.pageOverride ?? transactionsPage;
+    // The Rows selector must remain stable across numbered pages. Mobile load-more
+    // requests pass their smaller batch explicitly through pageSizeOverride.
+    const requestPageSize = options?.includeAll ? "all" : options?.pageSizeOverride ?? transactionsPageSize;
+    const hasServerSideFilters = Boolean(
+      reportMerchants.length || query.trim() ||
+        currencyFilter.trim() ||
+        categoryFilters.length > 0 || tagFilters.length > 0 ||
+        expandedAccountFilters.length > 0 ||
+        typeFilters.length > 0 ||
+        dateFilterMode !== "ltd" ||
+        customStart.trim() ||
+        customEnd.trim() ||
+        amountMin.trim() ||
+        (amountMax.trim() || reviewFilter || sourceFilter || confidenceFilter)
+    );
+    const searchParams = buildTransactionQuerySearchParams(
+      workspaceId,
+      {
+        query,
+        currencyFilter,
+        categoryIds: categoryFilters,
+        tagIds: tagFilters,
+        merchantFilters: reportMerchants, merchantMatch: "exact",
+        accountIds: expandedAccountFilters,
+        typeFilters,
+        dateFilterMode,
+        dateFilterAnchor,
+        customStart,
+        customEnd,
+        sortField,
+        sortDirection,
+        amountMin,
+        amountMax, reviewFilter, sourceFilter, confidenceFilter,
+      },
+      {
+        page: requestPage,
+        pageSize: requestPageSize,
+      }
+    );
+    searchParams.set("summaryMode", options?.includeAll ? "full" : options?.summaryOnly ? options.summaryMode ?? (summaryOpen ? "full" : "light") : "rows");
+    if (options?.summaryOnly) { searchParams.set("page", "1"); searchParams.set("pageSize", "1"); }
+    const largePageSearchParams = buildTransactionQuerySearchParams(
+      workspaceId,
+      {
+        query,
+        currencyFilter,
+        categoryIds: categoryFilters,
+        tagIds: tagFilters,
+        merchantFilters: reportMerchants, merchantMatch: "exact",
+        accountIds: expandedAccountFilters,
+        typeFilters,
+        dateFilterMode,
+        dateFilterAnchor,
+        customStart,
+        customEnd,
+        sortField,
+        sortDirection,
+        amountMin,
+        amountMax, reviewFilter, sourceFilter, confidenceFilter,
+      },
+      { page: 1, pageSize: 200 }
+    );
+    largePageSearchParams.set("summaryMode", "light");
+    const largePageKey = `transactions:list:${workspaceId}:${largePageSearchParams.toString()}`;
+    const cachedPrefetch =
+      !summaryOpen &&
+      !options?.background &&
+      !options?.append &&
+      !options?.includeAll &&
+      requestPage === 1 &&
+      Number(requestPageSize) <= 200 &&
+      !hasServerSideFilters
+        ? transactionPrefetchRef.current.get(largePageKey)
+        : undefined;
+    const usableCachedPrefetch = cachedPrefetch && cachedPrefetch.expiresAt > Date.now() ? cachedPrefetch : undefined;
+    if (cachedPrefetch && !usableCachedPrefetch) {
+      transactionPrefetchRef.current.delete(largePageKey);
+    }
+
+    let previewApplied = false;
+    try {
+      let fullPageApplied = false;
+      if (!options?.background && !options?.append && !options?.includeAll && !options?.prefetchOnly && !options?.summaryOnly
+        && !window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches && !categoryFilters.length && !reviewFilter && sortField !== "account" && Number(requestPageSize) > 50) {
+        const previewParams = new URLSearchParams(searchParams);
+        previewParams.set("preview", "first_rows");
+        void fetchJsonOnce<TransactionListPayload>({
+          key: `transactions:list:${workspaceId}:${previewParams.toString()}`,
+          route: "transactions.list", workspaceId,
+          input: `/api/transactions?${previewParams}`, timeoutMs: 10_000, cacheTtlMs: 15_000,
+        }).then(preview => {
+          if (fullPageApplied || requestId !== transactionsLoadRequestRef.current ||
+              (requestToken && !requestGateRef.current.isCurrent(requestToken))) return;
+          if (!preview.ok || !preview.json?.transactions?.length) return;
+          const hiddenAccounts = new Set([...getDeletedWorkspaceAccountIds(workspaceId), ...getDeletingWorkspaceAccountIds(workspaceId)]);
+          const previewRows = preview.json.transactions.filter(row => !hiddenAccounts.has(row.accountId) && !deletedTransactionIdsRef.current.has(row.id));
+          if (!previewRows.length) return;
+          previewApplied = true;
+          setPreviewQuery(transactionQueryKey);
+          setTransactions(previewRows);
+          setTransactionsSummary(current => ({ ...current, totalCount: Math.max(
+            current.totalCount, (requestPage - 1) * Number(requestPageSize) + previewRows.length,
+          ) }));
+          setIsWorkspaceDataReady(true);
+          setHasInitialTransactionsLoaded(true);
+        }).catch(() => { /* The full-page request remains authoritative. */ });
+      }
+      const response = usableCachedPrefetch
+        ? { ok: true, json: usableCachedPrefetch.payload }
+        : await fetchJsonOnce<TransactionListPayload>({
+            key: `transactions:list:${workspaceId}:${searchParams.toString()}`,
+            route: "transactions.list",
+            workspaceId,
+            detail: options?.background ? "background" : options?.append ? "append" : "foreground",
+            input: `/api/transactions?${searchParams?.toString() ?? ""}`,
+            timeoutMs: options?.summaryOnly ? 20_000 : 10_000,
+            cacheTtlMs: 15_000,
+          });
+      fullPageApplied = true;
+      if (!response.ok) {
+        throw new Error("Unable to load transactions.");
+      }
+
+      if (options?.prefetchOnly) {
+        if (response.json) {
+          transactionPrefetchRef.current.set(largePageKey, {
+            payload: response.json,
+            expiresAt: Date.now() + 30_000,
+          });
+        }
+        return;
+      }
+
+      if (requestId !== transactionsLoadRequestRef.current || (requestToken && !requestGateRef.current.isCurrent(requestToken))) {
+        return;
+      }
+
+      const payload = response.json;
+      if (options?.summaryOnly) {
+        if (payload?.summary) {
+          setTransactionsSummary(current => ({ ...current, ...payload.summary!, totalCount: current.totalCount }));
+          setSummaryScope(financialScopeKey);
+        }
+        return;
+      }
+      setPreviewQuery(null);
+      setTransactionsLoadFailed(false);
+      setMessage(current => current === "Clover is checking the latest transactions again." || current === "Unable to load transactions." ? "" : current);
+      if (payload?.summary) setSummaryScope(financialScopeKey);
+      const deletedAccountIds = new Set([
+        ...getDeletedWorkspaceAccountIds(workspaceId),
+        ...getDeletingWorkspaceAccountIds(workspaceId),
+      ]);
+      const fetchedTransactions = Array.isArray(payload?.transactions)
+        ? payload.transactions.filter(
+            (transaction) =>
+              !deletedAccountIds.has(transaction.accountId) &&
+              !deletedTransactionIdsRef.current.has(transaction.id)
+          )
+        : [];
+      if (requestToken) requestGateRef.current.finish(requestToken, true);
+      const cachedWorkspaceSnapshot = getCachedTransactionsWorkspace(workspaceId);
+      const cachedWorkspaceTransactions = cachedWorkspaceSnapshot?.transactions as Transaction[] | undefined;
+      const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
+        (transaction) =>
+          !deletedAccountIds.has(transaction.accountId) &&
+          !deletedTransactionIdsRef.current.has(transaction.id)
+      );
+      const importedTransactionsToPreserve =
+        transactionsRef.current.length > 0
+          ? getImportedTransactionsToPreserve(transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId)))
+          : getImportedTransactionsToPreserve(visibleCachedWorkspaceTransactions);
+      const hasOptimisticImportedTransactions = importedTransactionsToPreserve.some((transaction) =>
+        transaction.id.startsWith("optimistic-")
+      );
+      const hasFreshTransactions = fetchedTransactions.length > 0;
+      const hasServerSideFilters = hasActiveTransactionFilters;
+      const stableBaseTransactions =
+        transactionsRef.current.length > 0
+          ? transactionsRef.current.filter(
+              (transaction) =>
+                !deletedAccountIds.has(transaction.accountId) &&
+                !deletedTransactionIdsRef.current.has(transaction.id)
+            )
+          : visibleCachedWorkspaceTransactions;
+      const summaryPayload = payload?.summary && typeof payload.summary === "object" ? payload.summary : null;
+      const exactServerTotalCount =
+        typeof payload?.totalCount === "number"
+          ? payload.totalCount
+          : typeof summaryPayload?.totalCount === "number"
+            ? summaryPayload.totalCount
+            : fetchedTransactions.length;
+      const hasRecentImportEvidence = hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
+      const cachedTotalCount = Number(cachedWorkspaceSnapshot?.totalCount ?? cachedWorkspaceSnapshot?.summary?.totalCount ?? 0);
+      // A lightweight first-page response can temporarily report only the page
+      // length while the cached/previous summary already knows about older rows.
+      // Keep the largest trustworthy count so mobile pagination is not marked
+      // complete before those rows have been requested.
+      const knownServerTotalCount = hasServerSideFilters ? exactServerTotalCount : reconcileTransactionTotal(
+        exactServerTotalCount, fetchedTransactions.length,
+        getKnownMobileTransactionTotal(transactionsSummary.totalCount, cachedTotalCount),
+        payload?.totalCountIsExact === true
+      );
+      const hasRecentCachedTotalCount =
+        payload?.totalCountIsExact !== true &&
+        cachedTotalCount > exactServerTotalCount &&
+        Number.isFinite(Number(cachedWorkspaceSnapshot?.updatedAt)) &&
+        Date.now() - Number(cachedWorkspaceSnapshot?.updatedAt) <= RECENT_TRANSACTION_CACHE_MAX_AGE_MS;
+      const shouldPreserveKnownTransactionsWhileImportSettles =
+        !hasServerSideFilters &&
+        stableBaseTransactions.length > 0 &&
+        (
+          (hasRecentImportEvidence &&
+            (
+              (fetchedTransactions.length === 0 && exactServerTotalCount === 0) ||
+              (fetchedTransactions.length > 0 &&
+                mergeImportedWorkspaceTransactions(stableBaseTransactions, fetchedTransactions).length < stableBaseTransactions.length &&
+                exactServerTotalCount <= stableBaseTransactions.length)
+            )) ||
+          (options?.background && hasRecentCachedTotalCount) ||
+          (Boolean(options?.background) &&
+            fetchedTransactions.length < stableBaseTransactions.length &&
+            exactServerTotalCount <= stableBaseTransactions.length)
+        );
+      const shouldPatchExistingTransactions = Boolean(options?.append || (!hasServerSideFilters && !hasFreshTransactions));
+      const baseTransactions = shouldPatchExistingTransactions ? stableBaseTransactions : [];
+      const mergedTransactions = options?.append
+        ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
+        : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
+      const fetchedImportFileIds = new Set(
+        fetchedTransactions
+          .map((transaction) => getTransactionImportFileId(transaction))
+          .filter((importFileId): importFileId is string => Boolean(importFileId))
+      );
+      const fetchedTransactionIds = new Set(fetchedTransactions.map(transaction => transaction.id));
+      const importedTransactionsToPreserveAfterServerResponse = importedTransactionsToPreserve.filter(transaction => {
+        const importFileId = getTransactionImportFileId(transaction);
+        return !fetchedTransactionIds.has(transaction.id) && (!importFileId || !fetchedImportFileIds.has(importFileId));
+      });
+      const shouldPreserveImportedTransactions =
+        !hasServerSideFilters &&
+        (requestPage === 1 || Boolean(options?.append)) &&
+        importedTransactionsToPreserveAfterServerResponse.length > 0 &&
+        (exactServerTotalCount > 0 || hasRecentImportEvidence || hasOptimisticImportedTransactions) &&
+        (
+          Boolean(options?.background) ||
+          importedTransactionsToPreserveAfterServerResponse.length > fetchedTransactions.length ||
+          exactServerTotalCount > fetchedTransactions.length ||
+          fetchedTransactions.length < stableBaseTransactions.length
+        );
+      const mergedTransactionsWithImports =
+        shouldPreserveImportedTransactions && importedTransactionsToPreserveAfterServerResponse.length > 0
+          ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserveAfterServerResponse as unknown as ImportedWorkspaceTransaction[])
+          : mergedTransactions;
+      const responseCurrencyCodes = Array.isArray(payload?.currencyCodes)
+        ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
+        : [];
+      const workspaceCurrencyCodesFromData = getWorkspaceCurrencyCodes(
+        mergedTransactionsWithImports.length > 0 ? mergedTransactionsWithImports : fetchedTransactions
+      );
+      const nextCurrencyCodes = Array.isArray(payload?.currencyCodes) ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
+      authoritativeCurrencyWorkspaceRef.current = workspaceId;
+      const serverDisplayedTotalCount =
+        hasServerSideFilters
+          ? exactServerTotalCount
+          : fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
+            ? mergedTransactionsWithImports.length
+            : typeof payload?.totalCount === "number"
+              ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
+              : typeof summaryPayload?.totalCount === "number"
+                ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
+                : mergedTransactionsWithImports.length;
+      const displayedTotalCount =
+        !hasServerSideFilters && options?.preserveKnownTotal
+          ? reconcileTransactionTotal(serverDisplayedTotalCount, mergedTransactionsWithImports.length, transactionsSummary.totalCount, payload?.totalCountIsExact === true)
+          : serverDisplayedTotalCount;
+      if (shouldPreserveKnownTransactionsWhileImportSettles) {
+        const fallbackCurrencyCodes =
+          responseCurrencyCodes.length > 0
+            ? responseCurrencyCodes
+            : getWorkspaceCurrencyCodes(stableBaseTransactions);
+        const fallbackSummary =
+          buildVisibleTransactionSummary(
+            stableBaseTransactions,
+            {
+              totalCount: Math.max(transactionsSummary.totalCount, stableBaseTransactions.length),
+              currencyCodes: fallbackCurrencyCodes,
+            },
+            accountNumberById
+          ) ?? null;
+
+        setWorkspaceCurrencyCodes(fallbackCurrencyCodes);
+        setTransactions(mergeImportedWorkspaceTransactions(stableBaseTransactions, fetchedTransactions));
+        setTransactionsSummary((currentSummary) => ({
+          ...currentSummary,
+          totalCount: reconcileTransactionTotal(exactServerTotalCount, stableBaseTransactions.length, currentSummary.totalCount, payload?.totalCountIsExact === true),
+          income: fallbackSummary?.income ?? currentSummary.income,
+          spending: fallbackSummary?.spending ?? currentSummary.spending,
+          transfers: fallbackSummary?.transfers ?? currentSummary.transfers,
+          review: fallbackSummary?.review ?? currentSummary.review,
+          currencyCodes: fallbackCurrencyCodes,
+          topCategory: fallbackSummary?.topCategory ?? currentSummary.topCategory,
+          topAccount: fallbackSummary?.topAccount ?? currentSummary.topAccount,
+          firstTransactionDate: fallbackSummary?.firstTransactionDate ?? currentSummary.firstTransactionDate,
+          lastTransactionDate: fallbackSummary?.lastTransactionDate ?? currentSummary.lastTransactionDate,
+        }));
+        setTransactionsLoadFailed(false);
+        if (!options?.background) {
+          setIsWorkspaceDataReady(true);
+          setHasInitialTransactionsLoaded(true);
+          window.setTimeout(() => {
+            if (requestId !== transactionsLoadRequestRef.current || requestToken && !requestGateRef.current.isCurrent(requestToken)) return;
+            void loadTransactionsPage(workspaceId, {
+              background: true,
+              includeAll: options?.includeAll,
+              pageOverride: options?.pageOverride ?? transactionsPage,
+              pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
+              summaryMode: options?.summaryMode ?? "light",
+              preserveKnownTotal: options?.preserveKnownTotal,
+            });
+          }, 1800);
+        }
+        return;
+      }
+      setWorkspaceCurrencyCodes(nextCurrencyCodes);
+      setTransactions(mergedTransactionsWithImports);
+      if (options?.append) {
+        setMobileVisibleCount((current) => current + fetchedTransactions.length);
+        setMobilePaginationExhausted(
+          isMobileTransactionPaginationExhausted({
+            previousTransactionCount: stableBaseTransactions.length,
+            nextTransactionCount: mergedTransactionsWithImports.length,
+            fetchedTransactionCount: fetchedTransactions.length,
+            totalTransactionCount: knownServerTotalCount,
+          })
+        );
+      } else {
+        setMobileVisibleCount(MOBILE_TRANSACTIONS_BATCH_SIZE);
+        setMobilePaginationExhausted(
+          knownServerTotalCount > 0 && mergedTransactionsWithImports.length >= knownServerTotalCount
+        );
+      }
+      if (options?.append) {
+        setIsMobileLoadingMore(false);
+      }
+      const visibleSummaryFallback =
+        mergedTransactionsWithImports.length > 0
+          ? buildVisibleTransactionSummary(mergedTransactionsWithImports, {
+              totalCount: displayedTotalCount,
+              currencyCodes: nextCurrencyCodes,
+            }, accountNumberById)
+          : null;
+      const nextTransactionsSummary: TransactionPageMeta = summaryPayload
+        ? {
+            totalCount: displayedTotalCount,
+            income: typeof summaryPayload.income === "number" ? summaryPayload.income : visibleSummaryFallback?.income ?? 0,
+            spending: typeof summaryPayload.spending === "number" ? summaryPayload.spending : visibleSummaryFallback?.spending ?? 0,
+            transfers: typeof summaryPayload.transfers === "number" ? summaryPayload.transfers : visibleSummaryFallback?.transfers ?? 0,
+            review: typeof summaryPayload.review === "number" ? summaryPayload.review : 0,
+            currencyCodes: nextCurrencyCodes,
+            currencyTotals: summaryPayload.currencyTotals ?? visibleSummaryFallback?.currencyTotals,
+            topCategory: Array.isArray(summaryPayload.topCategory) ? summaryPayload.topCategory : null,
+            topAccount: Array.isArray(summaryPayload.topAccount) ? summaryPayload.topAccount : null,
+            firstTransactionDate:
+              typeof summaryPayload.firstTransactionDate === "string" ? summaryPayload.firstTransactionDate : null,
+            lastTransactionDate:
+              typeof summaryPayload.lastTransactionDate === "string" ? summaryPayload.lastTransactionDate : null,
+            firstReviewTransaction:
+              summaryPayload.firstReviewTransaction && typeof summaryPayload.firstReviewTransaction === "object"
+                ? (summaryPayload.firstReviewTransaction as Transaction)
+                : null,
+            firstReviewTransactionIndex:
+              typeof summaryPayload.firstReviewTransactionIndex === "number"
+                ? summaryPayload.firstReviewTransactionIndex
+                : null,
+          }
+        : {
+            totalCount: displayedTotalCount,
+            income: visibleSummaryFallback?.income ?? 0,
+            spending: visibleSummaryFallback?.spending ?? 0,
+            transfers: visibleSummaryFallback?.transfers ?? 0,
+            review: 0,
+            currencyCodes: nextCurrencyCodes,
+            currencyTotals: visibleSummaryFallback?.currencyTotals,
+            topCategory: null,
+            topAccount: null,
+            firstTransactionDate: null,
+            lastTransactionDate: null,
+            firstReviewTransaction: null,
+            firstReviewTransactionIndex: null,
+          };
+      setTransactionsSummary((currentSummary) => {
+        if (!summaryPayload) return { ...currentSummary, totalCount: displayedTotalCount, currencyCodes: nextCurrencyCodes };
+        const nextFinancialsAreEmpty =
+          nextTransactionsSummary.income === 0 &&
+          nextTransactionsSummary.spending === 0 &&
+          nextTransactionsSummary.transfers === 0;
+        const currentFinancialsHaveValue =
+          currentSummary.income !== 0 || currentSummary.spending !== 0 || currentSummary.transfers !== 0;
+        if (!hasServerSideFilters && nextFinancialsAreEmpty && currentFinancialsHaveValue && hasRecentImportEvidence) {
+          return {
+            ...nextTransactionsSummary,
+            totalCount: Math.max(currentSummary.totalCount, nextTransactionsSummary.totalCount),
+            income: currentSummary.income,
+            spending: currentSummary.spending,
+            transfers: currentSummary.transfers,
+          };
+        }
+
+        const nextIsEmpty =
+          nextTransactionsSummary.totalCount === 0 &&
+          nextTransactionsSummary.income === 0 &&
+          nextTransactionsSummary.spending === 0 &&
+          nextTransactionsSummary.transfers === 0;
+        const currentHasValue =
+          currentSummary.totalCount > 0 ||
+          currentSummary.income !== 0 ||
+          currentSummary.spending !== 0 ||
+          currentSummary.transfers !== 0;
+        if (!hasServerSideFilters && nextIsEmpty && currentHasValue && mergedTransactionsWithImports.length > 0) {
+          return {
+            ...currentSummary,
+            totalCount: Math.max(currentSummary.totalCount, mergedTransactionsWithImports.length),
+            currencyCodes: nextCurrencyCodes,
+          };
+        }
+
+        return nextTransactionsSummary;
+      });
+
+      if (!options?.background) {
+        setIsWorkspaceDataReady(true);
+        setHasInitialTransactionsLoaded(true);
+      }
+
+      if (!options?.append) {
+        setIsMobileLoadingMore(false);
+      }
+
+      if (!summaryPayload && !options?.append) {
+        // Rows paint first. The exact filtered summary runs separately and is
+        // shared across numbered pages; an old scope can never overwrite a new one.
+        void loadTransactionsPage(workspaceId, { background: true, summaryOnly: true });
+      }
+      // Keep the visible-page budget bounded. Totals use their own grouped
+      // request; do not prefetch an unrequested 200-row history in the background.
+    } catch {
+      if (requestId !== transactionsLoadRequestRef.current || (requestToken && !requestGateRef.current.isCurrent(requestToken))) {
+        return;
+      }
+
+      if (requestToken) requestGateRef.current.finish(requestToken, false);
+
+      if (options?.append) {
+        setIsMobileLoadingMore(false);
+      }
+
+      if (!options?.background) {
+        const hadFallbackRows = previewApplied || transactionsRef.current.length > 0 || hydrateWorkspaceFromCache(workspaceId);
+        const shouldSuppressFailure = hadFallbackRows || hasResilientFallbackEvidence();
+
+        if (!shouldSuppressFailure && transactionsAutoRetryRef.current < 1) {
+          const retryAttempt = transactionsAutoRetryRef.current;
+          transactionsAutoRetryRef.current += 1;
+          setTransactionsLoadFailed(false);
+          setIsWorkspaceDataReady(false);
+          setHasInitialTransactionsLoaded(false);
+          setMessage("Clover is checking the latest transactions again.");
+          window.setTimeout(() => {
+            if (requestId !== transactionsLoadRequestRef.current || requestToken && !requestGateRef.current.isCurrent(requestToken)) return;
+            void loadTransactionsPage(workspaceId, {
+              pageOverride: options?.pageOverride ?? transactionsPage,
+              pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
+              summaryMode: options?.summaryMode ?? "light",
+            });
+          }, 1200 * 2 ** retryAttempt);
+          return;
+        }
+
+        setMessage(shouldSuppressFailure ? "" : "Unable to load transactions.");
+        setTransactionsLoadFailed(!shouldSuppressFailure);
+        setIsWorkspaceDataReady(true);
+        setHasInitialTransactionsLoaded(true);
+        window.setTimeout(() => {
+          void loadTransactionsPage(workspaceId, {
+            background: true,
+            pageOverride: options?.pageOverride ?? transactionsPage,
+            pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
+            summaryMode: "light",
+          });
+        }, shouldSuppressFailure ? WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS : 3500);
+      }
+    } finally {
+      if (options?.summaryOnly && requestId === transactionsLoadRequestRef.current) setIsSummaryLoading(false);
+      if (!options?.summaryOnly && !options?.prefetchOnly && requestId === transactionsLoadRequestRef.current) setIsPageLoading(false);
+    }
+  };
+
+  const refreshTransactionsAfterImport = async (workspaceId: string) => {
+    for (const delay of importedTransactionsRefreshDelays) {
+      if (delay > 0) {
+        await wait(delay);
+      }
+
+      try {
+        await Promise.all([
+          loadWorkspaceMetadata(workspaceId, { background: true }),
+          loadTransactionsPage(workspaceId, {
+            background: true,
+            pageOverride: 1,
+            pageSizeOverride: transactionsPageSize,
+            summaryMode: "light",
+          }),
+        ]);
+      } catch {
+        // Import settlement is best-effort; the regular page retry path remains available.
+      }
+    }
+  };
+
+  const applyImportedSummary = useCallback(
+    async (summary: UploadInsightsSummary) => {
+      const optimisticAccount = buildOptimisticImportedAccount(summary);
+      const previewTransactions = summary.previewTransactions ?? [];
+      const isServerBackedImportSummary = previewTransactions.some(
+        (transaction) => Boolean(transaction.importFileId) && !transaction.id.startsWith("optimistic-")
+      );
+      const importedAccountKey = normalizeImportedAccountKey(
+        summary.accountName,
+        summary.institution,
+        summary.accountNumber ?? null,
+        summary.accountType ?? null,
+        previewTransactions[0]?.currency ?? null
+      );
+      const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+      let nextAccountsSnapshot: Account[] | null = null;
+      let nextTransactionsSnapshot: Transaction[] | null = null;
+      const importedCurrencyCodes = Array.from(
+        new Set(
+          [summary.currency, ...previewTransactions.map((transaction) => transaction.currency)]
+            .map((currency) => formatCurrencyCode(currency ?? ""))
+            .filter(Boolean)
+        )
+      );
+      flushSync(() => {
+        setIsWorkspaceDataReady(true);
+
+        // Receipt completion must always return Transactions to a stable,
+        // inclusive first-page view. Otherwise a stale drilldown, mobile page,
+        // or currency selection can make the new row appear to replace the
+        // table until the user leaves and comes back.
+        setQuery("");
+        setCurrencyFilter("");
+        setCategoryFilters([]);
+        setAccountFilters([]);
+        setTypeFilters([]);
+        setDateFilterMode("ltd");
+        setDateFilterAnchor(todayIso);
+        setCustomStart("");
+        setCustomEnd("");
+        setAmountMin("");
+        setAmountMax("");
+        setReviewFilter(""); setSourceFilter(""); setConfidenceFilter("");
+        setSortField("date");
+        setSortDirection("desc");
+        setActiveHeaderSort(null);
+        setTransactionsPage(1);
+        setMobileVisibleCount(MOBILE_TRANSACTIONS_BATCH_SIZE);
+        setMobilePaginationExhausted(false);
+        mobileLoadMoreInFlightRef.current = false;
+        setIsMobileLoadingMore(false);
+
+        if (optimisticAccount) {
+          setAccounts((current) =>
+            (nextAccountsSnapshot = current.filter((account) => {
+              if (summary.optimisticAccountId && account.id === summary.optimisticAccountId) {
+                return false;
+              }
+
+              if (account.source === "upload") {
+                return (
+                  normalizeImportedAccountKey(
+                    account.name,
+                    account.institution,
+                    account.accountNumber,
+                    account.type,
+                    account.currency
+                  ) !== importedAccountKey
+                );
+              }
+
+              return true;
+            }))
+          );
+        } else {
+          setAccounts((current) => {
+            nextAccountsSnapshot = current;
+            return current;
+          });
+        }
+
+        if (importedAccountId) {
+          setTransactions((current) => {
+            if (previewTransactions.length === 0) {
+              nextTransactionsSnapshot = current;
+              transactionsRef.current = current;
+              return current;
+            }
+            const next = mergeImportedPreviewTransactions(current, previewTransactions);
+            nextTransactionsSnapshot = next;
+            // The settlement refresh starts in this same callback. Keep its
+            // synchronous source of truth aligned before React runs effects.
+            transactionsRef.current = next;
+            return next;
+          });
+        } else if (previewTransactions.length > 0) {
+          setTransactions((current) => {
+            const next = mergeImportedPreviewTransactions(current, previewTransactions);
+            nextTransactionsSnapshot = next;
+            transactionsRef.current = next;
+            return next;
+          });
+        }
+
+        if (optimisticAccount) {
+          setAccounts((current) => {
+            const next = mergeOptimisticImportedAccount(current, optimisticAccount);
+            nextAccountsSnapshot = next;
+            return next;
+          });
+        }
+      });
+
+      // State updater callbacks may run when flushSync commits, after its callback.
+      // Derive the summary only once the merged transaction snapshot is available.
+      if (nextTransactionsSnapshot && previewTransactions.length > 0) {
+        const importedPreviewCurrencyCodes = previewTransactions
+          .map((transaction) => formatCurrencyCode(transaction.currency))
+          .filter(Boolean);
+        setWorkspaceCurrencyCodes((current) => Array.from(new Set([...current, ...importedPreviewCurrencyCodes])).sort());
+        setTransactionsSummary((current) =>
+          buildVisibleTransactionSummary(
+            nextTransactionsSnapshot ?? [],
+            {
+              ...current,
+              // The visible table is intentionally paged. Do not replace the
+              // known workspace total with the first page plus the optimistic
+              // import rows while the authoritative refresh is still in flight.
+              totalCount: Math.max(
+                current.totalCount,
+                getCachedTransactionsWorkspace(selectedWorkspaceId ?? "")?.totalCount ?? 0,
+                getCachedTransactionsWorkspace(selectedWorkspaceId ?? "")?.summary?.totalCount ?? 0,
+                nextTransactionsSnapshot?.length ?? 0
+              ),
+            },
+            accountNumberById
+          )
+        );
+      }
+
+      persistSelectedCurrency(selectedWorkspaceId, "");
+
+      const settledAccountId =
+        (nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null) ??
+        (summary.accountId && !summary.accountId.startsWith("optimistic-") ? summary.accountId : null);
+      const settledSummary =
+        settledAccountId && settledAccountId !== summary.accountId
+          ? {
+              ...summary,
+              accountId: settledAccountId,
+              optimistic: false,
+              optimisticAccountId: null,
+            }
+          : summary;
+      setPendingImportSummary(settledSummary);
+      setPostImportRefreshVersion((current) => current + 1);
+
+      if (!selectedWorkspaceId) {
+        return;
+      }
+
+      if (!isServerBackedImportSummary && !importRefreshInFlightRef.current) {
+        importRefreshInFlightRef.current = true;
+        try {
+          await refreshTransactionsAfterImport(selectedWorkspaceId);
+        } finally {
+          importRefreshInFlightRef.current = false;
+        }
+      }
+
+      setMessage(summary.completionMessage ?? "Import complete. Accounts and Transactions are updated.");
+    },
+    [accountNumberById, currencyFilter, refreshTransactionsAfterImport, selectedWorkspaceId]
+  );
+
+  useEffect(() => {
+    return subscribeImportedSummary(({ workspaceId, summary }) => {
+      if (!selectedWorkspaceId || workspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      const summaryKey = buildImportedSummaryDedupKey(summary);
+      if (handledImportedSummaryKeysRef.current.has(summaryKey)) {
+        return;
+      }
+
+      handledImportedSummaryKeysRef.current.add(summaryKey);
+      if (handledImportedSummaryKeysRef.current.size > 40) {
+        const [oldestKey] = handledImportedSummaryKeysRef.current;
+        if (oldestKey) {
+          handledImportedSummaryKeysRef.current.delete(oldestKey);
+        }
+      }
+
+      void applyImportedSummary(summary);
+    });
+  }, [applyImportedSummary, selectedWorkspaceId]);
+
+  const hydrateWorkspaceFromCache = (workspaceId: string) => {
+    if (hasActiveTransactionFilters) return false;
+    if (!workspaceId) {
+      return false;
+    }
+
+    const cachedSnapshot = getCachedTransactionsWorkspace(workspaceId);
+    if (!cachedSnapshot) {
+      return false;
+    }
+
+    const deletedAccountIds = new Set([
+      ...getDeletedWorkspaceAccountIds(workspaceId),
+      ...getDeletingWorkspaceAccountIds(workspaceId),
+    ]);
+    const filteredAccounts = (cachedSnapshot.accounts as Account[]).filter((account) => !deletedAccountIds.has(account.id));
+    const filteredTransactions = (cachedSnapshot.transactions as Transaction[]).filter(
+      (transaction) => !deletedAccountIds.has(transaction.accountId)
+    );
+    const cachedAccountIds = new Set(filteredAccounts.map((account) => account.id));
+    const recentImportFileIds = new Set(
+      importActivitySnapshot?.workspaceId === workspaceId &&
+      Date.now() - importActivitySnapshot.updatedAt <= RECENT_TRANSACTION_CACHE_MAX_AGE_MS
+        ? (importActivitySnapshot.summary?.previewTransactions ?? []).map((transaction) => transaction.importFileId)
+        : []
+    );
+    const receiptTransactionsToPreserve = getImportedTransactionsToPreserve(transactionsRef.current).filter(
+      (transaction) =>
+        cachedAccountIds.has(transaction.accountId) &&
+        (transaction.id.startsWith("optimistic-") ||
+          Boolean(transaction.importFileId && recentImportFileIds.has(transaction.importFileId)))
+    );
+    const dedupedCachedTransactions = mergeImportedWorkspaceTransactions(
+      receiptTransactionsToPreserve,
+      filteredTransactions
+    );
+    transactionsRef.current = dedupedCachedTransactions;
+    setAccounts(filteredAccounts);
+    setCategories(
+      cachedSnapshot.categories.length > 0
+        ? cachedSnapshot.categories
+        : (deriveCachedCategoriesFromTransactions(dedupedCachedTransactions) as Category[])
+    );
+    setTransactions(dedupedCachedTransactions);
+    setImports(cachedSnapshot.imports);
+    const cachedCurrencyCodes =
+      cachedSnapshot.summary?.currencyCodes ?? cachedSnapshot.currencyCodes ?? getWorkspaceCurrencyCodes(dedupedCachedTransactions);
+    setTransactionsSummary(
+      cachedSnapshot.summary
+        ? {
+            ...cachedSnapshot.summary,
+            currencyCodes: cachedSnapshot.summary.currencyCodes ?? cachedCurrencyCodes,
+          }
+        : {
+            totalCount: cachedSnapshot.totalCount ?? dedupedCachedTransactions.length,
+            income: 0,
+            spending: 0,
+            transfers: 0,
+            review: 0,
+            currencyCodes: cachedCurrencyCodes,
+            topCategory: null,
+            topAccount: null,
+            firstTransactionDate: null,
+            lastTransactionDate: null,
+            firstReviewTransaction: null,
+            firstReviewTransactionIndex: null,
+          }
+    );
+    setWorkspaceCurrencyCodes(cachedCurrencyCodes);
+    markTransactionsHydrated(workspaceId, cachedSnapshot.updatedAt);
+    // Keep the consumed version in the same React update as its rows. A ref
+    // can advance before a lower-priority row update has rendered.
+    transactionCacheVersion.consume(workspaceId, cachedSnapshot.updatedAt);
+    setIsWorkspaceDataReady(true);
+    setHasInitialTransactionsLoaded(true);
+    return true;
+  };
+
+  useEffect(() => {
+    void loadWorkspaces();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPlan = async () => {
+      const response = await fetchJsonOnce<{ user?: {
+        planTier: string;
+        accountLimit: number | null;
+        monthlyUploadLimit: number | null;
+        transactionLimit: number | null;
+        usage: { accountCount: number; monthlyUploadCount: number; transactionCount: number };
+      } }>({
+        key: "me:plan",
+        route: "/api/me",
+        input: "/api/me?view=plan",
+      }).catch(() => null);
+      if (!response?.ok || cancelled) return;
+
+      const payload = response.json;
+      const nextPlanTier = payload?.user?.planTier === "premium" ? "premium" : payload?.user?.planTier === "pro" ? "pro" : "free";
+      const nextLimits = payload?.user
+        ? {
+            accountLimit:
+              payload.user.accountLimit === null || payload.user.accountLimit === undefined
+                ? null
+                : Number(payload.user.accountLimit),
+            monthlyUploadLimit:
+              payload.user.monthlyUploadLimit === null || payload.user.monthlyUploadLimit === undefined
+                ? null
+                : Number(payload.user.monthlyUploadLimit),
+            transactionLimit:
+              payload.user.transactionLimit === null || payload.user.transactionLimit === undefined
+                ? null
+                : Number(payload.user.transactionLimit),
+          }
+        : null;
+      const nextUsage = payload?.user?.usage
+        ? {
+            accountCount: Number(payload.user.usage.accountCount ?? 0),
+            monthlyUploadCount: Number(payload.user.usage.monthlyUploadCount ?? 0),
+            transactionCount: Number(payload.user.usage.transactionCount ?? 0),
+          }
+        : null;
+
+      setPlanTier(nextPlanTier);
+      setPlanLimits(nextLimits);
+      setPlanUsage(nextUsage);
+    };
+
+    void loadPlan();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    persistSelectedWorkspaceId(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
+  }, [defaultCurrency, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (
+      !currencyFilter ||
+      authoritativeCurrencyWorkspaceRef.current !== selectedWorkspaceId ||
+      workspaceCurrencyCodes.includes(formatCurrencyCode(currencyFilter))
+    ) {
+      return;
+    }
+
+    setCurrencyFilter("");
+    persistSelectedCurrency(selectedWorkspaceId, "");
+  }, [currencyFilter, selectedWorkspaceId, workspaceCurrencyCodes]);
+
+  useLayoutEffect(() => {
+    authoritativeCurrencyWorkspaceRef.current = "";
+    skipContextWriteRef.current = true;
+    const saved = readTransactionListContext(selectedWorkspaceId);
+    setContextRestoreVersion((version) => version + 1);
+    setSelectedTransactionIds([]);
+    setSelectedTransaction(null);
+    setDetailDraft(null);
+    setUndoStack([]);
+    setRedoStack([]);
+    setQuery(saved?.query ?? "");
+    setCategoryFilters(saved?.categoryFilters ?? []);
+    setTagFilters(saved?.tagFilters ?? []);
+    setReportMerchants([]);
+    setAccountFilters(saved?.accountFilters ?? []);
+    setTypeFilters(saved?.typeFilters ?? []);
+    setDateFilterMode(saved?.dateFilterMode ?? "ltd");
+    setDateFilterAnchor(saved?.dateFilterAnchor ?? todayIso);
+    setCustomStart(saved?.customStart ?? "");
+    setCustomEnd(saved?.customEnd ?? "");
+    setAmountMin(saved?.amountMin ?? "");
+    setAmountMax(saved?.amountMax ?? "");
+    setReviewFilter(saved?.reviewFilter ?? ""); setSourceFilter(saved?.sourceFilter ?? ""); setConfidenceFilter(saved?.confidenceFilter ?? "");
+    setSortField(saved?.sortField ?? "date");
+    setSortDirection(saved?.sortDirection ?? "desc");
+    setTransactionsPage(1);
+    setFilterOpen(false);
+
+    if (!selectedWorkspaceId) {
+      setAccounts([]);
+      setCategories([]);
+      setTransactions([]);
+      setImports([]);
+      setTransactionsSummary({
+        totalCount: 0,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        currencyCodes: ["PHP"],
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      });
+      setWorkspaceCurrencyCodes([]);
+      setIsWorkspaceDataReady(hasLoadedWorkspaceList);
+      setHasInitialTransactionsLoaded(hasLoadedWorkspaceList);
+      return;
+    }
+
+    if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
+      void loadWorkspaceMetadata(selectedWorkspaceId, { background: true });
+      void loadTransactionsPage(selectedWorkspaceId, { background: true });
+      return;
+    }
+
+    setAccounts([]);
+    setCategories([]);
+    setTransactions([]);
+    setImports([]);
+    setTransactionsSummary({
+      totalCount: 0,
+      income: 0,
+      spending: 0,
+      transfers: 0,
+      review: 0,
+      currencyCodes: ["PHP"],
+      topCategory: null,
+      topAccount: null,
+      firstTransactionDate: null,
+      lastTransactionDate: null,
+      firstReviewTransaction: null,
+      firstReviewTransactionIndex: null,
+    });
+    setWorkspaceCurrencyCodes([]);
+    setIsWorkspaceDataReady(false);
+    setHasInitialTransactionsLoaded(false);
+    void loadWorkspaceMetadata(selectedWorkspaceId);
+  }, [hasLoadedWorkspaceList, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    const shouldReactToCacheKey = (key: string | null) =>
+      key === transactionsWorkspaceCacheKey || key === selectedWorkspaceKey;
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage) {
+        return;
+      }
+
+      if (!shouldReactToCacheKey(event.key)) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId) && shouldHydrateTransactionsSnapshot(activeWorkspaceId)) {
+        setIsWorkspaceDataReady(false);
+        void loadWorkspaceMetadata(activeWorkspaceId, { skipImports: true, background: true });
+        void loadTransactionsPage(activeWorkspaceId, { background: true });
+      }
+    };
+
+    const handleWorkspaceCacheUpdated = (event: Event) => {
+      // Cache publication dispatches synchronously. Do not hydrate our own
+      // state back into itself before its version has been marked consumed.
+      if (publishingTransactionsCacheRef.current) return;
+      const customEvent = event as CustomEvent<WorkspaceCacheUpdatedEventDetail>;
+      if (!shouldReactToCacheKey(customEvent.detail?.key ?? null)) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId) && shouldHydrateTransactionsSnapshot(activeWorkspaceId)) {
+        setIsWorkspaceDataReady(false);
+        void loadWorkspaceMetadata(activeWorkspaceId, { skipImports: true, background: true });
+        void loadTransactionsPage(activeWorkspaceId, { background: true });
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    };
+  }, [loadTransactionsPage, loadWorkspaceMetadata, selectedWorkspaceId, shouldHydrateTransactionsSnapshot]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void loadTransactionsPage(selectedWorkspaceId, { preserveKnownTotal: true });
+    }, query ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [
+    selectedWorkspaceId,
+    query,
+    currencyFilter,
+    categoryFilters,
+    tagFilters, reportMerchants,
+    accountFilters,
+    typeFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    sortField,
+    sortDirection,
+    amountMin,
+    amountMax, reviewFilter, sourceFilter, confidenceFilter,
+    transactionsPage,
+    transactionsPageSize,
+    summaryOpen,
+  ]);
+
+  const refreshListRef = useRef(() => {});
+  refreshListRef.current = () => {
+    if (!selectedWorkspaceId || document.visibilityState !== "visible") return;
+    transactionPrefetchRef.current.clear();
+    clearJsonRequestCache(`transactions:list:${selectedWorkspaceId}:`);
+    void loadTransactionsPage(selectedWorkspaceId, { background: true });
+  };
+  useEffect(() => {
+    const refresh = () => refreshListRef.current();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("clover:transactions-changed", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("clover:transactions-changed", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribeCommit = subscribeWorkspaceDataChanges(change => {
+      if (change.workspaceId === selectedWorkspaceId && /\/imports\/[^/]+\/committed$/.test(change.path)) {
+        refreshListRef.current();
+      }
+    });
+    const unsubscribe = subscribeExternalImportRefresh((workspaceId) => {
+      if (workspaceId !== selectedWorkspaceId) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => refreshListRef.current(), 100);
+    });
+    return () => { unsubscribeCommit(); unsubscribe(); if (timer) clearTimeout(timer); };
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || postImportRefreshVersion === 0) {
+      return;
+    }
+
+    // This effect runs after React commits the filter reset above, so the
+    // authoritative refresh cannot reuse the stale pre-import filter closure.
+    void loadTransactionsPage(selectedWorkspaceId, {
+      background: true,
+      pageOverride: 1,
+      pageSizeOverride: transactionsPageSize,
+      summaryMode: "light",
+      preserveKnownTotal: true,
+    });
+  }, [postImportRefreshVersion, selectedWorkspaceId, transactionsPageSize]);
+
+  useEffect(() => {
+    setTransactionsPage(1);
+  }, [
+    query,
+    currencyFilter,
+    categoryFilters,
+    tagFilters, reportMerchants,
+    accountFilters,
+    typeFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    sortField,
+    sortDirection,
+    amountMin,
+    amountMax, reviewFilter, sourceFilter, confidenceFilter,
+  ]);
+
+  useEffect(() => {
+    if (!addMenuOpen && !selectionMenuOpen && !activeWarningTransactionId && !headerMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (
+        addMenuRef.current?.contains(target) ||
+        addMenuPanelRef.current?.contains(target) ||
+        selectionActionsMenuRef.current?.contains(target) ||
+        headerMenuRef.current?.contains(target) ||
+        (activeWarningTransactionId ? warningPopoverRefs.current.get(activeWarningTransactionId)?.contains(target) : false)
+      ) {
+        return;
+      }
+
+      setAddMenuOpen(false);
+      setSelectionMenuOpen(false);
+      setActiveWarningTransactionId(null);
+      setHeaderMenuOpen(null);
+      setHeaderMenuPosition(null);
+    };
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAddMenuOpen(false);
+        setSelectionMenuOpen(false);
+        setActiveWarningTransactionId(null);
+        setHeaderMenuOpen(null);
+        setHeaderMenuPosition(null);
+        setImportOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeWarningTransactionId, addMenuOpen, headerMenuOpen, selectionMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!addMenuOpen) {
+      setAddMenuPortalStyle(null);
+      return;
+    }
+
+    const updateAddMenuPosition = () => {
+      const trigger = addMenuRef.current;
+      if (!trigger || typeof window === "undefined") {
+        return;
+      }
+
+      const rect = trigger.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const width = 196;
+      const left = Math.max(12, Math.min(rect.right - width, viewportWidth - width - 12));
+      const top = Math.min(rect.bottom + 8, viewportHeight - 16);
+
+      setAddMenuPortalStyle({
+        position: "fixed",
+        top,
+        left,
+        width,
+        zIndex: 140,
+      });
+    };
+
+    updateAddMenuPosition();
+    window.addEventListener("resize", updateAddMenuPosition);
+    window.addEventListener("scroll", updateAddMenuPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateAddMenuPosition);
+      window.removeEventListener("scroll", updateAddMenuPosition, true);
+    };
+  }, [addMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (manualOpen) {
+      setManualAccountMenuOpen(false);
+      setManualCategoryMenuOpen(false);
+      if (manualDialogRef.current && !mobileCreation) return containDialogFocus(manualDialogRef.current, manualNameInputRef.current, addMenuRef.current?.querySelector("button"));
+    }
+  }, [manualOpen, mobileCreation]);
+
+  useEffect(() => {
+    if (bulkEditOpen && bulkEditDialogRef.current) return containDialogFocus(bulkEditDialogRef.current);
+  }, [bulkEditOpen]);
+
+  useEffect(() => {
+    const reviewTransactionId = urlSearchParams.get("review");
+    if (!reviewTransactionId || !isWorkspaceDataReady || !transactions.length) {
+      return;
+    }
+
+    if (reviewTransactionParamRef.current === reviewTransactionId) {
+      return;
+    }
+
+    const reviewTransaction = transactions.find((transaction) => transaction.id === reviewTransactionId);
+    if (!reviewTransaction) {
+      return;
+    }
+
+    reviewTransactionParamRef.current = reviewTransactionId;
+    openTransactionReview(reviewTransaction);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete("review");
+    window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+  }, [isWorkspaceDataReady, searchParams, transactions, urlSearchParams]);
+
+  const closeToolbarMenus = () => {
+    setAddMenuOpen(false);
+    setSelectionMenuOpen(false);
+    setHeaderMenuOpen(null);
+    setHeaderMenuPosition(null);
+  };
+
+  const openImportFiles = (
+    files: File[] | null = null,
+    backgroundOnly = false,
+    importMode: ImportImageMode = "statement"
+  ) => {
+    const shouldLaunchInBackground = backgroundOnly && !(files?.some(isImageImportFile) ?? false);
+    flushSync(() => {
+      closeChrome();
+      setPendingImportSummary(null);
+      closeToolbarMenus();
+      setImportBackgroundOnly(shouldLaunchInBackground);
+      setImportSessionId((current) => current + 1);
+      setImportSeedFiles(files && files.length > 0 ? files : null);
+      setImportSeedMode(importMode);
+      setImportOpen(true);
+    });
+  };
+
+  const openMobileFilePicker = () => {
+    // Load the upload UI while the native picker is open, before selection.
+    void loadImportFilesModal();
+    const input = addFileInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    setAddMenuOpen(false);
+    input.value = "";
+    input.click();
+  };
+
+  const openPhotoCapture = () => {
+    // Load the upload UI while the native picker is open, before selection.
+    void loadImportFilesModal();
+    const input = addPhotoInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    setAddMenuOpen(false);
+    input.value = "";
+    input.click();
+  };
+
+  const openPhotoLibrary = () => {
+    // Load the upload UI while the native picker is open, before selection.
+    void loadImportFilesModal();
+    const input = addPhotoLibraryInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    setAddMenuOpen(false);
+    input.value = "";
+    input.click();
+  };
+
+  const handleMobileFiles = (files: File[]) => openImportFiles(files);
+  const handlePhotoCaptureChange = (files: File[]) => {
+    openImportFiles(files, false, "receipt");
+  };
+
+  useEffect(() => {
+    const active = manualOpen;
+    document.body.toggleAttribute("data-clover-page-modal", active);
+
+    return () => {
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, [addMenuOpen, manualOpen]);
+
+  useEffect(() => {
+    if (urlSearchParams.get("import") === "1") {
+      setImportOpen(true);
+      window.history.replaceState({}, "", "/transactions");
+    }
+  }, [urlSearchParams]);
+
+  useEffect(() => {
+    if (urlSearchParams.get("manual") === "1" && isWorkspaceDataReady && selectedWorkspaceId) {
+      // Run the normal default-account setup outside React's effect flush.
+      const timer = window.setTimeout(() => {
+        void openManualAdd();
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.delete("manual");
+        window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, [urlSearchParams, isWorkspaceDataReady, selectedWorkspaceId]);
+
+  useEffect(() => {
+    const handleOpenManual = () => {
+      void openManualAdd();
+    };
+
+    window.addEventListener("clover:open-transaction-add", handleOpenManual);
+    return () => {
+      window.removeEventListener("clover:open-transaction-add", handleOpenManual);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isWorkspaceDataReady) {
+      return;
+    }
+
+    if (urlSearchParams.get("report") === "1") {
+      const signature = selectedWorkspaceId + ":" + urlSearchParams.toString();
+      if(drilldownParamRef.current === signature) return;
+      drilldownParamRef.current = signature;
+      const filters = parseTransactionQueryFilters(urlSearchParams);
+      setQuery(filters.query ?? "");
+      setCurrencyFilter(filters.currencyFilter ?? "");
+      setCategoryFilters(filters.categoryIds.map(value=>findMatchingId(value,categories)||value));
+      setAccountFilters(filters.accountIds);
+      setTagFilters(filters.tagIds);
+      setReportMerchants(filters.merchantFilters);
+      setTypeFilters(filters.typeFilters);
+      setDateFilterMode(filters.dateFilterMode);
+      setCustomStart(filters.customStart); setCustomEnd(filters.customEnd);
+      setReviewFilter(filters.reviewFilter); setSourceFilter(""); setConfidenceFilter("");
+      setAmountMin(""); setAmountMax(""); setTransactionsPage(1); setFilterOpen(false);
+      return;
+    }
+    const drilldownSignature = [
+      urlSearchParams.get("q") ?? "",
+      urlSearchParams.get("month") ?? "",
+      urlSearchParams.get("category") ?? "",
+      urlSearchParams.get("account") ?? "",
+      urlSearchParams.get("currency") ?? "",
+    ].join("|");
+
+    if (drilldownParamRef.current === drilldownSignature) {
+      return;
+    }
+
+    const q = urlSearchParams.get("q") ?? "";
+    const month = urlSearchParams.get("month") ?? "";
+    const categoriesFromUrl = readSearchParamValues(urlSearchParams, "category");
+    const accountsFromUrl = readSearchParamValues(urlSearchParams, "account");
+    const currencyFromUrl = urlSearchParams.get("currency") ?? "";
+
+    const hasDrilldownParams = Boolean(q || month || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0 || currencyFromUrl);
+
+    if (!hasDrilldownParams) {
+      // An ordinary return/reload keeps the Profile's restored list context.
+      if (drilldownParamRef.current === null) {
+        drilldownParamRef.current = drilldownSignature;
+        return;
+      }
+      if (drilldownParamRef.current === drilldownSignature) {
+        return;
+      }
+
+      drilldownParamRef.current = drilldownSignature;
+      setQuery("");
+      setReportMerchants([]);
+      setTagFilters([]);
+      setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
+      setCategoryFilters([]);
+      setAccountFilters([]);
+      setTypeFilters([]);
+      setDateFilterMode("ltd");
+      setDateFilterAnchor(todayIso);
+      setCustomStart("");
+      setCustomEnd("");
+      setFilterOpen(false);
+      setHeaderMenuOpen(null);
+      setHeaderMenuPosition(null);
+      return;
+    }
+
+    drilldownParamRef.current = drilldownSignature;
+
+    const nextCategoryFilters = categoriesFromUrl
+      .map((value) => findMatchingId(value, categories))
+      .filter(Boolean);
+    const nextAccountFilters = accountsFromUrl
+      .map((value) => findMatchingId(value, accounts))
+      .filter(Boolean);
+
+    setQuery(q);
+    setReportMerchants([]);
+    setTagFilters([]);
+    setCurrencyFilter(currencyFromUrl ? formatCurrencyCode(currencyFromUrl) : "");
+    setCategoryFilters(nextCategoryFilters);
+    setAccountFilters(nextAccountFilters);
+    setTypeFilters([]);
+    setDateFilterMode(month ? "month" : "ltd");
+    setDateFilterAnchor(month ? `${month}-01` : todayIso);
+    setCustomStart("");
+    setCustomEnd("");
+    setFilterOpen(false);
+    setHeaderMenuOpen(null);
+    setHeaderMenuPosition(null);
+  }, [accounts, categories, defaultCurrency, isWorkspaceDataReady, searchParams, selectedWorkspaceId]);
+
+  const ensureDefaultAccount = async (workspaceId: string, preferredCurrency = "PHP") => {
+    const normalizedPreferredCurrency = formatCurrencyCode(preferredCurrency || "PHP");
+    const preferred = mostUsedTransactionAccount(accounts.filter(isTransactionAccount));
+    if (preferred) return preferred.id;
+
+    const response = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId,
+        name: "Cash",
+        institution: "Cash",
+        type: "cash",
+        currency: normalizedPreferredCurrency,
+        source: "manual",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to create a default account for this workspace.");
+    }
+
+    const data = await response.json();
+    const accountId = data.account?.id as string | undefined;
+
+    if (!accountId) {
+      throw new Error("Default account was not created.");
+    }
+
+    setAccounts((current) => {
+      // A delayed Cash response must not replace existing accounts or enter another Profile.
+      if (activeAccountWorkspaceRef.current !== workspaceId) return current;
+      return current.some((account) => account.id === accountId)
+        ? current
+        : [...current, data.account];
+    });
+    return accountId;
+  };
+  const getDisplayCategoryNameForTransaction = useCallback(
+    (transaction: Transaction) => {
+      if (hasTransactionUserEdits(transaction)) return transaction.categoryName ?? getCategoryNameById(categories, transaction.categoryId ?? "") ?? "Other";
+      const categoryValue = transaction.categoryId ?? otherCategoryId;
+      const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
+
+      return (
+        getEffectiveTransactionCategoryName({
+          categoryName: transaction.categoryName ?? getCategoryNameById(categories, categoryValue) ?? null,
+          rawPayload: transaction.rawPayload as never,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          institution: accountInstitution,
+          source: transaction.source ?? null,
+          type: transaction.type,
+        }) ??
+        guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
+        "Other"
+      );
+    },
+    [accountInstitutionById, categories, otherCategoryId]
+  );
+  const visibleTransactions = useMemo(() => {
+    const filteredTransactions = transactions.filter(
+      (transaction) =>
+        matchesTransactionSearch(transaction, searchText) &&
+        matchesTransactionFilters(transaction, {
+          currencyFilter,
+          categoryFilters,
+    tagFilters, reportMerchants,
+          accountFilters: expandedAccountFilters,
+          typeFilters,
+          dateFilterMode,
+          dateFilterAnchor,
+          customStart,
+          customEnd,
+          amountMin,
+          amountMax, reviewFilter, sourceFilter, confidenceFilter,
+          otherCategoryId,
+          categoryNameById,
+        }, accountNumberById)
+    );
+    const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+
+    const getTransactionSortValue = (transaction: Transaction, field: TransactionSortField) => {
+      switch (field) {
+        case "name":
+          return summarizeTransactionMerchantText(
+            transaction.merchantClean ?? transaction.merchantRaw,
+            accountInstitutionById.get(transaction.accountId) ?? null
+          );
+        case "account":
+          return accountNameById.get(transaction.accountId) ?? transaction.accountName;
+        case "category": {
+          return getDisplayCategoryNameForTransaction(transaction);
+        }
+        case "amount":
+          return Number(transaction.amount);
+        case "date":
+        default:
+          return new Date(transaction.date).getTime();
+      }
+    };
+
+    return [...filteredTransactions].sort((left, right) => {
+      const leftValue = getTransactionSortValue(left, sortField);
+      const rightValue = getTransactionSortValue(right, sortField);
+
+      if (typeof leftValue === "number" && typeof rightValue === "number") {
+        return (leftValue - rightValue) * directionMultiplier;
+      }
+
+      return (
+        String(leftValue).localeCompare(String(rightValue), undefined, { sensitivity: "base", numeric: true }) *
+        directionMultiplier
+      );
+    });
+  }, [
+    accountInstitutionById,
+    accountNameById,
+    accountNumberById,
+    getDisplayCategoryNameForTransaction,
+    categories,
+    categoryNameById,
+    currencyFilter,
+    categoryFilters,
+    tagFilters, reportMerchants,
+    expandedAccountFilters,
+    typeFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    amountMin,
+    amountMax, reviewFilter, sourceFilter, confidenceFilter,
+    otherCategoryId,
+    searchText,
+    sortDirection,
+    sortField,
+    transactions,
+  ]);
+  const hasActiveServerSideFilters = Boolean(
+    query.trim() ||
+      currencyFilter.trim() ||
+      categoryFilters.length > 0 || tagFilters.length > 0 ||
+      expandedAccountFilters.length > 0 ||
+      typeFilters.length > 0 ||
+      dateFilterMode !== "ltd" ||
+      customStart.trim() ||
+      customEnd.trim() ||
+      amountMin.trim() ||
+      (amountMax.trim() || reviewFilter || sourceFilter || confidenceFilter)
+  );
+  const visibleFilteredSummary = useMemo(
+    () =>
+      buildVisibleTransactionSummary(visibleTransactions, {
+        totalCount: visibleTransactions.length,
+        currencyCodes: transactionsSummary.currencyCodes,
+      }, accountNumberById),
+    [accountNumberById, transactionsSummary.currencyCodes, visibleTransactions]
+  );
+  const shouldUseVisibleFilteredSummary = hasActiveServerSideFilters && visibleTransactions.length === 0;
+  const displayedTransactionsSummary = shouldUseVisibleFilteredSummary ? visibleFilteredSummary : transactionsSummary;
+  const isAllCurrenciesView = !currencyFilter;
+  const transactionSummaryCurrencies = useMemo(
+    () => {
+      const currencies = Object.keys(displayedTransactionsSummary.currencyTotals ?? {});
+      return currencies.length > 0 ? currencies : displayedTransactionsSummary.currencyCodes;
+    },
+    [displayedTransactionsSummary.currencyCodes, displayedTransactionsSummary.currencyTotals]
+  );
+  const transactionExchangeRates = useExchangeRates(
+    transactionSummaryCurrencies,
+    defaultCurrency,
+    isAllCurrenciesView && transactionSummaryCurrencies.length > 1
+  );
+  const contributingTransactionCurrencies = useMemo(
+    () =>
+      Object.entries(displayedTransactionsSummary.currencyTotals ?? {})
+        .filter(([, values]) => values.income !== 0 || values.spending !== 0 || values.transfers !== 0)
+        .map(([currency]) => formatCurrencyCode(currency)),
+    [displayedTransactionsSummary.currencyTotals]
+  );
+  const estimatedTransactionTotals = useMemo(() => {
+    if (!isAllCurrenciesView || transactionSummaryCurrencies.length <= 1) {
+      return {
+        income: displayedTransactionsSummary.income,
+        spending: displayedTransactionsSummary.spending,
+        transfers: displayedTransactionsSummary.transfers,
+      };
+    }
+
+    return Object.entries(displayedTransactionsSummary.currencyTotals ?? {}).reduce(
+      (totals, [currency, values]) => {
+        totals.income += convertAmount(values.income, currency, transactionExchangeRates.rates) ?? 0;
+        totals.spending += convertAmount(values.spending, currency, transactionExchangeRates.rates) ?? 0;
+        totals.transfers += convertAmount(values.transfers, currency, transactionExchangeRates.rates) ?? 0;
+        return totals;
+      },
+      { income: 0, spending: 0, transfers: 0 }
+    );
+  }, [displayedTransactionsSummary, isAllCurrenciesView, transactionExchangeRates.rates, transactionSummaryCurrencies.length]);
+  const totalTransactionCountForDisplay = shouldUseVisibleFilteredSummary ? visibleTransactions.length : transactionsSummary.totalCount;
+  const activeFinalizingImportIds = useMemo(
+    () => new Set(imports.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
+    [imports]
+  );
+  const activeFinalizingImportKey = useMemo(
+    () => Array.from(activeFinalizingImportIds).sort().join("|"),
+    [activeFinalizingImportIds]
+  );
+  const failedFinalizingImportIds = useMemo(
+    () => new Set(imports.filter(isFailedEnrichmentJob).map((importFile) => importFile.id)),
+    [imports]
+  );
+  const [finalizingNowMs, setFinalizingNowMs] = useState(() => Date.now());
+  const hasActiveFinalizingImports = activeFinalizingImportIds.size > 0;
+  useEffect(() => {
+    if (!hasActiveFinalizingImports) {
+      return;
+    }
+
+    setFinalizingNowMs(Date.now());
+    const intervalId = window.setInterval(() => setFinalizingNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [hasActiveFinalizingImports]);
+  useEffect(() => {
+    if (!selectedWorkspaceId || !activeFinalizingImportKey) {
+      return;
+    }
+
+    let cancelled = false;
+    let refreshInFlight = false;
+    const skipDisplayRefresh = () => cancelled || document.visibilityState === "hidden";
+    const refreshEnrichmentDeltas = async () => {
+      if (cancelled || refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        const importFileIds = activeFinalizingImportKey.split("|").filter(Boolean);
+        await Promise.allSettled(
+          importFileIds.map((importFileId) =>
+            fetch("/api/import-enrichment/run", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ importFileId, limit: 3, batchSize: 500 }),
+              keepalive: true,
+            })
+          )
+        );
+        if (skipDisplayRefresh()) {
+          return;
+        }
+        await loadWorkspaceMetadata(selectedWorkspaceId, { background: true });
+        if (skipDisplayRefresh()) {
+          return;
+        }
+        await loadTransactionsPage(selectedWorkspaceId, {
+          background: true,
+          pageOverride: transactionsPage,
+          pageSizeOverride: transactionsPageSize,
+          summaryMode: "light",
+        });
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refreshEnrichmentDeltas();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    void refreshEnrichmentDeltas();
+    const intervalId = window.setInterval(() => {
+      void refreshEnrichmentDeltas();
+    }, 30_000);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [activeFinalizingImportKey, selectedWorkspaceId, transactionsPage, transactionsPageSize]);
+  const finalizingNoticeState = useMemo(() => getEnrichmentNoticeState(imports, finalizingNowMs), [finalizingNowMs, imports]);
+  const finalizingTransactions = useMemo(
+    () =>
+      visibleTransactions.filter(
+        (transaction) => {
+          if (!transaction.importFileId) {
+            return false;
+          }
+
+          if (activeFinalizingImportIds.has(transaction.importFileId)) {
+            return true;
+          }
+
+          return failedFinalizingImportIds.has(transaction.importFileId) && isImportFinalizingTransaction(transaction);
+        }
+      ),
+    [activeFinalizingImportIds, failedFinalizingImportIds, visibleTransactions]
+  );
+  const finalizingTransactionCount = finalizingTransactions.length;
+  const [finalizingNoticeDismissed, setFinalizingNoticeDismissed] = useState(false);
+  const finalizingNeedsReview = finalizingNoticeState.needsReview;
+  const finalizingNoticeDismissalKey = useMemo(
+    () =>
+      finalizingNeedsReview && finalizingTransactionCount > 0
+        ? buildFinalizingNoticeDismissalKey({
+            workspaceId: selectedWorkspaceId,
+            importFileIds: finalizingTransactions.map((transaction) => transaction.importFileId ?? ""),
+            transactionIds: finalizingTransactions.map((transaction) => transaction.id),
+          })
+        : null,
+    [finalizingNeedsReview, finalizingTransactionCount, finalizingTransactions, selectedWorkspaceId]
+  );
+  useEffect(() => {
+    setFinalizingNoticeDismissed(isFinalizingNoticeDismissed(finalizingNoticeDismissalKey));
+  }, [finalizingNoticeDismissalKey]);
+  useEffect(() => {
+    if (visibleTransactions.length === 0) {
+      return;
+    }
+
+    const currentActivity = readImportActivity();
+    if (!currentActivity || (currentActivity.status !== "active" && !importActivityHasCompletedRows(currentActivity))) {
+      return;
+    }
+    const activeImportFileId =
+      typeof currentActivity.importFileId === "string" && currentActivity.importFileId.trim()
+        ? currentActivity.importFileId.trim()
+        : null;
+    const hasVisibleCurrentImportTransactions = activeImportFileId
+      ? visibleTransactions.some((transaction) => {
+          const rawPayload = transaction.rawPayload;
+          const sourceImportFileId =
+            rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+              ? (rawPayload as Record<string, unknown>).sourceImportFileId
+              : null;
+          return transaction.importFileId === activeImportFileId || sourceImportFileId === activeImportFileId;
+        })
+      : false;
+    const importBatchStillRunning =
+      Number(currentActivity.fileTotal ?? 0) > 0 &&
+      Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
+    const expectedImportedRows = getImportActivityExpectedRows(currentActivity);
+    const importedRowsStillSettling =
+      hasRecentWorkspaceImportEvidence(currentActivity, selectedWorkspaceId) &&
+      expectedImportedRows > 0 &&
+      transactionsSummary.totalCount < expectedImportedRows;
+    if (importBatchStillRunning && !hasVisibleCurrentImportTransactions) {
+      return;
+    }
+    if (importedRowsStillSettling) {
+      return;
+    }
+
+    const hasVisibleImportedTransactions = visibleTransactions.some(
+      (transaction) => transaction.source === "upload" || Boolean(transaction.importFileId)
+    );
+    if ((finalizingNeedsReview && finalizingTransactionCount > 0) || hasVisibleCurrentImportTransactions || hasVisibleImportedTransactions) {
+      clearImportActivity();
+    }
+  }, [finalizingNeedsReview, finalizingTransactionCount, selectedWorkspaceId, transactionsSummary.totalCount, visibleTransactions]);
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const refreshWhileImportSettles = () => {
+      const currentActivity = readImportActivity();
+      if (!currentActivity || !hasRecentWorkspaceImportEvidence(currentActivity, selectedWorkspaceId)) {
+        return false;
+      }
+
+      const expectedImportedRows = getImportActivityExpectedRows(currentActivity);
+      const importBatchStillRunning =
+        currentActivity.status === "active" &&
+        Number(currentActivity.fileTotal ?? 0) > 0 &&
+        Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
+      const totalStillBehindImport = expectedImportedRows > 0 && transactionsSummary.totalCount < expectedImportedRows;
+      if (!importBatchStillRunning && !totalStillBehindImport) {
+        return false;
+      }
+
+      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+      void loadTransactionsPage(selectedWorkspaceId, {
+        background: true,
+        pageOverride: transactionsPage,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "light",
+      });
+      return true;
+    };
+
+    if (!refreshWhileImportSettles()) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (!refreshWhileImportSettles()) {
+        window.clearInterval(intervalId);
+      }
+    }, 1_800);
+
+    return () => window.clearInterval(intervalId);
+  }, [selectedWorkspaceId, transactionsPage, transactionsPageSize, transactionsSummary.totalCount]);
+  const showFinalizingNotice = finalizingTransactionCount > 0 && !finalizingNoticeDismissed;
+  const dismissFinalizingStatusNotice = () => {
+    if (finalizingNeedsReview) {
+      dismissFinalizingNotice(finalizingNoticeDismissalKey);
+    }
+
+    setFinalizingNoticeDismissed(true);
+  };
+  const totalTransactionPages = Math.max(1, Math.ceil(totalTransactionCountForDisplay / Math.max(transactionsPageSize, 1)));
+  const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
+  const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
+  const pageEndIndex = pageStartIndex + transactionsPageSize;
+  const isServerPagedTransactionResult =
+    totalTransactionCountForDisplay > transactionsPageSize &&
+    visibleTransactions.length <= transactionsPageSize;
+  const desktopPageTransactions = useMemo(
+    () => (isServerPagedTransactionResult ? visibleTransactions : visibleTransactions.slice(pageStartIndex, pageEndIndex)),
+    [isServerPagedTransactionResult, pageEndIndex, pageStartIndex, visibleTransactions]
+  );
+  useEffect(() => {
+    if (firstRowsReported.current || isCompactViewport || !isWorkspaceDataReady ||
+        window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches) return;
+    const table = transactionTableRef.current;
+    const header = table?.querySelector(".transactions-column-header");
+    const first = desktopPageTransactions[0];
+    const row = first ? transactionRowRefs.current.get(first.id) : null;
+    if (!table || !row || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting || entry.intersectionRatio < 0.5 || firstRowsReported.current || document.visibilityState !== "visible") return;
+      if (header && entry.intersectionRect.bottom <= header.getBoundingClientRect().bottom) return;
+      firstRowsReported.current = true;
+      observer.disconnect();
+      capturePostHogClientEvent("data_ready", {
+        operation: "transactions_first_rows", resource: "transactions", screen: "/transactions",
+        phase: "presentation", timing_boundary: "route_mount_to_first_visible_rows",
+        duration_ms: Math.max(0, Math.round(performance.now() - (firstRowsStartedAt.current ?? performance.now()))),
+        page_size: transactionsPageSize, filtered: hasActiveTransactionFilters,
+      });
+    }, { threshold: 0.5 });
+    const observe = () => {
+      if (document.visibilityState !== "visible" || firstRowsReported.current) return;
+      observer.unobserve(row);
+      observer.observe(row);
+    };
+    observe();
+    document.addEventListener("visibilitychange", observe);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", observe);
+    };
+  }, [desktopPageTransactions, hasActiveTransactionFilters, isCompactViewport, isWorkspaceDataReady, transactionsPageSize]);
+  const mobileVisibleTransactions = useMemo(
+    () => visibleTransactions.slice(0, Math.max(mobileVisibleCount, MOBILE_TRANSACTIONS_BATCH_SIZE)),
+    [mobileVisibleCount, visibleTransactions]
+  );
+  useEffect(() => {
+    if (!selectedWorkspaceId) return;
+    const candidates = isCompactViewport ? mobileVisibleTransactions : desktopPageTransactions;
+    return observeWebImportRows(selectedWorkspaceId, candidates, transactionRowRefs.current, isCompactViewport, (event, data) => {
+      capturePostHogClientEvent(event, data);
+    });
+  }, [desktopPageTransactions, isCompactViewport, mobileVisibleTransactions, selectedWorkspaceId]);
+  const mobileTransactionGroups = useMemo(() => {
+    const groups: Array<{ date: string; label: string; transactions: Transaction[] }> = [];
+
+    for (const transaction of mobileVisibleTransactions) {
+      const dateKey = transaction.date.slice(0, 10);
+      const label = formatDate(dateKey);
+      const lastGroup = groups[groups.length - 1];
+
+      if (!lastGroup || lastGroup.date !== dateKey) {
+        groups.push({ date: dateKey, label, transactions: [transaction] });
+      } else {
+        lastGroup.transactions.push(transaction);
+      }
+    }
+
+    return groups;
+  }, [mobileVisibleTransactions]);
+  const hasVisibleTransactions = visibleTransactions.length > 0;
+  const desktopPageTransactionIds = useMemo(
+    () => desktopPageTransactions.map((transaction) => transaction.id),
+    [desktopPageTransactions]
+  );
+  const allVisibleSelected =
+    desktopPageTransactionIds.length > 0 &&
+    desktopPageTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
+  const someVisibleSelected = desktopPageTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
+  const allMobileSelected = mobileVisibleTransactions.length > 0 && mobileVisibleTransactions.slice(0, 500).every(row => selectedTransactionIds.includes(row.id));
+  const hasMoreMobileTransactions =
+    isCompactViewport &&
+    (mobileVisibleTransactions.length < visibleTransactions.length ||
+      (!mobilePaginationExhausted && !searchText && transactions.length < transactionsSummary.totalCount));
+
+  const changeTransactionPage = (page: number) => {
+    if (page === transactionsPage) return;
+    setIsPageLoading(true);
+    setTransactionsPage(page);
+    transactionTableRef.current?.scrollTo({ top: 0, behavior: "instant" });
+    transactionTableRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  };
+
+  const currentPageLabel = useMemo(() => {
+    if (totalTransactionCountForDisplay === 0) {
+      return "0 of 0";
+    }
+
+    const displayedPageEnd = isServerPagedTransactionResult
+      ? pageStartIndex + desktopPageTransactions.length
+      : Math.min(pageEndIndex, totalTransactionCountForDisplay);
+    return `${pageStartIndex + 1}-${Math.min(displayedPageEnd, totalTransactionCountForDisplay)} of ${totalTransactionCountForDisplay}`;
+  }, [desktopPageTransactions.length, isServerPagedTransactionResult, pageEndIndex, pageStartIndex, totalTransactionCountForDisplay]);
+
+  const paginationPages = useMemo(() => {
+    if (totalTransactionPages <= 1) {
+      return [1];
+    }
+
+    const candidatePages = new Set<number>([
+      1,
+      totalTransactionPages,
+      Math.max(1, currentTransactionPage - 1),
+      currentTransactionPage,
+      Math.min(totalTransactionPages, currentTransactionPage + 1),
+    ]);
+
+    const sortedPages = Array.from(candidatePages)
+      .filter((page) => page >= 1 && page <= totalTransactionPages)
+      .sort((a, b) => a - b);
+
+    return sortedPages.reduce<Array<number | "ellipsis">>((pages, page) => {
+      const previous = pages[pages.length - 1];
+      if (typeof previous === "number" && page - previous > 1) {
+        pages.push("ellipsis");
+      }
+      pages.push(page);
+      return pages;
+    }, []);
+  }, [currentTransactionPage, totalTransactionPages]);
+
+  const loadMoreMobileTransactions = useCallback(async () => {
+    if (!isCompactViewport || !hasMoreMobileTransactions || !requestGateRef.current.canAppend(transactionQueryKey)) {
+      return;
+    }
+
+    if (mobileVisibleCount < visibleTransactions.length) {
+      setMobileVisibleCount((current) => Math.min(current + MOBILE_TRANSACTIONS_BATCH_SIZE, visibleTransactions.length));
+      return;
+    }
+
+    if (mobileLoadMoreInFlightRef.current || isMobileLoadingMore || !selectedWorkspaceId || transactions.length >= transactionsSummary.totalCount) {
+      return;
+    }
+
+    // Keep the server page size stable. Mixing the 25-row initial request with
+    // 12-row mobile display batches can skip server pages or retry one forever.
+    const serverPageSize = Math.max(1, transactionsPageSize);
+    const nextPage = getNextMobileTransactionPage(transactions.length, serverPageSize);
+    mobileLoadMoreInFlightRef.current = true;
+    setIsMobileLoadingMore(true);
+    try {
+      await loadTransactionsPage(selectedWorkspaceId, {
+        background: true,
+        append: true,
+        pageOverride: nextPage,
+        pageSizeOverride: serverPageSize,
+        summaryMode: "light",
+      });
+    } finally {
+      mobileLoadMoreInFlightRef.current = false;
+      setIsMobileLoadingMore(false);
+    }
+  }, [
+    transactionQueryKey,
+    hasMoreMobileTransactions,
+    isCompactViewport,
+    isMobileLoadingMore,
+    loadTransactionsPage,
+    mobileVisibleCount,
+    transactions.length,
+    transactionsPageSize,
+    transactionsSummary.totalCount,
+    visibleTransactions.length,
+    selectedWorkspaceId,
+  ]);
+
+  useEffect(() => {
+    if (!isCompactViewport) {
+      return;
+    }
+
+    const target = mobileLoadMoreRef.current;
+    if (!target || !hasMoreMobileTransactions) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMoreMobileTransactions();
+        }
+      },
+      {
+        root: null,
+        rootMargin: "320px 0px",
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [hasMoreMobileTransactions, isCompactViewport, loadMoreMobileTransactions]);
+
+  // Keep this reset independent of the recreated pagination callback. Dispatching
+  // it on every callback change can starve navigation and viewport updates.
+  useEffect(() => {
+    if (!isCompactViewport && isMobileLoadingMore) setIsMobileLoadingMore(false);
+  }, [isCompactViewport, isMobileLoadingMore]);
+
+  useEffect(() => {
+    if (!isCompactViewport) {
+      return;
+    }
+
+    let rafId = 0;
+    const checkScrollPosition = () => {
+      if (rafId) {
+        return;
+      }
+
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        const doc = document.documentElement;
+        const distanceFromBottom = doc.scrollHeight - window.innerHeight - window.scrollY;
+
+        if (distanceFromBottom < 900) {
+          void loadMoreMobileTransactions();
+        }
+      });
+    };
+
+    window.addEventListener("scroll", checkScrollPosition, { passive: true });
+    window.addEventListener("resize", checkScrollPosition);
+    checkScrollPosition();
+
+    return () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+      window.removeEventListener("scroll", checkScrollPosition);
+      window.removeEventListener("resize", checkScrollPosition);
+    };
+  }, [isCompactViewport, loadMoreMobileTransactions]);
+
+  useEffect(() => {
+    if (!selectAllRef.current) {
+      return;
+    }
+
+    selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+  }, [allVisibleSelected, someVisibleSelected]);
+
+  useEffect(() => {
+    setTransactionsPage(1);
+    setMobileVisibleCount(MOBILE_TRANSACTIONS_BATCH_SIZE);
+    setMobilePaginationExhausted(false);
+    mobileLoadMoreInFlightRef.current = false;
+    setIsMobileLoadingMore(false);
+  }, [
+    selectedWorkspaceId,
+    query,
+    currencyFilter,
+    categoryFilters,
+    tagFilters, reportMerchants,
+    accountFilters,
+    typeFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    sortField,
+    sortDirection,
+    amountMin,
+    amountMax, reviewFilter, sourceFilter, confidenceFilter,
+  ]);
+
+  useEffect(() => {
+    setTransactionsPage((current) => Math.min(Math.max(current, 1), totalTransactionPages));
+  }, [totalTransactionPages]);
+
+  const importSummary = useMemo(() => {
+    return imports.reduce(
+      (accumulator, file) => {
+        if (file.status === "processing") {
+          accumulator.processing += 1;
+        } else if (file.status === "done") {
+          accumulator.done += 1;
+        } else if (file.status === "failed") {
+          accumulator.failed += 1;
+        }
+        return accumulator;
+      },
+      { processing: 0, done: 0, failed: 0 }
+    );
+  }, [imports]);
+
+  const warningReasonFor = (transaction: Transaction) => getTransactionReviewReason(transaction);
+  const reviewReasonsFor = (transaction: Transaction) => getTransactionReviewReasonsForDisplay(transaction);
+
+  const isDuplicateWarningTransaction = (transaction: Transaction) => reviewReasonsFor(transaction).includes("Review similar transaction");
+
+  const detailWarningReasonFor = (transaction: Transaction) => {
+    return warningReasonFor(transaction);
+  };
+
+  const isReviewableTransaction = (transaction: Transaction) => {
+    return reviewReasonsFor(transaction).length > 0;
+  };
+
+  const firstReviewTransaction = useMemo(
+    () => transactionsSummary.firstReviewTransaction ?? transactions.find((transaction) => isReviewableTransaction(transaction)) ?? null,
+    [transactions, transactionsSummary.firstReviewTransaction]
+  );
+
+  const selectedTransactionWarningReason = selectedTransaction ? detailWarningReasonFor(selectedTransaction) : null;
+  const selectedTransactionReviewReasons = selectedTransaction ? reviewReasonsFor(selectedTransaction) : [];
+  const selectedTransactionWarningReasonSummary =
+    selectedTransactionReviewReasons.length > 0 ? selectedTransactionReviewReasons.join(" · ") : selectedTransactionWarningReason;
+  const selectedTransactionConfidenceScore = selectedTransaction
+    ? getTransactionConfidenceScore(selectedTransaction, selectedTransactionWarningReason)
+    : null;
+  const selectedTransactionReviewChips = selectedTransaction
+    ? getTransactionReviewChips(selectedTransaction, selectedTransactionWarningReason)
+    : [];
+  const selectedTransactionPrimaryReviewChips = selectedTransactionReviewChips.filter((chip) => chip.label !== "High confidence");
+  const selectedTransactionConfidenceChips = selectedTransactionReviewChips.filter((chip) => chip.label === "High confidence");
+  const getDisplayCategoryIdForTransaction = useCallback(
+    (transaction: Transaction) => {
+      const displayCategoryName = getDisplayCategoryNameForTransaction(transaction);
+      return getCategoryIdByName(categories, displayCategoryName) || transaction.categoryId || otherCategoryId;
+    },
+    [categories, getDisplayCategoryNameForTransaction, otherCategoryId]
+  );
+  const detailTransactionSummary = useMemo(() => {
+    if (!selectedTransaction) {
+      return "";
+    }
+
+    return summarizeTransactionMerchantText(
+      detailDraft?.merchantClean ?? selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw,
+      accountInstitutionById.get(selectedTransaction.accountId) ?? null
+    );
+  }, [accountInstitutionById, detailDraft?.merchantClean, selectedTransaction]);
+  const detailTransactionRawName = selectedTransaction?.merchantRaw.trim() ?? "";
+  const hasDistinctDetailRawName = Boolean(
+    detailTransactionRawName &&
+      detailTransactionSummary &&
+      detailTransactionRawName.toLowerCase() !== detailTransactionSummary.toLowerCase()
+  );
+  const hasDetailDraftChanges = useMemo(() => {
+    const baselineCategoryId = selectedTransaction ? getDisplayCategoryIdForTransaction(selectedTransaction) : "";
+    return JSON.stringify(detailTags) !== JSON.stringify((selectedTransaction?.tags ?? []).map((tag) => tag.name)) || hasTransactionDetailDraftChanges(detailDraft, selectedTransaction, {
+      baselineCategoryId: baselineCategoryId || otherCategoryId,
+      baselineCurrency: selectedTransaction?.currency ?? "PHP",
+      baselineTransfer: Boolean(selectedTransaction?.isTransfer),
+    });
+  }, [detailDraft, detailTags, getDisplayCategoryIdForTransaction, otherCategoryId, selectedTransaction]);
+
+  useEffect(() => {
+    if (!activeWarningTransactionId || !isWorkspaceDataReady) {
+      return;
+    }
+
+    const row = transactionRowRefs.current.get(activeWarningTransactionId);
+    if (!row) {
+      return;
+    }
+
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.focus();
+  }, [activeWarningTransactionId, isWorkspaceDataReady, transactions, transactionsPage]);
+  const detailSelectedAccount = useMemo(
+    () => (detailDraft ? accounts.find((account) => account.id === detailDraft.accountId) ?? null : null),
+    [accounts, detailDraft]
+  );
+  const detailSelectedAccountBrand = useMemo(
+    () =>
+      detailSelectedAccount
+        ? transactionAccountPickerOptions.find((account) => account.id === detailSelectedAccount.id)?.brand ??
+          getAccountBrand({
+            name: detailSelectedAccount.name,
+            institution: detailSelectedAccount.institution,
+            type: detailSelectedAccount.type,
+          })
+        : null,
+    [detailSelectedAccount, transactionAccountPickerOptions]
+  );
+  const detailSelectedCategory = useMemo(
+    () => categories.find((category) => category.id === (detailDraft?.categoryId ?? otherCategoryId)) ?? null,
+    [categories, detailDraft?.categoryId, otherCategoryId]
+  );
+  const selectedTransactionReceiptLineItems = useMemo(
+    () => parseReceiptLineItemsFromPayload(selectedTransaction?.rawPayload),
+    [selectedTransaction?.rawPayload]
+  );
+  const selectedTransactionRawNote = useMemo(() => getTransactionParsedNote(selectedTransaction), [selectedTransaction]);
+  const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
+  const detailReceiptLineItemTotal = useMemo(
+    () => getManualReceiptLineItemTotal(detailReceiptLineItems),
+    [detailReceiptLineItems]
+  );
+  const manualReceiptLineItemTotal = useMemo(
+    () => getManualReceiptLineItemTotal(manualForm.receiptLineItems),
+    [manualForm.receiptLineItems]
+  );
+  const manualReceiptLineItemHasValues = manualForm.receiptLineItems.some(
+    (item) => item.description.trim() || item.amount.trim() || item.quantity.trim() || item.unitPrice.trim()
+  );
+  const manualReceiptLineItemAmount = Number(manualForm.amount || 0);
+  const manualReceiptLineItemMismatch =
+    manualReceiptLineItemHasValues && Number.isFinite(manualReceiptLineItemAmount)
+      ? Math.abs(manualReceiptLineItemTotal - manualReceiptLineItemAmount) > 0.01
+      : false;
+
+  const nextReviewTransactionAfter = (transactionId: string) => {
+    const startIndex = visibleTransactions.findIndex((transaction) => transaction.id === transactionId);
+    const start = startIndex >= 0 ? startIndex + 1 : 0;
+    const ordered = [...visibleTransactions.slice(start), ...visibleTransactions.slice(0, start)];
+    return ordered.find((transaction) => transaction.id !== transactionId && isReviewableTransaction(transaction)) ?? null;
+  };
+
+  const focusTransactionRow = (transactionId: string | null | undefined) => {
+    if (!transactionId) {
+      return;
+    }
+
+    const row = transactionRowRefs.current.get(transactionId);
+    row?.focus();
+  };
+
+  const revealTransactionRow = (transactionId: string) => {
+    let attempts = 0;
+    const tryReveal = () => {
+      const row = transactionRowRefs.current.get(transactionId);
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.focus();
+        return;
+      }
+
+      attempts += 1;
+      if (attempts < 12) {
+        window.setTimeout(tryReveal, 80);
+      }
+    };
+
+    window.setTimeout(tryReveal, 0);
+  };
+
+  const handleTransactionRowKeyDown = (event: ReactKeyboardEvent<HTMLElement>, transaction: Transaction, index: number) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusTransactionRow(desktopPageTransactions[index + 1]?.id);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusTransactionRow(desktopPageTransactions[index - 1]?.id);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      openTransactionDetail(transaction);
+      return;
+    }
+
+    if (event.key === " ") {
+      event.preventDefault();
+      toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id));
+    }
+  };
+
+  const refreshOpenTransactionDetail = async (transactionId: string, baseline: TransactionDetailDraft) => {
+    const requestId = transactionDetailRefreshRequestRef.current + 1;
+    transactionDetailRefreshRequestRef.current = requestId;
+    try {
+      const response = await fetch(`/api/transactions/${encodeURIComponent(transactionId)}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const refreshed = payload?.transaction as Transaction | undefined;
+      if (!refreshed?.id || requestId !== transactionDetailRefreshRequestRef.current) return;
+      setTransactions((current) => current.map((entry) => (entry.id === refreshed.id ? refreshed : entry)));
+      setSelectedTransaction((current) => (current?.id === refreshed.id ? { ...refreshed, warningReason: refreshed.warningReason ?? current.warningReason } : current));
+      setDetailDraft((current) => {
+        if (!current) return current;
+        return mergeRefreshedTransactionDetailDraft(current, baseline, createDetailDraft(refreshed, {
+          categoryId: getDisplayCategoryIdForTransaction(refreshed),
+          type: getTransactionDisplayType(
+            refreshed,
+            accountNumberById.get(refreshed.accountId) ?? null,
+            workspaceAccountNumbers
+          ),
+        }));
+      });
+    } catch {
+      // The existing row is already usable. Keep the drawer instant if the
+      // detail refresh or post-visible receipt enrichment is still settling.
+    }
+  };
+
+  usePendingReceiptDetails(selectedTransaction, (fresh, baseline) => {
+    const optionsFor = (entry: Transaction) => ({
+      categoryId: getDisplayCategoryIdForTransaction(entry),
+      type: getTransactionDisplayType(entry, accountNumberById.get(entry.accountId) ?? null, workspaceAccountNumbers),
+    });
+    setSelectedTransaction((current) => current?.id === fresh.id ? fresh : current);
+    setTransactions((current) => current.map((entry) => entry.id === fresh.id ? fresh : entry));
+    setDetailDraft((current) => current ? mergeRefreshedTransactionDetailDraft(
+      current, createDetailDraft(baseline, optionsFor(baseline)), createDetailDraft(fresh, optionsFor(fresh))
+    ) : current);
+  });
+
+  const openTransactionDetail = (transaction: Transaction, { syncRoute = true }: { syncRoute?: boolean } = {}) => {
+    if (syncRoute && isCompactViewport) {
+      router.push(`/transactions/${encodeURIComponent(transaction.id)}`, { scroll: true });
+      return;
+    }
+
+    if (isCompactViewport && transactionDetailScrollYRef.current === null) {
+      transactionDetailScrollYRef.current = window.scrollY;
+    }
+    setActiveWarningTransactionId(null);
+    setSelectedTransaction(transaction);
+    setDetailTags((transaction.tags ?? []).map((tag) => tag.name));
+    setDetailEditing(false);
+    setDetailActionMenuOpen(false);
+    setTransactionDeleteConfirmOpen(false);
+    setTransactionSplitBillOpen(false);
+    setTransactionSplitBillDraft({
+      groupId: "",
+      participantNames: [],
+    });
+    setTransactionSplitBillSaving(false);
+    const initialDraft = createDetailDraft(transaction, {
+        categoryId: getDisplayCategoryIdForTransaction(transaction),
+        type: getTransactionDisplayType(
+          transaction,
+          accountNumberById.get(transaction.accountId) ?? null,
+          workspaceAccountNumbers
+        ),
+      });
+    setDetailDraft(initialDraft);
+    void refreshOpenTransactionDetail(transaction.id, initialDraft);
+
+    if (syncRoute && isCompactViewport) {
+      detailTransactionParamRef.current = transaction.id;
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set("detail", transaction.id);
+      router.push(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`, { scroll: false });
+    }
+  };
+
+  const openTransactionReview = (transaction: Transaction, _transactionIndex?: number | null) => {
+    openTransactionDetail(transaction);
+    capturePostHogClientEventOnce("review_item_opened", {
+      workspace_id: selectedWorkspaceId || null,
+      transaction_id: transaction.id,
+      review_reason: reviewReasonsFor(transaction).join(" · "),
+      review_status: transaction.reviewStatus ?? null,
+    }, analyticsOnceKey("review_item_opened", `transaction:${transaction.id}`));
+  };
+
+  const resolveTransactionWarning = async (
+    transaction: Transaction,
+    patch: Pick<Transaction, "isExcluded" | "isTransfer" | "reviewStatus">,
+    successMessage: string,
+    outcome: "accepted" | "rejected"
+  ) => {
+    if (isSaving) return;
+    setIsSaving(true);
+    const nextReviewTransaction = nextReviewTransactionAfter(transaction.id);
+
+    capturePostHogClientEvent(
+      outcome === "accepted" ? "review_item_accepted" : "review_item_rejected",
+      {
+        workspace_id: selectedWorkspaceId || null,
+        transaction_id: transaction.id,
+        transaction_amount: Number(transaction.amount),
+        transaction_currency: transaction.currency,
+        transaction_account: transaction.accountName,
+        transaction_category: transaction.categoryName ?? "Uncategorized",
+        merchant_raw: transaction.merchantRaw,
+        merchant_clean: transaction.merchantClean ?? transaction.merchantRaw,
+        review_reason: reviewReasonsFor(transaction).join(" · ") || null,
+        review_status: patch.reviewStatus,
+        is_excluded: patch.isExcluded,
+        is_transfer: patch.isTransfer,
+      }
+    );
+
+    if (isDuplicateWarningTransaction(transaction) && outcome === "rejected") {
+      capturePostHogClientEvent("transaction_split", {
+        workspace_id: selectedWorkspaceId || null,
+        transaction_id: transaction.id,
+        split_reason: "duplicate_review",
+        transaction_amount: Number(transaction.amount),
+        transaction_account: transaction.accountName,
+      });
+    }
+
+    transactionDetailRefreshRequestRef.current += 1;
+    applyTransactionPatchLocally(transaction.id, patch);
+    setMessage(successMessage);
+
+    try {
+      await updateTransaction(transaction.id, {
+        isExcluded: patch.isExcluded,
+        reviewStatus: patch.reviewStatus,
+      }, { recordHistory: false });
+    } catch (error) {
+      applyTransactionPatchLocally(transaction.id, {
+        isExcluded: transaction.isExcluded,
+        isTransfer: transaction.isTransfer,
+        reviewStatus: transaction.reviewStatus,
+      });
+      refreshTransactionsSummary();
+      setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+      return;
+    } finally {
+      setIsSaving(false);
+    }
+
+    setActiveWarningTransactionId(null);
+    if (nextReviewTransaction) {
+      window.requestAnimationFrame(() => {
+        openTransactionReview(nextReviewTransaction);
+      });
+      return;
+    }
+
+    closeTransactionDetail();
+  };
+
+  const closeTransactionDetail = (
+    options?: { syncRoute?: boolean } | ReactMouseEvent<HTMLElement>
+  ) => {
+    const syncRoute = options && "syncRoute" in options ? options.syncRoute ?? true : true;
+    if (detailEditing && hasDetailDraftChanges && !isSaving) {
+      setMessage("Save or cancel your transaction changes before closing.");
+      return;
+    }
+
+    transactionDetailRefreshRequestRef.current += 1;
+    setSelectedTransaction(null);
+    setDetailDraft(null);
+    setDetailEditing(false);
+    setDetailActionMenuOpen(false);
+    setTransactionDeleteConfirmOpen(false);
+    setTransactionSplitBillOpen(false);
+    setTransactionSplitBillDraft({
+      groupId: "",
+      participantNames: [],
+    });
+    setTransactionSplitBillSaving(false);
+    setTransactionSplitBillError(null);
+    setActiveWarningTransactionId(null);
+
+    if (syncRoute && isCompactViewport && urlSearchParams.get("detail")) {
+      detailTransactionParamRef.current = null;
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("detail");
+      router.replace(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`, { scroll: false });
+    }
+
+    if (isCompactViewport && transactionDetailScrollYRef.current !== null) {
+      const scrollY = transactionDetailScrollYRef.current;
+      transactionDetailScrollYRef.current = null;
+      window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedTransaction) return;
+    const dialog = document.querySelector<HTMLElement>(".transaction-drawer");
+    if (dialog) return containDialogFocus(dialog);
+  }, [selectedTransaction?.id]);
+
+  useEffect(() => {
+    if (!bulkDeleteConfirmOpen) return;
+    const dialog = document.querySelector<HTMLElement>('[aria-labelledby="bulk-delete-title"]');
+    if (dialog) return containDialogFocus(dialog);
+  }, [bulkDeleteConfirmOpen]);
+
+  const beginDrawerEdit = (label: string) => {
+    setDetailTags((selectedTransaction?.tags ?? []).map((tag) => tag.name));
+    setDetailEditing(true);
+    requestAnimationFrame(() => {
+      const root = document.querySelector(".transaction-drawer");
+      root?.querySelectorAll("details").forEach((element) => { element.open = true; });
+      const field = Array.from(root?.querySelectorAll("[data-detail-field]") ?? []).find((element) => element.getAttribute("data-detail-field") === label);
+      (field?.querySelector("input, textarea, button, select") as HTMLElement | null)?.focus();
+    });
+  };
+
+  const cancelTransactionDetailEdit = () => {
+    if (!selectedTransaction) {
+      return;
+    }
+
+    setDetailDraft({
+      ...createDetailDraft(selectedTransaction, {
+        categoryId: getDisplayCategoryIdForTransaction(selectedTransaction),
+        type: getTransactionDisplayType(
+          selectedTransaction,
+          accountNumberById.get(selectedTransaction.accountId) ?? null,
+          workspaceAccountNumbers
+        ),
+      }),
+    });
+    setDetailEditing(false);
+    setDetailActionMenuOpen(false);
+  };
+
+  useEffect(() => {
+    if (!isCompactViewport) {
+      return;
+    }
+
+    const detailTransactionId = urlSearchParams.get("detail");
+    if (!detailTransactionId) {
+      return;
+    }
+
+    detailTransactionParamRef.current = detailTransactionId;
+    if (selectedTransaction?.id === detailTransactionId) {
+      return;
+    }
+
+    const transaction = transactions.find((candidate) => candidate.id === detailTransactionId);
+    if (transaction) {
+      openTransactionDetail(transaction, { syncRoute: false });
+    }
+  }, [isCompactViewport, selectedTransaction, transactions, urlSearchParams]);
+
+  const createTransactionSplitBill = async () => {
+    if (!selectedTransaction) {
+      return;
+    }
+
+    const transactionTitle = (detailDraft?.merchantClean ?? selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw).trim();
+    const transactionAmount = detailDraft?.amount ?? selectedTransaction.amount;
+    const transactionCurrency = detailDraft?.currency ?? selectedTransaction.currency;
+    const transactionDate = detailDraft?.date ?? selectedTransaction.date.slice(0, 10);
+
+    setTransactionSplitBillSaving(true);
+    try {
+      const createdBill = (await createSplitBillFromTransaction({
+        workspaceId: selectedTransaction.workspaceId,
+        transactionId: selectedTransaction.id,
+        transactionTitle: transactionTitle || "Split Bill",
+        billDate: transactionDate,
+        currency: transactionCurrency,
+        amount: transactionAmount,
+        draft: transactionSplitBillDraft,
+        receiptLineItems: selectedTransactionReceiptLineItems.map((lineItem) => ({
+          description: lineItem.description,
+          amount:
+            lineItem.amount ??
+            (getReceiptLineItemComputedAmount(lineItem) !== null ? String(getReceiptLineItemComputedAmount(lineItem)) : ""),
+        })),
+      })) as { id: string; title: string } | null;
+
+      setTransactionSplitBillOpen(false);
+      setTransactionSplitBillDraft({
+        groupId: "",
+        participantNames: [],
+      });
+      setTransactionSplitBillError(null);
+      if (createdBill) {
+        setSelectedTransaction((current) => (current ? { ...current, splitBill: createdBill } : current));
+      }
+      router.refresh();
+    } catch (error) {
+      setTransactionSplitBillError(error instanceof Error ? error.message : "Unable to create split bill.");
+    } finally {
+      setTransactionSplitBillSaving(false);
+    }
+  };
+
+  const updateDetailReceiptLineItem = (index: number, field: keyof ReceiptLineItemDraft, value: string) => {
+    setDetailDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextLineItems = current.receiptLineItems.length > 0 ? [...current.receiptLineItems] : selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
+      nextLineItems[index] = {
+        ...(nextLineItems[index] ?? createEmptyReceiptLineItem()),
+        [field]: value,
+      };
+      return {
+        ...current,
+        receiptLineItems: nextLineItems,
+      };
+    });
+  };
+
+  const deleteDetailReceiptLineItem = (index: number) => {
+    setDetailDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        receiptLineItems: current.receiptLineItems.filter((_, itemIndex) => itemIndex !== index),
+      };
+    });
+  };
+
+  const toggleSelectedTransaction = (transactionId: string, selected: boolean) => {
+    setSelectedTransactionIds((current) => {
+      const next = new Set(current);
+      if (selected) {
+        next.add(transactionId);
+      } else {
+        next.delete(transactionId);
+      }
+      return Array.from(next);
+    });
+  };
+
+  const [bulkDestinationOpen, setBulkDestinationOpen] = useState(false);
+  useEffect(() => { setBulkDestinationOpen(false); }, [selectedWorkspaceId]);
+  const clearSelection = () => {
+    setSelectedTransactionIds([]);
+    setSelectionMenuOpen(false);
+    setBulkDeleteConfirmOpen(false);
+  };
+
+  const syncAfterTransactionRemovals = (transactionIds: readonly string[]) => {
+    const deletedIds = new Set(transactionIds);
+    if (deletedIds.size === 0) return;
+
+    deletedIds.forEach((transactionId) => deletedTransactionIdsRef.current.add(transactionId));
+    if (selectedWorkspaceId) {
+      deletedIds.forEach((transactionId) => {
+        applyOptimisticWorkspaceTransactionDeletion(selectedWorkspaceId, transactionId);
+      });
+    }
+    setTransactions((current) => current.filter((entry) => !deletedIds.has(entry.id)));
+    setSelectedTransactionIds((current) => current.filter((entryId) => !deletedIds.has(entryId)));
+    setActiveWarningTransactionId((current) => (current && deletedIds.has(current) ? null : current));
+    setSelectedTransaction((current) => (current && deletedIds.has(current.id) ? null : current));
+    setDetailDraft((current) => {
+      if (!current || !selectedTransaction?.id || !deletedIds.has(selectedTransaction.id)) {
+        return current;
+      }
+
+      return null;
+    });
+  };
+
+  const syncAfterTransactionRemoval = (transactionId: string) => {
+    syncAfterTransactionRemovals([transactionId]);
+  };
+
+  const openBulkEdit = () => {
+    setBulkEditForm(createEmptyBulkEditForm());
+    setBulkEditOpen(true);
+  };
+
+  const editSelection = () => {
+    if (selectedTransactionIds.length !== 1) { openBulkEdit(); return; }
+    const transaction = transactions.find((entry) => entry.id === selectedTransactionIds[0])
+      ?? (selectedRowsRef.current.workspaceId === selectedWorkspaceId
+        ? selectedRowsRef.current.rows.get(selectedTransactionIds[0]) : undefined);
+    if (!transaction) return;
+    if (isCompactViewport) { router.push(`/transactions/${encodeURIComponent(transaction.id)}?edit=1`); return; }
+    openTransactionDetail(transaction);
+    if (!isCompactViewport) setDetailEditing(true);
+  };
+
+  const openSelectionTags = () => {
+    setSelectedTags([]);
+    setTagAction("add");
+    setTagError("");
+    setTagsOpen(true);
+  };
+  useEffect(() => {
+    if (!tagsOpen) return;
+    const previousFocus = document.activeElement;
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const controls = Array.from(tagsDialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]') ?? []);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", trapFocus);
+    return () => { document.removeEventListener("keydown", trapFocus); if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus(); };
+  }, [tagsOpen]);
+  useEffect(() => {
+    if (!tagsOpen || !selectedWorkspaceId) return;
+    let cancelled = false;
+    setTagSuggestions([]);
+    void fetch(`/api/tags?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : { tags: [] })
+      .then((payload) => { if (!cancelled) setTagSuggestions((payload.tags ?? []).map((tag: { name: string }) => tag.name)); })
+      .catch(() => { /* New tags remain available if suggestions cannot load. */ });
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape" && !isSaving) setTagsOpen(false); };
+    document.addEventListener("keydown", escape);
+    return () => { cancelled = true; document.removeEventListener("keydown", escape); };
+  }, [tagsOpen, selectedWorkspaceId, isSaving]);
+
+  const applySelectionTags = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSaving || !selectedTags.length) return;
+    setIsSaving(true);
+    setTagError("");
+    const failed: string[] = [];
+    // Bounded requests; the server adds/removes only these tags, never replaces
+    // the other labels on a selected transaction with a stale client snapshot.
+    for (let start = 0; start < selectedTransactionIds.length; start += 4) {
+      await Promise.all(selectedTransactionIds.slice(start, start + 4).map(async (id) => {
+        try { await updateTransaction(id, { tags: selectedTags, tagAction }, { recordHistory: false, refreshSummary: false }); }
+        catch { failed.push(id); }
+      }));
+    }
+    setIsSaving(false);
+    setUndoStack([]);
+    setRedoStack([]);
+    clearJsonRequestCache("transactions:list:");
+    refreshTransactionsSummary();
+    if (failed.length) {
+      setSelectedTransactionIds(failed);
+      setTagError(`${failed.length} transaction${failed.length === 1 ? "" : "s"} could not be updated. Retry to apply tags to those remaining.`);
+      return;
+    }
+    setMessage(`Tags ${tagAction === "add" ? "added" : "removed"} for ${selectedTransactionIds.length} transaction${selectedTransactionIds.length === 1 ? "" : "s"}.`);
+    setTagsOpen(false);
+    clearSelection();
+  };
+
+  const applyDateFilterMode = (mode: DateFilterMode) => {
+    if (mode === "ltd") {
+      setDateFilterMode("ltd");
+      setDateFilterAnchor(todayIso);
+      setCustomStart("");
+      setCustomEnd("");
+      return;
+    }
+
+    if (mode === "custom") {
+      setDateFilterMode("custom");
+      setDateFilterAnchor(todayIso);
+      setCustomStart((current) => current || todayIso);
+      setCustomEnd((current) => current || todayIso);
+      return;
+    }
+
+    setDateFilterMode(mode);
+    setDateFilterAnchor(todayIso);
+    setCustomStart("");
+    setCustomEnd("");
+  };
+
+  const toggleFiltersPanel = () => {
+    closeToolbarMenus();
+    setFilterOpen((current) => !current);
+  };
+
+  const closeHeaderMenu = () => {
+    setHeaderMenuOpen(null);
+    setHeaderMenuPosition(null);
+  };
+
+  const openHeaderMenu = (field: TransactionSortField, event: ReactMouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const desiredWidth = field === "name" ? 236 : field === "amount" ? 360 : field === "date" ? 380 : 332;
+    const menuWidth = Math.min(desiredWidth, window.innerWidth - 16);
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
+    setAddMenuOpen(false);
+    setSelectionMenuOpen(false);
+    setFilterOpen(false);
+    setHeaderMenuOpen((current) => (current === field ? null : field));
+    setHeaderMenuPosition((current) => (current && current.left === left && current.width === menuWidth ? current : {
+      top: rect.bottom + 10,
+      left,
+      width: menuWidth,
+    }));
+  };
+
+  const toggleHeaderSort = (field: TransactionSortField, direction: TransactionSortDirection) => {
+    if (activeHeaderSort?.field === field && activeHeaderSort.direction === direction) {
+      setActiveHeaderSort(null);
+      setSortField("date");
+      setSortDirection("desc");
+      return;
+    }
+
+    setActiveHeaderSort({ field, direction });
+    setSortField(field);
+    setSortDirection(direction);
+  };
+
+  const openManualAdd = async () => {
+    setManualSaveError("");
+    flushSync(() => {
+      closeChrome();
+      setAddMenuOpen(false);
+    });
+
+    const activeWorkspaceId = selectedWorkspaceId || readTransactionsWorkspaceCache()?.selectedWorkspaceId || workspaces[0]?.id || null;
+
+    if (!activeWorkspaceId) {
+      setMessage("Choose a workspace first.");
+      return;
+    }
+
+    if (activeWorkspaceId !== selectedWorkspaceId) {
+      setSelectedWorkspaceId(activeWorkspaceId);
+    }
+
+    const transactionLimitUsageCount = planUsage?.transactionCount ?? workspaceTransactionCount;
+
+    if (planLimits?.transactionLimit != null && transactionLimitUsageCount >= planLimits.transactionLimit) {
+      setPlanLimitNudge({
+        planTier,
+        limitType: "transaction_limit",
+        limitValue: planLimits.transactionLimit,
+      });
+      setMessage("You’ve reached the current transaction limit for this plan.");
+      return;
+    }
+
+    flushSync(() => {
+      setCreationTab("manual");
+      setManualForm(createEmptyManualForm("", getOtherCategoryId(categories), defaultCurrency));
+      setManualMoreOpen(false);
+      setManualAccountMenuOpen(false);
+      setManualCategoryMenuOpen(false);
+      setManualOpen(true);
+    });
+
+    try {
+      const accountId = await ensureDefaultAccount(activeWorkspaceId, defaultCurrency);
+      if (activeAccountWorkspaceRef.current !== activeWorkspaceId) return;
+      const accountCurrency = formatCurrencyCode(
+        accounts.find((account) => account.id === accountId)?.currency || defaultCurrency
+      );
+      setManualForm((current) => {
+        if (current.accountId) {
+          return current;
+        }
+
+        return {
+          ...current,
+          accountId,
+          currency: accountCurrency,
+        };
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to prepare transaction form.");
+    }
+  };
+
+  const fetchCategorySuggestion = useCallback(
+    async (merchantText: string, type: Transaction["type"], signal?: AbortSignal) => {
+      if (!selectedWorkspaceId || merchantText.trim().length < 2) {
+        return null;
+      }
+
+      const response = await fetch("/api/transaction-category-suggestions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          merchantText,
+          type,
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = (await response.json()) as { suggestion?: CategorySuggestion | null };
+      return payload.suggestion ?? null;
+    },
+    [selectedWorkspaceId]
+  );
+
+  useEffect(() => {
+    const handleKeyboardShortcuts = (event: globalThis.KeyboardEvent) => {
+      const target = event.target;
+      const isEditableTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+
+      if (event.key === "Escape") {
+        if (merchantRenameSuggestion) {
+          setMerchantRenameSuggestion(null);
+          return;
+        }
+
+        if (transactionDeleteConfirmOpen) {
+          setTransactionDeleteConfirmOpen(false);
+          return;
+        }
+
+        if (selectedTransaction) {
+          closeTransactionDetail();
+          return;
+        }
+
+        if (bulkDeleteConfirmOpen) {
+          setBulkDeleteConfirmOpen(false);
+          return;
+        }
+
+        if (manualOpen) {
+          if (isSaving || tableLocked) return;
+          setManualOpen(false);
+          return;
+        }
+
+        if (bulkEditOpen) {
+          setBulkEditOpen(false);
+          return;
+        }
+
+        if (filterOpen) {
+          setFilterOpen(false);
+          return;
+        }
+
+        if (hasSelectedTransactions) {
+          setSelectedTransactionIds([]);
+          return;
+        }
+
+        if (headerMenuOpen) {
+          setHeaderMenuOpen(null);
+          setHeaderMenuPosition(null);
+          return;
+        }
+
+        if (addMenuOpen) {
+          closeToolbarMenus();
+        }
+
+        return;
+      }
+
+      if (isEditableTarget || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "f") {
+        event.preventDefault();
+        toggleFiltersPanel();
+        return;
+      }
+
+      if (key === "a") {
+        event.preventDefault();
+        void openManualAdd();
+        return;
+      }
+
+      if (key === "i") {
+        event.preventDefault();
+        openImportFiles();
+        return;
+      }
+
+      if (key === "b" && hasSelectedTransactions) {
+        event.preventDefault();
+        openBulkEdit();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyboardShortcuts);
+    return () => document.removeEventListener("keydown", handleKeyboardShortcuts);
+  }, [
+    addMenuOpen,
+    bulkDeleteConfirmOpen,
+    bulkEditOpen,
+    headerMenuOpen,
+    filterOpen,
+    hasSelectedTransactions,
+    manualOpen,
+    tableLocked,
+    isSaving,
+    merchantRenameSuggestion,
+    openBulkEdit,
+    openManualAdd,
+    selectedTransaction,
+    transactionDeleteConfirmOpen,
+    toggleFiltersPanel,
+  ]);
+
+  const saveManualTransaction = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const entryDraft = { ...manualForm,
+      merchantRaw: manualForm.merchantRaw.trim() || manualTransactionName(manualForm.type),
+      date: manualForm.date.trim() || manualTransactionToday(),
+      amount: manualForm.amount.trim() || "0",
+      categoryId: manualTransactionCategoryId(categories, manualForm.type, manualForm.categoryId),
+    };
+    if (manualSaveInFlightRef.current) return;
+    const submitter = event.nativeEvent instanceof SubmitEvent ? event.nativeEvent.submitter : null;
+    const submitMode = submitter instanceof HTMLElement ? submitter.getAttribute("data-submit-mode") : null;
+    const keepOpenAfterSave = submitMode === "add-another";
+
+    const normalizedManualAmount = normalizeTransactionAmountInput(entryDraft.amount);
+    if (normalizedManualAmount === null) {
+      setMessage(transactionAmountFormatMessage);
+      return;
+    }
+
+    const activeWorkspaceId = selectedWorkspaceId || readTransactionsWorkspaceCache()?.selectedWorkspaceId || workspaces[0]?.id || null;
+
+    if (!activeWorkspaceId) {
+      setMessage("Choose a workspace first.");
+      return;
+    }
+
+    if (activeWorkspaceId !== selectedWorkspaceId) {
+      setSelectedWorkspaceId(activeWorkspaceId);
+    }
+
+    setManualSaveError("");
+    manualSaveInFlightRef.current = true;
+    setIsSaving(true);
+    let optimisticTransactionId = "";
+    let optimisticTransactionAmount = 0;
+    let optimisticTransactionCurrency = entryDraft.currency;
+    let optimisticTransactionType: Transaction["type"] = "expense";
+    let resolvedAccountId = "";
+    try {
+      const accountId = entryDraft.accountId || (await ensureDefaultAccount(activeWorkspaceId, entryDraft.currency));
+      resolvedAccountId = accountId;
+      const account = accounts.find((entry) => entry.id === accountId) ?? null;
+      const accountCurrency = formatCurrencyCode(account?.currency ?? "PHP");
+      const transactionCurrency = formatCurrencyCode(entryDraft.currency || accountCurrency);
+
+      if (entryDraft.type === "transfer") {
+        if (!entryDraft.destinationAccountId) {
+          throw new Error("Choose where the money is going.");
+        }
+
+        const transferResponse = await fetch("/api/transactions/manual-transfer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: activeWorkspaceId,
+            sourceAccountId: accountId,
+            destinationAccountId: entryDraft.destinationAccountId,
+            date: entryDraft.date,
+            amount: normalizedManualAmount,
+            currency: transactionCurrency,
+            name: entryDraft.merchantRaw.trim() || null,
+            description: entryDraft.description.trim() || null,
+            feeAmount: entryDraft.feeAmount || null,
+            tags: sanitizeTransactionTagNames(entryDraft.tags),
+          }),
+        });
+        const transferPayload = (await transferResponse.json().catch(() => ({}))) as { error?: string };
+        if (!transferResponse.ok) {
+          throw new Error(transferPayload.error ?? "Unable to create transfer.");
+        }
+
+        clearAccountsWorkspaceCache(activeWorkspaceId);
+        setManualAccountMenuOpen(false);
+        setManualCategoryMenuOpen(false);
+        setManualMoreOpen(false);
+        if (keepOpenAfterSave) {
+          setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories), transactionCurrency));
+          window.requestAnimationFrame(() => manualNameInputRef.current?.focus());
+        } else {
+          setManualOpen(false);
+        }
+        setMessage("Transfer added between your accounts.");
+        await loadTransactionsPage(activeWorkspaceId, {
+          background: true,
+          pageOverride: 1,
+          pageSizeOverride: transactionsPageSize,
+          summaryMode: "light",
+        });
+        return;
+      }
+
+      const categoryId = entryDraft.categoryId || getOtherCategoryId(categories) || undefined;
+      const categoryName = getCategoryNameById(categories, categoryId ?? null);
+      const accountName = account?.name ?? accountId;
+      const receiptLineItems = sanitizeReceiptLineItems(entryDraft.receiptLineItems);
+      const optimisticTransaction: Transaction = {
+        id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        workspaceId: activeWorkspaceId,
+        accountId,
+        accountName,
+        categoryId: categoryId ?? null,
+        categoryName,
+        reviewStatus: "confirmed",
+        date: entryDraft.date,
+        amount: Number(normalizedManualAmount).toFixed(2),
+        currency: transactionCurrency,
+        type: entryDraft.type === "credit" ? "income" : "expense",
+        merchantRaw: entryDraft.merchantRaw,
+        merchantClean: null,
+        description: entryDraft.description.trim() || null,
+        isTransfer: false,
+        isExcluded: false,
+        source: "manual",
+        importFileId: null,
+        warningReason: null,
+        rawPayload: {
+          source: "manual",
+          merchantRaw: entryDraft.merchantRaw,
+          merchantClean: null,
+          description: entryDraft.description.trim() || null,
+          tags: sanitizeTransactionTagNames(entryDraft.tags),
+          receiptLineItems,
+        },
+      };
+      optimisticTransactionId = optimisticTransaction.id;
+      optimisticTransactionAmount = Number(optimisticTransaction.amount);
+      optimisticTransactionType = optimisticTransaction.type;
+      optimisticTransactionCurrency = optimisticTransaction.currency;
+
+      flushSync(() => {
+        setTransactionsPage(1);
+        setTransactions((current) => [optimisticTransaction, ...current.filter((entry) => entry.id !== optimisticTransaction.id)]);
+        setTransactionsSummary((current) => ({
+          ...current,
+          totalCount: current.totalCount + 1,
+          currencyTotals: withTransactionCurrencyDelta(current.currencyTotals, optimisticTransactionCurrency, optimisticTransactionType, optimisticTransactionAmount),
+          income: current.income + (optimisticTransaction.type === "income" ? optimisticTransactionAmount : 0),
+          spending: current.spending + (optimisticTransaction.type === "expense" ? optimisticTransactionAmount : 0),
+          transfers: current.transfers + (optimisticTransaction.type === "transfer" ? optimisticTransactionAmount : 0),
+        }));
+        setUndoStack([]);
+        setRedoStack([]);
+        setManualMoreOpen(false);
+        setManualAccountMenuOpen(false);
+        setManualCategoryMenuOpen(false);
+      });
+
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: activeWorkspaceId,
+          accountId,
+          categoryId: categoryId ?? null,
+          date: entryDraft.date,
+          amount: normalizedManualAmount,
+          currency: transactionCurrency,
+          type: entryDraft.type === "credit" ? "income" : "expense",
+          merchantRaw: entryDraft.merchantRaw,
+          merchantClean: null,
+          description: entryDraft.description.trim() || null,
+          tags: sanitizeTransactionTagNames(entryDraft.tags),
+          receiptLineItems,
+          isTransfer: false,
+          isExcluded: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const limitPayload = parsePlanLimitPayload(payload);
+        if (limitPayload) {
+          setPlanLimitNudge(limitPayload);
+        }
+        throw new Error(payload?.error ?? "Unable to create transaction.");
+      }
+
+      const payload = await response.json();
+      const created = payload.transaction as Transaction;
+      clearAccountsWorkspaceCache(activeWorkspaceId);
+      if (optimisticTransactionId) {
+        setTransactions((current) =>
+          current.map((entry) => (entry.id === optimisticTransactionId ? created : entry))
+        );
+      }
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+      void loadTransactionsPage(activeWorkspaceId, {
+        background: true,
+        pageOverride: 1,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "light",
+      });
+      setMessage(`Transaction "${created.merchantRaw}" added.`);
+      if (!keepOpenAfterSave) setManualOpen(false);
+
+      if (keepOpenAfterSave) {
+        const nextAccountId =
+          resolvedAccountId || created.accountId || (await ensureDefaultAccount(activeWorkspaceId, created.currency));
+        const nextAccount = accounts.find((entry) => entry.id === nextAccountId) ?? null;
+        const nextCurrency = formatCurrencyCode(nextAccount?.currency ?? created.currency ?? "PHP");
+        flushSync(() => {
+          setManualForm(
+            createEmptyManualForm(
+              nextAccountId,
+              getOtherCategoryId(categories),
+              nextCurrency
+            )
+          );
+          setManualMoreOpen(false);
+          setManualAccountMenuOpen(false);
+          setManualCategoryMenuOpen(false);
+          setManualOpen(true);
+        });
+
+        window.requestAnimationFrame(() => {
+          manualNameInputRef.current?.focus();
+        });
+      }
+    } catch (error) {
+      if (optimisticTransactionId) {
+        setTransactions((current) => current.filter((entry) => entry.id !== optimisticTransactionId));
+        setTransactionsSummary((current) => ({
+          ...current,
+          totalCount: Math.max(0, current.totalCount - 1),
+          currencyTotals: withTransactionCurrencyDelta(current.currencyTotals, optimisticTransactionCurrency, optimisticTransactionType, -optimisticTransactionAmount),
+          income: current.income - (optimisticTransactionType === "income" ? optimisticTransactionAmount : 0),
+          spending: current.spending - (optimisticTransactionType === "expense" ? optimisticTransactionAmount : 0),
+          transfers: current.transfers - (optimisticTransactionType === "transfer" ? optimisticTransactionAmount : 0),
+        }));
+      }
+      const errorMessage = error instanceof Error ? error.message : "Unable to create transaction.";
+      setManualSaveError(errorMessage);
+      setMessage(errorMessage);
+    } finally {
+      manualSaveInFlightRef.current = false;
+      setIsSaving(false);
+    }
+  };
+
+  const transactionToPatch = (transaction: Transaction) => ({
+    categoryId: transaction.categoryId,
+    accountId: transaction.accountId,
+    isExcluded: transaction.isExcluded,
+    isTransfer: transaction.isTransfer,
+    type: getTransactionDisplayType(transaction, accountNumberById.get(transaction.accountId) ?? null, workspaceAccountNumbers),
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description ?? null,
+    date: transaction.date.slice(0, 10),
+    amount: transaction.amount,
+    currency: transaction.currency,
+  });
+
+  const updateTransaction = async (
+    transactionId: string,
+    body: Record<string, unknown>,
+    options: UpdateTransactionOptions = {}
+  ) => {
+    const before =
+      options.recordHistory === false
+        ? null
+        : options.historyBefore ?? transactions.find((entry) => entry.id === transactionId) ?? null;
+    const response = await fetch(`/api/transactions/${transactionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to update transaction.");
+    }
+
+    const payload = await response.json();
+    const updated = payload.transaction as Transaction;
+    clearJsonRequestCache(`transactions:list:${selectedWorkspaceId}:`);
+    transactionPrefetchRef.current.clear();
+    clearAccountsWorkspaceCache(selectedWorkspaceId);
+    setTransactions((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+    setSelectedTransaction((current) => (current?.id === updated.id ? updated : current));
+    setDetailDraft((current) => {
+      if (!current || selectedTransaction?.id !== updated.id) {
+        return current;
+      }
+
+      return createDetailDraft(updated, {
+        categoryId: getDisplayCategoryIdForTransaction(updated),
+        type: getTransactionDisplayType(
+          updated,
+          accountNumberById.get(updated.accountId) ?? null,
+          workspaceAccountNumbers
+        ),
+      });
+    });
+
+    if (before) {
+      setUndoStack((current) => [{ before, after: updated }, ...current]);
+      setRedoStack([]);
+    }
+
+    if (options.refreshSummary !== false) {
+      refreshTransactionsSummary();
+    }
+    return updated;
+  };
+
+  const setTransactionTotalsExcluded = async (transaction: Transaction, isExcluded: boolean) => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setMessage("");
+    transactionDetailRefreshRequestRef.current += 1;
+    try {
+      await updateTransaction(transaction.id, { isExcluded });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update totals.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const suggestMerchantRenameForSimilarTransactions = (transaction: Transaction, nextMerchantClean: string) => {
+    const target = nextMerchantClean.trim();
+    if (!target) {
+      return;
+    }
+
+    const sourceKey = normalizeMerchantGroupKey(transaction.merchantRaw);
+    const matchingTransactionIds = transactions
+      .filter((entry) => entry.id !== transaction.id && normalizeMerchantGroupKey(entry.merchantRaw) === sourceKey)
+      .filter((entry) => normalizeMerchantGroupKey(entry.merchantClean ?? entry.merchantRaw) !== normalizeMerchantGroupKey(target))
+      .map((entry) => entry.id);
+
+    if (matchingTransactionIds.length === 0) {
+      return;
+    }
+
+    capturePostHogClientEventOnce(
+      "ai_suggestion_shown",
+      {
+        workspace_id: selectedWorkspaceId || null,
+        suggestion_type: "merchant_rename",
+        source_transaction_id: transaction.id,
+        source_merchant_raw: transaction.merchantRaw,
+        target_merchant_clean: target,
+        matching_count: matchingTransactionIds.length,
+        transaction_amount: Number(transaction.amount),
+        transaction_account: transaction.accountName,
+        transaction_category: transaction.categoryName ?? "Uncategorized",
+      },
+      analyticsOnceKey("ai_suggestion_shown", `merchant:${transaction.id}:${target}`)
+    );
+
+    setMerchantRenameSuggestion({
+      sourceTransactionId: transaction.id,
+      sourceMerchantRaw: transaction.merchantRaw,
+      targetMerchantClean: target,
+      matchingTransactionIds,
+    });
+  };
+
+  const applyMerchantRenameSuggestion = async () => {
+    if (!merchantRenameSuggestion) {
+      return;
+    }
+
+    setMerchantRenameBusy(true);
+    try {
+      const transactionsToUpdate = merchantRenameSuggestion.matchingTransactionIds
+        .map((transactionId) => transactions.find((entry) => entry.id === transactionId))
+        .filter((entry): entry is Transaction => Boolean(entry));
+
+      if (!transactionsToUpdate.length) {
+        setMerchantRenameSuggestion(null);
+        setMessage("No matching transactions were found.");
+        return;
+      }
+
+      await Promise.allSettled(
+        transactionsToUpdate.map((transaction) =>
+          updateTransaction(
+            transaction.id,
+            {
+              merchantClean: merchantRenameSuggestion.targetMerchantClean,
+            },
+            { recordHistory: false }
+          )
+        )
+      );
+
+      capturePostHogClientEvent("ai_suggestion_accepted", {
+        workspace_id: selectedWorkspaceId || null,
+        suggestion_type: "merchant_rename",
+        source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+        source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+        target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+        matching_count: transactionsToUpdate.length,
+        transaction_account: transactionsToUpdate[0]?.accountName ?? null,
+        transaction_category: transactionsToUpdate[0]?.categoryName ?? null,
+      });
+      capturePostHogClientEvent("transaction_merged", {
+        workspace_id: selectedWorkspaceId || null,
+        source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+        target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+        merged_count: transactionsToUpdate.length,
+        transaction_account: transactionsToUpdate[0]?.accountName ?? null,
+      });
+
+      setMerchantRenameSuggestion(null);
+      setMessage(
+        `Applied "${merchantRenameSuggestion.targetMerchantClean}" to ${transactionsToUpdate.length} similar transaction${
+          transactionsToUpdate.length === 1 ? "" : "s"
+        }.`
+      );
+    } finally {
+      setMerchantRenameBusy(false);
+    }
+  };
+
+  const applyTransactionPatchLocally = (transactionId: string, patch: Partial<Transaction>) => {
+    const before = transactionsRef.current.find(entry => entry.id === transactionId)
+      ?? (selectedTransaction?.id === transactionId ? selectedTransaction : null)
+      ?? (transactionsSummary.firstReviewTransaction?.id === transactionId ? transactionsSummary.firstReviewTransaction : null);
+    if (before) {
+      const after = { ...before, ...patch };
+      const delta = Number(isReviewableTransaction(after)) - Number(isReviewableTransaction(before));
+      setTransactionsSummary(current => ({
+        ...current,
+        review: Math.max(0, current.review + delta),
+        totalCount: reviewFilter === "pending" ? Math.max(0, current.totalCount + delta) : current.totalCount,
+        firstReviewTransaction: current.firstReviewTransaction?.id === transactionId
+          ? (isReviewableTransaction(after) ? after : null) : current.firstReviewTransaction,
+      }));
+    }
+    setTransactions((current) =>
+      current.map((entry) => (entry.id === transactionId ? { ...entry, ...patch } : entry))
+    );
+    setSelectedTransaction((current) => (current?.id === transactionId ? { ...current, ...patch } : current));
+    setDetailDraft((current) => {
+      if (!current || selectedTransaction?.id !== transactionId) {
+        return current;
+      }
+
+      return applyTransactionPatchToDetailDraft(current, patch);
+    });
+  };
+
+  const applyTransactionPatchesLocally = (patches: Array<{ transactionId: string; patch: Partial<Transaction> }>) => {
+    if (!patches.length) {
+      return;
+    }
+
+    const patchMap = new Map(patches.map(({ transactionId, patch }) => [transactionId, patch] as const));
+
+    setTransactions((current) =>
+      current.map((entry) => {
+        const patch = patchMap.get(entry.id);
+        return patch ? { ...entry, ...patch } : entry;
+      })
+    );
+
+    setSelectedTransaction((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const patch = patchMap.get(current.id);
+      return patch ? { ...current, ...patch } : current;
+    });
+
+    setDetailDraft((current) => {
+      if (!current || !selectedTransaction) {
+        return current;
+      }
+
+      const patch = patchMap.get(selectedTransaction.id);
+      if (!patch) {
+        return current;
+      }
+
+      return applyTransactionPatchToDetailDraft(current, patch);
+    });
+  };
+
+  const syncRemovedCashAccounts = (accountIds: readonly string[]) => {
+    const removedAccountIds = new Set(accountIds);
+    if (removedAccountIds.size === 0) {
+      return;
+    }
+
+    setAccounts((current) => current.filter((account) => !removedAccountIds.has(account.id)));
+    setAccountFilters((current) => current.filter((accountId) => !removedAccountIds.has(accountId)));
+  };
+
+  const deleteTransactionRemote = async (transactionId: string) => {
+    const response = await fetch(`/api/transactions/${transactionId}`, {
+      method: "DELETE",
+    });
+    const payload = await response.json().catch(() => null) as { error?: string; removedAccountIds?: string[] } | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error || "Unable to delete transaction.");
+    }
+
+    syncRemovedCashAccounts(Array.isArray(payload?.removedAccountIds) ? payload.removedAccountIds : []);
+    clearJsonRequestCache("transactions:list:");
+    transactionPrefetchRef.current.clear();
+    clearAccountsWorkspaceCache(selectedWorkspaceId);
+  };
+
+  const deleteTransactionsRemote = async (transactionIds: readonly string[]) => {
+    const response = await fetch("/api/transactions/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: selectedWorkspaceId,
+        transactionIds,
+      }),
+    });
+    const payload = await response.json().catch(() => null) as { error?: string; removedAccountIds?: string[]; deletedIds?: string[] } | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error || "Unable to delete the selected transactions.");
+    }
+
+    syncRemovedCashAccounts(Array.isArray(payload?.removedAccountIds) ? payload.removedAccountIds : []);
+    clearJsonRequestCache("transactions:list:");
+    transactionPrefetchRef.current.clear();
+    clearAccountsWorkspaceCache(selectedWorkspaceId);
+    return Array.isArray(payload?.deletedIds) ? payload.deletedIds.filter((id) => transactionIds.includes(id)) : [];
+  };
+
+  const deleteTransaction = async (transactionId: string) => {
+    await deleteTransactionRemote(transactionId);
+
+    syncAfterTransactionRemoval(transactionId);
+  };
+
+  const deleteWarningTransaction = async (transaction: Transaction) => {
+    setActiveWarningTransactionId(null);
+    setMessage("Deleting transaction...");
+
+    try {
+      await deleteTransactionRemote(transaction.id);
+      syncAfterTransactionRemoval(transaction.id);
+      refreshTransactionsSummary();
+      setMessage("Transaction deleted.");
+    } catch (error) {
+      void loadTransactionsPage(selectedWorkspaceId || "", {
+        background: true,
+        pageOverride: transactionsPage,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "light",
+      });
+      setMessage(error instanceof Error ? error.message : "Unable to delete transaction.");
+    }
+  };
+
+  const refreshTransactionsSummary = () => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    transactionPrefetchRef.current.clear();
+    clearJsonRequestCache(`transactions:list:${selectedWorkspaceId}:`);
+    void loadTransactionsPage(selectedWorkspaceId, {
+      background: true,
+      pageOverride: transactionsPage,
+      pageSizeOverride: transactionsPageSize,
+      summaryMode: "light",
+    });
+  };
+
+  const confirmDeleteTransaction = async () => {
+    if (!selectedTransaction) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await deleteTransaction(selectedTransaction.id);
+      refreshTransactionsSummary();
+      setTransactionDeleteConfirmOpen(false);
+      closeTransactionDetail();
+      setMessage("Transaction deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete transaction.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const commitInlineEdit = async (transaction: Transaction, field: EditableTransactionField, value: string) => {
+    const payload: Record<string, unknown> = {};
+
+    if (field === "name") {
+      payload.merchantClean = value.trim() || null;
+    } else if (field === "date") {
+      payload.date = value;
+    } else if (field === "accountId") {
+      payload.accountId = value;
+    } else if (field === "categoryId") {
+      payload.categoryId = value || otherCategoryId || null;
+    } else if (field === "currency") {
+      payload.currency = value.trim().toUpperCase();
+    } else if (field === "amount") {
+      const trimmedValue = value.trim();
+      const parsedAmount = Number(trimmedValue);
+      if (!Number.isFinite(parsedAmount)) {
+        setMessage("Enter a valid amount.");
+        return;
+      }
+
+      payload.amount = Math.abs(parsedAmount).toString();
+    }
+
+    if (Object.keys(payload).length === 0) {
+      return;
+    }
+
+    if (field === "accountId" || field === "categoryId") {
+      const { nextPatch, rollbackPatch } = buildTransactionInlineRelationPatches({
+        transaction,
+        field,
+        value,
+        accounts,
+        categories,
+      });
+
+      applyTransactionPatchLocally(transaction.id, nextPatch);
+      void updateTransaction(transaction.id, payload).catch((error) => {
+        applyTransactionPatchLocally(transaction.id, rollbackPatch);
+        setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+      });
+      if (field === "categoryId") {
+        const categoryChange = resolveTransactionCategoryChange({
+          previousCategoryId: transaction.categoryId ?? "",
+          previousCategoryName: transaction.categoryName ?? null,
+          nextCategoryId: value,
+          nextCategoryName: nextPatch.categoryName ?? null,
+          lookupCategoryName: (categoryId) => categoryNameById.get(categoryId) ?? null,
+        });
+        setMessage(
+          buildTransactionCategoryUpdatedMessage({
+            previousCategoryName: categoryChange.previousCategoryName,
+            nextCategoryName: categoryChange.nextCategoryName,
+          })
+        );
+      } else {
+        setMessage("Transaction updated.");
+      }
+      return;
+    }
+
+    if (field === "name") {
+      const nextMerchantClean = value.trim() || null;
+      applyTransactionPatchLocally(transaction.id, {
+        merchantClean: nextMerchantClean,
+      });
+
+      setMessage("Transaction updated.");
+      void updateTransaction(
+        transaction.id,
+        {
+          merchantClean: nextMerchantClean,
+        },
+        { historyBefore: transaction }
+      )
+        .then((updated) => {
+          if (nextMerchantClean) {
+            suggestMerchantRenameForSimilarTransactions(updated, nextMerchantClean);
+          }
+        })
+        .catch((error) => {
+          applyTransactionPatchLocally(transaction.id, {
+            merchantClean: transaction.merchantClean,
+          });
+          setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+        });
+      return;
+    }
+
+    await updateTransaction(transaction.id, payload);
+    setMessage("Transaction updated.");
+  };
+
+  const commitInlineTypeEdit = async (transaction: Transaction, nextType: Transaction["type"]) => {
+    const currentCategoryName = getDisplayCategoryNameForTransaction(transaction);
+    const normalizedCurrentCategory = normalizeCategoryName(currentCategoryName);
+    let nextCategoryId = transaction.categoryId;
+
+    if (nextType === "transfer") {
+      nextCategoryId =
+        getCategoryIdByName(categories, "Transfers") ||
+        getCategoryIdByName(categories, "Transfer") ||
+        transaction.categoryId;
+    } else if (nextType === "income") {
+      const categorySupportsIncome =
+        coerceTransactionTypeFromCategoryName(currentCategoryName, "income", transaction.amount, false) === "income";
+      if (!categorySupportsIncome) {
+        nextCategoryId = getCategoryIdByName(categories, "Income") || transaction.categoryId;
+      }
+    } else if (normalizedCurrentCategory === "income" || normalizedCurrentCategory === "transfer" || normalizedCurrentCategory === "transfers") {
+      nextCategoryId = otherCategoryId || transaction.categoryId;
+    }
+
+    await updateTransaction(transaction.id, {
+      type: nextType,
+      isTransfer: nextType === "transfer",
+      ...(nextCategoryId !== transaction.categoryId ? { categoryId: nextCategoryId } : {}),
+    });
+    setMessage(`Transaction changed to ${nextType === "transfer" ? "Transfer" : nextType === "income" ? "Income" : "Expense"}.`);
+  };
+
+  const applyHistoryEntry = async (entry: TransactionHistoryEntry, direction: "undo" | "redo") => {
+    setIsApplyingHistory(true);
+    try {
+      const destination = direction === "undo" ? entry.before : entry.after;
+      await updateTransaction(destination.id, transactionToPatch(destination), {
+        recordHistory: false,
+      });
+
+      if (direction === "undo") {
+        setUndoStack((current) => current.slice(1));
+        setRedoStack((current) => [entry, ...current]);
+        setMessage("Undid the last transaction change.");
+        capturePostHogClientEvent("transaction_undone", {
+          workspace_id: selectedWorkspaceId || null,
+          transaction_id: destination.id,
+          before_transaction_id: entry.after.id,
+          after_transaction_id: entry.before.id,
+          transaction_amount: Number(entry.after.amount),
+          transaction_account: entry.after.accountName,
+          transaction_category: entry.after.categoryName ?? "Uncategorized",
+        });
+      } else {
+        setRedoStack((current) => current.slice(1));
+        setUndoStack((current) => [entry, ...current]);
+        setMessage("Redid the last transaction change.");
+      }
+    } finally {
+      setIsApplyingHistory(false);
+    }
+  };
+
+  const undoLastChange = async () => {
+    const entry = undoStack[0];
+    if (!entry || isSaving || isApplyingHistory) {
+      return;
+    }
+
+    await applyHistoryEntry(entry, "undo");
+  };
+
+  const redoLastChange = async () => {
+    const entry = redoStack[0];
+    if (!entry || isSaving || isApplyingHistory) {
+      return;
+    }
+
+    await applyHistoryEntry(entry, "redo");
+  };
+
+  const applyBulkEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!selectedTransactionIds.length) {
+      setMessage("Select transactions first.");
+      return;
+    }
+
+    const count = selectedTransactionIds.length;
+    const selected = selectedTransactionIds
+      .map((transactionId) => transactions.find((entry) => entry.id === transactionId)
+        ?? (selectedRowsRef.current.workspaceId === selectedWorkspaceId
+          ? selectedRowsRef.current.rows.get(transactionId) : undefined))
+      .filter((entry): entry is Transaction => Boolean(entry));
+    if (selected.length !== count) {
+      setMessage("Some selected transactions are unavailable. Refresh and select them again before applying changes.");
+      return;
+    }
+    setIsSaving(true);
+    const originalTransactions = new Map(selected.map((transaction) => [transaction.id, transaction] as const));
+    const accountNames = new Map(accounts.map((account) => [account.id, formatTransactionAccountName(account)] as const));
+    const categoryNames = new Map(categories.map((category) => [category.id, category.name] as const));
+
+    const payloads: Array<{
+      transaction: Transaction;
+      payload: {
+        accountId?: string;
+        categoryId?: string;
+        type?: "income" | "expense" | "transfer";
+      };
+    }> = selected.map((transaction) => ({
+      transaction,
+      payload: {
+        accountId: bulkEditForm.accountId || undefined,
+        categoryId: bulkEditForm.categoryId || undefined,
+        type:
+          bulkEditForm.type === ""
+            ? undefined
+            : bulkEditForm.type === "transfer"
+              ? "transfer"
+              : bulkEditForm.type === "credit"
+              ? "income"
+              : "expense",
+      },
+    }));
+
+    applyTransactionPatchesLocally(
+      payloads.map(({ transaction, payload }) => ({
+        transactionId: transaction.id,
+        patch: {
+          ...(payload.accountId
+            ? {
+                accountId: payload.accountId,
+                accountName: accountNames.get(payload.accountId) ?? transaction.accountName,
+              }
+            : {}),
+          ...(payload.categoryId
+            ? {
+                categoryId: payload.categoryId,
+                categoryName: categoryNames.get(payload.categoryId) ?? transaction.categoryName,
+              }
+            : {}),
+          ...(payload.type !== undefined ? { type: payload.type } : {}),
+        },
+      }))
+    );
+
+    setBulkEditOpen(false);
+    clearSelection();
+    setUndoStack([]);
+    setRedoStack([]);
+    setMessage(`Updating ${count} transaction${count === 1 ? "" : "s"}...`);
+
+    void (async () => {
+      try {
+        const results = await Promise.allSettled(
+          payloads.map(({ transaction, payload }) =>
+            updateTransaction(transaction.id, payload, {
+              recordHistory: false,
+              refreshSummary: false,
+            })
+          )
+        );
+        refreshTransactionsSummary();
+
+        const failedTransactions = results
+          .map((result, index) => ({ result, transaction: payloads[index].transaction }))
+          .filter(
+            (
+              entry
+            ): entry is {
+              result: PromiseRejectedResult;
+              transaction: Transaction;
+            } => entry.result.status === "rejected"
+          );
+
+        if (failedTransactions.length) {
+          applyTransactionPatchesLocally(
+            failedTransactions.map(({ transaction }) => ({
+              transactionId: transaction.id,
+              patch: originalTransactions.get(transaction.id) ?? transaction,
+            }))
+          );
+          const updatedCount = results.length - failedTransactions.length;
+          setMessage(`${updatedCount} of ${results.length} transactions updated. ${failedTransactions.length} could not be updated. Please try again.`);
+          return;
+        }
+
+        setMessage(`${results.length} transaction${results.length === 1 ? "" : "s"} updated.`);
+
+        const updatedFields = Array.from(
+          new Set(
+            payloads.flatMap(({ payload }) =>
+              Object.keys(payload).filter((key) => payload[key as keyof typeof payload] !== undefined)
+            )
+          )
+        );
+
+        capturePostHogClientEvent("bulk_transaction_updated", {
+          workspace_id: selectedWorkspaceId || null,
+          selected_count: selected.length,
+          updated_count: selected.length - failedTransactions.length,
+          updated_fields: updatedFields.join(",") || null,
+          transaction_type: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "type")
+            ? String(payloads[0]?.payload?.type)
+            : null,
+        });
+      } finally {
+        setIsSaving(false);
+      }
+    })();
+  };
+
+  const deleteSelectedTransactions = async () => {
+    if (!selectedTransactionIds.length) {
+      setMessage("Select transactions first.");
+      return;
+    }
+
+    const transactionIds = Array.from(new Set(selectedTransactionIds));
+    const count = transactionIds.length;
+    setIsSaving(true);
+    setMessage(`Deleting ${count} transaction${count === 1 ? "" : "s"}...`);
+
+    try {
+      const deletedIds = await deleteTransactionsRemote(transactionIds);
+      // Commit removal only after the server confirms which records were deleted.
+      transactionsLoadRequestRef.current += 1;
+      syncAfterTransactionRemovals(deletedIds);
+      setIsMobileLoadingMore(false);
+      mobileLoadMoreInFlightRef.current = false;
+      const hasRemainingVisibleTransactions = visibleTransactions.some((transaction) => !deletedIds.includes(transaction.id));
+      setMobilePaginationExhausted(!hasRemainingVisibleTransactions);
+      clearSelection();
+      setBulkDeleteConfirmOpen(false);
+      setUndoStack([]);
+      setRedoStack([]);
+      setTransactionsPage(1);
+      if (selectedWorkspaceId) {
+        await loadTransactionsPage(selectedWorkspaceId, {
+          background: true,
+          pageOverride: 1,
+          pageSizeOverride: transactionsPageSize,
+          summaryMode: "light",
+        });
+      }
+
+      capturePostHogClientEvent("bulk_transaction_deleted", {
+        workspace_id: selectedWorkspaceId || null,
+        selected_count: count,
+        deleted_count: deletedIds.length,
+      });
+
+      setMessage(deletedIds.length === count
+        ? `${count} transaction${count === 1 ? "" : "s"} deleted.`
+        : `${deletedIds.length} of ${count} transactions deleted. Some transactions could not be deleted.`);
+    } catch (error) {
+      setBulkDeleteConfirmOpen(false);
+      setMessage(error instanceof Error ? error.message : "Unable to delete transactions.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const persistDetailDraft = async ({ closeAfterSave = true }: { closeAfterSave?: boolean } = {}) => {
+    if (!selectedTransaction || !detailDraft) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const categoryChange = resolveTransactionCategoryChange({
+        previousCategoryId: selectedTransaction.categoryId ?? "",
+        previousCategoryName: selectedTransaction.categoryName ?? null,
+        nextCategoryId: detailDraft.categoryId || "",
+        lookupCategoryName: (categoryId) => categoryNameById.get(categoryId) ?? null,
+      });
+      const payload = { ...buildTransactionUpdatePayload(detailDraft, selectedTransaction), tags: detailTags };
+
+      await updateTransaction(selectedTransaction.id, payload);
+      capturePostHogClientEvent("feature_used", {
+        workspace_id: selectedWorkspaceId || null,
+        feature_name: "transaction_detail_edit",
+      });
+      if (closeAfterSave) {
+        setMessage(
+          categoryChange.categoryChanged
+            ? buildTransactionCategoryUpdatedMessage({
+                previousCategoryName: categoryChange.previousCategoryName,
+                nextCategoryName: categoryChange.nextCategoryName,
+              })
+            : "Transaction details updated."
+        );
+        closeTransactionDetail();
+      } else {
+        setDetailEditing(false);
+        setMessage(
+          categoryChange.categoryChanged
+            ? buildTransactionCategoryUpdatedMessage({
+                previousCategoryName: categoryChange.previousCategoryName,
+                nextCategoryName: categoryChange.nextCategoryName,
+              })
+            : "Transaction saved."
+        );
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const fetchTransactionsForPdf = async () => {
+    if (!selectedWorkspaceId) {
+      return [];
+    }
+
+    const searchParams = buildTransactionQuerySearchParams(
+      selectedWorkspaceId,
+      {
+        query,
+        currencyFilter,
+        categoryIds: categoryFilters,
+        tagIds: tagFilters,
+        merchantFilters: reportMerchants, merchantMatch: "exact",
+        accountIds: accountFilters,
+        typeFilters,
+        dateFilterMode,
+        dateFilterAnchor,
+        customStart,
+        customEnd,
+        sortField,
+        sortDirection,
+        amountMin,
+        amountMax, reviewFilter, sourceFilter, confidenceFilter,
+      },
+      {
+        pageSize: "all",
+      }
+    );
+
+    const response = await fetch(`/api/transactions?${searchParams?.toString() ?? ""}`);
+    if (!response.ok) {
+      throw new Error("Unable to export transactions.");
+    }
+
+    const payload = await response.json();
+    return Array.isArray(payload.transactions) ? (payload.transactions as Transaction[]) : [];
+  };
+
+  const downloadPdf = async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const exportRows = await fetchTransactionsForPdf();
+      const report = window.open("", "_blank", "width=1280,height=900");
+      if (!report) {
+        setMessage("Your browser blocked the PDF preview. Please allow popups and try again.");
+        return;
+      }
+
+      const rows = exportRows
+        .map((transaction) => {
+          const warningReason = warningReasonFor(transaction);
+          const amount = Number(transaction.amount);
+          const categoryValue = transaction.categoryId ?? otherCategoryId;
+          const effectiveType = getTransactionDisplayType(
+            transaction,
+            accountNumberById.get(transaction.accountId) ?? null,
+            workspaceAccountNumbers
+          );
+          const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
+          const categoryTone = getCategoryIconTone(categoryLabel);
+          const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
+          const merchantSummary = hasTransactionUserEdits(transaction) ? transaction.merchantClean ?? transaction.merchantRaw : summarizeTransactionMerchantText(
+            transaction.merchantClean ?? transaction.merchantRaw,
+            accountInstitution
+          );
+          const typeLabel = effectiveType === "transfer" ? "Transfer" : effectiveType === "income" ? "Credit" : "Debit";
+
+          return `
+            <tr>
+              <td>${escapeHtml(formatDate(transaction.date))}</td>
+              <td>
+                <div class="transactions-pdf-merchant">
+                  <strong>${escapeHtml(merchantSummary)}</strong>
+                  ${transaction.description ? `<span>${escapeHtml(transaction.description)}</span>` : ""}
+                </div>
+              </td>
+              <td>${escapeHtml(transaction.accountName)}</td>
+              <td>
+                <span class="transactions-pdf-category">
+                  <span
+                    class="transactions-pdf-category__swatch"
+                    style="background: ${categoryTone.backgroundColor}; border-color: ${categoryTone.borderColor};"
+                  ></span>
+                  <span>${escapeHtml(categoryLabel)}</span>
+                </span>
+              </td>
+              <td>
+                <span class="transactions-pdf-type transactions-pdf-type--${effectiveType === "transfer" ? "transfer" : effectiveType === "income" ? "credit" : "debit"}">
+                  ${escapeHtml(typeLabel)}
+                </span>
+              </td>
+              <td class="${effectiveType === "income" ? "positive" : effectiveType === "transfer" ? "neutral" : "negative"}">${escapeHtml(
+                formatTransactionAmount(amount, transaction.currency)
+              )}</td>
+              <td>${escapeHtml(warningReason ?? "—")}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const exportedCount = exportRows.length;
+      const exportTitle = workspace?.name ? `${workspace.name} Transactions` : "Transactions";
+      const summaryCards = [
+        { label: "Rows", value: String(totalTransactionCountForDisplay) },
+        { label: "Income", value: formatTransactionAggregate(displayedTransactionsSummary.income, exportRows) },
+        { label: "Spending", value: formatTransactionAggregate(displayedTransactionsSummary.spending, exportRows) },
+        { label: "Transfers", value: formatTransactionAggregate(displayedTransactionsSummary.transfers, exportRows) },
+      ];
+
+      report.document.open();
+      report.document.write(`
+        <html>
+          <head>
+            <title>${escapeHtml(exportTitle)}</title>
+            <style>
+              @page { size: auto; margin: 12mm; }
+              :root {
+                color-scheme: light;
+                --clover-teal: #18b4ce;
+                --clover-ink: #10212b;
+                --clover-muted: #5f7280;
+                --clover-stroke: #dbe3e8;
+                --clover-background: #f4fbfd;
+                --clover-positive: #16a34a;
+                --clover-negative: #ef4444;
+                --clover-neutral: #64748b;
+              }
+              body {
+                font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                color: var(--clover-ink);
+                margin: 0;
+                padding: 0;
+                background:
+                  radial-gradient(circle at top left, rgba(24, 180, 206, 0.14), transparent 28%),
+                  linear-gradient(180deg, #f8fcfd 0%, #ffffff 30%, #ffffff 100%);
+              }
+              .page {
+                padding: 16px;
+              }
+              .sheet {
+                border: 1px solid rgba(219, 227, 232, 0.9);
+                border-radius: 28px;
+                overflow: hidden;
+                background: rgba(255, 255, 255, 0.94);
+                box-shadow: 0 24px 60px rgba(16, 33, 43, 0.12);
+              }
+              .hero {
+                padding: 24px 28px 20px;
+                background: linear-gradient(135deg, rgba(24, 180, 206, 0.95) 0%, rgba(15, 196, 176, 0.95) 100%);
+                color: white;
+              }
+              .hero__eyebrow {
+                margin: 0;
+                font-size: 11px;
+                text-transform: capitalize;
+                letter-spacing: 0.22em;
+                opacity: 0.8;
+              }
+              .hero__title {
+                margin: 8px 0 6px;
+                font-size: 28px;
+                line-height: 1.05;
+                letter-spacing: -0.04em;
+              }
+              .hero__meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                font-size: 12px;
+                color: rgba(255, 255, 255, 0.88);
+              }
+              .hero__pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 7px 10px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.18);
+                backdrop-filter: blur(12px);
+              }
+              .summary-grid {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px;
+                padding: 18px 20px 10px;
+                background: var(--clover-background);
+                border-bottom: 1px solid var(--clover-stroke);
+              }
+              .summary-card {
+                border: 1px solid rgba(219, 227, 232, 0.9);
+                border-radius: 20px;
+                padding: 14px 16px;
+                background: rgba(255, 255, 255, 0.95);
+              }
+              .summary-card__label {
+                display: block;
+                font-size: 10px;
+                text-transform: capitalize;
+                letter-spacing: 0.16em;
+                color: var(--clover-muted);
+                margin-bottom: 8px;
+              }
+              .summary-card__value {
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: -0.02em;
+              }
+              .content {
+                padding: 16px 20px 22px;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: auto;
+              }
+              thead th {
+                font-size: 10px;
+                text-transform: capitalize;
+                letter-spacing: 0.14em;
+                color: var(--clover-muted);
+                text-align: left;
+                padding: 10px 8px;
+                border-bottom: 1px solid var(--clover-stroke);
+              }
+              tbody td {
+                text-align: left;
+                vertical-align: top;
+                padding: 12px 8px;
+                border-bottom: 1px solid rgba(219, 227, 232, 0.85);
+                font-size: 12px;
+                word-break: break-word;
+              }
+              tbody tr:nth-child(even) {
+                background: rgba(24, 180, 206, 0.03);
+              }
+              .transactions-pdf-merchant {
+                display: grid;
+                gap: 3px;
+              }
+              .transactions-pdf-merchant strong {
+                font-size: 12.5px;
+                line-height: 1.25;
+              }
+              .transactions-pdf-merchant span {
+                color: var(--clover-muted);
+                font-size: 10.5px;
+                line-height: 1.3;
+              }
+              .transactions-pdf-category {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+              }
+              .transactions-pdf-category__swatch {
+                width: 12px;
+                height: 12px;
+                border-radius: 999px;
+                border: 1px solid transparent;
+                flex: 0 0 auto;
+              }
+              .transactions-pdf-type {
+                display: inline-flex;
+                align-items: center;
+                padding: 6px 10px;
+                border-radius: 999px;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: capitalize;
+                border: 1px solid transparent;
+              }
+              .transactions-pdf-type--credit {
+                background: rgba(22, 163, 74, 0.08);
+                color: var(--clover-positive);
+                border-color: rgba(22, 163, 74, 0.16);
+              }
+              .transactions-pdf-type--debit {
+                background: rgba(239, 68, 68, 0.08);
+                color: var(--clover-negative);
+                border-color: rgba(239, 68, 68, 0.16);
+              }
+              .transactions-pdf-type--transfer {
+                background: rgba(100, 116, 139, 0.1);
+                color: var(--clover-neutral);
+                border-color: rgba(100, 116, 139, 0.18);
+              }
+              .positive {
+                color: var(--clover-positive);
+              }
+              .negative {
+                color: var(--clover-negative);
+              }
+              .neutral {
+                color: var(--clover-neutral);
+              }
+              .footer {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 14px 20px 20px;
+                color: var(--clover-muted);
+                font-size: 11px;
+              }
+              @media print {
+                body {
+                  background: white;
+                }
+                .page {
+                  padding: 0;
+                }
+                .sheet {
+                  border: none;
+                  border-radius: 0;
+                  box-shadow: none;
+                }
+                .summary-grid {
+                  background: white;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="page">
+              <section class="sheet">
+                <header class="hero">
+                  <p class="hero__eyebrow">Clover</p>
+                  <h1 class="hero__title">${escapeHtml(exportTitle)}</h1>
+                  <div class="hero__meta">
+                    <span class="hero__pill">${escapeHtml(workspace?.name ?? "Selected workspace")}</span>
+                    <span class="hero__pill">${escapeHtml(String(exportedCount))} transaction${exportedCount === 1 ? "" : "s"}</span>
+                    <span class="hero__pill">PDF export</span>
+                  </div>
+                </header>
+                <section class="summary-grid">
+                  ${summaryCards
+                    .map(
+                      (card) => `
+                        <div class="summary-card">
+                          <span class="summary-card__label">${escapeHtml(card.label)}</span>
+                          <span class="summary-card__value">${escapeHtml(card.value)}</span>
+                        </div>
+                      `
+                    )
+                    .join("")}
+                </section>
+                <div class="content">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Merchant</th>
+                        <th>Account</th>
+                        <th>Category</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Warning</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rows || `<tr><td colspan="7">No transactions to print.</td></tr>`}
+                    </tbody>
+                  </table>
+                </div>
+                <footer class="footer">
+                  <span>Generated ${escapeHtml(new Date().toLocaleString("en-PH"))}</span>
+                  <span>Clover transactions</span>
+                </footer>
+              </section>
+            </div>
+          </body>
+        </html>
+      `);
+      report.document.close();
+      report.focus();
+      window.setTimeout(() => {
+        report.print();
+      }, 250);
+      capturePostHogClientEvent("report_exported", {
+        workspace_id: selectedWorkspaceId || null,
+        export_format: "pdf",
+        row_count: exportRows.length,
+        selected_count: selectedTransactionIds.length,
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to export transactions.");
+    }
+  };
+
+  const netCashFlow = estimatedTransactionTotals.income - estimatedTransactionTotals.spending;
+  const missingContributingTransactionCurrencies = contributingTransactionCurrencies.filter(
+    (currency) =>
+      currency !== formatCurrencyCode(defaultCurrency) &&
+      !Number.isFinite(transactionExchangeRates.rates[formatCurrencyCode(currency)])
+  );
+  const transactionEstimateLoading =
+    isAllCurrenciesView && transactionExchangeRates.loading && missingContributingTransactionCurrencies.length > 0;
+  const transactionEstimateUnavailable =
+    isAllCurrenciesView &&
+    !transactionExchangeRates.loading &&
+    missingContributingTransactionCurrencies.length > 0;
+  const formatTransactionSummary = (value: number) => {
+    if (transactionsLoadFailed) return "Unavailable";
+    if (transactionEstimateLoading || transactionEstimateUnavailable) {
+      return "—";
+    }
+    if (isAllCurrenciesView && transactionSummaryCurrencies.length > 1) {
+      return formatTransactionAmount(value, defaultCurrency);
+    }
+    return formatTransactionAggregate(value, visibleTransactions);
+  };
+  const visibleWarningTransactionCount = visibleTransactions.filter(isReviewableTransaction).length;
+  const warningTransactionCount = Math.max(displayedTransactionsSummary.review, visibleWarningTransactionCount);
+  const hasReviewItems = warningTransactionCount > 0;
+  const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
+  const headerMenuTitle =
+    headerMenuOpen === "name"
+      ? "Sort by name"
+      : headerMenuOpen === "date"
+        ? "Filter date"
+        : headerMenuOpen === "account"
+          ? "Filter account"
+          : headerMenuOpen === "category"
+            ? "Filter category"
+          : headerMenuOpen === "amount"
+            ? "Sort by amount"
+            : "";
+  const amountTypeOptions: Array<{ value: TransactionTypeFilter; label: string; icon: string }> = [
+    { value: "debit", label: "Expense", icon: "−" },
+    { value: "credit", label: "Income", icon: "+" },
+    { value: "transfer", label: "Transfer", icon: "↔" },
+  ];
+  const headerMenuPanel = headerMenuOpen && headerMenuPosition ? (
+    <div
+      className={`transactions-column-menu glass ${headerMenuOpen === "amount" ? "transactions-column-menu--amount" : ""}`}
+      ref={headerMenuRef}
+      style={{
+        top: `${headerMenuPosition.top}px`,
+        left: `${headerMenuPosition.left}px`,
+        width: `${headerMenuPosition.width}px`,
+      }}
+      role="dialog"
+      aria-label={headerMenuTitle}
+    >
+      <button
+        className="icon-button transactions-column-menu__close"
+        type="button"
+        onClick={closeHeaderMenu}
+        aria-label={`Close ${headerMenuTitle.toLowerCase()}`}
+      >
+        ×
+      </button>
+
+      {headerMenuOpen === "name" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            {[
+              ["asc", "A-Z"],
+              ["desc", "Z-A"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  activeHeaderSort?.field === "name" && activeHeaderSort.direction === direction ? "is-active" : ""
+                }`}
+                aria-pressed={activeHeaderSort?.field === "name" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("name", direction as TransactionSortDirection)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {headerMenuOpen === "date" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            {[
+              ["desc", "Newest"],
+              ["asc", "Oldest"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  activeHeaderSort?.field === "date" && activeHeaderSort.direction === direction ? "is-active" : ""
+                }`}
+                aria-pressed={activeHeaderSort?.field === "date" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("date", direction as TransactionSortDirection)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="transactions-column-menu__options">
+            {[
+              ["ltd", "Lifetime"],
+              ["day", "Today"],
+              ["week", "This week"],
+              ["month", "This month"],
+              ["quarter", "This quarter"],
+              ["year", "This year"],
+              ["custom", "Custom range"],
+            ].map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                className={`pill pill-interactive transactions-filter-pill ${
+                  dateFilterMode !== "ltd" && dateFilterMode === mode ? "pill-is-selected" : ""
+                }`}
+                aria-pressed={dateFilterMode !== "ltd" && dateFilterMode === mode}
+                onClick={() => applyDateFilterMode(dateFilterMode === mode ? "ltd" : (mode as DateFilterMode))}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="transactions-column-menu__fields">
+            <label className="transactions-column-menu__field">
+              <span>Start</span>
+              <input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} />
+            </label>
+            <label className="transactions-column-menu__field">
+              <span>End</span>
+              <input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
+            </label>
+          </div>
+        </div>
+      ) : null}
+
+      {headerMenuOpen === "account" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            {[
+              ["asc", "A-Z"],
+              ["desc", "Z-A"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  activeHeaderSort?.field === "account" && activeHeaderSort.direction === direction ? "is-active" : ""
+                }`}
+                aria-pressed={activeHeaderSort?.field === "account" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("account", direction as TransactionSortDirection)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <MultiSelectFilterGroup
+            label="Accounts"
+            options={accountFilterOptions}
+            selected={accountFilters}
+            onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
+            onClear={() => setAccountFilters([])}
+          />
+        </div>
+      ) : null}
+
+      {headerMenuOpen === "category" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            {[
+              ["asc", "A-Z"],
+              ["desc", "Z-A"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  activeHeaderSort?.field === "category" && activeHeaderSort.direction === direction ? "is-active" : ""
+                }`}
+                aria-pressed={activeHeaderSort?.field === "category" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("category", direction as TransactionSortDirection)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <MultiSelectFilterGroup
+            label="Categories"
+            options={categories.map((category) => ({
+              value: category.id,
+              label: category.name,
+            }))}
+            selected={categoryFilters}
+            onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))}
+            onClear={() => setCategoryFilters([])}
+          />
+        </div>
+      ) : null}
+
+      {headerMenuOpen === "amount" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort transactions-column-menu__sort--amount">
+            {[
+              ["asc", "Ascending"],
+              ["desc", "Descending"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  activeHeaderSort?.field === "amount" && activeHeaderSort.direction === direction ? "is-active" : ""
+                }`}
+                aria-pressed={activeHeaderSort?.field === "amount" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("amount", direction as TransactionSortDirection)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Show amounts for">
+            <div className="transactions-amount-type-grid">
+              {amountTypeOptions.map((option) => {
+                const isSelected = typeFilters.includes(option.value);
+                return (
+                  <button
+                    key={option.value}
+                    className={`transactions-amount-type-chip ${isSelected ? "is-selected" : ""}`}
+                    type="button"
+                    aria-pressed={isSelected}
+                    aria-label={`Filter ${option.label.toLowerCase()} transactions`}
+                    title={option.label}
+                    onClick={() => setTypeFilters((current) => toggleTypedFilterValue(current, option.value))}
+                  >
+                    <span aria-hidden="true">{option.icon}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range">
+            <label className="transactions-column-menu__field">
+              <span>Min amount</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={amountMin}
+                onChange={(event) => setAmountMin(event.target.value)}
+                placeholder="0.00"
+              />
+            </label>
+            <label className="transactions-column-menu__field">
+              <span>Max amount</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={amountMax}
+                onChange={(event) => setAmountMax(event.target.value)}
+                placeholder="0.00"
+              />
+            </label>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+  const isWorkspaceSelectionSettling = !hasLoadedWorkspaceList || (!selectedWorkspaceId && workspaces.length > 0);
+  const isCanceledImport = Boolean(
+    selectedWorkspaceId &&
+    (
+      canceledImportWorkspaceIdsRef.current.has(selectedWorkspaceId) ||
+      isCanceledWorkspaceImport(importActivitySnapshot, selectedWorkspaceId)
+    )
+  );
+  const isTableLoading =
+    transactions.length === 0 &&
+    (isWorkspaceSelectionSettling || (!isCanceledImport && Boolean(selectedWorkspaceId) && !isWorkspaceDataReady));
+  const hasTransactionDataEvidence =
+    Boolean(selectedWorkspaceId) &&
+    (
+      transactions.length > 0 ||
+      hasCachedTransactionsWorkspaceEvidence(selectedWorkspaceId) ||
+      hasRecentWorkspaceImportEvidence(importActivitySnapshot, selectedWorkspaceId)
+    );
+  const shouldShowSyncingInsteadOfEmpty =
+    totalTransactionCountForDisplay === 0 &&
+    !hasActiveServerSideFilters &&
+    !transactionsLoadFailed &&
+    !isCanceledImport &&
+    !isTableLoading &&
+    hasTransactionDataEvidence;
+  const hasKnownTransactionsAwaitingRows =
+    Boolean(selectedWorkspaceId) &&
+    !transactionsLoadFailed &&
+    transactions.length === 0 &&
+    totalTransactionCountForDisplay > 0;
+  const showTransactionsLoadingState =
+    !isCanceledImport && (isTableLoading || shouldShowSyncingInsteadOfEmpty || hasKnownTransactionsAwaitingRows);
+  const clearTransactionFilters = () => {
+    setReportMerchants([]);
+    setQuery(""); setCurrencyFilter(""); persistSelectedCurrency(selectedWorkspaceId, "");
+    setCategoryFilters([]); setAccountFilters([]); setTypeFilters([]); setTagFilters([]);
+    setDateFilterMode("ltd"); setDateFilterAnchor(todayIso); setCustomStart(""); setCustomEnd("");
+    setAmountMin(""); setAmountMax(""); setReviewFilter(""); setSourceFilter(""); setConfidenceFilter(""); setTransactionsPage(1);
+  };
+  const activeFilterChips = [
+    ...(currencyFilter ? [{ label: currencyFilter, clear: () => { setCurrencyFilter(""); persistSelectedCurrency(selectedWorkspaceId, ""); } }] : []),
+    ...accountFilters.map(id => ({ label: accountFilterOptions.find(option => option.value === id)?.label ?? "Account", clear: () => setAccountFilters(current => current.filter(value => value !== id)) })),
+    ...categoryFilters.map(id => ({ label: categories.find(category => category.id === id)?.name ?? "Category", clear: () => setCategoryFilters(current => current.filter(value => value !== id)) })),
+    ...typeFilters.map(type => ({ label: type === "debit" ? "Expense" : type === "credit" ? "Income" : "Transfer", clear: () => setTypeFilters(current => current.filter(value => value !== type)) })),
+    ...(dateFilterMode !== "ltd" ? [{ label: ({ day: "Today", week: "This week", month: "This month", quarter: "This quarter", year: "This year", custom: "Custom dates" })[dateFilterMode], clear: () => { setDateFilterMode("ltd"); setCustomStart(""); setCustomEnd(""); } }] : []),
+    ...(reviewFilter ? [{ label: reviewFilter === "pending" ? "Needs review" : "Confirmed", clear: () => setReviewFilter("") }] : []),
+    ...(sourceFilter ? [{ label: sourceFilter === "upload" ? "Imported" : "Manual", clear: () => setSourceFilter("") }] : []),
+    ...(confidenceFilter ? [{ label: `${confidenceFilter} extraction confidence`, clear: () => setConfidenceFilter("") }] : []),
+    ...(amountMin || amountMax ? [{ label: "Amount range", clear: () => { setAmountMin(""); setAmountMax(""); } }] : []),
+    ...reportMerchants.map(name=>({label: name, clear:()=>setReportMerchants(current=>current.filter(n=>n!==name))})),
+    ...tagFilters.map(id => ({ label: filterTags.find(tag => tag.id === id)?.name ?? "Tag", clear: () => setTagFilters(current => current.filter(value => value !== id)) })),
+  ];
+  const transactionsNoResults = <div className="empty-state transactions-empty-state transactions-empty-state--table" role="status">
+    <CloverMascot pose="receipt" size={144} />
+    <strong className="transactions-empty-state__title">No matching transactions</strong>
+    <p>Try a different search or remove a filter.</p>
+    <button type="button" className="button button-secondary" onClick={clearTransactionFilters}>Clear filters</button>
+  </div>;
+  const transactionsBlankState = (
+    <div className="empty-state transactions-empty-state transactions-empty-state--table">
+      <div className="transactions-empty-state__art" aria-hidden="true">
+        <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
+      </div>
+      <strong className="transactions-empty-state__title">
+        No transactions yet
+      </strong>
+      <p>Add a transaction or upload files to build your history.</p>
+      <div className="transactions-empty-state__actions">
+        <button className="button button-primary button-small transactions-action-button transactions-toolbar-add" type="button" onClick={() => void openManualAdd()} aria-label="Add transaction">
+          <span className="button-icon" aria-hidden="true"><ActionIcon name="plus" /></span>
+          <span>Add transaction</span>
+        </button>
+      </div>
+    </div>
+  );
+  useEffect(() => {
+    if (!selectedWorkspaceId || !shouldShowSyncingInsteadOfEmpty) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+      void loadTransactionsPage(selectedWorkspaceId, {
+        background: true,
+        pageOverride: transactionsPage,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "light",
+      });
+    }, SYNCING_EMPTY_STATE_REFRESH_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [selectedWorkspaceId, shouldShowSyncingInsteadOfEmpty, transactionsPage, transactionsPageSize]);
+  const transactionsShellActions = isCompactViewport ? (
+    <div className="transactions-shell-actions transactions-shell-actions--compact" style={transactionsShellActionsStyle}>
+      <button
+        className="button button-primary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
+        type="button"
+        onClick={() => void openManualAdd()}
+        aria-label="Add transaction"
+        title="Add transaction"
+      >
+        <ActionIcon name="plus" />
+        <span>Add transaction</span>
+      </button>
+    </div>
+  ) : (
+    <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
+      <TransactionSelectionToolbar activeFilterCount={activeFilterChips.length} count={0} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
+
+      <TransactionsManageMenu />
+
+      <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
+        <button
+          className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
+          type="button"
+          onClick={() => {
+            void openManualAdd();
+          }}
+          title="Add transaction (A)"
+          aria-label="Add transaction"
+          aria-keyshortcuts="a"
+        >
+          <span className="button-icon" aria-hidden="true">
+            <ActionIcon name="plus" />
+          </span>
+          <span>Add transaction</span>
+        </button>
+      </div>
+    </div>
+  );
+  const transactionCacheVersionAtRender = transactionCacheVersion.expectedVersion;
+  useEffect(() => {
+    // This cache is shared with unfiltered workspace views. Never publish a
+    // filtered subset and its totals as though it were the full workspace.
+    if (!selectedWorkspaceId || !isWorkspaceDataReady || hasActiveTransactionFilters || previewQuery !== null) {
+      return;
+    }
+
+    publishingTransactionsCacheRef.current = true;
+    try {
+      const updatedAt = persistTransactionsWorkspaceCache(selectedWorkspaceId, {
+        accounts,
+        categories,
+        transactions,
+        imports,
+        page: transactionsPage,
+        pageSize: transactionsPageSize,
+        totalCount: transactionsSummary.totalCount,
+        currencyCodes: workspaceCurrencyCodes,
+        summary: transactionsSummary,
+      }, { expectedUpdatedAt: transactionCacheVersionAtRender });
+      if (updatedAt === 0) {
+        hydrateWorkspaceFromCache(selectedWorkspaceId);
+      } else {
+        if (updatedAt) transactionCacheVersion.publish(selectedWorkspaceId, updatedAt);
+        markTransactionsHydrated(selectedWorkspaceId, updatedAt);
+      }
+    } finally {
+      publishingTransactionsCacheRef.current = false;
+    }
+  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes, hasActiveTransactionFilters, previewQuery]);
+
+  useEffect(() => {
+    if (bulkDeleteConfirmOpen) {
+      setSelectionMenuOpen(false);
+    }
+  }, [bulkDeleteConfirmOpen]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY);
+    const updateViewport = () => setIsCompactViewport(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateViewport);
+    };
+  }, []);
+
+  return (
+    <CloverShell
+      active="transactions"
+      title="Transactions"
+      desktopTitleAction={<ContextualAskClover context="transactions" planTier={planTier} />}
+      mobileLeadingAction={
+        <div className="transactions-mobile-leading-actions">
+          <ContextualAskClover context="transactions" planTier={planTier} />
+        </div>
+      }
+
+      mobileTrailingAction={<button className="icon-button" type="button" aria-label="Add transaction" onClick={() => void openManualAdd()}><ActionIcon name="plus" /></button>}
+      actions={transactionsShellActions}
+    >
+      {selectedWorkspaceId ? <FirstUseActivation key={selectedWorkspaceId} workspaceId={selectedWorkspaceId} resultOnly /> : null}
+      <ImportFileInput
+        ref={addFileInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept={PUBLIC_IMPORT_ACCEPT}
+        multiple
+        onFiles={handleMobileFiles}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      <ImportFileInput
+        ref={addPhotoInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onFiles={handlePhotoCaptureChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <ImportFileInput
+        ref={addPhotoLibraryInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept="image/*"
+        multiple
+        onFiles={handlePhotoCaptureChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      <PageFileDropZone
+        enabled={true}
+        title="Drop statement files anywhere"
+        onFilesDropped={(files) => openImportFiles(files, true)}
+      />
+      <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
+        <div className="transactions-main-panel">
+          {isCompactViewport && !hasSelectedTransactions ? <TransactionSelectionToolbar compact activeFilterCount={activeFilterChips.length} warningCount={warningTransactionCount} count={0} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
+          {isCompactViewport && hasSelectedTransactions ? (
+            <div className="transactions-mobile-bulk-toolbar">
+              <input type="checkbox" aria-label={allMobileSelected ? "Deselect all loaded transactions" : "Select all loaded transactions"}
+                checked={allMobileSelected} ref={input => { if (input) input.indeterminate = !allMobileSelected; }}
+                onChange={() => setSelectedTransactionIds(allMobileSelected ? [] : mobileVisibleTransactions.slice(0, 500).map(row => row.id))} />
+              <button className="button button-primary button-small" type="button" onClick={() => setBulkDestinationOpen(true)}>Add To</button>
+              <button className="button button-secondary button-small" type="button" onClick={() => setBulkDeleteConfirmOpen(true)}>Delete</button>
+            </div>
+          ) : null}
+          {!isCompactViewport && selectedTransactionCount > 0 ? <TransactionsHeaderOverlay className="transactions-selection-overlay"><TransactionSelectionToolbar activeFilterCount={activeFilterChips.length} count={selectedTransactionCount} onAddTo={() => setBulkDestinationOpen(true)} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /></TransactionsHeaderOverlay> : null}
+          {dateFilterMode === "custom" && customStart && customEnd && customStart > customEnd ? <p role="alert">From date must be on or before To date. Choose a valid range to update the results.</p> : null}
+          {message ? <p role="status" aria-live="polite">{message}</p> : null}
+          {showFinalizingNotice ? (
+            <div className="transactions-status-line" role="status" aria-live="polite">
+              <div className="transactions-status-line__meta">
+                <span className={`pill ${finalizingNeedsReview ? "pill-neutral" : "pill-neutral"}`}>
+                  {finalizingNoticeState.label}
+                </span>
+                <span className="panel-muted">
+                  {finalizingNeedsReview
+                    ? `Clover couldn't finalize automatically for ${finalizingTransactionCount} visible transaction${finalizingTransactionCount === 1 ? "" : "s"}; please review.`
+                    : `Clover is enriching names and categories for ${finalizingTransactionCount} visible transaction${finalizingTransactionCount === 1 ? "" : "s"} · ${finalizingNoticeState.detail}.`}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="icon-button transactions-status-line__dismiss"
+                onClick={dismissFinalizingStatusNotice}
+                aria-label="Dismiss status notice"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+          ) : null}
+      {filterOpen && !(isCompactViewport && hasSelectedTransactions) ? <TransactionsHeaderOverlay className="transactions-filters-overlay">
+        <section className="transactions-inline-filters" aria-label="Transaction filters">
+          <div className="transactions-inline-filters__head"><strong>Filters</strong><button className="button button-ghost button-small" type="button" onClick={clearTransactionFilters}>Reset</button><button className="icon-button" type="button" onClick={() => { setFilterOpen(false); document.querySelector<HTMLButtonElement>(".transaction-selection-toolbar__filter")?.focus(); }} aria-label="Close filters"><InterfaceIcon name="close" /></button></div>
+          {activeFilterChips.length ? <div className="transactions-active-filters" aria-label="Active filters">{activeFilterChips.map((chip, index) => <button key={`${chip.label}-${index}`} type="button" className="button button-secondary button-small" onClick={chip.clear} aria-label={`Remove ${chip.label} filter`}>{chip.label}<InterfaceIcon name="close" size={12} /></button>)}</div> : null}
+          <TransactionFilterRow label="Dates" summary={({ ltd: "Lifetime", day: "Today", week: "This week", month: "This month", year: "This year", quarter: "This quarter", custom: [customStart, customEnd].filter(Boolean).join(" – ") || "Custom" })[dateFilterMode]}>
+            <div className="transactions-filter-group__options">
+              {([["ltd", "Lifetime"], ["day", "Today"], ["week", "This week"], ["month", "This month"], ["quarter", "This quarter"], ["year", "This year"], ["custom", "Custom range"]] as const).map(([mode, label]) => <button key={mode} className="transactions-filter-pill" type="button" aria-pressed={dateFilterMode === mode} onClick={() => applyDateFilterMode(mode)}>{label}</button>)}
+            </div>
+            {dateFilterMode === "custom" ? <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range"><label className="transactions-column-menu__field">From<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label className="transactions-column-menu__field">To<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></div> : null}
+          </TransactionFilterRow>
+          <MultiSelectFilterGroup label="Type" options={[
+            { value: "debit", label: "Expense", icon: <span className="negative">↓</span> },
+            { value: "credit", label: "Income", icon: <span className="positive">↑</span> },
+            { value: "transfer", label: "Transfer", icon: <span>↔</span> },
+          ]} selected={typeFilters} onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))} onClear={() => setTypeFilters([])} />
+          <MultiSelectFilterGroup label="Accounts" options={accountFilterOptions.map((option) => ({ ...option, icon: <AccountBrandMark accountBrand={accountBrandById.get(option.value) ?? getAccountBrand({ name: option.label, institution: option.label, type: "bank" })} label={option.label} /> }))} selected={accountFilters} onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))} onClear={() => setAccountFilters([])} />
+          <MultiSelectFilterGroup label="Categories" options={categories.map((category) => ({ value: category.id, label: category.name, icon: <CategoryBrandMark categoryName={category.name} size={22} radius={7} /> }))} selected={categoryFilters} onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))} onClear={() => setCategoryFilters([])} />
+          <TransactionFilterRow label="Amount" summary={amountMin || amountMax ? `${amountMin || "0"} – ${amountMax || "Any"}` : "Any amount"}><div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Amount Range">
+            <span className="transactions-filter-group__label">Amount Range</span>
+            <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range">
+              <label className="transactions-column-menu__field"><span>Minimum</span><input type="number" inputMode="decimal" value={amountMin} onChange={(event) => setAmountMin(event.target.value)} placeholder="0.00" /></label>
+              <label className="transactions-column-menu__field"><span>Maximum</span><input type="number" inputMode="decimal" value={amountMax} onChange={(event) => setAmountMax(event.target.value)} placeholder="0.00" /></label>
+            </div>
+          </div></TransactionFilterRow>
+          <TransactionFilterRow label="Currency" summary={currencyFilter || "All currencies"}>
+            <div className="transactions-filter-group__options">
+              {["", ...workspaceCurrencyCodes].map((code) => <button key={code} type="button" className="transactions-filter-pill" aria-pressed={currencyFilter === code} onClick={() => { setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }}>{code || "All currencies"}</button>)}
+            </div>
+          </TransactionFilterRow>
+          <MultiSelectFilterGroup label="Tags" options={filterTags.map((tag) => ({ value: tag.id, label: tag.name }))} selected={tagFilters} onToggle={(value) => setTagFilters((current) => toggleFilterValue(current, value))} onClear={() => setTagFilters([])} />
+            <TransactionFilterRow label="Source" summary={sourceFilter === "upload" ? "Imported" : sourceFilter === "manual" ? "Manual" : "All sources"}>
+              <div className="transactions-filter-group__options">{[["", "All sources"], ["manual", "Manual"], ["upload", "Imported"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={sourceFilter === value} onClick={() => setSourceFilter(value)}>{label}</button>)}</div>
+            </TransactionFilterRow>
+            <TransactionFilterRow label="Extraction confidence" summary={confidenceFilter || "Any confidence"}>
+              <div className="transactions-filter-group__options">{[["", "Any confidence"], ["high", "High · 85–100%"], ["medium", "Medium · 65–84%"], ["low", "Low · below 65%"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={confidenceFilter === value} onClick={() => setConfidenceFilter(value)}>{label}</button>)}</div>
+            </TransactionFilterRow>
+          <TransactionFilterRow label="Warnings" summary={reviewFilter === "pending" ? "Needs review" : reviewFilter === "confirmed" ? "Confirmed" : "All transactions"}>
+            <div className="transactions-filter-group__options">{[["", "All transactions"], ["pending", "Needs review"], ["confirmed", "Confirmed"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={reviewFilter === value} onClick={() => setReviewFilter(value)}>{label}</button>)}</div>
+          </TransactionFilterRow>
+          {isCompactViewport ? <TransactionsManageMenu compact /> : null}
+          <button type="button" className="button button-primary transactions-filter-show" onClick={() => setFilterOpen(false)}>Show transactions</button>
+        </section>
+      </TransactionsHeaderOverlay> : null}
+
+          {bulkDeleteConfirmOpen && typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  className="modal-backdrop modal-backdrop--transactions-confirm"
+                  role="presentation"
+                  onClick={() => setBulkDeleteConfirmOpen(false)}
+                >
+                  <section
+                    className="modal-card glass transactions-confirm-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="bulk-delete-title"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="modal-head">
+                      <div>
+                        <p className="eyebrow">Delete transactions</p>
+                        <h4 id="bulk-delete-title">
+                          Delete {selectedTransactionIds.length} selected transaction{selectedTransactionIds.length === 1 ? "" : "s"}?
+                        </h4>
+                        <p className="modal-copy">This cannot be undone.</p>
+                      </div>
+                      <button
+                        className="icon-button"
+                        type="button"
+                        onClick={() => setBulkDeleteConfirmOpen(false)}
+                        aria-label="Close delete confirmation"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="modal-actions">
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        onClick={() => setBulkDeleteConfirmOpen(false)}
+                        disabled={isSaving}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="button button-danger"
+                        type="button"
+                        onClick={() => void deleteSelectedTransactions()}
+                        disabled={isSaving}
+                      >
+                        {isSaving ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
+                  </section>
+                </div>,
+                document.body
+              )
+            : null}
+
+          {headerMenuPanel}
+
+
+
+          {!isCompactViewport ? (
+            <div
+              className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
+              ref={transactionTableRef}
+              aria-busy={showTransactionsLoadingState || isPageLoading}
+              data-columns-date={columnSettings.columns.date}
+              data-columns-account={columnSettings.columns.account}
+              data-columns-category={columnSettings.columns.category}
+              data-columns-tags={columnSettings.columns.tags}
+            >
+              <div className="line-item-header transactions-column-header">
+                <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    disabled={isPageLoading}
+                    checked={allVisibleSelected}
+                    onChange={(event) => {
+                      const shouldSelect = event.target.checked;
+                      setSelectedTransactionIds((current) => {
+                        const next = new Set(current);
+                        if (shouldSelect) {
+                          desktopPageTransactionIds.forEach((transactionId) => next.add(transactionId));
+                        } else {
+                          desktopPageTransactionIds.forEach((transactionId) => next.delete(transactionId));
+                        }
+                        return Array.from(next);
+                      });
+                    }}
+                    aria-label="Select all transactions on this page"
+                  />
+                </label>
+                <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
+                <button
+                  className="line-item-header-cell line-item-header-cell--name"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("name", event)}
+                  aria-expanded={headerMenuOpen === "name"}
+                >
+                  Name
+                </button>
+                <button
+                  className="line-item-header-cell"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("date", event)}
+                  aria-expanded={headerMenuOpen === "date"}
+                >
+                  Date
+                </button>
+                <button
+                  className="line-item-header-cell"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("account", event)}
+                  aria-expanded={headerMenuOpen === "account"}
+                >
+                  Account
+                </button>
+                <button
+                  className="line-item-header-cell line-item-header-cell--category"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("category", event)}
+                  aria-expanded={headerMenuOpen === "category"}
+                >
+                  Category
+                </button>
+                <span className="line-item-header-cell transaction-tags-cell">Tags</span>
+                <button
+                  className="line-item-header-cell line-item-header-cell--amount"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("amount", event)}
+                  aria-expanded={headerMenuOpen === "amount"}
+                >
+                  Amount
+                </button>
+                <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
+                <TransactionColumns {...columnSettings} />
+              </div>
+            {transactionsLoadFailed ? (
+              <div className="empty-state transactions-empty-state transactions-empty-state--table">
+                <strong>Couldn&apos;t load transactions.</strong>
+                <p>Your transactions may still be there, but Clover could not reach the latest workspace data. Try again before importing or editing.</p>
+                <button className="button button-primary button-small" type="button" onClick={() => selectedWorkspaceId && void loadTransactionsPage(selectedWorkspaceId)}>
+                  Retry
+                </button>
+              </div>
+            ) : showTransactionsLoadingState ? (
+              <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading transactions">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="line-item transactions-loading-row">
+                    <span className="skeleton-block skeleton-block--checkbox" />
+                    <span className="skeleton-block skeleton-block--icon" />
+                    <span className="transactions-loading-name">
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                    </span>
+                    <span className="skeleton-block skeleton-block--date" />
+                    <span className="transactions-loading-account">
+                      <span className="skeleton-block skeleton-block--account-icon" />
+                      <span className="skeleton-block skeleton-block--account-line" />
+                    </span>
+                    <span className="skeleton-block skeleton-block--category" />
+                    <span className="skeleton-block transaction-tags-cell" />
+                    <span className="skeleton-block skeleton-block--amount" />
+                    <span className="skeleton-block skeleton-block--chevron" />
+                    <span aria-hidden="true" />
+                  </div>
+                ))}
+              </div>
+            ) : hasVisibleTransactions ? (
+              desktopPageTransactions.map((transaction, index) => {
+                const warningReason = warningReasonFor(transaction);
+                const amount = Number(transaction.amount);
+                const categoryValue = transaction.categoryId ?? otherCategoryId;
+                const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
+                const effectiveType = getTransactionDisplayType(
+                  transaction,
+                  accountNumberById.get(transaction.accountId) ?? null,
+                  workspaceAccountNumbers
+                );
+                const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
+                const effectiveCategoryValue = getCategoryIdByName(categories, categoryLabel) || categoryValue;
+                const isTransferTransaction = effectiveType === "transfer";
+                const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
+                const accountDisplayName = getDisplayAccountNameForTransaction(transaction);
+                const accountBrand = pickPreferredAccountBrand(
+                  accountBrandById.get(transaction.accountId),
+                  getAccountBrand({
+                    institution: accountInstitution,
+                    name: accountDisplayName,
+                    type: effectiveType === "transfer" ? "bank" : effectiveType === "income" ? "bank" : "other",
+                  })
+                );
+                const merchantSummary = hasTransactionUserEdits(transaction) ? transaction.merchantClean ?? transaction.merchantRaw : summarizeTransactionMerchantText(
+                  transaction.merchantClean ?? transaction.merchantRaw,
+                  accountInstitution
+                );
+                const sourceClass =
+                  transaction.source === "manual"
+                    ? "line-item--manual"
+                    : transaction.source === "upload"
+                      ? "line-item--imported"
+                      : "line-item--other";
+                return (
+                  <div
+                    key={transaction.id}
+                    ref={(node) => {
+                      if (node) {
+                        transactionRowRefs.current.set(transaction.id, node);
+                        return;
+                      }
+
+                      transactionRowRefs.current.delete(transaction.id);
+                    }}
+                    className={`line-item ${sourceClass} ${transaction.isExcluded ? "is-muted" : ""} ${
+                      selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
+                    }`}
+                    tabIndex={0}
+                    aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${formatTransactionAmount(amount, transaction.currency)}`}
+                    onKeyDown={(event) => handleTransactionRowKeyDown(event, transaction, index)}
+                  >
+                    <label className="transaction-select-cell">
+                      <input
+                        type="checkbox"
+                        checked={selectedTransactionIds.includes(transaction.id)}
+                        onChange={(event) => toggleSelectedTransaction(transaction.id, event.target.checked)}
+                        aria-label={`Select ${transaction.merchantRaw}`}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="transaction-category-icon-cell transaction-relation-icon-trigger"
+                      aria-label={`Edit category for ${transaction.merchantRaw}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        inlineCategoryPickerButtonRefs.current.get(transaction.id)?.click();
+                      }}
+                    >
+                      <MerchantLogo transaction={transaction} size={24} fallback={<CategoryBrandMark categoryName={categoryLabel} size={24} radius={8} />} />
+                    </button>
+                    <div className="transaction-name-cell">
+                      <InlineEditableCell
+                        value={transaction.merchantClean ?? transaction.merchantRaw}
+                        displayValue={merchantSummary}
+                        ariaLabel={`Edit name for ${transaction.merchantRaw}`}
+                        kind="text"
+                        className="transaction-inline-edit transaction-inline-edit--name"
+                        onCommit={(value) => commitInlineEdit(transaction, "name", value)}
+                      />
+                    </div>
+                    <div className="transaction-date-cell">
+                      <InlineEditableCell
+                        value={transaction.date.slice(0, 10)}
+                        displayValue={formatDate(transaction.date)}
+                        ariaLabel={`Edit date for ${transaction.merchantRaw}`}
+                        kind="date"
+                        className="transaction-inline-edit transaction-inline-edit--date"
+                        onCommit={(value) => commitInlineEdit(transaction, "date", value)}
+                      />
+                    </div>
+                    <div className="transaction-account-cell">
+                      <TransactionAccountPicker
+                        accounts={transactionAccountPickerOptions}
+                        selectedId={transaction.accountId}
+                        ariaLabel={`Edit account for ${transaction.merchantRaw}`}
+                        className="transaction-inline-relation-picker transaction-inline-relation-picker--account"
+                        buttonClassName="transaction-inline-edit transaction-inline-edit--select"
+                        onSelect={(account) => void commitInlineEdit(transaction, "accountId", account.id)}
+                      />
+                    </div>
+                    <div className="transaction-category-cell">
+                      <TransactionCategoryPicker
+                        categories={categories}
+                        selectedId={effectiveCategoryValue}
+                        showSelectedIcon={false}
+                        buttonRef={(node) => {
+                          if (node) {
+                            inlineCategoryPickerButtonRefs.current.set(transaction.id, node);
+                            return;
+                          }
+                          inlineCategoryPickerButtonRefs.current.delete(transaction.id);
+                        }}
+                        ariaLabel={`Edit category for ${transaction.merchantRaw}`}
+                        className="transaction-inline-relation-picker transaction-inline-relation-picker--category"
+                        buttonClassName="transaction-inline-edit transaction-inline-edit--select"
+                        onSelect={(category) => void commitInlineEdit(transaction, "categoryId", category.id)}
+                      />
+                    </div>
+                    <div className="transaction-tags-cell"><TransactionTagPreview tags={transaction.tags} /></div>
+                    <div className={`transaction-amount-cell ${amountToneClass}`}>
+                      <select
+                        className="transaction-amount-type-select"
+                        value={effectiveType}
+                        aria-label={`Change ${transaction.merchantRaw} type`}
+                        title={`Type: ${effectiveType === "income" ? "Income" : effectiveType === "transfer" ? "Transfer" : "Expense"}. Click to change.`}
+                        onChange={(event) => {
+                          void commitInlineTypeEdit(transaction, event.target.value as Transaction["type"]).catch((error) => {
+                            setMessage(error instanceof Error ? error.message : "Unable to update transaction type.");
+                          });
+                        }}
+                      >
+                        <option value="expense">−</option>
+                        <option value="income">+</option>
+                        <option value="transfer">↔</option>
+                      </select>
+                      <InlineEditableCell
+                        value={formatEditableAmount(transaction)}
+                        displayValue={formatTransactionAmount(amount, transaction.currency)}
+                        ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
+                        kind="number"
+                        className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass}`}
+                        onCommit={(value) => commitInlineEdit(transaction, "amount", value)}
+                      />
+                    </div>
+                    <div className="transaction-notes-cell">
+                      <button
+                        type="button"
+                        className="transaction-note-button transaction-note-button--plain"
+                        onClick={() => openTransactionDetail(transaction)}
+                        aria-label={`Open details for ${transaction.merchantRaw}`}
+                      >
+                        <ActionIcon name="chevron-right" />
+                      </button>
+                    </div>
+                    <div className="transaction-warning-cell">
+                      {warningReason ? (
+                        <div
+                          className={`transaction-warning-wrap ${
+                            activeWarningTransactionId === transaction.id ? "is-open" : ""
+                          }`}
+                          ref={(node) => {
+                            if (node) {
+                              warningPopoverRefs.current.set(transaction.id, node);
+                              return;
+                            }
+
+                            warningPopoverRefs.current.delete(transaction.id);
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="warning-chip"
+                            title={warningReason}
+                            aria-label={warningReason}
+                            aria-haspopup="dialog"
+                            onClick={() =>
+                              openTransactionReview(transaction)
+                            }
+                          >
+                            <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                          </button>
+                          <div className="transaction-warning-popover" role="tooltip" aria-label={warningReason}>
+                            <p className="transaction-warning-popover__reason">{warningReason}</p>
+                            <div className="transaction-warning-popover__actions">
+                              <button
+                                type="button"
+                                className="button button-primary button-small"
+                                onClick={() =>
+                                  resolveTransactionWarning(
+                                    transaction,
+                                    {
+                                      isExcluded: transaction.isExcluded,
+                                      isTransfer: transaction.isTransfer,
+                                      reviewStatus: "confirmed",
+                                    },
+                                    "",
+                                    "accepted"
+                                  )
+                                }
+                              >
+                                Keep
+                              </button>
+                              <button
+                                type="button"
+                                className="button button-secondary button-small"
+                                onClick={() => void deleteWarningTransaction(transaction)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })
+            ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
+              transactionsBlankState
+            ) : !hasVisibleTransactions ? (
+              transactionsNoResults
+            ) : null}
+          </div>
+          ) : null}
+
+          {isCompactViewport ? (
+          <div
+            className={`transactions-mobile-view${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
+          >
+            {transactionsLoadFailed ? (
+              <div className="empty-state transactions-empty-state transactions-empty-state--table">
+                <strong>Couldn&apos;t load transactions.</strong>
+                <p>Your transactions may still be there. Retry to refresh the latest workspace data.</p>
+                <button className="button button-primary button-small" type="button" onClick={() => selectedWorkspaceId && void loadTransactionsPage(selectedWorkspaceId)}>
+                  Retry
+                </button>
+              </div>
+            ) : showTransactionsLoadingState ? (
+              <div className="transactions-mobile-list" role="status" aria-live="polite" aria-label="Loading transactions">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="transactions-mobile-simple-row transactions-mobile-simple-row--loading">
+                    <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                    <span className="skeleton-block skeleton-block--amount" />
+                    <span className="skeleton-block skeleton-block--chevron" />
+                  </div>
+                ))}
+              </div>
+            ) : hasVisibleTransactions ? (
+              <div className="transactions-mobile-list">
+                {mobileTransactionGroups.map((group) => (
+                  <section key={group.date} className="transactions-mobile-date-group">
+                    <div className="transactions-mobile-date-divider">
+                      <span>{group.label}</span>
+                    </div>
+                    <div className="transactions-mobile-date-group__rows">
+                      {group.transactions.map((transaction) => {
+                        const amount = Number(transaction.amount);
+                        const categoryValue = transaction.categoryId ?? otherCategoryId;
+                        const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
+                        const effectiveType = getTransactionDisplayType(
+                          transaction,
+                          accountNumberById.get(transaction.accountId) ?? null,
+                          workspaceAccountNumbers
+                        );
+                        const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
+                        const isTransferTransaction = effectiveType === "transfer";
+                        const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
+                        const merchantSummary = hasTransactionUserEdits(transaction) ? transaction.merchantClean ?? transaction.merchantRaw : summarizeTransactionMerchantText(
+                          transaction.merchantClean ?? transaction.merchantRaw,
+                          accountInstitution
+                        );
+                        const accountDisplayName = getDisplayAccountNameForTransaction(transaction);
+                        const accountBrand = pickPreferredAccountBrand(
+                          accountBrandById.get(transaction.accountId),
+                          getAccountBrand({
+                            institution: accountInstitution,
+                            name: accountDisplayName,
+                            type: effectiveType === "transfer" ? "bank" : effectiveType === "income" ? "bank" : "other",
+                          })
+                        );
+
+                        return (
+                          <MobileSwipeDelete
+                            key={transaction.id}
+                            disabled={hasSelectedTransactions}
+                            deleteLabel={`Delete ${merchantSummary}`}
+                            onDelete={async () => { await deleteTransaction(transaction.id); refreshTransactionsSummary(); }}
+                          >
+                          <article
+                            ref={(node) => {
+                              if (node) {
+                                transactionRowRefs.current.set(transaction.id, node);
+                                return;
+                              }
+
+                              transactionRowRefs.current.delete(transaction.id);
+                            }}
+                            className={`transactions-mobile-simple-row${hasSelectedTransactions ? " transactions-mobile-simple-row--selectable" : ""}${transaction.isExcluded ? " is-muted" : ""}${selectedTransactionIds.includes(transaction.id) ? " is-selected" : ""}`}
+                            tabIndex={0}
+                            role="group"
+                            aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${formatTransactionAmount(
+                              amount,
+                              transaction.currency
+                            )}`}
+                            onPointerDown={(event) => longPress.start(event, transaction.id)}
+                            onPointerMove={longPress.move}
+                            onPointerLeave={longPress.cancel}
+                            onPointerUp={longPress.cancel}
+                            onPointerCancel={longPress.cancel}
+                            onContextMenu={(event) => event.preventDefault()}
+                            onClick={() => { if (longPress.consume()) return; hasSelectedTransactions ? toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id)) : openTransactionDetail(transaction); }}
+                            onKeyDown={(event) => {
+                              if (event.target !== event.currentTarget) return;
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                if (hasSelectedTransactions || event.key === " ") toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id));
+                                else openTransactionDetail(transaction);
+                              }
+                            }}
+                          >
+                            {hasSelectedTransactions ? <label className="transactions-mobile-select" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                              <input type="checkbox" checked={selectedTransactionIds.includes(transaction.id)} onChange={(event) => toggleSelectedTransaction(transaction.id, event.target.checked)} aria-label={`Select ${merchantSummary}`} />
+                            </label> : null}
+                            <div className="transactions-mobile-simple-row__name">
+                              <MerchantLogo transaction={transaction} size={20} fallback={<CategoryBrandMark
+                                categoryName={categoryLabel}
+                                size={20}
+                                radius={7}
+                                className="transactions-mobile-simple-row__category-icon"
+                              />} />
+                              <span className="transactions-mobile-simple-row__text"><span className="transactions-mobile-simple-row__title-line"><span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>{warningReasonFor(transaction) ? <button type="button" className="transactions-mobile-warning-button" aria-label={warningReasonFor(transaction) ?? "Needs review"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); openTransactionDetail(transaction); }}><span className="warning-mark warning-mark--small" aria-hidden="true" /></button> : null}</span><span className="transactions-mobile-simple-row__meta"><span className="transactions-mobile-simple-row__account-brand" aria-hidden="true"><AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} /></span><span>{accountDisplayName} · {formatDate(transaction.date)}</span></span></span>
+                            </div>
+                            <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
+                              <span className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
+                                {effectiveType === "income" ? "+" : effectiveType === "expense" ? "−" : ""}{formatTransactionAmount(Math.abs(amount), transaction.currency)}
+                              </span>
+
+                            </div>
+                            <button
+                              type="button"
+                              className="transactions-mobile-simple-row__detail transactions-mobile-simple-row__detail--plain"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openTransactionDetail(transaction);
+                              }}
+                              aria-label={`Open details for ${transaction.merchantRaw}`}
+                            >
+                              <ActionIcon name="chevron-right" />
+                            </button>
+                          </article>
+                          </MobileSwipeDelete>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+                {hasMoreMobileTransactions ? (
+                  <button
+                    type="button"
+                    ref={mobileLoadMoreRef}
+                    className={`transactions-mobile-load-more${isMobileLoadingMore ? " is-loading" : ""}`}
+                    aria-live="polite"
+                    onClick={() => void loadMoreMobileTransactions()}
+                    disabled={isMobileLoadingMore}
+                  >
+                    {isMobileLoadingMore ? <span className="transactions-mobile-load-more__spinner" aria-hidden="true" /> : null}
+                    <span>{isMobileLoadingMore ? "Loading more transactions…" : "Load more transactions"}</span>
+                  </button>
+                ) : null}
+              </div>
+            ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
+              transactionsBlankState
+            ) : !hasVisibleTransactions ? (
+              transactionsNoResults
+            ) : null}
+          </div>
+          ) : null}
+
+          {!isCompactViewport ? (
+            <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
+              <div className="transactions-footer__paging">
+                <div className="table-footer__summary">
+                  {totalTransactionCountForDisplay > 0 ? (
+                    <span className="transactions-footer__showing" role="status">{hasSelectedTransactions ? `${selectedTransactionCount} selected` : `Showing ${currentPageLabel}`}</span>
+                  ) : null}
+                  {warningTransactionCount > 0 ? (
+                    <button
+                      type="button"
+                      className="warning-summary-button"
+                      data-tooltip={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} need review. ${firstReviewTransaction ? warningReasonFor(firstReviewTransaction) ?? "" : ""} Open to review and edit the name, date, account, category, amount, or receipt details.`}
+                      title={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"}`}
+                      onClick={() => {
+                        const nextReviewTransaction =
+                          activeWarningTransactionId ? nextReviewTransactionAfter(activeWarningTransactionId) : null;
+                        const targetReviewTransaction = nextReviewTransaction ?? firstReviewTransaction;
+                        if (targetReviewTransaction) {
+                          const visibleTargetIndex = visibleTransactions.findIndex(
+                            (transaction) => transaction.id === targetReviewTransaction.id
+                          );
+                          openTransactionReview(
+                            targetReviewTransaction,
+                            visibleTargetIndex >= 0
+                              ? (currentTransactionPage - 1) * transactionsPageSize + visibleTargetIndex
+                              : targetReviewTransaction.id === firstReviewTransaction?.id
+                                ? transactionsSummary.firstReviewTransactionIndex
+                                : null
+                          );
+                        }
+                      }}
+                      aria-label={
+                        firstReviewTransaction
+                          ? `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open next warning.`
+                          : `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning`
+                      }
+                    >
+                      <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                      <span className="warning-summary-button__count" aria-hidden="true">{warningTransactionCount}</span>
+                    </button>
+                  ) : null}
+                </div>
+                <nav className="transactions-pagination" aria-label="Transaction pages">
+                  {isPageLoading ? <span className="transactions-page-loading" role="status"><span className="spinner" aria-hidden="true" /> Loading</span> : null}
+                  <div className="transactions-pagination__nav">
+                    <button
+                      className="button button-secondary button-small transactions-action-button"
+                      type="button"
+                      onClick={() => changeTransactionPage(Math.max(1, currentTransactionPage - 1))}
+                      disabled={isPageLoading || currentTransactionPage <= 1}
+                    >
+                      Prev
+                    </button>
+                    {paginationPages.map((page, index) =>
+                      page === "ellipsis" ? (
+                        <span key={`ellipsis-${index}`} className="transactions-pagination__ellipsis" aria-hidden="true">
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={page}
+                          className={`button button-secondary button-small transactions-action-button transactions-pagination__page ${
+                            page === currentTransactionPage ? "is-active" : ""
+                          }`}
+                          type="button"
+                          onClick={() => changeTransactionPage(page)}
+                          disabled={isPageLoading}
+                          aria-current={page === currentTransactionPage ? "page" : undefined}
+                        >
+                          {page}
+                        </button>
+                      )
+                    )}
+                    <button
+                      className="button button-secondary button-small transactions-action-button"
+                      type="button"
+                      onClick={() => changeTransactionPage(Math.min(totalTransactionPages, currentTransactionPage + 1))}
+                      disabled={isPageLoading || currentTransactionPage >= totalTransactionPages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <label className="transactions-pagination__size">
+                    <span>Rows</span>
+                    <select
+                      value={transactionsPageSize}
+                      onChange={(event) => {
+                        setTransactionsPageSize(Number(event.target.value));
+                        setTransactionsPage(1);
+                      }}
+                      aria-label="Rows per page"
+                    >
+                      {[25, 50, 100, 200].map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </nav>
+              </div>
+              <div className="transactions-footer__actions">
+                <section className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">
+                  {summaryScope !== financialScopeKey ? <span className="transactions-totals-status" role="status">{isSummaryLoading ? "Updating totals…" : ""}</span> : null}
+                  <div className="transactions-footer-snapshot__metrics">
+                    <div className="transactions-footer-snapshot__metric">
+                      <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Income" : "Income"}</span>
+                      <span className="transactions-footer-snapshot__metric-value positive">
+                        {summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.income) : "—"}
+                      </span>
+                    </div>
+                    <div className="transactions-footer-snapshot__metric">
+                      <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Spending" : "Spending"}</span>
+                      <span className="transactions-footer-snapshot__metric-value negative">
+                        {summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.spending) : "—"}
+                      </span>
+                    </div>
+                    <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net" style={transactionsFooterNetMetricStyle}>
+                      <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Net Cash Flow" : "Net Cash Flow"}</span>
+                      <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
+                        {summaryScope === financialScopeKey ? formatTransactionSummary(netCashFlow) : "—"}
+                      </span>
+                    </div>
+                  </div>
+                </section>
+                <button className="transactions-footer-add" type="button" onClick={() => void openManualAdd()} aria-label="Add transaction"><ActionIcon name="plus" /></button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <aside
+          className={`transactions-summary-panel glass ${summaryOpen ? "" : "is-hidden"}`}
+          id="transactions-expanded-summary"
+          aria-label="Transaction summary"
+          hidden={!summaryOpen}
+        >
+          <div className="transactions-summary-panel__head">
+            <p className="eyebrow">Summary</p>
+            <h4>Overview</h4>
+            <button type="button" className="button button-secondary button-small" onClick={() => setSummaryOpen(false)}>Close summary</button>
+            <p>All transactions matching the current filters.</p>
+          </div>
+
+          <dl className="transactions-summary-list">
+            <div>
+              <dt>Total transactions</dt>
+              <dd>{totalTransactionCountForDisplay}</dd>
+            </div>
+            <div>
+              <dt>{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Income" : "Income"}</dt>
+              <dd className="positive">{summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.income) : "—"}</dd>
+            </div>
+            <div>
+              <dt>{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Spending" : "Spending"}</dt>
+              <dd className="negative">{summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.spending) : "—"}</dd>
+            </div>
+            <div>
+              <dt>Transfers</dt>
+              <dd>{formatTransactionSummary(estimatedTransactionTotals.transfers)}</dd>
+            </div>
+            <div>
+              <dt>{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Net cash flow" : "Net cash flow"}</dt>
+              <dd className={netCashFlow >= 0 ? "positive" : "negative"}>{summaryScope === financialScopeKey ? formatTransactionSummary(netCashFlow) : "—"}</dd>
+            </div>
+            <div>
+              <dt>Review items</dt>
+              <dd>{displayedTransactionsSummary.review}</dd>
+            </div>
+            <div>
+              <dt>Top category</dt>
+              <dd>{displayedTransactionsSummary.topCategory ? `${displayedTransactionsSummary.topCategory[0]} · ${formatTransactionAggregate(displayedTransactionsSummary.topCategory[1], visibleTransactions)}` : "—"}</dd>
+            </div>
+            <div>
+              <dt>Top source</dt>
+              <dd>{transactionsSummary.topAccount ? `${transactionsSummary.topAccount[0]} · ${formatTransactionAggregate(transactionsSummary.topAccount[1], visibleTransactions)}` : "—"}</dd>
+            </div>
+            <div>
+              <dt>First transaction</dt>
+              <dd>{transactionsSummary.firstTransactionDate ? formatDate(transactionsSummary.firstTransactionDate) : "—"}</dd>
+            </div>
+            <div>
+              <dt>Last transaction</dt>
+              <dd>{transactionsSummary.lastTransactionDate ? formatDate(transactionsSummary.lastTransactionDate) : "—"}</dd>
+            </div>
+          </dl>
+
+        </aside>
+      </section>
+
+      {bulkDestinationOpen && selectedTransactionIds.length ? <TransactionBulkDestination
+        key={selectedWorkspaceId}
+        workspaceId={selectedWorkspaceId}
+        count={selectedTransactionIds.length}
+        rows={selectedTransactionIds.flatMap(id => {
+          const row = selectedRowsRef.current.workspaceId === selectedWorkspaceId ? selectedRowsRef.current.rows.get(id) : undefined;
+          return row ? [row] : [];
+        })}
+        onClose={() => setBulkDestinationOpen(false)}
+        onSuccess={notice => { setBulkDestinationOpen(false); clearSelection(); setMessage(notice); }}
+      /> : null}
+      {tagsOpen ? createPortal(
+        <div className="modal-backdrop" onClick={() => { if (!isSaving) setTagsOpen(false); }}>
+          <section ref={tagsDialogRef} className="modal-card glass transaction-tags-dialog" role="dialog" aria-modal="true" aria-labelledby="selection-tags-title" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-head"><h4 id="selection-tags-title">Tags · {selectedTransactionCount} selected</h4><button type="button" className="icon-button" aria-label="Close tags" disabled={isSaving} onClick={() => setTagsOpen(false)}>×</button></div>
+            <form onSubmit={applySelectionTags}>
+              <fieldset disabled={isSaving}>
+                <label>Action<select autoFocus value={tagAction} onChange={(event) => setTagAction(event.target.value as "add" | "remove")}><option value="add">Add tags</option><option value="remove">Remove tags</option></select></label>
+                <p>Other tags on each transaction will stay unchanged.</p>
+                <TransactionTagsEditor tags={selectedTags} onChange={setSelectedTags} suggestions={tagSuggestions} placeholder="Find or create a tag" />
+              </fieldset>
+              {tagError ? <p role="alert">{tagError}</p> : null}
+              <div className="form-actions"><button className="button button-secondary" type="button" disabled={isSaving} onClick={() => setTagsOpen(false)}>Cancel</button><button className="button button-primary" type="submit" disabled={isSaving || !selectedTags.length}>{isSaving ? "Saving…" : tagAction === "add" ? "Add tags" : "Remove tags"}</button></div>
+            </form>
+          </section>
+        </div>, document.body
+      ) : null}
+      {bulkEditOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setBulkEditOpen(false)}>
+          <section
+            className="modal-card modal-card--manual glass"
+            role="dialog"
+            aria-modal="true"
+            ref={bulkEditDialogRef}
+            tabIndex={-1}
+            aria-labelledby="bulk-edit-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MobileSheetHandle onClose={() => setManualOpen(false)} disabled={isSaving || tableLocked} />
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Transactions</p>
+                <h4 id="bulk-edit-title">Edit selected</h4>
+                <p className="modal-copy">{selectedTransactionIds.length} selected · apply the same changes to all rows.</p>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setBulkEditOpen(false)} aria-label="Close bulk edit">
+                ×
+              </button>
+            </div>
+
+            <form className="manual-form" onSubmit={applyBulkEdit}>
+              <div className="form-grid transactions-bulk-grid">
+                <label>
+                  Category
+                  <select aria-label="Category" value={bulkEditForm.categoryId} onChange={(event) => setBulkEditForm((current) => ({ ...current, categoryId: event.target.value }))}>
+                    <option value="">Leave unchanged</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Account
+                  <select aria-label="Account" value={bulkEditForm.accountId} onChange={(event) => setBulkEditForm((current) => ({ ...current, accountId: event.target.value }))}>
+                    <option value="">Leave unchanged</option>
+                    {selectableTransactionAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {formatAccountOptionLabel(account, formatTransactionAccountName(account))}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Type
+                  <select aria-label="Type" value={bulkEditForm.type} onChange={(event) => setBulkEditForm((current) => ({ ...current, type: event.target.value as BulkEditForm["type"] }))}>
+                    <option value="">Leave unchanged</option>
+                    <option value="debit">Debit</option>
+                    <option value="credit">Credit</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="form-actions">
+                <button className="button button-secondary" type="button" onClick={() => setBulkEditOpen(false)}>
+                  Cancel
+                </button>
+                <button className="button button-primary" type="submit" disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Apply changes"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {manualOpen ? createPortal(
+        <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => { if (!isSaving && !tableLocked) setManualOpen(false); }}>
+          <section
+            className={`modal-card modal-card--manual transactions-entry--figma glass${enlargedText ? " modal-card--enlarged-text" : ""}`}
+            ref={manualDialogRef}
+            tabIndex={-1}
+            style={manualModalStyle}
+            role={mobileCreation ? "region" : "dialog"}
+            aria-modal={mobileCreation ? undefined : true}
+            aria-labelledby="add-transaction-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MobileSheetHandle onClose={() => setManualOpen(false)} disabled={isSaving || tableLocked} />
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Transactions</p>
+                <h4 id="add-transaction-title">Add transaction</h4>
+              </div>
+              <button className="icon-button" type="button" onClick={() => { if (!isSaving && !tableLocked) setManualOpen(false); }} disabled={isSaving || tableLocked} aria-label="Close add transaction dialog">
+                <InterfaceIcon name="close" />
+              </button>
+            </div>
+
+            {(
+              <div className="transaction-creation-tabs" style={{ "--entry-tab-index": ["manual", "ask", "upload", "sync"].indexOf(creationTab) } as React.CSSProperties} role="tablist" aria-label="How to add transactions">
+                {([['manual', 'Manual'], ['ask', 'Ask Clover'], ['upload', 'Upload'], ['sync', 'Sync']] as const).map(([tab, label]) => (
+                  <button key={tab} type="button" disabled={isSaving || tableLocked} role="tab" id={`creation-tab-${tab}`} aria-selected={creationTab === tab} aria-controls={`creation-panel-${tab}`} tabIndex={creationTab === tab ? 0 : -1} onKeyDown={(event) => {
+                    const tabs = ["manual", "ask", "upload", "sync"] as const;
+                    const index = tabs.indexOf(tab);
+                    const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : null;
+                    if (next) { event.preventDefault(); setCreationTab(next); if (next === "sync") setSyncVisited(true); if (next === "ask") setCreationChatVisited(true); document.getElementById(`creation-tab-${next}`)?.focus(); }
+                  }} onClick={() => { setCreationTab(tab); if (tab === "sync") setSyncVisited(true); if (tab === "ask") setCreationChatVisited(true); }}><img src={getEntryMethodIconSrc(tab)} alt="" width="20" height="20" />{label}</button>
+                ))}
+              </div>
+            )}
+            {(creationTab === "sync" || syncVisited) && selectedWorkspaceId ? <div hidden={creationTab !== "sync"} id="creation-panel-sync" role="tabpanel" aria-labelledby="creation-tab-sync"><FinverseConnectButton workspaceId={selectedWorkspaceId} mode="sync" /></div> : null}
+            <div id="creation-panel-manual" role="tabpanel" aria-labelledby="creation-tab-manual" hidden={creationTab !== "manual"}>
+            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary entry-table-toggle" type="button" aria-label={tableMode ? "Single entry" : "Table entry"} title={tableMode ? "Single entry" : "Table entry"} disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}><span aria-hidden="true">{tableMode ? "✎" : "▦"}</span></button></div>
+            <div hidden={!tableMode}><TransactionTableEntry key={selectedWorkspaceId} workspaceId={selectedWorkspaceId} accounts={accounts} categories={categories} onLockChange={setTableLocked} onSaved={() => { if (selectedWorkspaceId) void loadTransactionsPage(selectedWorkspaceId, {background:true}); }} /></div>
+            <form onSubmit={saveManualTransaction} hidden={tableMode}>
+
+              {manualSaveError ? <p role="alert">{manualSaveError}</p> : null}
+              <fieldset disabled={isSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+              <div className="manual-form-layout manual-form-layout--compact" data-transaction-type={manualForm.type}>
+                <div className="transactions-manual-type-section">
+                  <span className="transactions-manual-type-section__label">Transaction type</span>
+                  <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
+                  <button
+                    type="button"
+                    className={`transactions-manual-type-toggle__button ${manualForm.type === "debit" ? "is-active" : ""}`}
+                    onClick={() => { setManualCategoryTouched(false); setManualForm((current) => ({ ...current, type: "debit", categoryId: "" })); }}
+                    aria-pressed={manualForm.type === "debit"}
+                  >
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">
+                      −
+                    </span>
+                    <span>Expense</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`transactions-manual-type-toggle__button ${manualForm.type === "credit" ? "is-active" : ""}`}
+                    onClick={() => { setManualCategoryTouched(false); setManualForm((current) => ({ ...current, type: "credit", categoryId: "" })); }}
+                    aria-pressed={manualForm.type === "credit"}
+                  >
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">
+                      +
+                    </span>
+                    <span>Income</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`transactions-manual-type-toggle__button ${manualForm.type === "transfer" ? "is-active" : ""}`}
+                    onClick={() => { setManualCategoryTouched(false); setManualForm((current) => ({ ...current, type: "transfer", categoryId: "" })); }}
+                    aria-pressed={manualForm.type === "transfer"}
+                  >
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">↔</span>
+                    <span>Transfer</span>
+                  </button>
+                  </div>
+                </div>
+
+                <div className="transactions-manual-row transactions-manual-row--money">
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__currency">
+                    <span className="transactions-manual-field__label">Currency</span>
+                    <CurrencySelector
+                      value={manualForm.currency}
+                      onChange={(value) => setManualForm((current) => ({ ...current, currency: value }))}
+                      options={currencyCatalogCodes}
+                      ariaLabel="Select transaction currency"
+                      className="transactions-manual-currency"
+                      buttonClassName="transactions-manual-currency__button"
+                      menuClassName="transactions-manual-currency__menu"
+                      optionClassName="transactions-manual-currency__option"
+                      menuAlignment="end"
+                      showCurrencyCode
+                      portalMenu
+                    />
+                  </label>
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__amount">
+                    <span className="transactions-manual-field__label">Amount</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={manualForm.amount}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        event.target.setCustomValidity(value && normalizeTransactionAmountInput(value) === null ? transactionAmountFormatMessage : "");
+                        setManualForm((current) => ({ ...current, amount: value }));
+                      }}
+                      onBlur={(event) => {
+                        const amount = normalizeTransactionAmountInput(event.target.value);
+                        if (amount !== null) setManualForm((current) => ({ ...current, amount }));
+                      }}
+                      placeholder="0.00"
+                    />
+                  </label>
+                </div>
+
+                <div className="transactions-manual-row transactions-manual-row--name">
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
+                    <span className="transactions-manual-field__label">{manualForm.type === "transfer" ? "What was it for? (optional)" : "What was it for?"}</span>
+                    <TransactionNameAutocomplete
+                      workspaceId={selectedWorkspaceId}
+                      inputRef={manualNameInputRef}
+                      value={manualForm.merchantRaw}
+                      onChange={(merchantRaw) => setManualForm((current) => ({ ...current, merchantRaw }))}
+                      onSelect={(suggestion: TransactionNameSuggestion) => {
+                        setManualForm((current) => ({
+                          ...current,
+                          merchantRaw: suggestion.name,
+                          ...(!manualCategoryTouched && suggestion.categoryId ? { categoryId: suggestion.categoryId } : {}),
+                        }));
+                        manualCategoryButtonRef.current?.focus();
+                      }}
+                      placeholder={manualTransactionPlaceholder(manualForm.type)}
+                      required={false}
+                    />
+                  </label>
+                </div>
+
+                <div className="transactions-manual-inline-row transactions-manual-inline-row--account">
+                  <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--account" aria-hidden="true">
+                    <AccountBrandMark accountBrand={manualSelectedAccountBrand} label={manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"} />
+                  </span>
+                  <div className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
+                    <span className="transactions-manual-field__label">{manualForm.type === "transfer" ? "From account" : "Account"}</span>
+                    <div className="transactions-manual-picker">
+                      <div className="transactions-manual-picker__control">
+                        <button
+                          type="button"
+                          className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                          aria-label={manualForm.type === "transfer" ? "From account" : "Account"}
+                          aria-expanded={manualAccountMenuOpen}
+                          onClick={() => {
+                            setManualCategoryMenuOpen(false);
+                            setManualAccountMenuOpen((current) => !current);
+                          }}
+                        >
+                          <span className="transactions-manual-picker__text">
+                            {manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"}
+                          </span>
+                          <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                            <ActionIcon name="chevron-down" />
+                          </span>
+                        </button>
+                        {manualAccountMenuOpen ? (
+                          <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
+                            {manualAccountOptions.map(({ account, label: accountDisplayName }) => {
+                              const accountOptionBrand = accountBrandById.get(account.id) ?? getAccountBrand(account);
+
+                              return (
+                                <button
+                                  key={account.id}
+                                  type="button"
+                                  className={`transactions-manual-picker__option ${
+                                    account.id === manualForm.accountId ? "is-selected" : ""
+                                  }`}
+                                  onClick={() => {
+                                    setManualForm((current) => ({
+                                      ...current,
+                                      accountId: account.id,
+                                      currency: formatCurrencyCode(account.currency || current.currency || "PHP"),
+                                    }));
+                                    setManualAccountMenuOpen(false);
+                                  }}
+                                >
+                                  <span className="transactions-manual-picker__brand" aria-hidden="true">
+                                    <AccountBrandMark accountBrand={accountOptionBrand} label={accountDisplayName} />
+                                  </span>
+                                  <span className="transactions-manual-picker__option-text">
+                                    <strong>{accountDisplayName}</strong>
+                                    <span>{account.institution ?? account.type}</span>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {manualForm.type === "transfer" ? (
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                    <span className="transactions-manual-field__label">To account</span>
+                    <TransactionAccountPicker searchable={false}
+                      accounts={manualTransferDestinationPickerOptions}
+                      selectedId={manualForm.destinationAccountId}
+                      placeholder="Choose destination account"
+                      ariaLabel="Choose destination account"
+                      onSelect={(account) =>
+                        setManualForm((current) => ({ ...current, destinationAccountId: account.id }))
+                      }
+                    />
+                    {manualTransferDestinationOptions.length === 0 ? (
+                      <small className="field-help">Add another account in {manualForm.currency} to record an internal transfer.</small>
+                    ) : (
+                      <small className="field-help">Transfers between your accounts are excluded from income and spending.</small>
+                    )}
+                  </label>
+                ) : null}
+
+                {manualForm.type !== "transfer" ? <div className="transactions-manual-inline-row transactions-manual-inline-row--category">
+                  <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--category" aria-hidden="true">
+                    <CategoryBrandMark
+                      categoryName={manualSelectedCategory?.name ?? "Other"}
+                      size="100%"
+                      radius={18}
+                      className="transactions-manual-inline-row__icon-badge"
+                    />
+                  </span>
+                  <div className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
+                    <span className="transactions-manual-field__label">Category</span>
+                    <TransactionCategoryPicker searchable={false} showSelectedIcon={false}
+                      categories={categories}
+                      selectedId={manualSelectedCategoryId}
+                      buttonRef={manualCategoryButtonRef}
+                      onSelect={(category) => {
+                        setManualCategoryTouched(true);
+                        setManualForm((current) => ({ ...current, categoryId: category.id }));
+                      }}
+                    />
+                    {manualCategorySuggestion ? <small>Suggested: {manualCategorySuggestion.categoryName} · {manualCategorySuggestion.confidence}% confidence. Review before saving.</small> : null}
+                  </div>
+                </div> : null}
+
+                <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-date">
+                  <span className="transactions-manual-field__label"><InterfaceIcon name="date" /> Date</span>
+                  <input
+                    type="date"
+                    value={manualForm.date}
+                    onChange={(event) => setManualForm((current) => ({ ...current, date: event.target.value }))}
+                  />
+                </label>
+
+                {manualMoreOpen ? (
+                  <button
+                    type="button"
+                    className="transactions-manual-more"
+                    onClick={() => setManualMoreOpen((current) => !current)}
+                    aria-expanded={manualMoreOpen}
+                  >
+                    <span>{manualMoreOpen ? "Fewer details" : "More details"}</span>
+                    <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                      <ActionIcon name="chevron-down" />
+                    </span>
+                  </button>
+                ) : (
+                  <div className="manual-form-actions manual-form-actions--closed">
+                    <button
+                      type="button"
+                      className="transactions-manual-more"
+                      onClick={() => setManualMoreOpen((current) => !current)}
+                      aria-expanded={manualMoreOpen}
+                    >
+                      <span>{manualMoreOpen ? "Fewer details" : "More details"}</span>
+                      <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                        <ActionIcon name="chevron-down" />
+                      </span>
+                    </button>
+                    <div className="manual-form-actions__right">
+                      <button
+                        className="transactions-manual-add-another"
+                        type="submit"
+                        data-submit-mode="add-another"
+                        disabled={isSaving}
+                      >
+                        Add another
+                      </button>
+                      <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
+                        {isSaving ? "Saving..." : "Add transaction"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {manualMoreOpen ? (
+                  <>
+                    <div className="manual-more-panel manual-more-panel--compact">
+                      {manualForm.type === "transfer" ? (
+                        <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                          <span className="transactions-manual-field__label">Transfer fee (optional)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={manualForm.feeAmount}
+                            onChange={(event) => setManualForm((current) => ({ ...current, feeAmount: event.target.value }))}
+                            placeholder="0.00"
+                          />
+                        </label>
+                      ) : null}
+                      <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                        <span className="transactions-manual-field__label">Notes</span>
+                        <textarea
+                          value={manualForm.description}
+                          onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
+                          placeholder="Optional note or review context"
+                        />
+                      </label>
+
+                      <div className="transactions-manual-field transactions-manual-field--embedded-label">
+                        <span className="transactions-manual-field__label">Tags</span>
+                        <TransactionTagsEditor
+                          tags={manualForm.tags}
+                          onChange={(tags) => setManualForm((current) => ({ ...current, tags }))}
+                          placeholder="Examples: Bills, Work, Family"
+                          inputAriaLabel="Add tags to transaction"
+                        />
+                      </div>
+
+                      <div className="manual-more-panel__receipt-line-items">
+                        <div className="manual-more-panel__section-head">
+                          <span>Receipt line items</span>
+                        </div>
+
+                        {manualForm.receiptLineItems.length === 0 ? (
+                          <p className="field-help field-help--compact">
+                            Optional. Add item lines if you want the receipt breakdown to follow the transaction.
+                          </p>
+                        ) : null}
+
+                        {manualForm.receiptLineItems.length > 0 ? (
+                          <div className="manual-receipt-table" role="table" aria-label="Receipt line items">
+                            <div className="manual-receipt-table__header" role="row">
+                              <span role="columnheader">Item</span>
+                              <span role="columnheader">Price</span>
+                              <span aria-hidden="true" />
+                            </div>
+
+                            {manualForm.receiptLineItems.map((lineItem, index) => (
+                              <div key={index} className="manual-receipt-table__row" role="row">
+                                <label className="manual-receipt-table__cell" role="cell">
+                                  <span className="sr-only">Item</span>
+                                  <input
+                                    value={lineItem.description}
+                                    onChange={(event) =>
+                                      setManualForm((current) => ({
+                                        ...current,
+                                        receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                          entryIndex === index ? { ...entry, description: event.target.value } : entry
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="Coffee"
+                                  />
+                                </label>
+                                <label className="manual-receipt-table__cell manual-receipt-table__cell--price" role="cell">
+                                  <span className="sr-only">Price</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={lineItem.amount}
+                                    onChange={(event) =>
+                                      setManualForm((current) => ({
+                                        ...current,
+                                        receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                          entryIndex === index ? { ...entry, amount: event.target.value } : entry
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="0.00"
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  className="manual-receipt-table__remove"
+                                  onClick={() =>
+                                    setManualForm((current) => ({
+                                      ...current,
+                                      receiptLineItems: current.receiptLineItems.filter((_, entryIndex) => entryIndex !== index),
+                                    }))
+                                  }
+                                  aria-label="Remove line item"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          className="manual-receipt-table__add-floater"
+                          onClick={() =>
+                            setManualForm((current) => ({
+                              ...current,
+                              receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
+                            }))
+                          }
+                          aria-label="Add receipt line item"
+                        >
+                          +
+                        </button>
+
+                        {manualReceiptLineItemHasValues ? (
+                          <div className="field-help">
+                            <div>Line-item total: {formatTransactionAmount(manualReceiptLineItemTotal, manualForm.currency)}</div>
+                            {manualReceiptLineItemMismatch ? (
+                              <div>Line items do not match the transaction amount yet.</div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="manual-form-actions manual-form-actions--expanded">
+                      <div className="manual-form-actions__right">
+                        <button
+                          className="transactions-manual-add-another"
+                          type="submit"
+                          data-submit-mode="add-another"
+                          disabled={isSaving}
+                        >
+                          Add another
+                        </button>
+                        <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
+                          {isSaving ? "Saving..." : "Add transaction"}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+                          </fieldset>
+            </form>
+            </div>
+            {creationChatVisited ? <div id="creation-panel-ask" role="tabpanel" aria-labelledby="creation-tab-ask" hidden={creationTab !== "ask"} className="transaction-creation-panel">
+
+              <AdviserChat minimal workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro" || planTier === "premium"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review"
+                formContext={{ kind: "transaction", fields: { accountId: manualForm.accountId, currency: manualForm.currency, date: manualForm.date,
+                  type: manualForm.type === "credit" ? "income" : manualForm.type === "debit" ? "expense" : "transfer", merchantRaw: manualForm.merchantRaw, amount: manualForm.amount } }} />
+            </div> : null}
+            {true ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
+
+              <UploadSourceButtons onFiles={openMobileFilePicker} onCamera={openPhotoCapture} onLibrary={openPhotoLibrary} /><UploadSecurityCopy />
+            </div> : null}
+          </section>
+        </div>, document.body
+      ) : null}
+
+      {selectedTransaction ? (
+        <div className="modal-backdrop modal-backdrop--transaction-detail" role="presentation" onClick={closeTransactionDetail}>
+          <section
+            className="modal-card modal-card--wide transaction-drawer transaction-drawer--sidepanel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transaction-notes-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="transaction-drawer__mobile-header"><button className="icon-button" type="button" aria-label="Back to transactions" onClick={closeTransactionDetail}><span aria-hidden="true">‹</span></button><h4>Transaction Details</h4><ContextualAskClover context="transactions" planTier={planTier} /></div>
+            <div className="modal-head transaction-drawer__head">
+              <div className="transaction-drawer__head-title">
+                <button
+                  className="icon-button transaction-drawer__back-button"
+                  type="button"
+                  onClick={closeTransactionDetail}
+                  aria-label="Back to transactions"
+                >
+                  <ActionIcon name="chevron-left" />
+                </button>
+                <div>
+                  <p className="eyebrow">Transaction details</p>
+                  <h4 id="transaction-notes-title">{detailTransactionSummary || selectedTransaction.merchantRaw}</h4>
+
+                </div>
+              </div>
+              <div className="transaction-drawer__head-actions">
+                {detailEditing ? (
+                  <button className="button button-ghost button-small" type="button" onClick={cancelTransactionDetailEdit} disabled={isSaving}>
+                    Cancel
+                  </button>
+                ) : (
+                  <button className="button button-secondary button-small transaction-drawer__edit-button" type="button" onClick={() => setDetailEditing(true)}>
+                    Edit
+                  </button>
+                )}
+                <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details"><InterfaceIcon name="close" /></button>
+              </div>
+            </div>
+
+            {selectedTransactionPrimaryReviewChips.length > 0 ? (
+              <div className="transaction-drawer-review-status" aria-label="Transaction review context">
+                {selectedTransactionPrimaryReviewChips.map((chip) => (
+                  <span
+                    key={chip.label}
+                    className={`transaction-drawer-review-status__chip transaction-drawer-review-status__chip--${chip.tone}`}
+                  >
+                    {chip.label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+              <div className="transaction-drawer-view">
+                <div className={`transaction-drawer-view__amount is-${detailDraft?.type ?? "debit"}`}>
+                  <span>{detailDraft?.type === "credit" ? "+" : detailDraft?.type === "transfer" ? "↔" : "−"}</span>
+                  <strong>{formatTransactionAmount(Number(detailDraft?.amount ?? selectedTransaction.amount), detailDraft?.currency ?? selectedTransaction.currency)}</strong>
+                  <em>{detailDraft?.type === "credit" ? "Income" : detailDraft?.type === "transfer" ? "Transfer" : "Expense"}</em>
+                </div>
+                <TransactionConversion amount={detailDraft?.amount ?? selectedTransaction.amount} currency={detailDraft?.currency ?? selectedTransaction.currency} />
+                <dl className="transaction-drawer-view__facts">
+                  {[
+                    ["Name", detailDraft?.merchantClean || selectedTransaction.merchantRaw],
+                    ["Type", detailDraft?.type === "credit" ? "Income" : detailDraft?.type === "transfer" ? "Transfer" : "Expense"],
+                    ["Date", formatTransactionRecordDate(detailDraft?.date ?? selectedTransaction.date, "en-PH")],
+                    ["Account", detailSelectedAccount ? formatTransactionAccountName(detailSelectedAccount) : selectedTransaction.accountName],
+                    ["Category", detailSelectedCategory?.name ?? selectedTransaction.categoryName ?? "Other"],
+                    ["Amount", formatTransactionRecordAmount(detailDraft ?? selectedTransaction, "en-PH")],
+                    ["Tags", (selectedTransaction.tags ?? []).map((tag) => tag.name).join(", ") || "Add tags"],
+                    ["Notes", detailDraft?.description.trim() || "Add a note"],
+                  ].map(([label, value]) => <div key={label} data-detail-field={label}><dt>{label === "Account" && detailSelectedAccountBrand ? <><span className="transaction-detail-brand"><AccountBrandMark accountBrand={detailSelectedAccountBrand} label="" /></span><span>Account</span></> : label === "Category" ? <><CategoryBrandMark categoryName={detailSelectedCategory?.name ?? selectedTransaction.categoryName ?? "Other"} size={24} /><span>Category</span></> : <TransactionDetailLabel label={label} />}</dt><dd>{detailEditing ? (
+                    label === "Account" ? <TransactionAccountPicker accounts={transactionAccountPickerOptions} selectedId={detailDraft?.accountId ?? ""} onSelect={account => setDetailDraft(current => current ? {...current,accountId:account.id} : current)} ariaLabel="Choose transaction account" /> :
+                    label === "Category" ? <TransactionCategoryPicker categories={categories} selectedId={detailDraft?.categoryId ?? otherCategoryId} onSelect={category => setDetailDraft(current => current ? {...current,categoryId:category.id} : current)} ariaLabel="Choose transaction category" /> :
+                    label === "Type" ? <select aria-label="Transaction type" value={detailDraft?.type} onChange={event => setDetailDraft(current => current ? {...current,type:event.target.value as "credit" | "debit" | "transfer",isTransfer:event.target.value === "transfer"} : current)}>{amountTypeOptions.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}</select> :
+                    label === "Amount" ? <div className="transaction-detail-money"><input aria-label="Amount" type="number" step="0.01" value={detailDraft?.amount ?? ""} onChange={event => setDetailDraft(current => current ? {...current,amount:event.target.value} : current)} /><CurrencySelector value={detailDraft?.currency ?? selectedTransaction.currency} options={currencyCatalogCodes} onChange={currency => setDetailDraft(current => current ? {...current,currency} : current)} ariaLabel="Transaction currency" showCurrencyCode portalMenu /></div> :
+                    label === "Tags" ? <TransactionTagsEditor tags={detailTags} onChange={setDetailTags} suggestions={tagSuggestions} /> :
+                    label === "Notes" ? <textarea aria-label="Notes" value={detailDraft?.description ?? ""} onChange={event => setDetailDraft(current => current ? {...current,description:event.target.value} : current)} /> :
+                    <input aria-label={label} type={label === "Date" ? "date" : label === "Amount" ? "number" : "text"} step={label === "Amount" ? "0.01" : undefined} value={label === "Date" ? detailDraft?.date ?? todayIso : label === "Amount" ? detailDraft?.amount ?? "" : detailDraft?.merchantClean ?? ""} onChange={event => setDetailDraft(current => current ? {...current,[label === "Date" ? "date" : label === "Amount" ? "amount" : "merchantClean"]:event.target.value} : current)} />
+                  ) : <button type="button" onClick={() => beginDrawerEdit(label)}>{value}</button>}</dd></div>)}
+                </dl>
+                <details className="transaction-line-items-accordion" open>
+                  <summary>Line Items <span>{detailReceiptLineItems.length}</span></summary>
+                  {detailReceiptLineItems.length ? detailReceiptLineItems.map((item, index) => <TransactionLineItemRow key={index} description={item.description || `Line item ${index + 1}`} amount={formatReceiptLineItemAmount(item, selectedTransaction.currency, formatTransactionAmount)} />) : <p>No line items yet.</p>}
+                  {!detailEditing ? <QuickAddLineItem key={selectedTransaction.id} currency={detailDraft?.currency ?? selectedTransaction.currency} count={detailReceiptLineItems.length} disabled={isSaving} onAdd={async (item,requestId) => {
+                    setIsSaving(true);
+                    try { await updateTransaction(selectedTransaction.id,{appendReceiptLineItem:{item,requestId}}); }
+                    finally { setIsSaving(false); }
+                  }} /> : null}
+                </details>
+              </div>
+
+            {!detailEditing ? <TransactionSourceMatches
+              key={selectedTransaction.id}
+              matches={selectedTransaction.sourceMatches}
+              canCopy={!detailReceiptLineItems.length}
+              busy={isSaving}
+              onReview={async (sourceId, action) => {
+                setIsSaving(true);
+                try {
+                  await updateTransaction(selectedTransaction.id, { [action]: sourceId }, { recordHistory: false });
+                } finally { setIsSaving(false); }
+              }}
+            /> : null}
+
+            <TransactionReviewControls
+              transaction={{ ...selectedTransaction, isExcluded: detailDraft?.isExcluded ?? selectedTransaction.isExcluded }}
+              busy={isSaving} editing={detailEditing}
+              onToggle={() => {
+                if (detailEditing) {
+                  setDetailDraft(current => current ? { ...current, isExcluded: !current.isExcluded } : current);
+                } else {
+                  void setTransactionTotalsExcluded(selectedTransaction, !selectedTransaction.isExcluded);
+                }
+              }}
+              onReview={() => resolveTransactionWarning(selectedTransaction, {
+                isExcluded: selectedTransaction.isExcluded,
+                isTransfer: selectedTransaction.isTransfer,
+                reviewStatus: "confirmed",
+              }, "", "accepted")}
+              onEdit={() => beginDrawerEdit("Category")}
+            />
+
+            {detailEditing ? (
+            <details className="transaction-drawer-more">
+              <summary>More</summary>
+              <div className="transaction-drawer-more__body">
+                <div className="transaction-drawer-receipt-lines">
+                  <div className="transaction-drawer-receipt-lines__head">
+                    <span className="transaction-drawer-field-label">
+                      <span>Receipt line items</span>
+                    </span>
+                    <span className="field-help">
+                      {formatTransactionAmount(detailReceiptLineItemTotal, detailDraft?.currency ?? selectedTransaction.currency)}
+                    </span>
+                  </div>
+                  {detailReceiptLineItems.length > 0 && Math.abs(detailReceiptLineItemTotal - Number(detailDraft?.amount || 0)) > 0.005 ? <p role="status">Line items do not match the transaction total. Check for missing items, tax, or discounts. You can still save.</p> : null}
+                  <div className="transaction-drawer-receipt-table" role="table" aria-label="Receipt line items">
+                    <div className="transaction-drawer-receipt-table__row transaction-drawer-receipt-table__row--head" role="row">
+                      <span role="columnheader">Name</span>
+                      <span role="columnheader">Quantity</span>
+                      <span role="columnheader">Currency</span>
+                      <span role="columnheader">Amount</span>
+                      <span role="columnheader" className="sr-only">Actions</span>
+                    </div>
+                    {detailReceiptLineItems.length > 0 ? (
+                      detailReceiptLineItems.map((lineItem, index) => (
+                        <div key={`${lineItem.description || "line"}-${index}`} className="transaction-drawer-receipt-table__row" role="row">
+                          <input
+                            aria-label={`Receipt line item ${index + 1} name`}
+                            value={lineItem.description}
+                            placeholder="Item name"
+                            onChange={(event) => updateDetailReceiptLineItem(index, "description", event.target.value)}
+                          />
+                          <input
+                            aria-label={`Receipt line item ${index + 1} quantity`}
+                            value={lineItem.quantity}
+                            placeholder="1"
+                            inputMode="decimal"
+                            onChange={(event) => updateDetailReceiptLineItem(index, "quantity", event.target.value)}
+                          />
+                          <input
+                            aria-label={`Receipt line item ${index + 1} currency`}
+                            value={lineItem.currency || detailDraft?.currency || selectedTransaction.currency}
+                            placeholder={detailDraft?.currency || selectedTransaction.currency}
+                            onChange={(event) => updateDetailReceiptLineItem(index, "currency", event.target.value.toUpperCase())}
+                          />
+                          <input
+                            aria-label={`Receipt line item ${index + 1} amount`}
+                            value={lineItem.amount}
+                            placeholder="0.00"
+                            inputMode="decimal"
+                            onChange={(event) => updateDetailReceiptLineItem(index, "amount", event.target.value)}
+                          />
+                          <button
+                            className="button button-ghost button-small transaction-drawer-receipt-table__delete"
+                            type="button"
+                            onClick={() => deleteDetailReceiptLineItem(index)}
+                            aria-label={`Delete receipt line item ${index + 1}`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="transaction-drawer-receipt-table__empty">No line items yet.</div>
+                    )}
+                  </div>
+                  <QuickAddLineItem key={`${selectedTransaction.id}:edit`} currency={detailDraft?.currency ?? selectedTransaction.currency} count={detailReceiptLineItems.length} disabled={isSaving} onAdd={item => setDetailDraft(current => current ? {...current,receiptLineItems:[...current.receiptLineItems,{...createEmptyReceiptLineItem(),...item}]} : current)} />
+                </div>
+
+                <div className="transaction-drawer-more__row">
+                  <span>Confidence score</span>
+                  <span className="transaction-drawer-more__confidence">
+                    {selectedTransactionConfidenceChips.map((chip) => (
+                      <span
+                        key={chip.label}
+                        className={`transaction-drawer-review-status__chip transaction-drawer-review-status__chip--${chip.tone}`}
+                      >
+                        {chip.label}
+                      </span>
+                    ))}
+                    <strong>{selectedTransactionConfidenceScore ?? 0}%</strong>
+                  </span>
+                </div>
+                <p>Based on Clover's merchant, account, category, duplicate, and parser checks.</p>
+              </div>
+            </details>
+            ) : (
+              <details className="transaction-drawer-more">
+                <summary>Source and review details</summary>
+                <div className="transaction-drawer-more__body">
+                  <div className="transaction-drawer-more__row">
+                    <span>Source</span>
+                    <strong>{selectedTransaction.importFileId ? "Imported" : "Manual"}</strong>
+                    {selectedTransaction.importFileId ? <p>{selectedTransaction.importFileName ?? selectedTransaction.importFileId}</p> : null}
+                  </div>
+                  <div className="transaction-drawer-more__row">
+                    <span>Confidence score</span>
+                    <span className="transaction-drawer-more__confidence">
+                      {selectedTransactionConfidenceChips.map((chip) => (
+                        <span key={chip.label} className={`transaction-drawer-review-status__chip transaction-drawer-review-status__chip--${chip.tone}`}>
+                          {chip.label}
+                        </span>
+                      ))}
+                      <strong>{selectedTransactionConfidenceScore ?? 0}%</strong>
+                    </span>
+                  </div>
+                  <section aria-label="Parsed information"><h5>Parsed information</h5><p>{getTransactionParsedNote(selectedTransaction) || selectedTransaction.merchantRaw}</p></section>
+                </div>
+              </details>
+            )}
+
+            {detailEditing ? (
+              <div className="transaction-drawer-edit-footer">
+                <button className="button button-secondary" type="button" onClick={cancelTransactionDetailEdit} disabled={isSaving}>
+                  Cancel
+                </button>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() => void persistDetailDraft({ closeAfterSave: false })}
+                  disabled={isSaving || !hasDetailDraftChanges}
+                >
+                  {isSaving ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            ) : (
+            <div className="form-actions detail-actions">
+              <TransactionCrossFeatureActions
+                    workspaceId={selectedTransaction.workspaceId}
+                    transactionId={selectedTransaction.id}
+                    transactionType={selectedTransaction.type}
+                    title={detailDraft?.merchantClean || selectedTransaction.merchantClean || selectedTransaction.merchantRaw}
+                    amount={detailDraft?.amount ?? selectedTransaction.amount}
+                    currency={detailDraft?.currency ?? selectedTransaction.currency}
+                    date={detailDraft?.date ?? selectedTransaction.date}
+                    accountId={detailDraft?.accountId ?? selectedTransaction.accountId}
+                    splitBillHref={selectedTransaction.splitBill ? `/split-bill?bill=${selectedTransaction.splitBill.id}` : null}
+                    splitBillOpen={transactionSplitBillOpen}
+                    onToggleSplitBill={selectedTransaction.splitBill ? undefined : () => {
+                      setTransactionSplitBillError(null);
+                      setTransactionSplitBillOpen((current) => !current);
+                    }}
+              />
+            </div>
+            )}
+
+            {(transactionSplitBillError || (transactionSplitBillOpen && !selectedTransaction.splitBill)) ? (
+              <div className="transaction-drawer-split-bill">
+                {transactionSplitBillError ? <p className="field-help field-help--compact transaction-drawer-split-bill__error">{transactionSplitBillError}</p> : null}
+                {transactionSplitBillOpen && !selectedTransaction.splitBill ? (
+                  <SplitBillTransactionLinkFields
+                    workspaceId={selectedTransaction.workspaceId}
+                    draft={transactionSplitBillDraft}
+                    onChange={setTransactionSplitBillDraft}
+                    open={transactionSplitBillOpen}
+                    title="Add transaction to Split Bills"
+                    helperText="Choose a group or add names. The split bill will be created from this transaction."
+                    actionLabel="Create split bill"
+                    onAction={createTransactionSplitBill}
+                    actionBusy={transactionSplitBillSaving}
+                    actionDisabled={!transactionSplitBillDraft.groupId.trim() && transactionSplitBillDraft.participantNames.length === 0}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+
+            {!detailEditing && !transactionDeleteConfirmOpen ? <button className="button button-danger button-small transaction-drawer-delete-footer" type="button" onClick={() => setTransactionDeleteConfirmOpen(true)}>Delete transaction</button> : null}
+            {!detailEditing && transactionDeleteConfirmOpen ? (
+              <div className="transaction-drawer-delete-footer">
+                  <div className="detail-warning-box transaction-delete-confirm" role="alert">
+                    <p>
+                      <strong>Delete transaction?</strong>
+                      <span>This cannot be undone.</span>
+                    </p>
+                    <div className="detail-warning-actions detail-warning-actions--compact">
+                      <button className="button button-secondary button-small" type="button" onClick={() => setTransactionDeleteConfirmOpen(false)} disabled={isSaving}>Cancel</button>
+                      <button className="button button-danger button-small" type="button" onClick={() => void confirmDeleteTransaction()} disabled={isSaving}>{isSaving ? "Deleting..." : "Delete"}</button>
+                    </div>
+                  </div>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
+
+      {merchantRenameSuggestion ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setMerchantRenameSuggestion(null)}>
+          <section
+            className="modal-card modal-card--wide glass"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="merchant-rename-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Merchant cleanup</p>
+                <h4 id="merchant-rename-title">Apply this cleaner name everywhere?</h4>
+                <p className="modal-copy">
+                  You changed <strong>{merchantRenameSuggestion.sourceMerchantRaw}</strong> to{" "}
+                  <strong>{merchantRenameSuggestion.targetMerchantClean}</strong>. There{" "}
+                  {merchantRenameSuggestion.matchingTransactionIds.length === 1 ? "is 1 other matching transaction" : `are ${merchantRenameSuggestion.matchingTransactionIds.length} other matching transactions`}{" "}
+                  with the same statement label.
+                </p>
+              </div>
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => {
+                    capturePostHogClientEvent("ai_suggestion_rejected", {
+                      workspace_id: selectedWorkspaceId || null,
+                      suggestion_type: "merchant_rename",
+                      source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                      source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                      target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                      transaction_account: null,
+                    });
+                    capturePostHogClientEvent("merchant_rule_reverted", {
+                      workspace_id: selectedWorkspaceId || null,
+                      suggestion_type: "merchant_rename",
+                      source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                      source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                      target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                    });
+                    capturePostHogClientEvent("merchant_rule_deleted", {
+                      workspace_id: selectedWorkspaceId || null,
+                      suggestion_type: "merchant_rename",
+                      source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                      source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                      target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                    });
+                    setMerchantRenameSuggestion(null);
+                  }}
+                  aria-label="Close merchant rename suggestion"
+                >
+                ×
+              </button>
+            </div>
+
+            <div className="detail-warning-box">
+              <p>
+                If you accept, Clover will update the matching transactions to use{" "}
+                <strong>{merchantRenameSuggestion.targetMerchantClean}</strong> as the bold name, while keeping the raw
+                statement text in gray for reference.
+              </p>
+            </div>
+
+            <div className="form-actions detail-actions">
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => {
+                  capturePostHogClientEvent("ai_suggestion_rejected", {
+                    workspace_id: selectedWorkspaceId || null,
+                    suggestion_type: "merchant_rename",
+                    source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                    source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                    target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                    transaction_account: null,
+                  });
+                  capturePostHogClientEvent("merchant_rule_reverted", {
+                    workspace_id: selectedWorkspaceId || null,
+                    suggestion_type: "merchant_rename",
+                    source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                    source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                    target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                  });
+                  capturePostHogClientEvent("merchant_rule_deleted", {
+                    workspace_id: selectedWorkspaceId || null,
+                    suggestion_type: "merchant_rename",
+                    source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                    source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                    target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                  });
+                  setMerchantRenameSuggestion(null);
+                }}
+                disabled={merchantRenameBusy}
+              >
+                Ignore
+              </button>
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={() => void applyMerchantRenameSuggestion()}
+                disabled={merchantRenameBusy}
+              >
+                {merchantRenameBusy ? "Applying..." : `Apply to ${merchantRenameSuggestion.matchingTransactionIds.length} more`}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      <ImportFilesModal
+        key={importSessionId}
+        open={importOpen}
+        workspaceId={selectedWorkspaceId}
+        accounts={accounts}
+        defaultAccountId={null}
+        defaultImportMode={importSeedMode}
+        initialFiles={importSeedFiles}
+        onInitialFilesConsumed={() => setImportSeedFiles(null)}
+        backgroundOnly={importBackgroundOnly}
+        onClose={() => {
+          setImportOpen(false);
+          setImportSeedFiles(null);
+          setImportSeedMode("statement");
+          setImportBackgroundOnly(false);
+        }}
+        onImported={async (summary) => {
+          const summaryKey = buildImportedSummaryDedupKey(summary);
+          if (handledImportedSummaryKeysRef.current.has(summaryKey)) {
+            return;
+          }
+
+          handledImportedSummaryKeysRef.current.add(summaryKey);
+          await applyImportedSummary(summary);
+        }}
+      />
+      <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
+    </CloverShell>
+  );
+}

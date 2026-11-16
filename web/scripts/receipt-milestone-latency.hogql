@@ -1,0 +1,45 @@
+-- See receipt-first-attempt.hogql for the full acceptance denominator.
+-- This breakdown times observed milestones. Review prompt exposure can follow
+-- the first review-required outcome on the same attempt.
+WITH receipt_events AS (
+  SELECT properties.platform AS platform, properties.operation_id AS scan_id,
+    event, timestamp, toString(properties.outcome) AS outcome,
+    coalesce(nullIf(toString(properties.reason_code), ''), 'unspecified') AS reason_code,
+    toFloat64OrNull(toString(properties.duration_ms)) AS duration_ms
+  FROM events
+  WHERE event IN ('receipt_first_attempt', 'receipt_review_prompt_shown')
+    AND timestamp >= now() - INTERVAL 30 DAY
+    AND properties.analytics_environment = 'production'
+    AND properties.analytics_audience = 'customer'
+    AND coalesce(toString(properties.analytics_excluded), 'false') NOT IN ('true', '1')
+    AND properties.platform IN ('ios', 'android', 'mobile_web', 'desktop_web')
+    AND properties.operation_id IS NOT NULL
+), attempt_milestones AS (
+  SELECT platform, scan_id,
+    countIf(event = 'receipt_first_attempt' AND outcome = 'accepted') AS accepted,
+    argMinIf(tuple(outcome, reason_code, duration_ms), timestamp,
+      event = 'receipt_first_attempt' AND outcome != 'accepted') AS first_result,
+    argMinIf(tuple(reason_code, duration_ms), timestamp,
+      event = 'receipt_review_prompt_shown') AS first_prompt
+  FROM receipt_events
+  GROUP BY platform, scan_id
+  HAVING accepted > 0
+), timings AS (
+  SELECT platform, tupleElement(first_result, 1) AS milestone,
+    tupleElement(first_result, 2) AS reason_code, tupleElement(first_result, 3) AS duration_ms
+  FROM attempt_milestones
+  WHERE tupleElement(first_result, 1) IN ('visible', 'review_required', 'failed')
+  UNION ALL
+  SELECT platform, 'review_prompt_shown' AS milestone,
+    tupleElement(first_prompt, 1) AS reason_code, tupleElement(first_prompt, 2) AS duration_ms
+  FROM attempt_milestones
+  WHERE tupleElement(first_prompt, 2) IS NOT NULL
+)
+SELECT platform, milestone, reason_code, count() AS observed,
+  count(duration_ms) AS timed,
+  countIf(duration_ms <= 10000) AS reached_within_10s,
+  quantileIf(0.5)(duration_ms, duration_ms IS NOT NULL) AS p50_ms,
+  quantileIf(0.9)(duration_ms, duration_ms IS NOT NULL) AS p90_ms
+FROM timings
+GROUP BY platform, milestone, reason_code
+ORDER BY platform, milestone, observed DESC

@@ -1,0 +1,63 @@
+!Account
+NQIF Checking
+TBank
+^
+!Type:Bank
+D2026-09-01
+T1000.00
+POpening Balance
+L[QIF Checking]
+^
+D2026-09-02
+T-100.00
+PMarket and savings
+MWeekend purchases
+N1001
+CX
+SFood:Groceries/Household
+EWeekly food
+$-60.00
+S[QIF Savings]/Household
+ETravel fund
+$-40.00
+^
+D2026-09-03
+T-20.00
+PReturned item
+SShopping:Clothing
+$-30.00
+SShopping:Clothing
+ERefund
+$10.00
+^
+D2026-09-04
+T2500.00
+PEmployer
+LIncome:Salary
+N1001
+^
+!Account
+NQIF Savings
+TBank
+^
+!Type:Bank
+D2026-09-02
+T40.00
+PFrom checking
+L[QIF Checking]/Household
+^
+!Account
+NQIF Visa
+TCCard
+^
+!Type:CCard
+D2026-09-05
+T-12.50
+PCoffee shop
+LFood:Coffee
+^
+!Type:Cat
+NFood:Groceries
+DHousehold groceries
+E
+^

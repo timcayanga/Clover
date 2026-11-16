@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt><Stmt><Acct><Id><IBAN>DE00000000000000000001</IBAN></Id><Ccy>EUR</Ccy></Acct>
+<Ntry><Amt Ccy="EUR">24.90</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-09-02</Dt></BookgDt><AddtlNtryInf>Groceries</AddtlNtryInf></Ntry>
+<Ntry><Amt Ccy="EUR">850.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-09-03</Dt></BookgDt><AddtlNtryInf>Payroll deposit</AddtlNtryInf></Ntry>
+</Stmt></BkToCstmrStmt></Document>

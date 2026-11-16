@@ -1,0 +1,1746 @@
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
+import { manualTransactionName, manualTransactionToday, validManualTransactionDate } from "../../../../shared/manual-transaction-defaults";
+import { actionableReviewIds } from "@/lib/actionable-transaction-review";
+import { includedTransactionWhere } from "@/lib/transaction-review-inclusion-where";
+import { isAutomaticReviewExclusion } from "@/lib/transaction-review-inclusion";
+import { enrichMerchantIdentityPayload } from "@/lib/merchant-identity";
+import { getAccountBrand } from "@/lib/account-brand";
+import { planTransactionAccountPage, compareTransactionsByAccount } from "@/lib/transaction-account-sort";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
+import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { after, NextResponse } from "next/server";
+import { processPendingLearningJobs } from "@/lib/learning-jobs";
+import { z } from "zod";
+import { recordTrainingSignal } from "@/lib/data-engine";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
+import { countWorkspaceOwnerTransactions } from "@/lib/plan-access";
+import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName, getLandbankTransactionDisplayOverride } from "@/lib/transaction-display";
+import { coerceTransactionTypeFromCategoryName, resolveFinancialTransactionType } from "@/lib/transaction-directions";
+import { normalizeInstitutionCurrency } from "@/lib/import-parser";
+import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import { getTransactionReviewReasons, transactionNeedsReview } from "@/lib/transaction-review-reasons";
+import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import {
+  buildTransactionQueryWhere,
+  buildTransactionQueryOrderBy,
+  parseTransactionQueryFilters,
+  type TransactionQueryFilters,
+} from "@/lib/transaction-query";
+import {
+  createTransientDataUnavailableResponse,
+  isTransientDataError,
+  isUnauthorizedDataError,
+} from "@/lib/transient-data";
+import { summarizeErrorForLog } from "@/lib/security-logging";
+import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
+import { hasTransactionUserEdits } from "@/lib/transaction-user-edits";
+import {
+  getTransactionSummaryTypeOverrides,
+  type TransactionSummaryCandidate,
+} from "@/lib/transaction-summary";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
+import { parseManualTransactionAmount } from "@/lib/transaction-amount-input";
+
+export const dynamic = "force-dynamic";
+
+const getSummaryTransactionType = (transaction: {
+  type: "income" | "expense" | "transfer";
+  isTransfer: boolean;
+  categoryName?: string | null;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+  institution?: string | null;
+}) => {
+  return resolveFinancialTransactionType(transaction);
+};
+
+const resolveTransactionsRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
+
+type TransactionApiRow = {
+  reviewReasons?: Prisma.JsonValue;
+  id: string;
+  workspaceId: string;
+  accountId: string;
+  accountName: string;
+  accountType: string;
+  brandLogoUrl: string | null;
+  institution: string | null;
+  accountNumber: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  reviewStatus: string | null;
+  parserConfidence: number;
+  categoryConfidence: number;
+  accountMatchConfidence: number;
+  duplicateConfidence: number;
+  transferConfidence: number;
+  date: string;
+  amount: string;
+  currency: string;
+  type: "income" | "expense" | "transfer";
+  merchantRaw: string;
+  merchantClean: string | null;
+  description: string | null;
+  isTransfer: boolean;
+  isExcluded: boolean;
+  createdAt: string;
+  warningReason: string | null;
+  rawPayload: Prisma.JsonValue;
+  normalizedPayload: Prisma.JsonValue;
+  importFileId?: string | null;
+  source: "upload" | "manual";
+  splitBill: { id: string; title: string } | null;
+};
+
+type TransactionSummaryRow = {
+  reviewReasons?: Prisma.JsonValue;
+  normalizedPayload?: Prisma.JsonValue;
+  id: string;
+  importFileId?: string | null;
+  date: Date;
+  amount: Prisma.Decimal | bigint | number | string;
+  type: "income" | "expense" | "transfer";
+  merchantRaw: string;
+  merchantClean: string | null;
+  categoryId: string | null;
+  rawPayload: Prisma.JsonValue;
+  reviewStatus: string | null;
+  parserConfidence: number;
+  categoryConfidence: number;
+  accountMatchConfidence: number;
+  duplicateConfidence: number;
+  transferConfidence: number;
+  currency: string;
+  description: string | null;
+  category: { name: string } | null;
+  account: { name: string; institution: string | null } | null;
+  accountNumber?: string | null;
+  createdAt: Date;
+  isTransfer: boolean;
+  isExcluded: boolean;
+};
+
+const isResolvedReviewStatus = (status: string | null) =>
+  status === "confirmed" || status === "edited" || status === "rejected" || status === "duplicate_skipped";
+
+const normalizeTransactionKey = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+
+const getLastFourDigits = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
+const looksLikeImportedFileLabel = (value?: string | null) => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return Boolean(
+    normalized &&
+      (/\.pdf|\.csv|\.xlsx|\.xls|statement|unlocked|compressor|online|msoa|cert/.test(normalized) || /^\d[\d\s._-]+/.test(normalized))
+  );
+};
+
+const canonicalInstitutionKey = (value?: string | null) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\bchina\s+bank\b/g, "chinabank")
+    .replace(/\bmetro\s+bank\b/g, "metrobank");
+
+const expandImportedAccountFilters = async (workspaceId: string, accountIds: string[] | undefined) => {
+  const requestedAccountIds = (accountIds ?? []).filter(Boolean);
+  if (requestedAccountIds.length === 0) {
+    return requestedAccountIds;
+  }
+
+  const siblingAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      type: true,
+      accountNumber: true,
+      currency: true,
+    },
+  });
+
+  const requestedAccounts = siblingAccounts.filter((candidate) => requestedAccountIds.includes(candidate.id));
+  if (requestedAccounts.length === 0) {
+    return requestedAccountIds;
+  }
+
+  const expandedAccountIds = new Set(requestedAccountIds);
+  const requestedDescriptors = requestedAccounts.map((account) => ({
+    id: account.id,
+    key: normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency),
+    institution: canonicalInstitutionKey(account.institution),
+    lastFour: getLastFourDigits(account.accountNumber ?? account.name),
+    type: account.type,
+  }));
+
+  for (const candidate of siblingAccounts) {
+    const candidateDescriptor = {
+      id: candidate.id,
+      key: normalizeImportedAccountKey(
+        candidate.name,
+        candidate.institution,
+        candidate.accountNumber,
+        candidate.type,
+        candidate.currency
+      ),
+      institution: canonicalInstitutionKey(candidate.institution),
+      lastFour: getLastFourDigits(candidate.accountNumber ?? candidate.name),
+      type: candidate.type,
+    };
+
+    if (
+      requestedDescriptors.some((requested) => {
+        if (candidateDescriptor.id === requested.id) {
+          return true;
+        }
+
+        if (candidateDescriptor.key === requested.key) {
+          return true;
+        }
+
+        return Boolean(
+          requested.lastFour &&
+            candidateDescriptor.lastFour &&
+            requested.lastFour === candidateDescriptor.lastFour &&
+            requested.type === candidateDescriptor.type &&
+            ((requested.institution &&
+              candidateDescriptor.institution &&
+              requested.institution === candidateDescriptor.institution) ||
+              looksLikeImportedFileLabel(requested.institution) ||
+              looksLikeImportedFileLabel(candidateDescriptor.institution))
+        );
+      })
+    ) {
+      expandedAccountIds.add(candidate.id);
+    }
+  }
+
+  return Array.from(expandedAccountIds);
+};
+
+const expandImportedAccountIdentityFilters = async (
+  workspaceId: string,
+  identity: {
+    accountName?: string | null;
+    accountInstitution?: string | null;
+    accountNumber?: string | null;
+    accountType?: string | null;
+    accountCurrency?: string | null;
+  }
+) => {
+  if (
+    !identity.accountName?.trim() &&
+    !identity.accountInstitution?.trim() &&
+    !identity.accountNumber?.trim() &&
+    !identity.accountType?.trim()
+  ) {
+    return [];
+  }
+
+  const identityKey = normalizeImportedAccountKey(
+    identity.accountName ?? null,
+    identity.accountInstitution ?? null,
+    identity.accountNumber ?? null,
+    identity.accountType ?? null,
+    identity.accountCurrency ?? null
+  );
+  if (!identityKey) {
+    return [];
+  }
+
+  const matchingAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      type: true,
+      accountNumber: true,
+      currency: true,
+    },
+  });
+
+  return matchingAccounts
+    .filter(
+      (account) =>
+        normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency) ===
+        identityKey
+    )
+    .map((account) => account.id);
+};
+
+const normalizeCategoryFilterKey = (value: string | null | undefined) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const resolveCategoryFilterNames = async (workspaceId: string, categoryFilters: string[] | undefined) => {
+  const values = (categoryFilters ?? []).map((value) => value.trim()).filter(Boolean);
+  if (values.length === 0) {
+    return new Set<string>();
+  }
+
+  const allCategories = await prisma.category.findMany({
+    where: { workspaceId },
+    select: { id: true, name: true },
+  });
+  const categoryNameById = new Map(allCategories.map((category) => [category.id, category.name] as const));
+  const categoryNameKeys = new Set(allCategories.map((category) => normalizeCategoryFilterKey(category.name)));
+
+  return new Set(
+    values
+      .map((value) => categoryNameById.get(value) ?? value)
+      .map(normalizeCategoryFilterKey)
+      .filter((value) => value && (categoryNameKeys.has(value) || values.some((rawValue) => normalizeCategoryFilterKey(rawValue) === value)))
+  );
+};
+
+const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const candidate = payload.categoryName ?? payload.category ?? payload.normalizedCategory;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+};
+
+const isImportedTransactionPayload = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return false;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  return Boolean(
+    payload.importFileId ||
+      payload.sourceStatementFingerprint ||
+      payload.sourceImportFileId ||
+      payload.importId ||
+      payload.source === "upload" ||
+      payload.source === "import" ||
+      payload.source === "statement"
+  );
+};
+
+const getRawPayloadText = (rawPayload: Prisma.JsonValue | null | undefined, key: string) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const value = (rawPayload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+};
+
+const getRawPayloadSourceRowIndex = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const value = (rawPayload as Record<string, unknown>).sourceRowIndex;
+  const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
+};
+
+const normalizeDigits = (value?: string | null) => String(value ?? "").replace(/\D/g, "");
+
+const normalizeParsedImportToken = (value?: string | null) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+const getTransferCounterpartNumbers = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return { from: null as string | null, to: null as string | null };
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const from = typeof payload.transferFromAccountNumber === "string" && payload.transferFromAccountNumber.trim() ? payload.transferFromAccountNumber.trim() : null;
+  const to = typeof payload.transferToAccountNumber === "string" && payload.transferToAccountNumber.trim() ? payload.transferToAccountNumber.trim() : null;
+  return { from, to };
+};
+
+const isInternalWorkspaceTransfer = (
+  transaction: { accountId: string; accountNumber?: string | null; rawPayload: Prisma.JsonValue },
+  workspaceAccounts: Array<{ id: string; accountNumber: string | null }>
+) => {
+  const currentAccountNumber = normalizeDigits(transaction.accountNumber ?? null);
+  if (!currentAccountNumber) {
+    return false;
+  }
+
+  const { from, to } = getTransferCounterpartNumbers(transaction.rawPayload);
+  const fromDigits = normalizeDigits(from);
+  const toDigits = normalizeDigits(to);
+
+  const counterpartNumber =
+    fromDigits && currentAccountNumber === fromDigits
+      ? toDigits
+      : toDigits && currentAccountNumber === toDigits
+        ? fromDigits
+        : null;
+
+  if (!counterpartNumber) {
+    return false;
+  }
+
+  return workspaceAccounts.some(
+    (account) => account.id !== transaction.accountId && normalizeDigits(account.accountNumber ?? null) === counterpartNumber
+  );
+};
+
+const getImportedTransactionAccountIdentityKey = (transaction: TransactionApiRow) =>
+  normalizeImportedAccountKey(
+    transaction.accountName,
+    transaction.institution,
+    transaction.accountNumber,
+    null,
+    transaction.currency
+  ) || transaction.accountId;
+
+const getImportedTransactionStableKey = (transaction: TransactionApiRow) => {
+  const sourceRowIndex = getRawPayloadSourceRowIndex(transaction.rawPayload);
+  const statementFingerprint = getRawPayloadText(transaction.rawPayload, "sourceStatementFingerprint");
+  const accountIdentityKey = getImportedTransactionAccountIdentityKey(transaction);
+  if (statementFingerprint && sourceRowIndex !== null) {
+    return `statement:${accountIdentityKey}:${statementFingerprint}:${sourceRowIndex}`;
+  }
+
+  const sourceImportFileId = transaction.importFileId ?? getRawPayloadText(transaction.rawPayload, "sourceImportFileId");
+  if (sourceImportFileId && sourceRowIndex !== null) {
+    return `import:${accountIdentityKey}:${sourceImportFileId}:${sourceRowIndex}`;
+  }
+
+  if (isImportedTransactionPayload(transaction.rawPayload) || transaction.importFileId) {
+    const normalizedMerchant = normalizeTransactionKey(transaction.merchantClean ?? transaction.merchantRaw);
+    const normalizedDescription = normalizeTransactionKey(transaction.description);
+    return [
+      "legacy-import",
+      accountIdentityKey,
+      transaction.date,
+      Number(transaction.amount).toFixed(2),
+      transaction.currency,
+      normalizedMerchant,
+      normalizedDescription,
+    ].join(":");
+  }
+
+  return "";
+};
+
+const scoreImportedTransactionForDisplay = (transaction: TransactionApiRow) => {
+  const concreteCategory = transaction.categoryName && transaction.categoryName.trim().toLowerCase() !== "other" ? 1000 : 0;
+  const cleanName =
+    transaction.merchantClean && transaction.merchantClean.trim() && transaction.merchantClean.trim() !== transaction.merchantRaw.trim()
+      ? 100
+      : 0;
+  const merchantText = [transaction.merchantClean, transaction.merchantRaw, transaction.description].filter(Boolean).join(" ").toLowerCase();
+  const landbankDisplayBonus =
+    transaction.categoryName?.trim().toLowerCase() === "cash & atm" &&
+    /cash\s+out\s*-\s*order|atm\s+withdrawal|\bcash\s+out\b|\bwithdrawal\b|cash\s+deposit/.test(merchantText)
+      ? 500
+      : 0;
+  return (
+    concreteCategory +
+    cleanName +
+    landbankDisplayBonus +
+    Number(transaction.categoryConfidence ?? 0) +
+    Number(transaction.parserConfidence ?? 0) +
+    (transaction.reviewStatus === "confirmed" ? 25 : 0)
+  );
+};
+
+const dedupeImportedTransactionRows = (transactions: TransactionApiRow[]) => {
+  const next: TransactionApiRow[] = [];
+  const indexByStableKey = new Map<string, number>();
+
+  for (const transaction of transactions) {
+    const stableKey = getImportedTransactionStableKey(transaction);
+    if (!stableKey) {
+      next.push(transaction);
+      continue;
+    }
+
+    const existingIndex = indexByStableKey.get(stableKey);
+    if (existingIndex === undefined) {
+      indexByStableKey.set(stableKey, next.length);
+      next.push(transaction);
+      continue;
+    }
+
+    if (scoreImportedTransactionForDisplay(transaction) > scoreImportedTransactionForDisplay(next[existingIndex])) {
+      next[existingIndex] = transaction;
+    }
+  }
+
+  return next;
+};
+
+const getTransactionWarningReason = (transaction: TransactionSummaryRow) => {
+  if (isResolvedReviewStatus(transaction.reviewStatus)) {
+    return null;
+  }
+
+  const warningReasons = getTransactionReviewReasons({
+    reviewStatus: transaction.reviewStatus,
+    reviewReasons: transaction.reviewReasons,
+    normalizedPayload: transaction.normalizedPayload,
+    isExcluded: transaction.isExcluded,
+    categoryId: transaction.categoryId,
+    categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+    parserConfidence: transaction.parserConfidence,
+    categoryConfidence: transaction.categoryConfidence,
+    accountMatchConfidence: transaction.accountMatchConfidence,
+    duplicateConfidence: transaction.duplicateConfidence,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    rawPayload: transaction.rawPayload,
+  });
+
+  return warningReasons[0] ?? null;
+};
+
+const mapTransactionRow = (transaction: {
+  reviewReasons?: Prisma.JsonValue;
+  id: string;
+  workspaceId: string;
+  accountId: string;
+  account: { name: string; institution: string | null; type?: string };
+  categoryId: string | null;
+  rawPayload: Prisma.JsonValue;
+  normalizedPayload: Prisma.JsonValue;
+  category: { name: string } | null;
+  reviewStatus: string | null;
+  createdAt: Date;
+  parserConfidence: number;
+  categoryConfidence: number;
+  accountMatchConfidence: number;
+  duplicateConfidence: number;
+  transferConfidence: number;
+  date: Date;
+  amount: Prisma.Decimal | bigint | number | string;
+  currency: string;
+  type: "income" | "expense" | "transfer";
+  merchantRaw: string;
+  merchantClean: string | null;
+  description: string | null;
+  importFileId?: string | null;
+  accountNumber?: string | null;
+  isTransfer: boolean;
+  isExcluded: boolean;
+  warningReason: string | null;
+  splitBill: { id: string; title: string } | null;
+}, workspaceAccounts: Array<{ id: string; accountNumber: string | null }>, enrichLogo = true): TransactionApiRow => {
+  const userEdited = hasTransactionUserEdits(transaction);
+  const normalizedCurrency =
+    normalizeInstitutionCurrency(
+      transaction.account.institution,
+      transaction.currency,
+      transaction.account.name
+    ) ?? transaction.currency;
+  const importedFromStatement = Boolean(transaction.importFileId) || isImportedTransactionPayload(transaction.rawPayload);
+  const source = importedFromStatement ? "upload" : "manual";
+  const landbankOverride = getLandbankTransactionDisplayOverride({
+    institution: transaction.account.institution,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    rawPayload: transaction.rawPayload,
+  });
+  const categoryName = getEffectiveTransactionCategoryName({
+    categoryName: landbankOverride?.categoryName ?? transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+    rawPayload: transaction.rawPayload,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    institution: transaction.account.institution,
+    source,
+    type: transaction.type,
+  });
+  const effectiveIsTransfer =
+    (transaction.isTransfer && transaction.type === "transfer") ||
+    isInternalWorkspaceTransfer(
+      {
+        accountId: transaction.accountId,
+        accountNumber: transaction.accountNumber ?? null,
+        rawPayload: transaction.rawPayload,
+      },
+      workspaceAccounts
+    );
+  const effectiveType = coerceTransactionTypeFromCategoryName(
+    categoryName,
+    landbankOverride?.type ?? transaction.type,
+    transaction.amount,
+    effectiveIsTransfer
+  );
+
+  return {
+    id: transaction.id,
+    workspaceId: transaction.workspaceId,
+    accountId: transaction.accountId,
+    accountName: transaction.account.name,
+    accountType: transaction.account.type ?? "bank",
+    brandLogoUrl: getAccountBrand(transaction.account).logoSrc,
+    institution: transaction.account.institution,
+    accountNumber: transaction.accountNumber ?? null,
+    categoryId: transaction.categoryId,
+    reviewStatus: transaction.reviewStatus,
+    parserConfidence: transaction.parserConfidence,
+    categoryConfidence: transaction.categoryConfidence,
+    accountMatchConfidence: transaction.accountMatchConfidence,
+    duplicateConfidence: transaction.duplicateConfidence,
+    transferConfidence: transaction.transferConfidence,
+    date: transaction.date.toISOString(),
+    amount: transaction.amount.toString(),
+    currency: userEdited ? transaction.currency : normalizedCurrency,
+    type: userEdited ? transaction.type : effectiveType,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: userEdited ? transaction.merchantClean : getEffectiveTransactionMerchantName({
+      merchantClean: transaction.merchantClean,
+      merchantRaw: transaction.merchantRaw,
+      institution: transaction.account.institution,
+    }),
+    description: transaction.description,
+    isTransfer: (userEdited ? transaction.type : effectiveType) === "transfer",
+    isExcluded: transaction.isExcluded && !isAutomaticReviewExclusion(transaction),
+    reviewReasons: transaction.reviewReasons,
+    createdAt: transaction.createdAt.toISOString(),
+    warningReason: transaction.warningReason,
+    rawPayload: transaction.rawPayload,
+    normalizedPayload: (enrichLogo ? enrichMerchantIdentityPayload({
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: userEdited ? transaction.merchantClean : getEffectiveTransactionMerchantName({ merchantClean: transaction.merchantClean, merchantRaw: transaction.merchantRaw, institution: transaction.account.institution }),
+      description: transaction.description,
+      currency: userEdited ? transaction.currency : normalizedCurrency,
+      date: transaction.date,
+      institution: transaction.account.institution,
+      accountId: transaction.accountId,
+      reviewStatus: transaction.reviewStatus,
+      categoryName: userEdited ? transaction.category?.name ?? null : categoryName,
+      rawPayload: transaction.rawPayload,
+      normalizedPayload: transaction.normalizedPayload,
+    }) : transaction.normalizedPayload) as Prisma.JsonObject,
+    importFileId: transaction.importFileId ?? null,
+    source,
+    splitBill: transaction.splitBill,
+    categoryName: userEdited ? transaction.category?.name ?? null : categoryName,
+  };
+};
+
+// Only hydrate labels for the returned page, not every transaction used by
+// summary calculations. This keeps search-by-tag and the row cache consistent.
+const withTransactionTags = async <T extends { id: string; importFileId?: string | null }>(rows: T[], workspaceId: string, includeSourceNames = true) => {
+  if (!rows.length) return rows;
+  const sourceIds = includeSourceNames
+    ? [...new Set(rows.flatMap((row) => row.importFileId ? [row.importFileId] : []))]
+    : [];
+  const [links, sources] = await Promise.all([
+    prisma.transactionTag.findMany({
+      where: { transactionId: { in: rows.map((row) => row.id) }, transaction: { workspaceId } },
+      select: { transactionId: true, tag: { select: { id: true, name: true } } },
+    }),
+    sourceIds.length ? prisma.importFile.findMany({
+      where: { workspaceId, id: { in: sourceIds } }, select: { id: true, fileName: true },
+    }) : [],
+  ]);
+  const tagsById = new Map<string, Array<{ id: string; name: string }>>();
+  for (const link of links) tagsById.set(link.transactionId, [...(tagsById.get(link.transactionId) ?? []), link.tag]);
+  const sourceNames = new Map(sources.map((source) => [source.id, source.fileName]));
+  return rows.map((row) => ({ ...row, tags: tagsById.get(row.id) ?? [], importFileName: row.importFileId ? sourceNames.get(row.importFileId) ?? null : null }));
+};
+
+const transactionMatchesEffectiveCategoryFilters = (transaction: TransactionApiRow, categoryFilterNames: Set<string>) => {
+  if (categoryFilterNames.size === 0) {
+    return true;
+  }
+
+  const effectiveCategoryName = normalizeCategoryFilterKey(transaction.categoryName ?? "");
+  return Boolean(effectiveCategoryName && categoryFilterNames.has(effectiveCategoryName));
+};
+
+const receiptLineItemSchema = z.object({
+  description: z.string().min(1),
+  quantity: z.union([z.string(), z.number()]).nullable().optional(),
+  unitPrice: z.union([z.string(), z.number()]).nullable().optional(),
+  amount: z.union([z.string(), z.number()]).nullable().optional(),
+});
+
+const transactionSchema = z.object({
+  workspaceId: z.string().min(1),
+  accountId: z.string().min(1),
+  categoryId: z.string().optional().nullable(),
+  date: z.string().optional().default("").transform(value => value.trim() || manualTransactionToday()).refine(validManualTransactionDate, "Choose a valid date."),
+  amount: z.union([z.string(), z.number()]).optional().default("0"),
+  currency: z.string().default("PHP"),
+  type: z.enum(["income", "expense", "transfer"]),
+  merchantRaw: z.string().trim().max(200).optional().default(""),
+  merchantClean: z.string().optional().nullable(),
+  investmentAssetName: z.string().trim().min(1).optional(),
+  description: z.string().optional().nullable(),
+  receiptLineItems: z.array(receiptLineItemSchema).optional(),
+  isTransfer: z.boolean().optional(),
+  isExcluded: z.boolean().optional(),
+  preserveType: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+const normalizeTransactionTag = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+
+const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
+  // Prisma's distinct option deduplicates in the client for this query shape,
+  // transferring every transaction currency from Supabase on every page load.
+  // Keep the distinct operation inside Postgres so only a few codes leave it.
+  const rows = await prisma.$queryRaw<Array<{ currency: string | null }>>`
+    SELECT DISTINCT "currency"
+    FROM "Transaction"
+    WHERE "workspaceId" = ${workspaceId}
+      AND "deletedAt" IS NULL
+    ORDER BY "currency" ASC
+  `;
+
+  const codes = Array.from(
+    new Set(
+      rows
+        .map((row) => (typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : ""))
+        .filter(Boolean)
+    )
+  );
+
+  return codes;
+};
+
+// Sort narrow IDs before fetching receipt payloads and related display data.
+async function readTransactionPage<T extends { id: string }>(
+  scope: Prisma.TransactionWhereInput,
+  orderBy: Prisma.TransactionOrderByWithRelationInput[],
+  skip: number,
+  take: number,
+  hydrate: (where: Prisma.TransactionWhereInput, db: Prisma.TransactionClient) => Promise<T[]>,
+) {
+  return prisma.$transaction(async db => {
+    const ids = await db.transaction.findMany({ where: scope, select: { id: true }, orderBy, skip, take });
+    if (ids.length === 0) return [];
+    const rows = await hydrate({ id: { in: ids.map(row => row.id) } }, db);
+    const byId = new Map(rows.map(row => [row.id, row]));
+    return ids.map(({ id }) => byId.get(id)!);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+}
+
+export async function GET(request: Request) {
+  const started = performance.now();
+  const native = getMobileRequestContext()?.request === request;
+  try {
+    const userId = await resolveTransactionsRouteUserId();
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get("workspaceId");
+
+    if (!workspaceId) {
+      return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
+    }
+
+    await assertWorkspaceAccess(userId, workspaceId);
+    const parsedFilters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
+    if (parsedFilters.dateFilterMode === "custom" && parsedFilters.customStart && parsedFilters.customEnd && parsedFilters.customStart > parsedFilters.customEnd) {
+      return NextResponse.json({ error: "From date must be on or before To date" }, { status: 400 });
+    }
+    const [workspaceAccountRows, expandedAccountIds, expandedIdentityAccountIds] = await Promise.all([
+      prisma.account.findMany({
+        where: { workspaceId },
+        select: { id: true, name: true, source: true, currency: true, accountNumber: true, institution: true, type: true },
+      }),
+      expandImportedAccountFilters(workspaceId, parsedFilters.accountIds),
+      expandImportedAccountIdentityFilters(workspaceId, {
+        accountName: searchParams.get("accountName"),
+        accountInstitution: searchParams.get("accountInstitution"),
+        accountNumber: searchParams.get("accountNumber"),
+        accountType: searchParams.get("accountType"),
+        accountCurrency: searchParams.get("accountCurrency"),
+      }),
+    ]);
+    const workspaceAccounts = workspaceAccountRows.map((account) => ({
+      id: account.id,
+      accountNumber: account.accountNumber,
+    }));
+
+    const filters: TransactionQueryFilters = {
+      ...parsedFilters,
+      accountIds: Array.from(new Set([...expandedAccountIds, ...expandedIdentityAccountIds])),
+    };
+    const categoryFilterNames = await resolveCategoryFilterNames(workspaceId, filters.categoryIds);
+    const hasEffectiveCategoryFilters = categoryFilterNames.size > 0;
+    const regionalUser = filters.dateFilterMode && filters.dateFilterMode !== "ltd" ? await prisma.user.findUnique({where:{clerkUserId:userId},select:{regionalPreferences:true}}) : null;
+    const filterTimeZone = normalizeRegionalPreferences(regionalUser?.regionalPreferences).timeZone;
+    const where = buildTransactionQueryWhere(
+      workspaceId,
+      { ...filters, ...(hasEffectiveCategoryFilters ? { categoryIds: [] } : {}),
+        // Review is evaluated after display mapping, just like the warning icon.
+        ...(filters.reviewFilter === "pending" ? { reviewFilter: "" } : {}) },
+      { includeExcluded: true, timeZone: filterTimeZone }
+    );
+    const visibleWhere = {
+      ...where,
+      ...(searchParams.get("accountType") === "investment"
+        ? { account: { is: { type: "investment" as const } } }
+        : {}),
+    };
+    const financialWhere = { AND: [visibleWhere, includedTransactionWhere()] };
+    const orderBy = buildTransactionQueryOrderBy(filters);
+    const pageSizeParam = searchParams.get("pageSize");
+    const includeAll = pageSizeParam === "all";
+    const requestedSummaryMode = searchParams.get("summaryMode");
+    const summaryMode = requestedSummaryMode === "light" || requestedSummaryMode === "rows" ? "light" : "full";
+    const requestedPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+    const requestedPageSize = includeAll ? null : Math.max(1, Number(pageSizeParam ?? "25") || 25);
+    if (searchParams.get("summaryMode") === "rows" && !hasEffectiveCategoryFilters && filters.sortField !== "account") {
+      const queryStarted = performance.now();
+      const reviewIds = filters.reviewFilter === "pending" ? await actionableReviewIds(visibleWhere) : null;
+      const scope = reviewIds ? { AND: [visibleWhere, { id: { in: reviewIds } }] } : visibleWhere;
+      const take = Math.min(requestedPageSize ?? 30, 200);
+      const desktopPreview = !native && searchParams.get("preview") === "first_rows" && !reviewIds;
+      const previewTake = Math.min(take, desktopPreview ? 25 : Math.max(1, Math.floor(Number(searchParams.get("previewSize"))) || take));
+      const lookAhead = native && searchParams.get("pagination") === "lookahead" && previewTake === take && !reviewIds;
+      const skip = (requestedPage - 1) * take;
+      const [pageRows, count, currencyCodes] = await Promise.all([
+        readTransactionPage(scope, orderBy, skip, lookAhead ? take + 1 : previewTake, (pageWhere, db) => db.transaction.findMany({
+          where: pageWhere,
+          include: native
+            ? { account: { select: { name: true, type: true, institution: true, accountNumber: true } }, category: { select: { name: true } } }
+            : { account: true, category: true, splitBill: { select: { id: true, title: true } } },
+        })),
+        lookAhead || desktopPreview ? null : reviewIds ? reviewIds.length : prisma.transaction.count({ where: scope }),
+        // Native rows never expose or use the Profile's currency catalogue.
+        native || desktopPreview ? [] : getWorkspaceCurrencyCodes(workspaceId),
+      ]);
+      const queryFinished = performance.now();
+      const hasMore = count === null ? pageRows.length > take : skip + take < count;
+      const mapped = pageRows.slice(0, previewTake).map(row => mapTransactionRow({
+        ...row, accountNumber: row.account.accountNumber, warningReason: null,
+        splitBill: "splitBill" in row ? row.splitBill as { id: string; title: string } | null : null,
+      }, workspaceAccounts, !native));
+      const transactions = await withTransactionTags(mapped, workspaceId, !native);
+      return NextResponse.json({
+        transactions, totalCount: count ?? (pageRows.length ? skip + pageRows.length : 0),
+        totalCountIsExact: !desktopPreview && (count !== null || !hasMore && (skip === 0 || pageRows.length > 0)),
+        ...(native ? { hasMore } : {}),
+        page: requestedPage, pageSize: take, currencyCodes,
+      }, { headers: { "Server-Timing": [
+        `tx_scope;dur=${(queryStarted - started).toFixed(1)}`,
+        `tx_query;dur=${(queryFinished - queryStarted).toFixed(1)}`,
+        `tx_rows;dur=${(performance.now() - queryFinished).toFixed(1)}`,
+      ].join(", ") } });
+    }
+    const [currencyCodes, totalCount] = await Promise.all([
+      getWorkspaceCurrencyCodes(workspaceId),
+      prisma.transaction.count({ where: visibleWhere }),
+    ]);
+    if (totalCount === 0) {
+      return NextResponse.json({
+        transactions: [],
+        totalCountIsExact: true,
+        page: 1,
+        pageSize: includeAll ? 0 : requestedPageSize ?? 25,
+        totalCount: 0,
+        currencyCodes,
+        summary: {
+          totalCount: 0,
+          income: 0,
+          spending: 0,
+          transfers: 0,
+          review: 0,
+          currencyCodes,
+          topCategory: null,
+          topAccount: null,
+          firstTransactionDate: null,
+          lastTransactionDate: null,
+          firstReviewTransaction: null,
+          firstReviewTransactionIndex: null,
+        },
+      });
+    }
+
+    // Pending review must not force a complete ledger projection. Its compact,
+    // unresolved-only selection uses the same predicate as Home/native review.
+    if (summaryMode === "light" && filters.reviewFilter !== "pending" && !hasEffectiveCategoryFilters) {
+      const reviewIds = await actionableReviewIds(visibleWhere);
+      const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
+      const bdoAccountIds = workspaceAccountRows
+        .filter((account) => /\bbdo\b|\bbanco de oro\b/i.test(account.institution ?? ""))
+        .map((account) => account.id);
+      const accountPageIds = filters.sortField === "account" ? await (async () => {
+        const counts = await prisma.transaction.groupBy({ by: ["accountId"], where: visibleWhere, _count: { _all: true } });
+        const segments = planTransactionAccountPage(workspaceAccountRows,
+          counts.map(row => ({ accountId: row.accountId, count: row._count._all })),
+          includeAll ? 0 : pageStart, includeAll ? totalCount : requestedPageSize ?? 25,
+          filters.sortDirection ?? "desc");
+        const pages = await Promise.all(segments.map(segment => prisma.transaction.findMany({
+          where: { AND: [visibleWhere, { accountId: { in: segment.accountIds } }] },
+          select: { id: true },
+          orderBy: [{ date: "desc" }, { id: filters.sortDirection ?? "desc" }],
+          skip: segment.skip,
+          take: segment.take,
+        })));
+        return pages.flat().map(row => row.id);
+      })() : null;
+      const hydratePage = (pageWhere: Prisma.TransactionWhereInput, db: Prisma.TransactionClient, ordered = false) => db.transaction.findMany({
+          where: pageWhere,
+          ...(ordered ? { orderBy } : {}),
+          select: {
+            id: true,
+            accountId: true,
+            date: true,
+            amount: true,
+            type: true,
+            merchantRaw: true,
+            merchantClean: true,
+            importFileId: true,
+            categoryId: true,
+            rawPayload: true,
+            normalizedPayload: true,
+            reviewStatus: true,
+          reviewReasons: true,
+            parserConfidence: true,
+            categoryConfidence: true,
+            accountMatchConfidence: true,
+            duplicateConfidence: true,
+            transferConfidence: true,
+            currency: true,
+            description: true,
+            category: {
+              select: {
+                name: true,
+              },
+            },
+            account: {
+              select: {
+                name: true,
+                institution: true,
+                accountNumber: true,
+                type: true,
+              },
+            },
+            splitBill: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+            createdAt: true,
+            isTransfer: true,
+            isExcluded: true,
+          },
+      });
+      const [pageRows, summaryGroups, negativeGroups, summaryCategories, bdoSummaryRows, summaryAdjustmentRows, summaryMatchingRows] = await Promise.all([
+        accountPageIds
+          ? hydratePage({ AND: [visibleWhere, { id: { in: accountPageIds } }] }, prisma)
+          : includeAll
+            ? hydratePage(visibleWhere, prisma, true)
+            : readTransactionPage(visibleWhere, orderBy, pageStart, requestedPageSize ?? 25, hydratePage),
+        prisma.transaction.groupBy({
+          where: financialWhere,
+          by: ["type", "isTransfer", "categoryId", "accountId", "currency"],
+          _sum: {
+            amount: true,
+          },
+        }),
+        prisma.transaction.groupBy({
+          where: { AND: [financialWhere, { amount: { lt: 0 } }] },
+          by: ["type", "isTransfer", "categoryId", "accountId", "currency"],
+          _sum: { amount: true },
+        }),
+        prisma.category.findMany({
+          where: { workspaceId },
+          select: { id: true, name: true },
+        }),
+        bdoAccountIds.length > 0
+          ? prisma.transaction.findMany({
+              where: {
+                AND: [financialWhere, { accountId: { in: bdoAccountIds } }],
+              },
+              select: {
+                amount: true,
+                currency: true,
+                type: true,
+                isTransfer: true,
+                merchantRaw: true,
+                merchantClean: true,
+                description: true,
+                category: { select: { name: true } },
+                account: { select: { institution: true } },
+              },
+            })
+          : Promise.resolve([]),
+        prisma.transaction.findMany({
+          where: {
+            AND: [
+              financialWhere,
+              {
+                OR: [
+                  { merchantRaw: { contains: "payment", mode: "insensitive" } },
+                  { merchantClean: { contains: "payment", mode: "insensitive" } },
+                  { description: { contains: "payment", mode: "insensitive" } },
+                  { rawPayload: { path: ["transferPairId"], not: Prisma.AnyNull } },
+                  { rawPayload: { path: ["splitBillId"], not: Prisma.AnyNull } },
+                  { merchantRaw: { contains: "repayment", mode: "insensitive" } },
+                  { merchantClean: { contains: "repayment", mode: "insensitive" } },
+                  { description: { contains: "repayment", mode: "insensitive" } },
+                ],
+              },
+            ],
+          },
+          select: {
+            id: true,
+            accountId: true,
+            date: true,
+            amount: true,
+            currency: true,
+            type: true,
+            isTransfer: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            rawPayload: true,
+            normalizedPayload: true,
+            reviewStatus: true,
+            category: { select: { name: true } },
+            account: { select: { type: true, institution: true } },
+          },
+        }),
+        prisma.transaction.findMany({
+          where: {
+            workspaceId,
+            isExcluded: false,
+            deletedAt: null,
+            OR: [
+              { merchantRaw: { contains: "payment", mode: "insensitive" } },
+              { merchantClean: { contains: "payment", mode: "insensitive" } },
+              { description: { contains: "payment", mode: "insensitive" } },
+              { rawPayload: { path: ["transferPairId"], not: Prisma.AnyNull } },
+              { rawPayload: { path: ["splitBillId"], not: Prisma.AnyNull } },
+              { merchantRaw: { contains: "repayment", mode: "insensitive" } },
+              { merchantClean: { contains: "repayment", mode: "insensitive" } },
+              { description: { contains: "repayment", mode: "insensitive" } },
+            ],
+          },
+          select: {
+            id: true,
+            accountId: true,
+            date: true,
+            amount: true,
+            currency: true,
+            type: true,
+            isTransfer: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            rawPayload: true,
+            normalizedPayload: true,
+            reviewStatus: true,
+            category: { select: { name: true } },
+            account: { select: { type: true, institution: true } },
+          },
+        }),
+      ]);
+      if (accountPageIds) {
+        const position = new Map(accountPageIds.map((id, index) => [id, index]));
+        pageRows.sort((a, b) => position.get(a.id)! - position.get(b.id)!);
+      }
+
+      const transactions = pageRows.map((transaction) =>
+        mapTransactionRow({
+          id: transaction.id,
+          workspaceId,
+          importFileId: transaction.importFileId,
+          accountId: transaction.accountId,
+          account: transaction.account,
+          accountNumber: transaction.account?.accountNumber ?? null,
+          categoryId: transaction.categoryId,
+          rawPayload: transaction.rawPayload,
+          normalizedPayload: transaction.normalizedPayload,
+          category: transaction.category,
+          reviewStatus: transaction.reviewStatus,
+          reviewReasons: transaction.reviewReasons,
+          parserConfidence: transaction.parserConfidence,
+          categoryConfidence: transaction.categoryConfidence,
+          accountMatchConfidence: transaction.accountMatchConfidence,
+          duplicateConfidence: transaction.duplicateConfidence,
+          transferConfidence: transaction.transferConfidence,
+          date: transaction.date,
+          amount: transaction.amount,
+          currency: transaction.currency,
+          type: transaction.type,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+          isTransfer: transaction.isTransfer,
+          isExcluded: transaction.isExcluded,
+          createdAt: transaction.createdAt,
+          warningReason: getTransactionWarningReason(transaction),
+          splitBill: transaction.splitBill,
+        }, workspaceAccounts)
+      );
+      const lightSummary = {
+        income: 0,
+        spending: 0,
+        transfers: 0,
+      };
+      const currencyTotals: Record<string, { income: number; spending: number; transfers: number }> = {};
+      const addCurrencyTotal = (currencyValue: string, type: "income" | "expense" | "transfer", amount: number) => {
+        const currency = normalizeInstitutionCurrency(currencyValue || "PHP") ?? "PHP";
+        currencyTotals[currency] ??= { income: 0, spending: 0, transfers: 0 };
+        if (type === "income") currencyTotals[currency].income += amount;
+        else if (type === "transfer") currencyTotals[currency].transfers += amount;
+        else currencyTotals[currency].spending += amount;
+      };
+      const categoryNameById = new Map(summaryCategories.map((category) => [category.id, category.name] as const));
+      const bdoAccountIdSet = new Set(bdoAccountIds);
+      const groupKey = (group: { type: string; isTransfer: boolean; categoryId: string | null; accountId: string; currency: string }) => JSON.stringify([group.type,group.isTransfer,group.categoryId,group.accountId,group.currency]);
+      const negativeAmountByGroup = new Map(negativeGroups.map(group => [groupKey(group), Number(group._sum.amount ?? 0)]));
+      for (const group of summaryGroups) {
+        if (bdoAccountIdSet.has(group.accountId)) continue;
+        const amount = Number(group._sum.amount ?? 0) - 2 * (negativeAmountByGroup.get(groupKey(group)) ?? 0);
+        if (!Number.isFinite(amount)) {
+          continue;
+        }
+
+        const effectiveType = getSummaryTransactionType({
+          type: group.type,
+          isTransfer: group.isTransfer,
+          categoryName: group.categoryId ? categoryNameById.get(group.categoryId) : null,
+        });
+        if (effectiveType === "income") {
+          lightSummary.income += amount;
+        } else if (effectiveType === "transfer") {
+          lightSummary.transfers += amount;
+        } else {
+          lightSummary.spending += amount;
+        }
+        addCurrencyTotal(group.currency, effectiveType, amount);
+      }
+      for (const transaction of bdoSummaryRows) {
+        const amount = Math.abs(Number(transaction.amount));
+        if (!Number.isFinite(amount)) continue;
+        const effectiveType = getSummaryTransactionType({
+          type: transaction.type,
+          isTransfer: transaction.isTransfer,
+          categoryName: transaction.category?.name,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+          institution: transaction.account?.institution,
+        });
+        if (effectiveType === "income") lightSummary.income += amount;
+        else if (effectiveType === "transfer") lightSummary.transfers += amount;
+        else lightSummary.spending += amount;
+        addCurrencyTotal(transaction.currency, effectiveType, amount);
+      }
+      const lightSummaryOverrides = getTransactionSummaryTypeOverrides(
+        summaryMatchingRows.map((transaction) => ({
+          ...transaction,
+          accountType: transaction.account?.type ?? null,
+          categoryName: transaction.category?.name ?? null,
+        }))
+      );
+      for (const transaction of summaryAdjustmentRows) {
+        const overrideType = lightSummaryOverrides.get(transaction.id);
+        if (!overrideType) continue;
+
+        const originalType = getSummaryTransactionType({
+          type: transaction.type,
+          isTransfer: transaction.isTransfer,
+          categoryName: transaction.category?.name,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+          institution: transaction.account?.institution,
+        });
+        if (originalType === overrideType) continue;
+
+        const amount = Math.abs(Number(transaction.amount));
+        if (!Number.isFinite(amount)) continue;
+        if (originalType === "income") lightSummary.income -= amount;
+        else if (originalType === "transfer") lightSummary.transfers -= amount;
+        else lightSummary.spending -= amount;
+
+        if (overrideType === "income") lightSummary.income += amount;
+        else if (overrideType === "transfer") lightSummary.transfers += amount;
+        else lightSummary.spending += amount;
+        addCurrencyTotal(transaction.currency, originalType, -amount);
+        addCurrencyTotal(transaction.currency, overrideType, amount);
+      }
+
+      const firstReviewId = reviewIds[0];
+      const firstReviewRow = firstReviewId ? pageRows.find(row => row.id === firstReviewId)
+        ?? await prisma.transaction.findFirst({ where: { AND: [visibleWhere, { id: firstReviewId }] }, include: { account: true, category: true, splitBill: { select: { id: true, title: true } } } }) : null;
+      const firstReviewTransaction = firstReviewRow ? mapTransactionRow({ ...firstReviewRow, workspaceId, accountNumber: workspaceAccountRows.find(account => account.id === firstReviewRow.accountId)?.accountNumber ?? null, warningReason: null }, workspaceAccounts) : null;
+      return NextResponse.json({
+        transactions: await withTransactionTags(transactions, workspaceId),
+        totalCountIsExact: true,
+        page: includeAll ? 1 : requestedPage,
+        pageSize: includeAll ? totalCount : requestedPageSize ?? 25,
+        totalCount,
+        currencyCodes,
+        summary: {
+          totalCount,
+          income: lightSummary.income,
+          spending: lightSummary.spending,
+          transfers: lightSummary.transfers,
+          review: reviewIds.length,
+          currencyCodes,
+          currencyTotals,
+          topCategory: null,
+          topAccount: null,
+          firstTransactionDate: null,
+          lastTransactionDate: null,
+          firstReviewTransaction,
+          firstReviewTransactionIndex: null,
+        },
+      });
+    }
+
+    const [summaryRows, summaryMatchingRows] = await Promise.all([
+      prisma.transaction.findMany({
+        where: visibleWhere,
+        select: {
+          id: true,
+          accountId: true,
+          importFileId: true,
+          date: true,
+          amount: true,
+          type: true,
+          merchantRaw: true,
+          merchantClean: true,
+          categoryId: true,
+          rawPayload: true,
+          normalizedPayload: true,
+          reviewStatus: true,
+          reviewReasons: true,
+          parserConfidence: true,
+          categoryConfidence: true,
+          accountMatchConfidence: true,
+          duplicateConfidence: true,
+          transferConfidence: true,
+          currency: true,
+          description: true,
+          category: {
+            select: {
+              name: true,
+            },
+          },
+          account: {
+            select: {
+              name: true,
+              institution: true,
+              accountNumber: true,
+              type: true,
+            },
+          },
+          splitBill: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+          createdAt: true,
+          isTransfer: true,
+          isExcluded: true,
+        },
+        orderBy,
+      }),
+      prisma.transaction.findMany({
+        where: {
+          workspaceId,
+          isExcluded: false,
+          deletedAt: null,
+          OR: [
+            { merchantRaw: { contains: "payment", mode: "insensitive" } },
+            { merchantClean: { contains: "payment", mode: "insensitive" } },
+            { description: { contains: "payment", mode: "insensitive" } },
+            { rawPayload: { path: ["transferPairId"], not: Prisma.AnyNull } },
+            { rawPayload: { path: ["splitBillId"], not: Prisma.AnyNull } },
+            { merchantRaw: { contains: "repayment", mode: "insensitive" } },
+            { merchantClean: { contains: "repayment", mode: "insensitive" } },
+            { description: { contains: "repayment", mode: "insensitive" } },
+          ],
+        },
+        select: {
+          id: true,
+          accountId: true,
+          date: true,
+          amount: true,
+          currency: true,
+          type: true,
+          isTransfer: true,
+          merchantRaw: true,
+          merchantClean: true,
+          description: true,
+          rawPayload: true,
+          normalizedPayload: true,
+          reviewStatus: true,
+          category: { select: { name: true } },
+          account: { select: { type: true, institution: true } },
+        },
+      }),
+    ]);
+
+    const mappedSummaryRows = summaryRows.map((transaction) => {
+      const warningReason = getTransactionWarningReason(transaction);
+      return {
+        transaction,
+        warningReason,
+        mappedTransaction: mapTransactionRow({
+          id: transaction.id,
+          workspaceId,
+          importFileId: transaction.importFileId,
+          accountId: transaction.accountId,
+          account: transaction.account,
+          accountNumber: transaction.account?.accountNumber ?? null,
+          categoryId: transaction.categoryId,
+          rawPayload: transaction.rawPayload,
+          normalizedPayload: transaction.normalizedPayload,
+          category: transaction.category,
+          reviewStatus: transaction.reviewStatus,
+          reviewReasons: transaction.reviewReasons,
+          parserConfidence: transaction.parserConfidence,
+          categoryConfidence: transaction.categoryConfidence,
+          accountMatchConfidence: transaction.accountMatchConfidence,
+          duplicateConfidence: transaction.duplicateConfidence,
+          transferConfidence: transaction.transferConfidence,
+          date: transaction.date,
+          amount: transaction.amount,
+          currency: transaction.currency,
+          type: transaction.type,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+          isTransfer: transaction.isTransfer,
+          isExcluded: transaction.isExcluded,
+          createdAt: transaction.createdAt,
+          warningReason,
+          splitBill: transaction.splitBill,
+        }, workspaceAccounts, false),
+      };
+    });
+    const transactions = dedupeImportedTransactionRows(
+      mappedSummaryRows
+        .map((entry) => entry.mappedTransaction)
+        .filter((transaction) => transactionMatchesEffectiveCategoryFilters(transaction, categoryFilterNames))
+        .filter((transaction) => filters.reviewFilter !== "pending" || transactionNeedsReview(transaction))
+    );
+    if (filters.sortField === "account") {
+      transactions.sort(compareTransactionsByAccount(workspaceAccountRows, filters.sortDirection ?? "desc"));
+    }
+    const transactionById = new Map(mappedSummaryRows.map((entry) => [entry.mappedTransaction.id, entry] as const));
+    const visibleSummaryCandidates = transactions.filter((transaction) => !transaction.isExcluded).map((mappedTransaction) => {
+        const transaction = transactionById.get(mappedTransaction.id)?.transaction;
+        return {
+          id: mappedTransaction.id,
+          accountId: mappedTransaction.accountId,
+          accountType: transaction?.account?.type ?? null,
+          date: transaction?.date ?? mappedTransaction.date,
+          amount: transaction?.amount ?? mappedTransaction.amount,
+          currency: transaction?.currency ?? mappedTransaction.currency,
+          type: transaction?.type ?? mappedTransaction.type,
+          isTransfer: transaction?.isTransfer ?? mappedTransaction.isTransfer,
+          categoryName: transaction?.category?.name ?? mappedTransaction.categoryName,
+          merchantRaw: transaction?.merchantRaw ?? mappedTransaction.merchantRaw,
+          merchantClean: transaction?.merchantClean ?? mappedTransaction.merchantClean,
+          description: transaction?.description ?? mappedTransaction.description,
+          rawPayload: transaction?.rawPayload ?? mappedTransaction.rawPayload,
+          normalizedPayload: transaction?.normalizedPayload,
+          reviewStatus: transaction?.reviewStatus,
+        };
+      });
+    const summaryCandidateById = new Map<string, TransactionSummaryCandidate>(
+      summaryMatchingRows.map((transaction) => [
+        transaction.id,
+        {
+          ...transaction,
+          accountType: transaction.account?.type ?? null,
+          categoryName: transaction.category?.name ?? null,
+        },
+      ] as const)
+    );
+    for (const transaction of visibleSummaryCandidates) {
+      summaryCandidateById.set(transaction.id, transaction);
+    }
+    const summaryTypeOverrides = getTransactionSummaryTypeOverrides(
+      Array.from(summaryCandidateById.values())
+    );
+
+    const summaryState = {
+      totalCount: transactions.length,
+      income: 0,
+      spending: 0,
+      transfers: 0,
+      review: 0,
+      topCategories: new Map<string, number>(),
+      topAccounts: new Map<string, number>(),
+      firstTransactionDate: transactions[transactions.length - 1]?.date ?? null,
+      lastTransactionDate: transactions[0]?.date ?? null,
+      firstReviewTransaction: null as TransactionApiRow | null,
+      firstReviewTransactionIndex: null as number | null,
+      currencyTotals: {} as Record<string, { income: number; spending: number; transfers: number }>,
+    };
+
+    transactions.forEach((mappedTransaction, index) => {
+      const source = transactionById.get(mappedTransaction.id);
+      const transaction = source?.transaction;
+      const warningReason = getTransactionReviewReasons(mappedTransaction)[0] ?? null;
+      const amount = Math.abs(Number(mappedTransaction.amount));
+      const accountName = mappedTransaction.accountName ?? transaction?.account?.name ?? "";
+
+      if (!mappedTransaction.isExcluded) {
+        const effectiveType =
+          summaryTypeOverrides.get(mappedTransaction.id) ??
+          getSummaryTransactionType({
+            type: transaction?.type ?? mappedTransaction.type,
+            isTransfer: transaction?.isTransfer ?? mappedTransaction.isTransfer,
+            categoryName: transaction?.category?.name ?? mappedTransaction.categoryName,
+            merchantRaw: transaction?.merchantRaw ?? mappedTransaction.merchantRaw,
+            merchantClean: transaction?.merchantClean ?? mappedTransaction.merchantClean,
+            description: transaction?.description ?? mappedTransaction.description,
+            institution: transaction?.account?.institution ?? mappedTransaction.institution,
+          });
+
+        if (effectiveType === "income") {
+          summaryState.income += amount;
+        } else if (effectiveType === "transfer") {
+          summaryState.transfers += amount;
+        } else {
+          summaryState.spending += amount;
+        }
+        const currency = normalizeInstitutionCurrency(mappedTransaction.currency || "PHP") ?? "PHP";
+        summaryState.currencyTotals[currency] ??= { income: 0, spending: 0, transfers: 0 };
+        if (effectiveType === "income") summaryState.currencyTotals[currency].income += amount;
+        else if (effectiveType === "transfer") summaryState.currencyTotals[currency].transfers += amount;
+        else summaryState.currencyTotals[currency].spending += amount;
+
+        // Rank income and spending only; transfer volume has its own summary total.
+        if (effectiveType !== "transfer") {
+          const summaryCategoryName = mappedTransaction.categoryName ?? "Other";
+          summaryState.topCategories.set(summaryCategoryName, (summaryState.topCategories.get(summaryCategoryName) ?? 0) + amount);
+          summaryState.topAccounts.set(accountName, (summaryState.topAccounts.get(accountName) ?? 0) + amount);
+        }
+      }
+
+      if (warningReason) {
+        summaryState.review += 1;
+        if (!summaryState.firstReviewTransaction) {
+          summaryState.firstReviewTransaction = mappedTransaction;
+          summaryState.firstReviewTransactionIndex = index;
+        }
+      }
+    });
+
+    const topCategory = Array.from(summaryState.topCategories.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
+    const topAccount = Array.from(summaryState.topAccounts.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
+    const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
+    const pageTransactions = (includeAll ? transactions : transactions.slice(pageStart, pageStart + (requestedPageSize ?? 25))).map(row => ({ ...row, normalizedPayload: enrichMerchantIdentityPayload(row) as Prisma.JsonObject }));
+
+    return NextResponse.json({
+      transactions: await withTransactionTags(pageTransactions, workspaceId),
+      totalCountIsExact: true,
+      page: includeAll ? 1 : requestedPage,
+      pageSize: includeAll ? summaryState.totalCount : requestedPageSize ?? 25,
+      totalCount: summaryState.totalCount,
+      currencyCodes,
+      summary: {
+        totalCount: summaryState.totalCount,
+        income: summaryState.income,
+        spending: summaryState.spending,
+        transfers: summaryState.transfers,
+        review: summaryState.review,
+        currencyCodes,
+        currencyTotals: summaryState.currencyTotals,
+        topCategory,
+        topAccount,
+        firstTransactionDate: summaryState.firstTransactionDate,
+        lastTransactionDate: summaryState.lastTransactionDate,
+        firstReviewTransaction: summaryState.firstReviewTransaction,
+        firstReviewTransactionIndex: summaryState.firstReviewTransactionIndex,
+      },
+    });
+  } catch (error) {
+    if (isTransientDataError(error)) {
+      console.warn("[transactions] database temporarily unavailable", summarizeErrorForLog(error));
+      return createTransientDataUnavailableResponse("Clover is reconnecting to your transactions. Please retry shortly.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.error("[transactions] unable to load transactions", summarizeErrorForLog(error));
+    return NextResponse.json({ error: "Unable to load transactions" }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    assertTrustedRequestOrigin(request);
+    const userId = await resolveTransactionsRouteUserId();
+    const parsed = transactionSchema.parse(await request.json());
+    const payload = { ...parsed, merchantRaw: parsed.merchantRaw || manualTransactionName(parsed.type) };
+
+    const amount = parseManualTransactionAmount(payload.amount);
+    if (amount === null) {
+      return NextResponse.json({ error: "Enter zero or a positive amount with no more than two decimal places." }, { status: 400 });
+    }
+
+    await assertWorkspaceAccess(userId, payload.workspaceId);
+    const user = await getOrCreateCurrentUser(userId);
+    const effectiveLimits = getEffectiveUserLimits(user);
+    const transactionCountPromise =
+      effectiveLimits.transactionLimit !== null ? countWorkspaceOwnerTransactions(payload.workspaceId) : Promise.resolve(null);
+    const otherCategoryPromise = prisma.category.findFirst({
+      where: { workspaceId: payload.workspaceId, isArchived: false,
+        name: { equals: payload.type === "income" ? "Income" : payload.type === "transfer" ? "Transfers" : "Other", mode: "insensitive" } },
+    });
+    const selectedCategoryPromise =
+      payload.categoryId === undefined || payload.categoryId === null
+        ? Promise.resolve(null)
+        : prisma.category.findFirst({
+            where: { id: payload.categoryId, workspaceId: payload.workspaceId },
+          });
+    const selectedAccountPromise = prisma.account.findFirst({
+      where: { id: payload.accountId, workspaceId: payload.workspaceId },
+      select: { id: true, currency: true },
+    });
+    const [transactionCount, otherCategory, selectedCategory, selectedAccount] = await Promise.all([
+      transactionCountPromise,
+      otherCategoryPromise,
+      selectedCategoryPromise,
+      selectedAccountPromise,
+    ]);
+
+    if (!selectedAccount) {
+      return NextResponse.json({ error: "Choose an account from this Clover profile." }, { status: 400 });
+    }
+
+    const accountCurrency = String(selectedAccount.currency ?? "PHP").trim().toUpperCase() || "PHP";
+    const transactionCurrency = payload.currency.trim().toUpperCase();
+    if (accountCurrency !== transactionCurrency) {
+      return NextResponse.json(
+        { error: `Use ${accountCurrency} for this account, or choose a ${transactionCurrency} account.` },
+        { status: 400 }
+      );
+    }
+
+    if (effectiveLimits.transactionLimit !== null && transactionCount !== null && transactionCount >= effectiveLimits.transactionLimit) {
+      const isFreePlan = user.planTier === "free";
+      return NextResponse.json(
+        {
+          error: isFreePlan
+            ? `Free includes up to ${effectiveLimits.transactionLimit.toLocaleString()} transaction rows. Upgrade to Pro for more history.`
+            : `You’ve reached the current ${effectiveLimits.transactionLimit.toLocaleString()}-row transaction limit on Pro. Manage billing if you need more room.`,
+          planTier: user.planTier,
+          limitType: "transaction_limit",
+          limitValue: effectiveLimits.transactionLimit,
+        },
+        { status: 403 }
+      );
+    }
+
+    const useDefaultCategory = !selectedCategory || /^(other|uncategorized)$/i.test(selectedCategory.name.trim());
+    const resolvedCategory = useDefaultCategory ? otherCategory ?? selectedCategory : selectedCategory;
+    const resolvedCategoryId = resolvedCategory?.id ?? null;
+    const resolvedCategoryName = resolvedCategory?.name ?? null;
+    const resolvedType = payload.preserveType
+      ? payload.type
+      : coerceTransactionTypeFromCategoryName(resolvedCategoryName, payload.type);
+    const resolvedIsTransfer = resolvedType === "transfer";
+
+    const transaction = await prisma.$transaction(async db => {
+      const transaction = await db.transaction.create({
+        data: {
+          workspaceId: payload.workspaceId,
+          accountId: payload.accountId,
+          categoryId: resolvedCategoryId,
+          date: new Date(payload.date),
+          amount: amount.toFixed(2),
+          currency: transactionCurrency,
+          type: resolvedType,
+          merchantRaw: payload.merchantRaw,
+          merchantClean: payload.merchantClean ?? null,
+          description: payload.description ?? null,
+          isTransfer: resolvedIsTransfer,
+          isExcluded: payload.isExcluded ?? false,
+          reviewStatus: "confirmed",
+          parserConfidence: 100,
+          categoryConfidence: resolvedCategoryId ? 100 : 0,
+          accountMatchConfidence: 100,
+          duplicateConfidence: 0,
+          transferConfidence: resolvedIsTransfer ? 100 : 0,
+          rawPayload: {
+            source: "manual",
+            merchantRaw: payload.merchantRaw,
+            merchantClean: payload.merchantClean ?? null,
+            assetName: payload.investmentAssetName ?? null,
+            description: payload.description ?? null,
+            receiptLineItems:
+              payload.receiptLineItems?.map((item) => ({
+                description: item.description,
+                quantity: item.quantity === undefined || item.quantity === null ? null : item.quantity,
+                unitPrice: item.unitPrice === undefined || item.unitPrice === null ? null : item.unitPrice,
+                amount: item.amount === undefined || item.amount === null ? null : item.amount,
+              })) ?? [],
+          },
+          normalizedPayload: {
+            merchantClean: payload.merchantClean ?? payload.merchantRaw,
+            assetName: payload.investmentAssetName ?? null,
+            categoryId: resolvedCategoryId,
+            type: resolvedType,
+          },
+          learnedRuleIdsApplied: [],
+          transactionTags: payload.tags?.length
+            ? {
+                create: sanitizeTransactionTagNames(payload.tags).map((name) => ({
+                  tag: {
+                    connectOrCreate: {
+                      where: {
+                        workspaceId_normalizedName: {
+                          workspaceId: payload.workspaceId,
+                          normalizedName: normalizeTransactionTag(name),
+                        },
+                      },
+                      create: {
+                        workspaceId: payload.workspaceId,
+                        name,
+                        normalizedName: normalizeTransactionTag(name),
+                      },
+                    },
+                  },
+                })),
+              }
+            : undefined,
+        },
+        include: {
+          account: {
+            select: {
+              name: true,
+              institution: true,
+              accountNumber: true,
+            },
+          },
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (resolvedCategoryId) {
+        const category = await db.category.findUnique({
+          where: { id: resolvedCategoryId },
+        });
+
+        if (category) {
+          await recordTrainingSignal({
+            workspaceId: payload.workspaceId,
+            transactionId: transaction.id,
+            observationId: transaction.updatedAt.toISOString(),
+            merchantText: payload.merchantClean ?? payload.merchantRaw,
+            categoryId: category.id,
+            categoryName: category.name,
+            type: resolvedType,
+            source: "manual_transaction_creation",
+            confidence: 100,
+            notes: payload.accountId ? "Manual transaction created in the app." : null,
+            actorUserId: userId,
+          }, db);
+        }
+      }
+
+      return transaction;
+    });
+    after(async () => { await processPendingLearningJobs({ workspaceId: payload.workspaceId, limit: 1 }); });
+
+    void syncWorkspaceRecurringPatterns(payload.workspaceId).catch(() => {
+      // Recurring detection should never block a manual transaction save.
+    });
+
+    void capturePostHogServerEvent("manual_transaction_created", userId, {
+      workspace_id: payload.workspaceId,
+      transaction_id: transaction.id,
+      account_id: transaction.accountId,
+      category_id: resolvedCategoryId,
+      amount: Number(transaction.amount),
+      amount_signed: Number(transaction.amount),
+      currency: transaction.currency,
+      transaction_type: transaction.type,
+      source: "manual",
+      is_transfer: transaction.isTransfer,
+      is_excluded: transaction.isExcluded,
+    });
+
+    const createdAccount = await prisma.account.findUnique({
+      where: { id: payload.accountId },
+      select: { name: true },
+    });
+    const createdCategory = resolvedCategoryId
+      ? await prisma.category.findUnique({
+          where: { id: resolvedCategoryId },
+          select: { name: true },
+        })
+      : null;
+
+    void capturePostHogServerEvent("feature_used", userId, {
+      workspace_id: payload.workspaceId,
+      feature_name: "manual_transaction_creation",
+      transaction_count: 1,
+    });
+    if (resolvedCategoryId) {
+      void capturePostHogServerEvent("transaction_categorized", userId, {
+        workspace_id: payload.workspaceId,
+        transaction_id: transaction.id,
+        category_id: resolvedCategoryId,
+        is_manual_edit: true,
+      });
+    }
+
+    invalidateWorkspaceSummaryCache(payload.workspaceId);
+    return NextResponse.json({
+      transaction: {
+        ...transaction,
+        amount: transaction.amount.toString(),
+        date: transaction.date.toISOString(),
+        createdAt: transaction.createdAt.toISOString(),
+        updatedAt: transaction.updatedAt.toISOString(),
+        accountName: createdAccount?.name ?? null,
+        categoryName: createdCategory?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+      },
+    }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: "Invalid transaction payload" }, { status: 400 });
+  }
+}

@@ -1,0 +1,10 @@
+Account,Date,Payee,Notes,Category_Group,Category,Amount,Split_Amount,Cleared,Currency,Type
+Actual Checking,2026-09-01,Starting Balance,Opening balance,,,1000,0,Reconciled,USD,
+Actual Checking,2026-09-02,Corner Shop,Lunch,Living,Food,-12.50,0,Cleared,USD,
+Actual Checking,2026-09-03,Department Store,(SPLIT INTO 2) Shopping,,,0,-50,Cleared,USD,
+Actual Checking,2026-09-03,Department Store,(SPLIT 1 OF 2) Shirt,Living,Clothing,-30,0,Cleared,USD,
+Actual Checking,2026-09-03,Department Store,(SPLIT 2 OF 2) Snacks,Living,Food,-20,0,Cleared,USD,
+Actual Checking,2026-09-04,Employer,Monthly salary,Income,Salary,2500,0,Reconciled,USD,
+Actual Checking,2026-09-05,Corner Shop,Refund,Living,Food,5,0,Not cleared,USD,
+Actual Checking,2026-09-06,Actual Savings,Move savings,,,-100,0,Cleared,USD,Transfer Out
+Actual Savings,2026-09-06,Actual Checking,Move savings,,,100,0,Cleared,USD,Transfer In

@@ -1,0 +1,1312 @@
+import { HomeAddTransactionLink } from "./home-feature-grid";
+import { HomePendingSplitBills } from "@/components/home-pending-split-bills";
+import { FirstUseActivation } from "./first-use-activation";
+import { homeCurrencyScope } from "../../shared/home-currency-scope";
+import { HomeCurrencySelector } from "./home-currency-selector";
+import { AdviserHeaderLink } from "./adviser-header-link";
+import { buildHomeAdviserInsights } from "../../shared/home-adviser-insights";
+import { finverseBalances } from "@/lib/finverse-balances";
+import { convertHomeTotal } from "@/lib/home-currency-total";
+import { parseRecurringTracking, isWithinRecurringTerm } from "@/lib/recurring-tracking";
+import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
+import Link from "next/link";
+import { Prisma } from "@prisma/client";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { after } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { ensureStarterWorkspace } from "@/lib/starter-data";
+import { CloverShell } from "@/components/clover-shell";
+import { getPageSessionContext } from "@/lib/page-auth";
+import { analyticsOnceKey } from "@/lib/analytics";
+import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { deriveReconciledBalance } from "@/lib/account-balance";
+import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
+import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
+import { DashboardTopActionsLazy } from "@/components/dashboard-top-actions-lazy";
+import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
+import { selectedWorkspaceKey } from "@/lib/workspace-selection";
+import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
+import {
+  isAdminOnlyDataError,
+  isTransientDataError,
+  isUnauthorizedDataError,
+} from "@/lib/transient-data";
+import { TransientDataRecovery } from "@/components/transient-data-recovery";
+import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
+import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
+import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { DashboardBudgetPulse } from "@/components/dashboard-budget-pulse";
+import {
+  HomeRecurringPaymentsCard,
+  type HomeRecurringPaymentItem,
+  type HomeRecurringSuggestionItem,
+} from "@/components/home-recurring-payments-card";
+import {
+  resolveRelevantCommitmentDueDate,
+  toCommitmentOccurrenceKey,
+} from "@/lib/commitment-occurrences";
+import { hasCompatibleTable } from "@/lib/data-engine";
+import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
+import { getHomePeriodChange } from "@/lib/home-period-change";
+import { HomeFeatureGrid } from "@/components/home-feature-grid";
+import { HomeNextSteps } from "@/components/home-next-steps";
+import { buildReviewQueueWhere } from "@/lib/review-queue";
+import { BalanceVisibilityToggle } from "@/components/balance-visibility-toggle";
+import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from "@/lib/account-balance-projection";
+import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
+import type { HomeReviewTransaction } from "@/components/home-transaction-review-card";
+import { HomeTransactionReviewLauncher } from "@/components/home-transaction-review-launcher";
+
+const currencyFormatter = new Intl.NumberFormat("en-PH", {
+  style: "currency",
+  currency: "PHP",
+  minimumFractionDigits: 2,
+});
+
+const relativeTimeFormatter = new Intl.RelativeTimeFormat("en-PH", {
+  numeric: "auto",
+});
+
+type ExchangeRateResponse = Array<{
+  date: string;
+  base: string;
+  quote: string;
+  rate: number;
+}>;
+
+const loadDashboardExchangeRate = async (baseCurrency: string, quoteCurrency: string) => {
+  const base = formatCurrencyCode(baseCurrency);
+  const quote = formatCurrencyCode(quoteCurrency);
+  if (base === quote) return 1;
+
+  try {
+    const url = new URL("https://api.frankfurter.dev/v2/rates");
+    url.searchParams.set("base", base);
+    url.searchParams.set("quotes", quote);
+    const response = await fetch(url.toString(), { next: { revalidate: 6 * 60 * 60 } });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as ExchangeRateResponse;
+    const rate = payload[0]?.rate;
+    return typeof rate === "number" && Number.isFinite(rate) && rate > 0 ? rate : null;
+  } catch {
+    return null;
+  }
+};
+
+type DashboardTransaction = {
+  id: string;
+  date: Date;
+  amount: unknown;
+  currency: string;
+  isExcluded: boolean;
+  reviewStatus: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
+  categoryConfidence: number | null;
+  parserConfidence: number | null;
+  accountMatchConfidence: number | null;
+  duplicateConfidence: number | null;
+  categoryId: string | null;
+  type: "income" | "expense" | "transfer";
+  isTransfer: boolean;
+  merchantRaw: string | null;
+  merchantClean: string | null;
+  rawPayload: unknown;
+  account: {
+    name: string;
+    currency: string | null;
+  } | null;
+  category: {
+    name: string;
+  } | null;
+};
+
+const getDashboardTransactionReviewReasons = (transaction: DashboardTransaction) => {
+  if (transaction.reviewStatus !== "pending_review" && transaction.reviewStatus !== "suggested") {
+    return [];
+  }
+
+  return getTransactionReviewReasons({
+    reviewStatus: transaction.reviewStatus,
+    isExcluded: transaction.isExcluded,
+    categoryId: transaction.categoryId,
+    categoryName: transaction.category?.name ?? null,
+    parserConfidence: transaction.parserConfidence,
+    categoryConfidence: transaction.categoryConfidence,
+    accountMatchConfidence: transaction.accountMatchConfidence,
+    duplicateConfidence: transaction.duplicateConfidence,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    rawPayload: transaction.rawPayload,
+  });
+};
+
+type AggregatedTransactionTotals = {
+  income: number;
+  expense: number;
+  transfer: number;
+  confirmed: number;
+  reviewAttention: number;
+  expenseCategories: Map<string, number>;
+  expenseMerchants: Map<string, { amount: number; count: number; lastSeen: Date }>;
+};
+
+type WindowSummary = {
+  label: string;
+  income: number;
+  expense: number;
+  net: number;
+  transactions: number;
+  activeDays: number;
+};
+
+type DailyFlow = {
+  key: string;
+  label: string;
+  dateLabel: string;
+  dayLabel: string;
+  income: number;
+  expense: number;
+};
+
+type WorkspaceSummary = {
+  id: string;
+  name: string;
+  accounts: Array<{
+    id: string;
+    name: string;
+    institution: string | null;
+    accountNumber: string | null;
+    type: string;
+    currency: string;
+    balance: unknown;
+    _count?: { transactions: number };
+  }>;
+  _count: {
+    accounts: number;
+    importFiles: number;
+    transactions: number;
+  };
+};
+
+const toAmount = (value: unknown) => Number(value ?? 0);
+const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
+
+const formatSignedCurrency = (value: number, currency?: string | null) =>
+  `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
+
+
+const toIsoDay = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const toDayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const getDashboardTransactionType = (transaction: DashboardTransaction) =>
+  resolveFinancialTransactionType({
+    type: transaction.type,
+    amount: transaction.amount,
+    isTransfer: transaction.isTransfer,
+    categoryName: transaction.category?.name,
+  });
+
+const summarizeWindow = (transactions: DashboardTransaction[], label: string): WindowSummary => {
+  const totals = summarizeTransactions(transactions);
+  return {
+    label,
+    income: totals.income,
+    expense: totals.expense,
+    net: totals.income - totals.expense,
+    transactions: transactions.length,
+    activeDays: new Set(transactions.map((transaction) => toIsoDay(transaction.date))).size,
+  };
+};
+
+const buildDailyFlow = (transactions: DashboardTransaction[], start: Date, dayCount: number, labelFormat: Intl.DateTimeFormatOptions): DailyFlow[] => {
+  const totals = new Map<string, { income: number; expense: number }>();
+
+  for (const transaction of transactions) {
+    const transactionDay = toDayStart(transaction.date);
+    const dayOffset = Math.round((transactionDay.getTime() - start.getTime()) / 86400000);
+    if (dayOffset < 0 || dayOffset >= dayCount) {
+      continue;
+    }
+
+    const key = toIsoDay(transactionDay);
+    const current = totals.get(key) ?? { income: 0, expense: 0 };
+    const amount = Math.abs(toAmount(transaction.amount));
+    const transactionType = getDashboardTransactionType(transaction);
+    if (transactionType === "income") {
+      current.income += amount;
+    } else if (transactionType === "expense") {
+      current.expense += amount;
+    }
+    totals.set(key, current);
+  }
+
+  return Array.from({ length: dayCount }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const key = toIsoDay(date);
+    const dayTotals = totals.get(key) ?? { income: 0, expense: 0 };
+    return {
+      key,
+      label: date.toLocaleDateString("en-PH", labelFormat),
+      dateLabel: date.toLocaleDateString("en-PH", { month: "short", day: "numeric" }),
+      dayLabel: date.toLocaleDateString("en-PH", { weekday: "long" }),
+      ...dayTotals,
+    };
+  });
+};
+
+function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: string; currency: string }) {
+  const scale = Math.max(1, ...days.flatMap((day) => [day.income, day.expense]));
+  const isMonthly = days.length > 7;
+  const monthlyTimelineIndexes = new Set(
+    Array.from({ length: 5 }, (_, index) => Math.round((index * Math.max(days.length - 1, 0)) / 4))
+  );
+  const monthlyTimelineDays = Array.from(monthlyTimelineIndexes).map((index) => days[index]).filter(Boolean);
+
+  return (
+    <div className={`dashboard-home__report-flow${isMonthly ? " dashboard-home__report-flow--monthly" : ""}`} aria-label={`${label} daily income and expenses`}>
+      <div className="dashboard-home__report-flow-bars">
+        {days.map((day, index) => {
+          const hasMovement = day.income > 0 || day.expense > 0;
+          const detailLabel = `${day.dayLabel}, ${day.dateLabel} daily income and expenses`;
+          const segments = [
+            { kind: "income", value: day.income },
+            { kind: "expense", value: day.expense },
+          ];
+
+          return (
+            <div
+              aria-label={detailLabel}
+              className="dashboard-home__report-flow-bar"
+              key={day.key}
+              tabIndex={hasMovement ? 0 : undefined}
+              title={detailLabel}
+            >
+              <div className="dashboard-home__report-flow-track" data-active={hasMovement ? "true" : "false"}>
+                {segments.map((segment, segmentIndex) => (
+                  <span
+                    className={`dashboard-home__report-flow-segment dashboard-home__report-flow-segment--${segment.kind}`}
+                    data-active={segment.value > 0 ? "true" : "false"}
+                    data-edge={segments.length === 1 ? "only" : segmentIndex === 0 ? "bottom" : "top"}
+                    key={segment.kind}
+                    style={{ height: `${(segment.value / scale) * 100}%` }}
+                  />
+                ))}
+              </div>
+              {!isMonthly ? <span className="dashboard-home__report-flow-label">{day.label}</span> : null}
+              <span className="dashboard-home__report-flow-tooltip" aria-hidden="true">
+                <strong>{day.dayLabel}, {day.dateLabel}</strong>
+                <span>Income <HomeSensitiveAmount value={formatCurrency(day.income, currency)} currency={currency} /></span>
+                <span>Expenses <HomeSensitiveAmount value={formatCurrency(day.expense, currency)} currency={currency} /></span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {isMonthly ? (
+        <div className="dashboard-home__report-flow-timeline" aria-hidden="true">
+          {monthlyTimelineDays.map((day) => <span key={day.key}>{day.dateLabel}</span>)}
+        </div>
+      ) : null}
+      <div className="dashboard-home__report-flow-legend" aria-hidden="true">
+        <span><i className="dashboard-home__report-flow-dot dashboard-home__report-flow-dot--income" />Income</span>
+        <span><i className="dashboard-home__report-flow-dot dashboard-home__report-flow-dot--expense" />Expenses</span>
+      </div>
+    </div>
+  );
+}
+
+const summarizeTransactions = (transactions: DashboardTransaction[]): AggregatedTransactionTotals => {
+  return transactions.reduce<AggregatedTransactionTotals>(
+    (accumulator, transaction) => {
+      const amount = Math.abs(toAmount(transaction.amount));
+      const transactionType = getDashboardTransactionType(transaction);
+
+      if (transactionType === "income") {
+        accumulator.income += amount;
+      } else if (transactionType === "expense") {
+        accumulator.expense += amount;
+      } else {
+        accumulator.transfer += amount;
+      }
+
+      if (transaction.reviewStatus === "confirmed" || transaction.reviewStatus === "edited") {
+        accumulator.confirmed += 1;
+      }
+
+      if (getDashboardTransactionReviewReasons(transaction).length > 0) {
+        accumulator.reviewAttention += 1;
+      }
+
+      if (transactionType === "expense") {
+        const categoryName = transaction.category?.name ?? "Unassigned";
+        accumulator.expenseCategories.set(categoryName, (accumulator.expenseCategories.get(categoryName) ?? 0) + amount);
+
+        const merchantName = transaction.merchantClean?.trim() || transaction.merchantRaw?.trim() || "Unknown merchant";
+        const existingMerchant = accumulator.expenseMerchants.get(merchantName);
+        if (existingMerchant) {
+          existingMerchant.amount += amount;
+          existingMerchant.count += 1;
+          if (transaction.date > existingMerchant.lastSeen) {
+            existingMerchant.lastSeen = transaction.date;
+          }
+        } else {
+          accumulator.expenseMerchants.set(merchantName, {
+            amount,
+            count: 1,
+            lastSeen: transaction.date,
+          });
+        }
+      }
+
+      return accumulator;
+    },
+    {
+      income: 0,
+      expense: 0,
+      transfer: 0,
+      confirmed: 0,
+      reviewAttention: 0,
+      expenseCategories: new Map<string, number>(),
+      expenseMerchants: new Map<string, { amount: number; count: number; lastSeen: Date }>(),
+    }
+  );
+};
+
+const comparePeriods = (currentTransactions: DashboardTransaction[], previousTransactions: DashboardTransaction[]) => {
+  const current = summarizeTransactions(currentTransactions);
+  const previous = summarizeTransactions(previousTransactions);
+  const net = current.income - current.expense;
+  const previousNet = previous.income - previous.expense;
+  const expenseDelta = current.expense - previous.expense;
+  const incomeDelta = current.income - previous.income;
+  const netDelta = net - previousNet;
+
+  const categoryEntries = Array.from(new Set([...current.expenseCategories.keys(), ...previous.expenseCategories.keys()])).map((name: string) => {
+    const currentAmount = current.expenseCategories.get(name) ?? 0;
+    const previousAmount = previous.expenseCategories.get(name) ?? 0;
+    const delta = currentAmount - previousAmount;
+    const percentage = previousAmount > 0 ? (delta / previousAmount) * 100 : currentAmount > 0 ? 100 : 0;
+
+    return { name, currentAmount, previousAmount, delta, percentage };
+  });
+
+  const topCategory = [...current.expenseCategories.entries()].sort((a, b) => b[1] - a[1])[0];
+  const biggestMover = categoryEntries
+    .filter((entry) => entry.delta > 0)
+    .sort((a, b) => b.delta - a.delta || b.currentAmount - a.currentAmount)[0];
+  const topMerchant = [...current.expenseMerchants.entries()].sort(
+    (a, b) => b[1].count - a[1].count || b[1].amount - a[1].amount || b[1].lastSeen.getTime() - a[1].lastSeen.getTime()
+  )[0];
+
+  return {
+    current,
+    previous,
+    net,
+    previousNet,
+    expenseDelta,
+    incomeDelta,
+    netDelta,
+    topCategory,
+    biggestMover,
+    topMerchant,
+  };
+};
+
+
+function DashboardUnavailableContent() {
+  return (
+    <section className="dashboard-home dashboard-home--figma">
+      <TransientDataRecovery eyebrow="Home" pageLabel="Home" />
+    </section>
+  );
+}
+
+function DashboardUnavailableState() {
+  return (
+    <CloverShell active="dashboard" title="Home">
+      <DashboardUnavailableContent />
+    </CloverShell>
+  );
+}
+
+
+function DashboardStreamFallback() {
+  return (
+    <section className="dashboard-home dashboard-home--figma" aria-label="Loading dashboard content">
+      <article className="dashboard-home__hero dashboard-home__hero--balance dashboard-home__hero--loading glass">
+        <div className="dashboard-home__hero-main">
+          <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 108 }} />
+          <span className="skeleton-block skeleton-block--line" style={{ width: "min(100%, 340px)", height: 38, borderRadius: 999 }} />
+        </div>
+        <div className="dashboard-home__hero-aside" aria-hidden="true">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div key={index} className="dashboard-home__hero-mini-pill dashboard-home__hero-mini-pill--loading">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 112 }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 88, height: 18 }} />
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <section className="dashboard-home__hero-mobile-metrics" aria-label="Loading monthly balance summary">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <article key={index} className="dashboard-home__hero-mobile-card glass">
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 112 }} />
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 88, height: 18 }} />
+          </article>
+        ))}
+      </section>
+
+      <article className="dashboard-home__insight-strip dashboard-home__insight-strip--loading glass">
+        <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 68 }} />
+        <div className="dashboard-home__insight-strip-list">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="dashboard-home__insight-strip-item">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 100 }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "90%" }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 80 }} />
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <div className="dashboard-home__snapshot-grid">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <article key={index} className="dashboard-home__report-card dashboard-home__report-card--loading glass">
+            <div className="dashboard-home__report-card-head">
+              <div className="dashboard-home__summary-card-title">
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 116 }} />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 128, height: 30 }} />
+              </div>
+            </div>
+            <div className="dashboard-home__report-metrics">
+              {Array.from({ length: 3 }).map((__, metricIndex) => (
+                <span key={metricIndex}>
+                  <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 54 }} />
+                  <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 76 }} />
+                </span>
+              ))}
+            </div>
+            <div className={`dashboard-home__report-flow dashboard-home__report-flow--loading${index === 1 ? " dashboard-home__report-flow--monthly" : ""}`} aria-hidden="true">
+              <div className="dashboard-home__report-flow-bars">
+                {Array.from({ length: index === 1 ? 31 : 7 }).map((__, barIndex) => (
+                  <span key={barIndex} className="dashboard-home__report-flow-loading-bar">
+                    <span className="skeleton-block" />
+                  </span>
+                ))}
+              </div>
+            </div>
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 96 }} />
+          </article>
+        ))}
+      </div>
+
+      <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <article key={index} className="dashboard-home__goal-card dashboard-home__goal-card--loading glass">
+            <div className="dashboard-home__goal-card-head">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 116 }} />
+            </div>
+            <div className="dashboard-home__goal-card-body">
+              <span className="skeleton-block dashboard-home__ring dashboard-home__ring--compact" />
+              <div className="dashboard-home__goal-card-copy">
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 180px)", height: 22 }} />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: "min(100%, 220px)" }} />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 112 }} />
+              </div>
+            </div>
+            <span className="skeleton-block skeleton-block--line" style={{ width: 128, height: 34, borderRadius: 999 }} />
+          </article>
+        ))}
+      </div>
+
+    </section>
+  );
+}
+
+async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>) {
+  const cookieStore = await cookies();
+  const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+  const workspaceSelect = {
+    id: true,
+    name: true,
+    accounts: {
+      select: {
+        id: true,
+        name: true,
+        institution: true,
+        accountNumber: true,
+        type: true,
+        currency: true,
+        balance: true,
+        _count: { select: { transactions: { where: { deletedAt: null } } } },
+      },
+    },
+    _count: {
+      select: {
+        accounts: true,
+        importFiles: true,
+        transactions: true,
+      },
+    },
+  } as const;
+
+  const selectedWorkspaceData =
+    (selectedWorkspaceCookieId
+      ? await prisma.workspace.findFirst({
+          where: {
+            id: selectedWorkspaceCookieId,
+            user: {
+              clerkUserId: user.clerkUserId,
+            },
+          },
+          select: workspaceSelect,
+        })
+      : null) ??
+    (await prisma.workspace.findFirst({
+      where: {
+        user: {
+          clerkUserId: user.clerkUserId,
+        },
+      },
+      orderBy: { createdAt: "asc" },
+      select: workspaceSelect,
+    }));
+  let workspaceSummary = selectedWorkspaceData;
+
+  if (!workspaceSummary) {
+    const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+    workspaceSummary = await prisma.workspace.findUnique({
+      where: { id: starterWorkspace.id },
+      select: workspaceSelect,
+    });
+  }
+
+  if (!workspaceSummary) {
+    redirect("/home");
+  }
+
+  const activeWorkspaceSummary = workspaceSummary;
+
+  // Visibility repair is a legacy safety net, not page data. Run it after the
+  // response so Home does not perform two writes and a duplicate workspace read
+  // before it can show the user's current snapshot.
+  after(async () => {
+    await repairWorkspaceDataVisibility(activeWorkspaceSummary.id).catch((error) => {
+      console.warn("[home] unable to repair workspace data visibility", {
+        workspaceId: activeWorkspaceSummary.id,
+        error,
+      });
+    });
+  });
+
+  return activeWorkspaceSummary;
+}
+
+async function DashboardStream({
+  user,
+  workspaceSummary,
+  defaultCurrency,
+  selectedCurrency,
+}: {
+  user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
+  workspaceSummary: WorkspaceSummary;
+  defaultCurrency: string;
+  selectedCurrency: string;
+}) {
+  try {
+  const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
+  const shouldShowStarterCard =
+    workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts === 0;
+  const allCurrencies = selectedCurrency === "ALL";
+  const preferredDashboardCurrency = allCurrencies ? defaultCurrency : selectedCurrency;
+
+  const shouldLoadTransactions = workspaceSummary._count.transactions > 0;
+  const now = new Date();
+  const todayStart = toDayStart(now);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const sevenDaysAgo = new Date(todayStart);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const thirtyDaysAgo = new Date(todayStart);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+  const previousThirtyDayStart = new Date(thirtyDaysAgo);
+  previousThirtyDayStart.setDate(previousThirtyDayStart.getDate() - 30);
+  const ninetyDaysAgo = new Date(todayStart);
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+  const recentEntryPromise = shouldLoadTransactions ? prisma.transaction.findFirst({
+    where: buildActiveWorkspaceTransactionWhere(workspaceSummary.id, {
+      createdAt: { gte: sevenDaysAgo },
+      reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
+    }),
+    select: { id: true },
+  }) : Promise.resolve(null);
+  const latestImportPromise = prisma.importFile.findFirst({
+    where: { workspaceId: workspaceSummary.id },
+    orderBy: { uploadedAt: "desc" },
+    select: {
+      id: true,
+      fileName: true,
+      status: true,
+      uploadedAt: true,
+    },
+  });
+
+  const dashboardAccountsPromise =
+    workspaceSummary._count.accounts > 0
+      ? prisma.account.findMany({
+          where: {
+            workspaceId: workspaceSummary.id,
+          },
+          select: {
+            id: true,
+            name: true,
+            institution: true,
+            accountNumber: true,
+            type: true,
+            currency: true,
+            source: true,
+            balance: true,
+            transactions: {
+              // Uploaded accounts already use their persisted/checkpoint
+              // balance below. Only manual accounts need ledger replay here.
+              where: {
+                isExcluded: false,
+                deletedAt: null,
+                account: { OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] },
+              },
+              select: {
+                id: true,
+                amount: true,
+                currency: true,
+                type: true,
+                isExcluded: true,
+                merchantRaw: true,
+                merchantClean: true,
+                description: true,
+                date: true,
+                createdAt: true,
+                rawPayload: true,
+              },
+              orderBy: { date: "desc" },
+            },
+            statementCheckpoints: {
+              select: {
+                endingBalance: true,
+                status: true,
+                statementEndDate: true,
+                createdAt: true,
+                sourceMetadata: true,
+              },
+              orderBy: { createdAt: "desc" },
+              take: 50,
+            },
+          },
+          orderBy: { updatedAt: "desc" },
+        })
+      : Promise.resolve([]);
+
+  const transactionsPromise = shouldLoadTransactions
+    ? prisma.transaction.findMany({
+        where: buildActiveWorkspaceTransactionWhere(workspaceSummary.id, {
+          date: { gte: ninetyDaysAgo, lt: tomorrowStart },
+          reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
+        }),
+        select: {
+          id: true,
+          date: true,
+          amount: true,
+          currency: true,
+          isExcluded: true,
+          reviewStatus: true,
+          parserConfidence: true,
+          categoryConfidence: true,
+          accountMatchConfidence: true,
+          duplicateConfidence: true,
+          categoryId: true,
+          type: true,
+          isTransfer: true,
+          merchantRaw: true,
+          merchantClean: true,
+          rawPayload: true,
+          account: {
+            select: {
+              name: true,
+              currency: true,
+            },
+          },
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: { date: "desc" },
+      })
+    : Promise.resolve([] as DashboardTransaction[]);
+
+  // These reads depend only on the authorized Profile/currency, not the
+  // account totals or FX result. Start them alongside the primary queries.
+  const secondaryData = Promise.all([
+    getPlannedPaymentSuggestions(workspaceSummary.id).catch(() => []),
+    prisma.transaction.count({ where: { AND: [buildReviewQueueWhere(workspaceSummary.id), ...(allCurrencies ? [] : [{ currency: selectedCurrency }])] } }),
+    prisma.financialCommitment.findMany({
+      where: {
+        workspaceId: workspaceSummary.id,
+        status: "active",
+        kind: { in: ["planned_payment", "reminder"] },
+        ...(allCurrencies ? {} : { currency: selectedCurrency }),
+        OR: [
+          { dueDate: { not: null } },
+          { nextDueDate: { not: null } },
+        ],
+      },
+      orderBy: [{ nextDueDate: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        title: true,
+        amount: true,
+        currency: true,
+        dueDate: true,
+        nextDueDate: true,
+        recurrence: true,
+        tracking: true,
+      },
+      take: 30,
+    }).catch(() => []),
+  ]);
+
+  const [
+    recentEntry, latestImport, recentTransactions, dashboardAccounts, bankSnapshots,
+    [allPlannedPaymentSuggestions, outstandingReviewCount, recurringCommitments],
+    hasCommitmentOccurrenceTable,
+  ] = await Promise.all([
+    recentEntryPromise, latestImportPromise,
+    transactionsPromise,
+    dashboardAccountsPromise,
+    finverseBalances(workspaceSummary.id),
+    secondaryData,
+    hasCompatibleTable("FinancialCommitmentOccurrence").catch(() => false),
+  ]);
+
+  const transactionCurrency = (transaction: DashboardTransaction) => formatCurrencyCode(transaction.currency || transaction.account?.currency || defaultCurrency);
+  const allTransactions = (recentTransactions as DashboardTransaction[]).filter(t => allCurrencies || transactionCurrency(t) === selectedCurrency);
+  const reportCurrencies = Array.from(new Set([preferredDashboardCurrency, ...allTransactions.map(transactionCurrency)])).sort();
+  // Advice is scoped to its labeled currency; review previews include every currency.
+  const currentTransactions = allTransactions.filter((transaction) => transactionCurrency(transaction) === preferredDashboardCurrency);
+  const displayCurrency = preferredDashboardCurrency;
+  const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
+  const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
+    `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
+
+  const reconcileAccountBalance = (account: (typeof dashboardAccounts)[number]) => {
+    const latestCheckpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
+    const accountTransactions = account.type === "cash"
+      ? account.transactions.filter(
+          (transaction) => formatCurrencyCode(transaction.currency) === formatCurrencyCode(account.currency)
+        )
+      : account.transactions;
+    const fallbackBalance = (account.source === "manual" || account.source === "adviser_manual" || account.type === "cash")
+      ? deriveReconciledBalance({
+                accountType: account.type,
+          balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
+          transactions: accountTransactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
+          checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+          treatStoredBalanceAsOpening: ["manual", "adviser_manual"].includes(account.source),
+        })
+      : account.balance;
+    const reconciledBalance = bankSnapshots.get(account.id)?.bankBalance ?? resolveEffectiveAccountBalance({
+      cashBalanceProjected: account.type === "cash",      accountType: account.type,
+      liveBalance: fallbackBalance,
+      checkpointStatus: latestCheckpoint?.status ?? null,
+      checkpointBalance: latestCheckpoint?.endingBalance ?? null,
+    });
+
+    return String(reconciledBalance ?? account.balance ?? 0);
+  };
+
+  const spendableAccounts = dashboardAccounts.filter((account) =>
+    isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0]) && (allCurrencies || formatCurrencyCode(account.currency) === selectedCurrency)
+  );
+  const balanceCurrency = preferredDashboardCurrency;
+  const spendableCurrencies = Array.from(
+    new Set(spendableAccounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))
+  );
+  const balanceRateEntries = await Promise.all(
+    Array.from(new Set([...spendableCurrencies, ...reportCurrencies])).map(async (currency) => [currency, await loadDashboardExchangeRate(currency, balanceCurrency)] as const)
+  );
+  const balanceRates = Object.fromEntries(balanceRateEntries);
+  const balanceEstimateUnavailable = spendableCurrencies.some(currency => balanceRates[currency] === null);
+  const BalanceDecimal = Prisma.Decimal.clone({ precision: 40 });
+  const savingsTotal = spendableAccounts.reduce((sum, account) => {
+    const signedBalance = new BalanceDecimal(reconcileAccountBalance(account));
+    const rate = balanceRates[formatCurrencyCode(account.currency)];
+    if (rate === null || rate === undefined) return sum;
+    return sum.plus(BalanceDecimal.max(signedBalance, 0).times(String(rate)));
+  }, new BalanceDecimal(0));
+  const currentThirtyDayTransactions = currentTransactions.filter(
+    (transaction) => transaction.date >= thirtyDaysAgo && transaction.date < tomorrowStart
+  );
+  const currentSevenDayTransactions = currentTransactions.filter(
+    (transaction) => transaction.date >= sevenDaysAgo && transaction.date < tomorrowStart
+  );
+  const previousSevenDaysAgo = new Date(sevenDaysAgo);
+  previousSevenDaysAgo.setDate(previousSevenDaysAgo.getDate() - 7);
+  const previousSevenDayTransactions = currentTransactions.filter(
+    (transaction) => transaction.date >= previousSevenDaysAgo && transaction.date < sevenDaysAgo
+  );
+  const previousTransactionsWindow = currentTransactions.filter(
+    (transaction) => transaction.date >= previousThirtyDayStart && transaction.date < thirtyDaysAgo
+  );
+  const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
+  const weeklySummary = comparePeriods(currentSevenDayTransactions, previousSevenDayTransactions);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const currentMonthTransactions = currentTransactions.filter(
+    (transaction) => transaction.date >= monthStart && transaction.date < tomorrowStart
+  );
+  const monthSummary = summarizeWindow(currentMonthTransactions, "This month");
+  const currentSavingsRate = currentSummary.current.income > 0 ? currentSummary.net / currentSummary.current.income : null;
+  const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
+  const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
+  const reviewAttentionTransactions: HomeReviewTransaction[] = allTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo && transaction.date < tomorrowStart).flatMap((transaction) => {
+    const reviewReasons = getDashboardTransactionReviewReasons(transaction);
+    if (reviewReasons.length === 0) return [];
+    return [{
+      id: transaction.id,
+      title: transaction.merchantClean?.trim() || transaction.merchantRaw?.trim() || "Imported transaction",
+      date: transaction.date.toISOString(),
+      amount: String(transaction.amount),
+      currency: transactionCurrency(transaction),
+      type: transaction.type,
+      accountName: transaction.account?.name ?? "Account",
+      categoryName: transaction.category?.name ?? null,
+      reviewReasons,
+    }];
+  });
+  const reviewAttentionCount = reviewAttentionTransactions.length;
+  const daysSinceLastImport = latestImport
+    ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
+    : null;
+  const categorySpikeThreshold = Math.max(500, currentSummary.current.expense * 0.08);
+  const categorySpike =
+    currentSummary.biggestMover &&
+    currentSummary.biggestMover.delta >= categorySpikeThreshold &&
+    (currentSummary.biggestMover.previousAmount === 0 || currentSummary.biggestMover.percentage >= 25)
+      ? currentSummary.biggestMover
+      : null;
+  const nextSevenDays = new Date(now);
+  nextSevenDays.setDate(nextSevenDays.getDate() + 7);
+  const plannedPaymentSuggestions = allPlannedPaymentSuggestions.filter(s => allCurrencies || s.currency === selectedCurrency);
+  const plannedPaymentsDueSoon = plannedPaymentSuggestions.filter(
+    (suggestion) => suggestion.dueDate && new Date(suggestion.dueDate) <= nextSevenDays
+  );
+  const recurringSuggestions = plannedPaymentSuggestions.filter(
+    (suggestion) => suggestion.sourceKind === "recurring_transaction" || suggestion.sourceKind === "installment"
+  );
+  const recurringSuggestionCount = recurringSuggestions.length;
+  const statementReminderCount = plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "statement_reminder").length;
+  const recurringPaymentOccurrences = recurringCommitments
+    .map((commitment) => ({
+      commitment,
+      dueDate: resolveRelevantCommitmentDueDate({
+        dueDate: commitment.dueDate,
+        nextDueDate: commitment.nextDueDate,
+        recurrence: commitment.recurrence,
+        now,
+      }),
+    }))
+    .filter((entry): entry is typeof entry & { dueDate: Date } => Boolean(entry.dueDate))
+    .filter(({ commitment, dueDate }) => isWithinRecurringTerm({ recurrence: commitment.recurrence, tracking: parseRecurringTracking(commitment.tracking) }, dueDate, commitment.dueDate ?? commitment.nextDueDate ?? dueDate))
+    .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime())
+    .slice(0, 4);
+  const completedOccurrences = hasCommitmentOccurrenceTable && recurringPaymentOccurrences.length > 0
+    ? await prisma.financialCommitmentOccurrence.findMany({
+        where: {
+          workspaceId: workspaceSummary.id,
+          OR: recurringPaymentOccurrences.map((entry) => ({
+            commitmentId: entry.commitment.id,
+            dueDate: entry.dueDate,
+          })),
+        },
+        select: { commitmentId: true, dueDate: true },
+      }).catch(() => [])
+    : [];
+  const completedOccurrenceKeys = new Set(
+    completedOccurrences.map((occurrence) => `${occurrence.commitmentId}:${toCommitmentOccurrenceKey(occurrence.dueDate)}`)
+  );
+  const formatPaymentDate = (value: Date) => value.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    ...(value.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
+    timeZone: "UTC",
+  });
+  const homeRecurringPayments: HomeRecurringPaymentItem[] = recurringPaymentOccurrences.map(({ commitment, dueDate }) => {
+    const occurrenceKey = toCommitmentOccurrenceKey(dueDate);
+    const amountLabel = commitment.amount !== null
+      ? formatCurrencyAmount(Number(commitment.amount), commitment.currency)
+      : null;
+    return {
+      id: commitment.id,
+      title: commitment.title,
+      detail: formatPaymentDate(dueDate),
+      amountLabel,
+      currency: commitment.currency,
+      dueDate: occurrenceKey,
+      completed: completedOccurrenceKeys.has(`${commitment.id}:${occurrenceKey}`),
+    };
+  });
+  const homeRecurringSuggestions: HomeRecurringSuggestionItem[] = recurringSuggestions
+    .slice()
+    .sort((left, right) => {
+      if (!left.dueDate) return 1;
+      if (!right.dueDate) return -1;
+      return new Date(left.dueDate).getTime() - new Date(right.dueDate).getTime();
+    })
+    .slice(0, 4)
+    .map((suggestion) => ({
+      id: suggestion.id,
+      title: suggestion.title,
+      detail: [
+        suggestion.dueDate ? formatPaymentDate(new Date(suggestion.dueDate)) : "Date to confirm",
+      ].filter(Boolean).join(" · "),
+      amountLabel: suggestion.amount != null ? formatCurrencyAmount(Number(suggestion.amount), suggestion.currency) : null,
+      currency: suggestion.currency,
+    }));
+  const insightItems = buildHomeAdviserInsights({
+    currency: displayCurrency,
+    hasRecentTransactionActivity: Boolean(recentEntry) || currentSevenDayTransactions.length > 0,
+    categorySpike: categorySpike ?? null,
+    paymentTitles: plannedPaymentsDueSoon.map((payment) => payment.title),
+    recurringCount: recurringSuggestionCount,
+    weekly: weeklySummary.current,
+    previousWeeklyExpense: weeklySummary.previous.expense,
+    monthNet: monthSummary.net,
+    hasRecentTransactions: currentSevenDayTransactions.length > 0,
+    recentReviewCount: reviewAttentionCount,
+  });
+  const homeReminder = insightItems.find(item => item.kind === "reminder");
+  const homeInsights = insightItems.filter(item => item.kind !== "reminder");
+  const totalBalanceLabel = balanceEstimateUnavailable
+    ? "—"
+    : formatCurrencyAmount(savingsTotal.toFixed(2), balanceCurrency);
+  const currencyReports = reportCurrencies.map((currency) => {
+    const transactions = allTransactions.filter((transaction) => transactionCurrency(transaction) === currency);
+    const inWindow = (start: Date, end: Date) => transactions.filter((transaction) => transaction.date >= start && transaction.date < end);
+    const month = summarizeWindow(inWindow(monthStart, tomorrowStart), "This month");
+    const previousMonth = summarizeWindow(inWindow(previousMonthStart, monthStart), "Previous month");
+    return {
+      currency, month, previousMonth,
+      periods: [
+        { title: "Weekly Report", label: "Weekly report", days: 7, start: sevenDaysAgo },
+        { title: "Monthly Report", label: "Monthly report", days: 30, start: thirtyDaysAgo },
+      ].map((period) => ({ ...period,
+        summary: summarizeWindow(inWindow(period.start, tomorrowStart), period.title),
+        flow: buildDailyFlow(inWindow(period.start, tomorrowStart), period.start, period.days, period.days === 7 ? { weekday: "short" } : { day: "numeric" }),
+      })),
+    };
+  });
+  const balanceHighlights = (["income", "expense"] as const).map((kind) => {
+    const current = convertHomeTotal(currencyReports.map(report => ({ currency: report.currency, amount: report.month[kind] })), balanceRates);
+    const previous = convertHomeTotal(currencyReports.map(report => ({ currency: report.currency, amount: report.previousMonth[kind] })), balanceRates);
+    return {
+      key: kind,
+      isExpense: kind === "expense",
+      currency: balanceCurrency,
+      label: kind === "income" ? "Monthly Income" : "Monthly Expenses",
+      value: current === null ? "—" : formatCurrencyAmount(current, balanceCurrency),
+      unavailable: current === null,
+      comparisonUnavailable: current === null || previous === null,
+      trend: current === null || previous === null ? null : getHomePeriodChange(Number(current), Number(previous), balanceCurrency),
+    };
+  });
+  return (
+    <>
+      <PostHogPersonProperties
+        distinctId={user.clerkUserId}
+        properties={{
+          workspace_name: workspaceSummary.name,
+          account_count: workspaceSummary._count.accounts,
+          cash_account_count: cashAccountCount,
+          tracked_balance_total: balanceEstimateUnavailable ? null : Number(savingsTotal.toFixed(2)),
+          tracked_balance_currency: balanceCurrency,
+          transaction_count: workspaceSummary._count.transactions,
+          import_count: workspaceSummary._count.importFiles,
+          review_attention_count: reviewAttentionCount,
+          financial_experience: user.financialExperience,
+          last_import_at: latestImport?.uploadedAt.toISOString() ?? null,
+          days_since_last_import: daysSinceLastImport,
+        }}
+      />
+      <PostHogEvent
+        event="dashboard_viewed"
+        onceKey={analyticsOnceKey("dashboard_viewed", "session")}
+        properties={{
+          workspace_name: workspaceSummary.name,
+          account_count: workspaceSummary._count.accounts,
+          transaction_count: workspaceSummary._count.transactions,
+          import_count: workspaceSummary._count.importFiles,
+        }}
+      />
+      <section className="dashboard-home dashboard-home--figma">
+        <FirstUseActivation key={workspaceSummary.id} workspaceId={workspaceSummary.id} />
+        <article
+          className="dashboard-home__hero dashboard-home__hero--fresh dashboard-home__hero--balance glass"
+          style={{ background: "linear-gradient(90deg, #03A8C0 0%, #34D3D0 100%)" }}
+        >
+          <div className={`dashboard-home__hero-main${totalBalanceLabel.length > 18 ? " dashboard-home__hero-main--large-balance" : ""}`}>
+            <div className="dashboard-home__balance-heading">
+              <p className="eyebrow">My Balance</p>
+              <BalanceVisibilityToggle />
+            </div>
+            <strong>
+              {balanceEstimateUnavailable
+                ? totalBalanceLabel
+                : <HomeSensitiveAmount value={totalBalanceLabel} currency={balanceCurrency} />}
+            </strong>
+          </div>
+          <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
+            {balanceHighlights.map((pill) => (
+              <div key={pill.key} className={`dashboard-home__hero-mini-pill dashboard-home__hero-mini-pill--${pill.isExpense ? "expense" : "income"}`}>
+                <span className="dashboard-home__hero-mini-label" title={allCurrencies ? `All currencies converted to ${balanceCurrency}` : `${balanceCurrency} only`}>{pill.label}</span>
+                <div className="dashboard-home__hero-mini-row">
+                  <strong className="dashboard-home__hero-mini-value">
+                    {pill.unavailable ? "—" : <HomeSensitiveAmount value={pill.value} currency={pill.currency} />}
+                  </strong>
+                  {pill.trend ? (
+                    <span
+                      className={`dashboard-home__hero-mini-trend${pill.trend.direction === 0 ? "" : (pill.isExpense ? pill.trend.direction < 0 : pill.trend.direction > 0) ? " positive" : " negative"}`}
+                      title="Compared with last month"
+                    >
+                      {pill.trend.amountBased
+                        ? "—"
+                        : pill.trend.label === "0%" ? "0%" : `${pill.trend.direction > 0 ? "↑" : "↓"} ${pill.trend.label.replace(/^[+-]/, "")}`}
+                    </span>
+                  ) : <span className="dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable">{pill.comparisonUnavailable ? "Rate unavailable" : "No prior month"}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <HomeFeatureGrid />
+
+        <article className="dashboard-home__insight-strip glass" aria-label="Home Ask Clover">
+          <p className="eyebrow">Ask Clover</p>
+          {homeInsights.length > 0 ? (
+            <div className="dashboard-home__insight-strip-list" role="region" aria-label="Ask Clover suggestions" tabIndex={0}>
+              {homeInsights.map((item) => (
+                <div key={item.label} className={`dashboard-home__insight-strip-item${item.tone ? ` dashboard-home__insight-strip-item--${item.tone}` : ""}`}>
+                  <div className="dashboard-home__insight-strip-label">
+                    <span className="dashboard-home__insight-strip-emoji" aria-hidden="true">{item.emoji}</span>
+                    <span>{item.label}</span>
+                  </div>
+                  <span className="dashboard-home__insight-strip-copy">{item.parts.map((part, index) => typeof part === "string" ? part : <HomeSensitiveAmount key={index} value={formatCurrency(part.amount)} currency={part.currency} />)}</span>
+                  {item.href && item.actionLabel ? (
+                    <Link className="dashboard-home__insight-strip-action" href={item.href}>
+                      {item.actionLabel}
+                    </Link>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="dashboard-home__insight-strip-empty">
+              <span className="dashboard-home__insight-strip-emoji" aria-hidden="true">✨</span>
+              <span>No new suggestions right now. Clover will surface helpful next steps here.</span>
+            </div>
+          )}
+          {homeInsights.length > 1 ? <small className="dashboard-home__insight-swipe-hint">Swipe left or right for more advice</small> : null}
+          {homeReminder ? <div className="dashboard-home__activity-reminder">
+            <strong>{homeReminder.emoji} {homeReminder.label}</strong>
+            <span>{homeReminder.parts.join("")}</span>
+            <HomeAddTransactionLink />
+          </div> : null}
+        </article>
+
+        <HomeNextSteps
+          transactionCount={outstandingReviewCount}
+          recurringCount={recurringSuggestionCount}
+          statementCount={statementReminderCount}
+        />
+
+        <div className="dashboard-home__snapshot-grid" aria-label="Week and month snapshot">
+          {currencyReports.flatMap(({currency, periods}) => periods.map(({title, label, days, summary, flow}) => (
+            <article key={`${currency}-${days}`} data-report-currency={currency} className={`dashboard-home__report-card dashboard-home__report-card--${summary.net >= 0 ? "positive" : "warning"} glass`}>
+              <div className="dashboard-home__report-card-head"><div>
+                <p className="eyebrow">{title}</p>
+                {reportCurrencies.length > 1 ? <p>{currency}</p> : null}
+                <h4><HomeSensitiveAmount value={formatCurrency(summary.expense, currency)} currency={currency} /></h4>
+                <p className="dashboard-home__report-note">Recorded spending in the past {days} days</p>
+              </div></div>
+              <div className="dashboard-home__report-metrics" aria-label={`${label} metrics`}>
+                <span><small>Income</small><strong className="dashboard-home__report-metric-value--income"><HomeSensitiveAmount value={formatCurrency(summary.income, currency)} currency={currency} /></strong></span>
+                <span><small>Expenses</small><strong className="dashboard-home__report-metric-value--expense"><HomeSensitiveAmount value={formatCurrency(summary.expense, currency)} currency={currency} /></strong></span>
+                <span><small>Net Cash Flow</small><strong className={summary.net >= 0 ? "dashboard-home__report-metric-value--income" : "dashboard-home__report-metric-value--expense"}><HomeSensitiveAmount value={formatSignedCurrency(summary.net, currency)} currency={currency} /></strong></span>
+              </div>
+              <DailyFlowChart days={flow} label={label} currency={currency} />
+              <Link className="dashboard-home__report-link" href="/reports?section=trends">View report</Link>
+            </article>
+          )))}
+        </div>
+
+        <HomePendingSplitBills key={`split-bills-${workspaceSummary.id}`} />
+
+        <DashboardBudgetPulse currency={selectedCurrency} key={workspaceSummary.id} workspaceId={workspaceSummary.id} refreshKey={now.toISOString()} />
+
+        <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
+          <HomeRecurringPaymentsCard
+            payments={homeRecurringPayments}
+            suggestions={homeRecurringSuggestions}
+          />
+          {shouldShowStarterCard ? (
+            <div className="dashboard-home__starter-card">
+              <p className="eyebrow">Get started</p>
+              <strong>Upload files to unlock your dashboard.</strong>
+              <p>Bring in a statement and Clover will populate balance, movement, and recurring patterns in one place.</p>
+              <div className="dashboard-home__starter-actions">
+                <DashboardImportTrigger className="button button-primary button-small">
+                  Upload files
+                </DashboardImportTrigger>
+                <Link className="button button-secondary button-small" href="/accounts">
+                  Add an account
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="dashboard-home__goal-card dashboard-home__review-card">
+              <div className="dashboard-home__goal-card-head">
+                <p className="eyebrow">Things to review</p>
+              </div>
+              <div className="home-review-summary">
+                <div className="home-review-summary__row">
+                  <span className={`dashboard-home__status-check${outstandingReviewCount > 0 ? " dashboard-home__status-check--attention" : ""}`} aria-hidden="true">{outstandingReviewCount > 0 ? "!" : "✓"}</span>
+                  <strong>Transactions</strong>
+                  <small>{outstandingReviewCount > 0 ? `${outstandingReviewCount} items need confirmation` : "No transactions need review"}</small>
+                  <Link href="/review" aria-label="Review transactions">Review</Link>
+                </div>
+                <div className="home-review-summary__row">
+                  <span aria-hidden="true" />
+                  <strong>Recurring</strong>
+                  <small>{recurringSuggestionCount > 0 ? `${recurringSuggestionCount} suggestions to review` : "No new suggestions"}</small>
+                  <Link href="/recurring?tab=planned" aria-label="Review recurring suggestions">Review</Link>
+                </div>
+                <div className="home-review-summary__row">
+                  <span aria-hidden="true" />
+                  <strong>Statements</strong>
+                  <small>{statementReminderCount > 0
+                    ? `${statementReminderCount} payment reminders to review`
+                    : "No payment reminders to review"}</small>
+                  <Link href="/recurring?tab=planned" aria-label="Review statement payment reminders">Review</Link>
+                </div>
+              </div>
+              {reviewAttentionCount > 0 ? (
+                <details className="home-review-summary__preview">
+                  <summary>Review recent transaction details</summary>
+                  <HomeTransactionReviewLauncher transactions={reviewAttentionTransactions.slice(0, 3)} />
+                </details>
+              ) : null}
+            </div>
+          )}
+        </div>
+
+      </section>
+    </>
+  );
+  } catch (error) {
+    if (isNextNavigationSignal(error)) {
+      throw error;
+    }
+
+    if (isAdminOnlyDataError(error)) {
+      redirect("/admin");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      redirect("/sign-in");
+    }
+
+    await recordServerPageError({
+      error,
+      source: "dashboard-stream",
+      route: "/home",
+      userId: user.id,
+      clerkUserId: user.clerkUserId,
+      workspaceId: workspaceSummary.id,
+      metadata: {
+        transient: isTransientDataError(error),
+      },
+    });
+    return <DashboardUnavailableContent />;
+  }
+}
+
+async function DashboardPageStream(currency?: string) {
+  try {
+    const session = await getPageSessionContext();
+    const user = await getOrCreateCurrentUser(session.userId);
+    if (!session.isGuest && !hasCompletedOnboarding(user)) {
+      redirect("/onboarding");
+    }
+    const workspaceSummary = await resolveDashboardWorkspaceSummary(user);
+    const cookieStore = await cookies();
+    const defaultCurrency = normalizeDefaultCurrency(cookieStore.get(defaultCurrencyCookieKey)?.value);
+
+    const selectedCurrency = homeCurrencyScope(currency, defaultCurrency).selected;
+    const currencyOptions = [...new Set([defaultCurrency, ...workspaceSummary.accounts.map(a => a.currency)])];
+    return (
+      <CloverShell
+        active="dashboard"
+        title="Home"
+        workspaceId={workspaceSummary.id}
+        desktopTitleAction={<AdviserHeaderLink />}
+        mobileLeadingAction={<HomeCurrencySelector value={selectedCurrency} options={currencyOptions} mobile />}
+        actions={(
+        <div className="home-top-actions"><HomeCurrencySelector value={selectedCurrency} options={currencyOptions} />
+        <DashboardTopActionsLazy
+          workspaceId={workspaceSummary.id}
+          accounts={workspaceSummary.accounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            institution: account.institution,
+            type: account.type,
+            currency: account.currency,
+            transactionCount: account._count?.transactions ?? 0,
+          }))}
+        /></div>
+      )}
+      >
+        <DashboardStream
+          user={user}
+          workspaceSummary={workspaceSummary}
+          defaultCurrency={defaultCurrency}
+          selectedCurrency={selectedCurrency}
+        />
+    </CloverShell>
+    );
+  } catch (error) {
+    if (isNextNavigationSignal(error)) {
+      throw error;
+    }
+
+    await recordServerPageError({
+      error,
+      source: "dashboard-page",
+      route: "/home",
+      metadata: {
+        transient: isTransientDataError(error),
+      },
+    });
+    return <DashboardUnavailableState />;
+  }
+}
+
+export async function DashboardPageContent(currency?: string) {
+  return DashboardPageStream(currency);
+}

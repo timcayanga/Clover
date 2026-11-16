@@ -1,0 +1,223 @@
+import { splitBillReadErrorCode } from "../../shared/split-bill-read";
+import { suggestBillCategory } from "../../shared/split-bill-experience";
+import { transactionMerchantLogo } from "./transaction-merchant-logo";
+import type { MerchantIdentityInput } from "./logo-identity-types";
+import { parseAddFormDraft } from "../../shared/add-form-draft";
+import { resolveImportModalStatusDecision } from "./import-modal-status";
+import { parseAdviserChart } from "../../shared/adviser-chart";
+import { parseReceiptLineItemsFromPayload } from "./receipt-line-items";
+import { entryDraftSchema } from "./adviser-entry-schema";
+import { projectAdviserDeviceContext } from "./adviser-device-context";
+import { getTransactionReviewReasons } from "./transaction-review-reasons";
+import { getRecordedTransactionConfidence } from "./transaction-confidence";
+import { getTransactionUserNoteValue, getTransactionParsedNoteValue } from "./transaction-notes";
+
+const record = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+const pick = (value: unknown, fields: string[]) => {
+  const data = record(value);
+  return Object.fromEntries(
+    fields
+      .filter((field) => field in data)
+      .map((field) => [field, data[field]]),
+  );
+};
+const lastFour = (value: unknown) => {
+  const number = record(value).accountNumber;
+  const digits = typeof number === "string" ? number.replace(/\D/g, "") : "";
+  return digits.length >= 4 ? { lastFour: digits.slice(-4) } : {};
+};
+const transactionFields = [
+  "importFileId",
+  "createdAt",
+  "updatedAt",
+  "id",
+  "workspaceId",
+  "accountId",
+  "accountName",
+  "accountType",
+  "brandLogoUrl",
+  "categoryName",
+  "categoryId",
+  "institution",
+  "isExcluded",
+  "reviewStatus",
+  "date",
+  "amount",
+  "currency",
+  "type",
+  "merchantRaw",
+  "merchantClean",
+  "description",
+  "tags",
+];
+const transactionReview = (value: unknown) => {
+  const row = record(value);
+  // Project only actionable review labels; source payloads stay on the server.
+  return { ...transactionMerchantLogo(row as MerchantIdentityInput), reviewReasons: getTransactionReviewReasons(row), confidenceScore: getRecordedTransactionConfidence(row) };
+};
+const rows = (value: unknown, fields: string[]) => Array.isArray(value) ? value.map(row => pick(row, fields)) : [];
+const circleSummary = (value: unknown) => {
+  const circle = record(value);
+  return {
+    ...pick(circle, ["id", "name", "type", "description", "color", "avatarUrl", "currency", "role", "isOwner", "memberCount", "pendingCount", "expenseTotalThisMonth", "contributionTotalThisMonth", "detailsLoaded", "splitBillGroupId", "expenseCurrencyTotals", "contributionCurrencyTotals"]),
+    members: rows(circle.members, ["id", "displayName", "avatarUrl", "isMe", "role", "status", "isOwner", "contributionTarget", "contributionCadence", "contributedThisMonth"]),
+    budgets: rows(circle.budgets, ["id", "name", "targetAmount", "spentAmount", "currency", "cadence", "startsAt", "endsAt", "progressPercent", "isActive"]),
+    goals: rows(circle.goals, ["id", "name", "targetAmount", "currentAmount", "currency", "targetDate", "progressPercent", "status", "estimateConfidence", "estimateReason", "estimatedCompletionDate"]),
+    commitments: rows(circle.commitments, ["id", "title", "amount", "currency", "recurrence", "nextDueDate", "assignedMemberId", "assignedMemberIds", "assignedMemberName", "notes", "isActive"]),
+    contributions: rows(circle.contributions, ["id", "memberId", "memberName", "goalId", "amount", "currency", "contributionDate", "destinationLabel", "note"]),
+    expenses: rows(circle.expenses, ["id", "kind", "title", "amount", "currency", "date", "visibility", "transactionId", "categoryName", "lineItems", "splitItems", "canEditSplit", "canUnshare"]),
+    investmentShares: rows(circle.investmentShares, ["id", "name", "institution", "balance", "currency", "visibility"]),
+    activities: rows(circle.activities, ["id", "action", "summary", "createdAt"]),
+    insights: rows(circle.insights, ["id", "title", "detail", "confidence", "reason"]),
+  };
+};
+const splitSummary = (value: unknown) => pick(value, ["id", "title", "note", "billDate", "currency", "sourceType", "total", "settlementStatus", "resolved"]);
+const splitDetail = (value: unknown) => {
+  const bill = record(value), settlement = record(bill.settlement);
+  return { ...splitSummary(bill),
+    group: bill.group ? pick(bill.group, ["id", "name"]) : null,
+    categoryName: typeof record(record(bill.transaction).category).name === "string" ? record(record(bill.transaction).category).name : suggestBillCategory(String(bill.title??""))?.name ?? null,
+    payments: rows(bill.payments, ["id", "participantId", "amount", "note"]),
+    transferSettlements: rows(bill.transferSettlements,["id","fromParticipantId","toParticipantId","fromParticipantName","toParticipantName","amount","createdAt"]),
+    participants: rows(bill.participants, ["id", "name"]),
+    items: rows(bill.items, ["id", "description", "amount", "participantIds", "splitMethod", "allocations"]),
+    settlement: {
+      ...pick(settlement, ["totalSpent", "totalPaid", "totalOwed"]),
+      participants: rows(settlement.participants, ["id", "name", "paid", "owed", "balance"]),
+      transfers: rows(settlement.transfers, ["fromParticipantId", "toParticipantId", "fromParticipantName", "toParticipantName", "amount"]),
+    },
+  };
+};
+export function mobileApiResponse(operation: string, value: unknown) {
+  const data = record(value);
+  if (operation === "import-process" && !data.error) return { ...pick(data, ["ok", "status", "queued", "duplicate", "canonicalImportFileId", "confirmedTransactionsCount", "visibleImportComplete"]) };
+  if (data.error) {
+    const code = operation === "split-bills" ? splitBillReadErrorCode(data.code) : undefined;
+    return { ...pick(data, ["error"]), ...(code ? { code } : {}) };
+  }
+  if (operation === "activation") return { activation: data.activation };
+  if (operation === "split-group-create" || operation === "split-group-edit") return {group:pick(data.group,["id","name"]),...pick(data,["ok"])};
+  if (operation === "preview") return pick(data,["settlement"]);
+  if (operation === "split-receipt-preview") return { receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "items"]) };
+  if (operation === "adviser-chat") return {
+    ...pick(data, ["reply", "degraded", "scopeRejected", "answerSource"]),
+    ...(parseAdviserChart(data.visualization) ? {visualization:parseAdviserChart(data.visualization)} : {}),
+    ...(projectAdviserDeviceContext(data.deviceContext) ? { deviceContext: projectAdviserDeviceContext(data.deviceContext) } : {}),
+    formDraft: Array.isArray(data.actions) ? data.actions.filter(action=>record(action).type==="prepare_form").map(action=>parseAddFormDraft(record(action).payload)).find(Boolean) : undefined,
+    entryDraft: Array.isArray(data.actions) ? data.actions.filter(action => record(action).type === "create_entries").map(action => entryDraftSchema.safeParse(record(action).payload)).find(result => result.success)?.data : undefined,
+    suggestions: rows(data.suggestions, ["id", "label", "prompt"]),
+    ...(data.grounding ? { grounding: pick(data.grounding, ["transactionCount", "historyThrough"]) } : {}),
+    usage: pick(data.usage, ["plan", "remaining", "resetsAt", "unlimited"]),
+    // Native action confirmation is not implemented yet; never execute or expose
+    // model-generated action payloads as if they were saved financial records.
+    hasActions: Array.isArray(data.actions) && data.actions.some(action => record(action).type !== "create_entries"),
+  };
+  if (operation === "circles" || operation === "circle") {
+    if (data.circleId) return pick(data, ["circleId"]);
+    if (data.circle) return { circleId: record(data.circle).id };
+    const circles = Array.isArray(data.circles) ? data.circles.map(circleSummary) : [];
+    return operation === "circles" ? { circles } : { circle: circles[0] ?? null };
+  }
+  if (operation === "split-bills" && data.pending) return { pending: { ...pick(data.pending, ["count"]), bills: rows(record(data.pending).bills, ["id", "title", "currency", "remaining"]) } };
+  if (operation === "split-bills" && data.summary) return { summary: pick(data.summary, ["youOwe", "owedToYou"]) };
+  if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore"]), bills: Array.isArray(data.bills) ? data.bills.map(splitDetail) : [] };
+  if (operation === "split-bill" || operation === "transfer-settlements" || operation === "resolution") return data.bill ? { bill: splitDetail(data.bill) } : pick(data,["deleted","ok"]);
+  if (operation === "payment-profile-delete") return pick(data,["deleted","ok"]);
+  if (operation === "payment-requests") return { ...pick(data,["shareUrl"]), request: pick(data.request,["id","amount","currency","billAmount","billCurrency","status","shareUrl"]), requests: rows(data.requests,["id","amount","currency","status","shareUrl","recipientName","note"]) };
+  if (operation === "budgets" || operation === "budget") return {
+    budget: pick(data.budget, ["id"]),
+    ...(data.history ? { history: pick(data.history, ["points", "recentTransactions"]) } : {}),
+  };
+  if (operation.startsWith("recurring-")) return { ...pick(data, ["ok", "completed", "completedAt"]), ...(data.commitment ? { commitment: pick(data.commitment, ["id"]) } : {}) };
+  if (operation === "account") return { account: { ...pick(data.account, ["id", "name", "institution", "type", "currency", "balance", "displayBalance", "brandLogoUrl", "brandPalette", "source", "favorite", "creditLimit", "creditPeriodStart", "creditPeriodEnd", "investmentSubtype", "investmentSymbol", "investmentQuantity", "investmentCostBasis", "investmentPrincipal", "investmentStartDate", "investmentMaturityDate", "investmentInterestRate", "investmentMaturityValue", "transactionCount"]), ...lastFour(data.account), ...(Array.isArray(record(data.account).cardNumberHistory) ? {cardNumberHistory: rows(record(data.account).cardNumberHistory, ["previousLastFour", "newLastFour", "effectiveDate", "reason", "confirmedAt"])} : {}) }, ...pick(data, ["deletedTransactions"]) };
+  if (operation === "account-create") return { account: pick(data.account, ["id", "name", "institution", "type", "currency", "balance"]) };
+  if (operation === "transaction-create") return { transaction: pick(data.transaction, ["id"]) };
+  if (operation === "transactions")
+    return {
+      ...pick(data, ["page", "totalCount", "totalCountIsExact", "hasMore"]),
+      ...(data.summary ? { summary: pick(data.summary,["currencyTotals"]) } : {}),
+      transactions: Array.isArray(data.transactions)
+        ? data.transactions.map((row) => ({ ...pick(row, transactionFields), ...lastFour(row), ...transactionReview(row) }))
+        : [],
+    };
+  if (operation === "transaction") {
+    const row = record(data.transaction);
+    return {
+      transaction: { ...pick(row, transactionFields), sourceMatches: row.sourceMatches, ...transactionReview(row), splitBill: row.splitBill ? pick(row.splitBill, ["id", "title"]) : null, receiptLineItems: parseReceiptLineItemsFromPayload(row.rawPayload,row.normalizedPayload), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
+      accounts: Array.isArray(data.accounts) ? data.accounts.map(row => pick(row, ["id", "name", "institution", "currency", "type"])) : [],
+      categories: Array.isArray(data.categories) ? data.categories.map(row => pick(row, ["id", "name", "type"])) : [],
+    };
+  }
+  if (operation === "accounts")
+    return {
+      accounts: Array.isArray(data.accounts)
+        ? data.accounts.map((row) =>
+            ({ ...pick(row, [
+              "id",
+              "name",
+              "type",
+              "institution",
+              "currency",
+              "balance",
+              "displayBalance", "brandLogoUrl", "brandPalette",
+              "investmentSubtype", "investmentSymbol", "investmentQuantity", "investmentCostBasis",
+            ]), ...lastFour(row) }),
+          )
+        : [],
+    };
+  if (operation === "imports")
+    return {
+      importFiles: Array.isArray(data.importFiles)
+        ? data.importFiles.map((row) =>
+            pick(row, [
+              "id",
+              "fileName",
+              "status",
+              "createdAt",
+              "processingMessage",
+            ]),
+          )
+        : [],
+    };
+  if (operation === "import-status") {
+    const receipt = record(data.receiptTransaction);
+    return {
+      ...(typeof receipt.id === "string" ? {
+        receiptTransaction: {
+          ...pick(receipt, transactionFields), ...lastFour(receipt),
+          ...transactionMerchantLogo(receipt as MerchantIdentityInput, { storedOnly: true }),
+          reviewReasons: getTransactionReviewReasons(receipt),
+          confidenceScore: getRecordedTransactionConfidence(receipt),
+        },
+      } : {}),
+      ...pick(data,["nativeUploadReceived","nativeUploadFinalizing","canResume","pdfVisibilityTarget","commitAgeMs"]),
+      statementSelfHeal: pick(data.statementSelfHeal, ["reason"]),
+      receiptTransactionId: record(data.receiptTransaction).id ?? null,
+      progress:resolveImportModalStatusDecision({importMode:"statement",...record(data.importFile),...pick(data,["visibleImportComplete","confirmedTransactionsCount","parsedRowsCount"])}).progress,
+      importFile: pick(data.importFile, [
+        "id",
+        "fileName",
+        "status",
+        "processingMessage",
+        "processingPhase",
+      ]),
+      ...pick(data, [
+        "visibleImportComplete",
+        "settledImportComplete",
+        "confirmedTransactionsCount",
+        "parsedRowsCount",
+      ]),
+    };
+  }
+  return pick(data, [
+    "status",
+    "importFileId",
+    "queued",
+    "processed",
+    "visibleImportComplete",
+    "confirmedTransactionsCount",
+  ]);
+}

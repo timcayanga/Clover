@@ -1,0 +1,22 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { View } from "react-native";
+import AddTransaction from "./(tabs)/add";
+
+
+export default function AddTransactionSheet() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      accessibilityViewIsModal
+      style={{
+        flex: 1,
+        paddingTop: insets.top,
+        paddingLeft: insets.left,
+        paddingRight: insets.right,
+      }}
+    >
+      <AddTransaction sheet />
+
+    </View>
+  );
+}

@@ -1,0 +1,13 @@
+Details of Your POSB Payroll Account
+Account No.: 001-23456-7
+As at 29 FEB 2024
+WITHDRAWAL($) DEPOSIT($) BALANCE($)
+Balance Brought Forward 1.33 -
+Balance Carried Forward 3.33 -
+Page 1 of 1
+POSB_TXN | 06 FEB | incoming | 20.00 | 18.67 | Salary
+POSB_TXN | 07 FEB | outgoing | 5.00 | 13.67 | FAST Payment / Receipt Ref A
+POSB_TXN | 07 FEB | outgoing | 5.00 | 8.67 | FAST Payment / Receipt Ref B
+POSB_TXN | 08 FEB | outgoing | 10.00 | 1.33 - | Cash Withdrawal
+POSB_TXN | 08 FEB | outgoing | 2.00 | 3.33 - | ATM Withdrawal Fee
+POSB_TXN | 29 FEB | incoming | 0.00 | 3.33 - | Interest Earned

@@ -1,0 +1,716 @@
+"use client";
+
+import { signupOrigin, signupProperties } from "../../shared/web-signup-attribution";
+import { clearSignupAttribution, startSignupAttribution } from "@/lib/web-signup-attribution-client";
+import { isPublicAnalyticsPath, namedAnalyticsAction, websiteSection } from "../../shared/analytics-measurement";
+import { normalizePlanAnalytics } from "../../shared/plan-analytics";
+import Script from "next/script";
+import { browserContext, safeRoute, routeSegments, safeAction } from "../../shared/analytics";
+import { installBrowserTelemetry } from "@/lib/browser-telemetry";
+import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+import {
+  analyticsOnceKey,
+  getAnalyticsEpochProperties,
+  getPostHogClientHost,
+  scopeAnalyticsDistinctId,
+  shouldTrackAnalytics,
+  type AnalyticsEventName,
+  type AnalyticsProperties,
+} from "@/lib/analytics";
+import { getCloverViewportLayout } from "@/lib/responsive-layout";
+
+type CaptureOptions = { transport?: "sendBeacon"; send_instantly?: boolean };
+
+declare global {
+  interface Window {
+    posthog?: {
+      init: (key: string, config: { api_host: string; capture_pageview?: boolean; capture_pageleave?: boolean }) => void;
+      capture: (event: string, properties?: Record<string, unknown>, options?: CaptureOptions) => void;
+      identify: (distinctId: string, properties?: Record<string, unknown>) => void;
+      reset: () => void;
+    };
+    __posthogReady?: boolean;
+    __posthogQueue?: Array<() => void>;
+  }
+}
+
+type PostHogScriptProps = {
+  token: string;
+  host: string;
+};
+
+type PostHogPersonPropertiesProps = {
+  distinctId: string;
+  properties: AnalyticsProperties;
+};
+
+const normalizeHost = (host: string) => host.replace(/\/$/, "");
+const redactAnalyticsPath = (pathname: string | null | undefined) => safeRoute(pathname || "/");
+
+// Only a rendered, published knowledge article may declare a resource path.
+const publicResourceProperties = (pathname: string | null = window.location.pathname) => {
+  const path = document.querySelector("[data-analytics-resource]")?.getAttribute("data-analytics-resource");
+  return path === pathname && path === window.location.pathname && /^\/(guides\/[a-z0-9-]+|help\/[a-z0-9-]+\/[a-z0-9-]+)$/.test(path)
+    ? { public_resource_path: path } : {};
+};
+
+const getSafeAnalyticsLocation = (pathname: string | null | undefined = window.location.pathname) => {
+  const safePathname = redactAnalyticsPath(pathname);
+  return {
+    $current_url: `${window.location.origin}${safePathname}`,
+    $pathname: safePathname,
+    website_section: websiteSection(pathname || "/"),
+  };
+};
+
+const getPostHogPersonProperties = (user: {
+  firstName?: string | null;
+  lastName?: string | null;
+  username?: string | null;
+  primaryEmailAddress?: { emailAddress?: string | null } | null;
+}) => {
+  const email = user.primaryEmailAddress?.emailAddress ?? undefined;
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || email?.split("@")[0];
+  const username = user.username ?? undefined;
+
+  return {
+    ...(email ? { email } : {}),
+    ...(name ? { name } : {}),
+    ...(username ? { username } : {}),
+  };
+};
+
+const flushPostHogQueue = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const queue = window.__posthogQueue;
+
+  if (!queue?.length || !window.posthog) {
+    return;
+  }
+
+  window.__posthogQueue = [];
+
+  for (const callback of queue) {
+    callback();
+  }
+};
+
+const runWhenPostHogReady = (callback: () => void) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (window.posthog) {
+    callback();
+    return;
+  }
+
+  window.__posthogQueue ??= [];
+  window.__posthogQueue.push(callback);
+};
+
+let currentPlanProperties: Record<string, unknown> = {};
+let currentPlanUserId: string | null = null;
+const safeCapture = (event: string, properties: Record<string, unknown> = {}, options?: CaptureOptions) => {
+  try {
+    window.posthog?.capture(event, {
+      ...getAnalyticsEpochProperties(),
+      ...browserContext(navigator.userAgent, window.innerWidth, navigator.maxTouchPoints),
+      event_source: "web",
+      analytics_schema_version: 3,
+      analytics_audience: "anonymous",
+      analytics_excluded: false,
+      analytics_environment: getClientAnalyticsEnvironment(),
+      ...currentPlanProperties,
+      ...normalizePlanAnalytics(properties ?? {}),
+    }, options);
+  } catch {
+    // Analytics must never interrupt Clover rendering or navigation.
+  }
+};
+
+const safeIdentify = (distinctId: string, properties: Record<string, unknown> = {}) => {
+  try {
+    window.posthog?.identify(distinctId, properties);
+  } catch {
+    // Analytics must never interrupt Clover rendering or navigation.
+  }
+};
+
+const safeReset = () => {
+  try {
+    window.posthog?.reset();
+  } catch {
+    // Analytics must never interrupt Clover rendering or navigation.
+  }
+};
+
+const getClientAnalyticsEnvironment = (): "production" | "staging" | "local" => {
+  if (typeof document === "undefined") {
+    return "production";
+  }
+
+  const rawEnvironment = document.body.dataset.environment ?? "production";
+  if (rawEnvironment === "preview" || rawEnvironment === "staging") {
+    return "staging";
+  }
+
+  return rawEnvironment === "local" ? "local" : "production";
+};
+
+const SESSION_STARTED_KEY = "clover.posthog.session-started.beta-2026-07-28";
+const SESSION_RETURNED_KEY = "clover.posthog.session-returned.beta-2026-07-28";
+const ATTRIBUTION_KEY = "clover.posthog.first-touch.v1";
+
+type FirstTouchAttribution = {
+  channel: "AI" | "Organic search" | "Social" | "Paid" | "Email" | "Referral" | "Direct";
+  source: string;
+  landingPath: string;
+};
+
+const classifyAttribution = (): FirstTouchAttribution => {
+  const params = new URLSearchParams(window.location.search);
+  const medium = (params.get("utm_medium") ?? "").toLowerCase();
+  const campaignSource = (params.get("utm_source") ?? "").toLowerCase().slice(0, 80);
+  let referrerHost = "";
+  try {
+    referrerHost = document.referrer ? new URL(document.referrer).hostname.toLowerCase().replace(/^www\./, "") : "";
+  } catch {
+    referrerHost = "";
+  }
+  const source = campaignSource || referrerHost || "direct";
+  const searchable = `${source} ${medium}`;
+  const channel = /chatgpt|openai|perplexity|claude|anthropic|gemini|bard|copilot/.test(searchable)
+    ? "AI"
+    : /google|bing|yahoo|duckduckgo|baidu|yandex|ecosia/.test(searchable) && !/cpc|ppc|paid/.test(medium)
+      ? "Organic search"
+      : /facebook|instagram|linkedin|twitter|x\.com|tiktok|reddit|youtube/.test(searchable)
+        ? "Social"
+        : /cpc|ppc|paid|display/.test(medium)
+          ? "Paid"
+          : /email|newsletter/.test(medium)
+            ? "Email"
+            : referrerHost && referrerHost !== window.location.hostname
+              ? "Referral"
+              : "Direct";
+  return { channel, source, landingPath: redactAnalyticsPath(window.location.pathname) };
+};
+
+const getFirstTouchAttribution = (): FirstTouchAttribution | null => {
+  try {
+    const existing = window.localStorage.getItem(ATTRIBUTION_KEY);
+    if (existing) return JSON.parse(existing) as FirstTouchAttribution;
+    if (!isPublicAnalyticsPath(window.location.pathname)) return null;
+    const attribution = classifyAttribution();
+    window.localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(attribution));
+    return attribution;
+  } catch {
+    return isPublicAnalyticsPath(window.location.pathname) ? classifyAttribution() : null;
+  }
+};
+
+function PostHogBootstrap({ token, host }: PostHogScriptProps) {
+  const apiHost = normalizeHost(host);
+
+  return (
+    <Script
+      id="posthog-bootstrap"
+      strategy="afterInteractive"
+      dangerouslySetInnerHTML={{
+        __html: `
+          !function(t,e){var o,n,p,r;e.__SV=1e3,window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="capture identify alias people.set people.set_once people.unset people.increment people.append register register_once unregister opt_in_capturing opt_out_capturing has_opted_out_capturing".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1e3}(document,window.posthog||[]);
+          window.__cloverSafeRoute = function(path) { const segments = new Set(${JSON.stringify(routeSegments)}); return "/" + path.split(/[?#]/)[0].split("/").filter(Boolean).map(s => segments.has(s) ? s : ":id").join("/"); };
+          posthog.init(${JSON.stringify(token)}, {
+            api_host: ${JSON.stringify(apiHost)},
+            capture_pageview: false,
+            capture_pageleave: false,
+            autocapture: false,
+            disable_session_recording: true,
+            before_send: function(event) {
+              if (event && event.properties) {
+                for (const key of ["$current_url", "$referrer", "$initial_current_url", "$initial_referrer"]) {
+                  if (typeof event.properties[key] === "string") {
+                    try { const url = new URL(event.properties[key]); event.properties[key] = url.origin + window.__cloverSafeRoute(url.pathname); } catch { delete event.properties[key]; }
+                  }
+                }
+                for (const key of ["$pathname", "$initial_pathname"]) {
+                  if (typeof event.properties[key] === "string") event.properties[key] = window.__cloverSafeRoute(event.properties[key]);
+                }
+              }
+              return event;
+            }
+          });
+          window.__posthogReady = true;
+          (${flushPostHogQueue.toString()})();
+          window.dispatchEvent(new Event("posthog-ready"));
+        `,
+      }}
+    />
+  );
+}
+
+function PostHogPageViews() {
+  const pathname = usePathname();
+  const lastPathname = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (lastPathname.current === pathname) return;
+    lastPathname.current = pathname;
+    const resourceProperties = publicResourceProperties(pathname);
+    runWhenPostHogReady(() => {
+      const attribution = getFirstTouchAttribution();
+      safeCapture("$pageview", {
+        ...getSafeAnalyticsLocation(pathname),
+        ...resourceProperties,
+        route: redactAnalyticsPath(pathname),
+        is_public_website: isPublicAnalyticsPath(pathname || "/"),
+        ...(attribution ? {
+          acquisition_channel: attribution.channel,
+          acquisition_source: attribution.source,
+          landing_path: attribution.landingPath,
+        } : {}),
+      });
+    });
+  }, [pathname]);
+
+  return null;
+}
+
+function PostHogBehaviorSignals() {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!shouldTrackAnalytics()) return;
+    let activeStartedAt = document.visibilityState === "visible" ? performance.now() : null;
+    let activeDurationMs = 0;
+    let maximumScroll = 0;
+    let sent = false;
+    const route = redactAnalyticsPath(pathname);
+    const location = getSafeAnalyticsLocation(pathname);
+    const publicPage = isPublicAnalyticsPath(pathname || "/");
+    const resourceProperties = publicResourceProperties(pathname);
+    const updateScroll = (event?: Event) => {
+      const target = event?.target;
+      const element = target instanceof Element ? target : document.scrollingElement;
+      if (!element) return;
+      const scrollable = element.scrollHeight - element.clientHeight;
+      const depth = scrollable <= 0 ? 100 : Math.round((element.scrollTop / scrollable) * 100);
+      maximumScroll = Math.max(maximumScroll, Math.min(100, depth));
+    };
+    const captureClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element
+        ? event.target.closest("a,button,input,select,textarea,[role='button'],[role='link']")
+        : null;
+      if (!target) return;
+      const area = target.closest("dialog,[role='dialog']") ? "dialog"
+        : target.closest("nav") ? "navigation"
+          : target.closest("header") ? "header"
+            : target.closest("aside") ? "sidebar"
+              : target.closest("footer") ? "footer" : "main";
+      const namedAction = namedAnalyticsAction({ action: target.getAttribute("data-analytics-action"), href: target.getAttribute("href"), label: target.getAttribute("aria-label"), origin: window.location.origin });
+      const section = target.closest("[data-analytics-section]")?.getAttribute("data-analytics-section");
+      const origin = signupOrigin(pathname || "/", section ?? area);
+      const isAcquisitionPage = publicPage && websiteSection(pathname || "/") !== "auth";
+      const attribution = isAcquisitionPage && namedAction === "signup"
+        ? startSignupAttribution(origin.page, origin.placement) : null;
+      if (isAcquisitionPage && namedAction === "login") clearSignupAttribution();
+      const properties = {
+        ...location,
+        ...resourceProperties,
+        route,
+        x_percent: Math.min(99, Math.max(0, Math.floor((event.clientX / Math.max(1, window.innerWidth)) * 100))),
+        y_percent: Math.min(99, Math.max(0, Math.floor((event.clientY / Math.max(1, window.innerHeight)) * 100))),
+        action: namedAction ?? safeAction(target.getAttribute("aria-label") || target.textContent),
+        action_named: Boolean(namedAction),
+        is_public_website: isPublicAnalyticsPath(pathname || "/"),
+        ...(section && ["hero", "final_cta", "pricing", "features"].includes(section) ? { cta_placement: section } : {}),
+        target_type: target.getAttribute("role") || target.tagName.toLowerCase(),
+        target_area: area,
+        viewport_class: getCloverViewportLayout(window.innerWidth),
+      };
+      runWhenPostHogReady(() => {
+        safeCapture("ui_interaction", properties);
+        if (!publicPage || !namedAction) return;
+        const actionProperties = {
+          ...location,
+          ...resourceProperties,
+          action: namedAction,
+          target_area: area,
+          cta_placement: properties.cta_placement,
+          is_public_website: true,
+        };
+        const immediate = { send_instantly: true };
+        if (attribution) safeCapture("web_signup_cta_clicked", {
+          ...actionProperties, ...signupProperties(attribution),
+        }, immediate);
+        if (isAcquisitionPage && namedAction === "login") safeCapture("web_login_cta_clicked", {
+          ...actionProperties, origin_page: origin.page, cta_placement: origin.placement,
+        }, immediate);
+        // PostHog counts $autocapture toward engagement. Send only known actions,
+        // without DOM text, form values, link parameters or an elements chain.
+        safeCapture("$autocapture", { ...actionProperties, $event_type: "click" }, immediate);
+        if (namedAction === "download_ios" || namedAction === "download_android") {
+          safeCapture("app_store_click", {
+            ...actionProperties,
+            origin_page: origin.page,
+            cta_placement: origin.placement,
+            store: namedAction === "download_ios" ? "app_store" : "google_play",
+          }, immediate);
+        }
+      });
+    };
+    const updateVisibility = () => {
+      const now = performance.now();
+      if (document.visibilityState === "hidden") {
+        if (activeStartedAt !== null) activeDurationMs += Math.max(0, now - activeStartedAt);
+        activeStartedAt = null;
+      } else if (activeStartedAt === null) {
+        activeStartedAt = now;
+      }
+    };
+    const finish = (reason: "navigation" | "pagehide") => {
+      if (sent) return;
+      sent = true;
+      updateScroll();
+      const durationMs = Math.round(activeDurationMs + (activeStartedAt === null ? 0 : Math.max(0, performance.now() - activeStartedAt)));
+      const exitProperties = {
+        ...location,
+        ...resourceProperties,
+        route,
+        is_public_website: publicPage,
+        duration_ms: durationMs,
+        max_scroll_percent: maximumScroll,
+      };
+      if (publicPage) {
+        const captureExit = () => safeCapture("$pageleave", {
+          ...exitProperties,
+          $prev_pageview_pathname: route,
+          $prev_pageview_duration: durationMs / 1000,
+          exit_reason: reason,
+        }, reason === "pagehide" ? { transport: "sendBeacon", send_instantly: true } : undefined);
+        runWhenPostHogReady(captureExit);
+      }
+      if (durationMs >= 500) {
+        safeCapture("page_engagement", {
+          ...exitProperties,
+          viewport_class: getCloverViewportLayout(window.innerWidth),
+        });
+      }
+    };
+    document.addEventListener("scroll", updateScroll, { capture: true, passive: true });
+    document.addEventListener("click", captureClick, { capture: true, passive: true });
+    document.addEventListener("visibilitychange", updateVisibility);
+    const onPageHide = () => finish("pagehide");
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      sent = false;
+      activeDurationMs = 0;
+      activeStartedAt = document.visibilityState === "visible" ? performance.now() : null;
+      maximumScroll = 0;
+      if (publicPage) runWhenPostHogReady(() => safeCapture("$pageview", {
+        ...location, ...resourceProperties, route, is_public_website: true,
+      }));
+    };
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
+    updateScroll();
+    return () => {
+      if (window.location.pathname !== pathname) finish("navigation");
+      document.removeEventListener("scroll", updateScroll, true);
+      document.removeEventListener("click", captureClick, true);
+      document.removeEventListener("visibilitychange", updateVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [pathname]);
+
+  return null;
+}
+
+function PostHogSessionSignals() {
+  useEffect(() => {
+    if (!shouldTrackAnalytics()) {
+      return;
+    }
+
+    const sessionStartedKey = SESSION_STARTED_KEY;
+    const sessionReturnedKey = SESSION_RETURNED_KEY;
+
+    runWhenPostHogReady(() => {
+      try {
+        const sessionHasStarted = window.sessionStorage.getItem(sessionStartedKey) === "1";
+        if (sessionHasStarted) {
+          return;
+        }
+
+        const returning = window.localStorage.getItem(sessionReturnedKey) === "1";
+        safeCapture(returning ? "session_returned" : "session_started", getSafeAnalyticsLocation());
+
+        window.sessionStorage.setItem(sessionStartedKey, "1");
+        window.localStorage.setItem(sessionReturnedKey, "1");
+      } catch {
+        // Ignore storage failures and still let analytics continue.
+      }
+    });
+  }, []);
+
+  return null;
+}
+
+function PostHogRoutePerformance() {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!shouldTrackAnalytics()) {
+      return;
+    }
+
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    let cancelled = false;
+    const finish = () => {
+      if (cancelled) {
+        return;
+      }
+
+      const finishedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const durationMs = Math.max(0, Math.round(finishedAt - startedAt));
+      const properties = {
+        route: redactAnalyticsPath(pathname),
+        duration_ms: durationMs,
+        viewport_class: getCloverViewportLayout(window.innerWidth),
+      } satisfies AnalyticsProperties;
+
+      runWhenPostHogReady(() => {
+        safeCapture("page_render_completed", { ...properties, timing_boundary: "post_route_commit_two_frames" });
+        if (durationMs >= 2000) {
+          safeCapture("page_render_slow", { ...properties, timing_boundary: "post_route_commit_two_frames" });
+        }
+      });
+    };
+
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(finish);
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [pathname]);
+
+  return null;
+}
+
+function PostHogRequestSignals() {
+  useEffect(() => installBrowserTelemetry((event, properties) => runWhenPostHogReady(() => safeCapture(event, properties))), []);
+  return null;
+}
+
+function PostHogIdentity() {
+  const { isLoaded, user } = useUser();
+  const path = usePathname();
+  useEffect(() => {
+    if (currentPlanUserId !== (user?.id ?? null)) {
+      currentPlanProperties = {};
+      currentPlanUserId = user?.id ?? null;
+    }
+    if (!isLoaded || !user || !shouldTrackAnalytics()) return;
+    const controller = new AbortController();
+    const refresh = () => { void fetch("/api/analytics/plan", { cache: "no-store", signal: controller.signal })
+      .then(r => r.ok ? r.json() : null).then(p => { if (p && !controller.signal.aborted) runWhenPostHogReady(() => { if (controller.signal.aborted) return; currentPlanProperties = p; safeIdentify(scopeAnalyticsDistinctId(user.id, getClientAnalyticsEnvironment()), p); }); }).catch(() => {}); };
+    refresh(); window.addEventListener("focus", refresh);
+    return () => { controller.abort(); window.removeEventListener("focus", refresh); };
+  }, [isLoaded, user?.id, path]);
+
+  useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+
+    runWhenPostHogReady(() => {
+      if (user) {
+        safeIdentify(
+          scopeAnalyticsDistinctId(user.id, getClientAnalyticsEnvironment()),
+          {
+            ...getAnalyticsEpochProperties(),
+            ...getPostHogPersonProperties(user),
+          }
+        );
+        const attribution = getFirstTouchAttribution();
+        if (attribution) {
+          const conversionKey = `clover.posthog.acquisition-identified.v1:${user.id}`;
+          try {
+            if (window.localStorage.getItem(conversionKey) !== "1") {
+              safeCapture("acquisition_identified", {
+                acquisition_channel: attribution.channel,
+                acquisition_source: attribution.source,
+                landing_path: attribution.landingPath,
+              });
+              window.localStorage.setItem(conversionKey, "1");
+            }
+          } catch {
+            safeCapture("acquisition_identified", {
+              acquisition_channel: attribution.channel,
+              acquisition_source: attribution.source,
+              landing_path: attribution.landingPath,
+            });
+          }
+        }
+        return;
+      }
+
+        currentPlanProperties = {};
+        safeReset();
+    });
+  }, [isLoaded, user]);
+
+  return null;
+}
+
+export function PostHogAnalytics() {
+  const token = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  const host = getPostHogClientHost();
+
+  if (!token) {
+    return null;
+  }
+
+  return (
+    <>
+      <PostHogBootstrap token={token} host={host} />
+      <PostHogPageViews />
+      <PostHogSessionSignals />
+      <PostHogRoutePerformance />
+      <PostHogBehaviorSignals />
+      <PostHogRequestSignals />
+    </>
+  );
+}
+
+export function PostHogClerkIdentity() {
+  const token = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+
+  if (!token) {
+    return null;
+  }
+
+  return <PostHogIdentity />;
+}
+
+export function PostHogPersonProperties({ distinctId, properties }: PostHogPersonPropertiesProps) {
+  useEffect(() => {
+    if (!shouldTrackAnalytics() || !distinctId) {
+      return;
+    }
+
+    runWhenPostHogReady(() => {
+      safeIdentify(scopeAnalyticsDistinctId(distinctId, getClientAnalyticsEnvironment()), {
+        ...getAnalyticsEpochProperties(),
+        ...currentPlanProperties,
+      ...normalizePlanAnalytics(properties ?? {}),
+      });
+    });
+  }, [distinctId, properties]);
+
+  return null;
+}
+
+type PostHogEventProps = {
+  event: AnalyticsEventName;
+  properties?: AnalyticsProperties;
+  onceKey?: string;
+};
+
+export function PostHogEvent({ event, properties = {}, onceKey }: PostHogEventProps) {
+  useEffect(() => {
+    if (!shouldTrackAnalytics()) {
+      return;
+    }
+
+    if (onceKey) {
+      try {
+        if (window.localStorage.getItem(onceKey)) {
+          return;
+        }
+        window.localStorage.setItem(onceKey, "1");
+      } catch {
+        // Ignore storage failures and still attempt capture.
+      }
+    }
+
+    runWhenPostHogReady(() => {
+      safeCapture(event, properties);
+    });
+  }, [event, onceKey, properties]);
+
+  return null;
+}
+
+export function PostHogPageEvent({ event, properties }: Omit<PostHogEventProps, "onceKey">) {
+  const pathname = usePathname();
+  const lastEvent = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!shouldTrackAnalytics()) {
+      return;
+    }
+
+    const key = `${event}:${pathname}`;
+    if (lastEvent.current === key) return;
+    lastEvent.current = key;
+
+    runWhenPostHogReady(() => {
+      safeCapture(event, {
+        ...currentPlanProperties,
+      ...normalizePlanAnalytics(properties ?? {}),
+        ...getSafeAnalyticsLocation(pathname),
+      });
+    });
+  }, [event, pathname, properties]);
+
+  return null;
+}
+
+export const capturePostHogClientEvent = (
+  event: AnalyticsEventName,
+  properties: AnalyticsProperties = {},
+  options?: { send_instantly: boolean },
+) => {
+  if (!shouldTrackAnalytics()) {
+    return;
+  }
+
+  runWhenPostHogReady(() => {
+    safeCapture(event, properties, options);
+  });
+};
+
+export const capturePostHogClientEventOnce = (
+  event: AnalyticsEventName,
+  properties: AnalyticsProperties,
+  onceKey: string
+) => {
+  if (!shouldTrackAnalytics()) {
+    return;
+  }
+
+  try {
+    if (window.localStorage.getItem(onceKey)) {
+      return;
+    }
+    window.localStorage.setItem(onceKey, "1");
+  } catch {
+    // Ignore storage failures and still attempt capture.
+  }
+
+  runWhenPostHogReady(() => {
+    safeCapture(event, properties);
+  });
+};
+
+export { analyticsOnceKey };

@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { homePeriodLabel } from '../src/home-period-label.ts';
+assert.equal(homePeriodLabel(1763.90, 5), '—', 'A tiny prior baseline must not display a 35,178% spike.');
+assert.equal(homePeriodLabel(100, 0), 'No prior month');
+assert.equal(homePeriodLabel(100, NaN), '—');
+assert.equal(homePeriodLabel(Infinity, 100), '—');
+assert.equal(homePeriodLabel(125, 100), '↑ 25%');
+assert.equal(homePeriodLabel(0, 100), '↓ 100%');
+assert.equal(homePeriodLabel(100.1, 100), '0%');
+console.log('Home period labels: missing baselines, extreme ratios and normal changes passed.');

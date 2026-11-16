@@ -1,0 +1,249 @@
+import type { MarketHistoryPoint, MarketRange, MarketRegion } from "@/lib/market-data";
+
+export type PortfolioGrowthAsset = {
+  id: string;
+  name: string;
+  symbol: string;
+  market: MarketRegion;
+  units: number;
+  currency: string;
+  historyMode?: "market" | "recorded";
+  currentValue?: number | null;
+  purchaseValue?: number | null;
+  startDate?: string | null;
+  unitActivities?: PortfolioGrowthUnitActivity[];
+};
+
+export type PortfolioGrowthUnitActivity = {
+  date: string;
+  unitsDelta: number;
+};
+
+export type PortfolioGrowthHistory = {
+  assetId: string;
+  currency: string;
+  points: MarketHistoryPoint[];
+};
+
+const getRangeStart = (range: MarketRange, now: Date) => {
+  const start = new Date(now);
+  start.setUTCHours(0, 0, 0, 0);
+  if (range === "1D") return start;
+  if (range === "5D") start.setUTCDate(start.getUTCDate() - 4);
+  if (range === "1M") start.setUTCMonth(start.getUTCMonth() - 1);
+  if (range === "3M") start.setUTCMonth(start.getUTCMonth() - 3);
+  if (range === "6M") start.setUTCMonth(start.getUTCMonth() - 6);
+  if (range === "YTD") start.setUTCMonth(0, 1);
+  if (range === "1Y") start.setUTCFullYear(start.getUTCFullYear() - 1);
+  if (range === "5Y") start.setUTCFullYear(start.getUTCFullYear() - 5);
+  return start;
+};
+
+export const buildRecordedValueHistory = (
+  asset: PortfolioGrowthAsset,
+  range: MarketRange,
+  now = new Date(),
+  marketWindowStart?: string,
+): PortfolioGrowthHistory | null => {
+  const parsedStart = asset.startDate ? new Date(asset.startDate) : null;
+  if (
+    !parsedStart ||
+    !Number.isFinite(parsedStart.getTime()) ||
+    !Number.isFinite(asset.currentValue) ||
+    (asset.currentValue ?? -1) < 0
+  ) {
+    return null;
+  }
+
+  const end = new Date(now);
+  if (!Number.isFinite(end.getTime()) || parsedStart > end) return null;
+  const valueDivisor = asset.historyMode === "market" ? asset.units : 1;
+  if (!Number.isFinite(valueDivisor) || valueDivisor <= 0) return null;
+  // Providers use trading sessions/time zones, not always our UTC calendar
+  // cutoff. Seed saved holdings at the same boundary so an existing balance
+  // cannot appear as a new contribution on the first filtered day.
+  const providerStart = marketWindowStart ? new Date(marketWindowStart) : null;
+  const rangeStart = providerStart && Number.isFinite(providerStart.getTime())
+    ? providerStart
+    : getRangeStart(range, end);
+  const effectiveStart = range === "MAX" || parsedStart > rangeStart ? parsedStart : rangeStart;
+  const usesRecordedPurchase = effectiveStart.getTime() === parsedStart.getTime()
+    && Number.isFinite(asset.purchaseValue)
+    && (asset.purchaseValue ?? -1) >= 0;
+  const startValue = (usesRecordedPurchase ? asset.purchaseValue! : asset.currentValue!) / valueDivisor;
+  const currentValue = asset.currentValue! / valueDivisor;
+  const timestampRange = range === "1D";
+  const startKey = timestampRange
+    ? effectiveStart.toISOString()
+    : effectiveStart.toISOString().slice(0, 10);
+  const endKey = timestampRange ? end.toISOString() : end.toISOString().slice(0, 10);
+  const points = startKey === endKey
+    ? [{ date: endKey, value: currentValue }]
+    : [
+        { date: startKey, value: startValue },
+        { date: endKey, value: currentValue },
+      ];
+
+  return { assetId: asset.id, currency: asset.currency, points };
+};
+
+export const getPortfolioGrowthMarket = (subtype: string | null, currency: string): MarketRegion => {
+  if (subtype === "crypto") return "crypto";
+  return currency.trim().toUpperCase() === "PHP" ? "ph" : "us";
+};
+
+const toPriceMap = (points: MarketHistoryPoint[], granularity: "daily" | "timestamp") => {
+  const prices = new Map<string, number>();
+  for (const point of points) {
+    const timestamp = new Date(point.date).getTime();
+    if (!Number.isFinite(timestamp) || !Number.isFinite(point.value) || point.value < 0) continue;
+    const iso = new Date(timestamp).toISOString();
+    prices.set(granularity === "timestamp" ? iso : iso.slice(0, 10), point.value);
+  }
+  return prices;
+};
+
+const buildDailyDateRange = (start: string, end: string) => {
+  const dates: string[] = [];
+  const cursor = new Date(`${start}T12:00:00Z`);
+  const last = new Date(`${end}T12:00:00Z`);
+  while (cursor <= last) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+};
+
+const normalizeActivityDate = (value: string) => {
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+};
+
+const buildUnitLedger = (asset: PortfolioGrowthAsset) => {
+  const changesByDate = new Map<string, number>();
+  for (const activity of asset.unitActivities ?? []) {
+    const date = normalizeActivityDate(activity.date);
+    if (!date || !Number.isFinite(activity.unitsDelta) || activity.unitsDelta === 0) continue;
+    changesByDate.set(date, (changesByDate.get(date) ?? 0) + activity.unitsDelta);
+  }
+  const totalRecordedChange = [...changesByDate.values()].reduce((sum, change) => sum + change, 0);
+  // Reconcile the ledger to the current holding. Any unexplained units become a
+  // pre-history baseline rather than being duplicated across dated activity.
+  const baselineUnits = Math.max(0, asset.units - totalRecordedChange);
+  const activityDates = [...changesByDate.keys()].sort();
+  return { baselineUnits, changesByDate, activityDates };
+};
+
+export const buildPortfolioGrowthSeries = ({
+  assets,
+  histories,
+  exchangeRates,
+  granularity = "daily",
+}: {
+  assets: PortfolioGrowthAsset[];
+  histories: PortfolioGrowthHistory[];
+  exchangeRates: Record<string, number>;
+  granularity?: "daily" | "timestamp";
+}) => {
+  const historyByAsset = new Map(histories.map((history) => [history.assetId, history]));
+  const usable = assets
+    .map((asset) => {
+      const history = historyByAsset.get(asset.id);
+      const rate = exchangeRates[history?.currency.trim().toUpperCase() ?? ""];
+      const daily = history ? toPriceMap(history.points, granularity) : new Map<string, number>();
+      const dates = [...daily.keys()].sort();
+      const unitLedger = buildUnitLedger(asset);
+      if (
+        !history ||
+        daily.size === 0 ||
+        !Number.isFinite(rate) ||
+        rate <= 0 ||
+        (asset.units <= 0 && unitLedger.activityDates.length === 0)
+      ) return null;
+      const parsedStartDate = asset.startDate ? new Date(asset.startDate) : null;
+      const startDate = parsedStartDate && Number.isFinite(parsedStartDate.getTime())
+        ? parsedStartDate.toISOString().slice(0, granularity === "timestamp" ? undefined : 10)
+        : null;
+      const firstUnitDate = unitLedger.baselineUnits > 0
+        ? startDate
+        : unitLedger.activityDates.find((date) => (unitLedger.changesByDate.get(date) ?? 0) > 0) ?? startDate;
+      return { asset, daily, dates, rate, startDate: firstUnitDate, unitLedger };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  if (usable.length === 0) return [];
+
+  // Build over the union of every usable holding's period. Requiring all
+  // providers to overlap makes one newer purchase or stale quote erase the
+  // whole portfolio chart. Each asset joins only after both its position and a
+  // usable valuation have started.
+  const firstChartDate = usable
+    .map((entry) => {
+      const firstPriceDate = entry.dates[0];
+      return entry.startDate && entry.startDate > firstPriceDate ? entry.startDate : firstPriceDate;
+    })
+    .sort()[0];
+  const lastChartDate = usable
+    .map((entry) => entry.dates[entry.dates.length - 1])
+    .sort()
+    .at(-1)!;
+  if (firstChartDate > lastChartDate) return [];
+
+  const dates = granularity === "daily"
+    ? buildDailyDateRange(firstChartDate, lastChartDate)
+    : Array.from(
+        new Set(usable.flatMap((entry) => entry.dates.filter((date) => date >= firstChartDate && date <= lastChartDate)))
+      ).sort();
+  const latestPriceByAsset = new Map<string, number>();
+  const unitsByAsset = new Map<string, number>();
+  const appliedActivityDatesByAsset = new Map<string, Set<string>>();
+  for (const entry of usable) {
+    let units = entry.unitLedger.baselineUnits;
+    const appliedDates = new Set<string>();
+    for (const activityDate of entry.unitLedger.activityDates) {
+      if (activityDate >= firstChartDate.slice(0, 10)) continue;
+      units = Math.max(0, units + (entry.unitLedger.changesByDate.get(activityDate) ?? 0));
+      appliedDates.add(activityDate);
+    }
+    unitsByAsset.set(entry.asset.id, units);
+    appliedActivityDatesByAsset.set(entry.asset.id, appliedDates);
+  }
+  for (const entry of usable) {
+    const seedDates = entry.dates.filter((date) => date <= firstChartDate);
+    const seedDate = seedDates[seedDates.length - 1];
+    const seedPrice = seedDate ? entry.daily.get(seedDate) : undefined;
+    if (seedPrice !== undefined) latestPriceByAsset.set(entry.asset.id, seedPrice);
+  }
+
+  let hasPositionStarted = false;
+  // Carry the last daily close through weekends and exchange-specific holidays.
+  return dates.flatMap((date) => {
+    let value = 0;
+    let valuedAssets = 0;
+    for (const entry of usable) {
+      if (entry.startDate && date < entry.startDate) continue;
+      const activityDate = date.slice(0, 10);
+      const unitsChange = entry.unitLedger.changesByDate.get(activityDate);
+      const appliedActivityDates = appliedActivityDatesByAsset.get(entry.asset.id) ?? new Set<string>();
+      if (unitsChange !== undefined && !appliedActivityDates.has(activityDate)) {
+        unitsByAsset.set(entry.asset.id, Math.max(0, (unitsByAsset.get(entry.asset.id) ?? 0) + unitsChange));
+        appliedActivityDates.add(activityDate);
+        appliedActivityDatesByAsset.set(entry.asset.id, appliedActivityDates);
+      }
+      const price = entry.daily.get(date);
+      if (price !== undefined) latestPriceByAsset.set(entry.asset.id, price);
+      const latestPrice = latestPriceByAsset.get(entry.asset.id);
+      if (latestPrice === undefined) {
+        continue;
+      }
+      const units = unitsByAsset.get(entry.asset.id) ?? 0;
+      if (units <= 0) continue;
+      hasPositionStarted = true;
+      value += latestPrice * units * entry.rate;
+      valuedAssets += 1;
+    }
+    // Keep zero-value dates after a full sale so the chart shows the position
+    // falling to zero instead of ending immediately before the sale.
+    return valuedAssets > 0 || hasPositionStarted ? [{ date, value }] : [];
+  });
+};

@@ -1,0 +1,14 @@
+Subject: GCash Bills Pay Receipt
+Date: Feb 1, 2025 at 6:09:25 PM
+Amount Paid PHP 123.25
+INVENTED ELECTRIC COOPERATIVE,
+INC (SAMPLE)
+Biller Name
+Total Amount PHP 123.25
+Amount Paid PHP 120.00
+Fee PHP 3.25
+Account Number 0000012345
+Date/Time 01 February 2025 6:09:19 PM
+GCash Ref. No. 999999001
+Total Amount PHP 123.25
+Fee PHP 3.25

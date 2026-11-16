@@ -1,0 +1,13 @@
+GCash Bills Pay Receipt
+Biller Name BIR
+Total Amount PHP 135.00
+Amount Paid PHP 135.00
+Fee PHP 0.00
+Form Series 0600 (Payment Form)
+Branch Code 00000
+Tin 001234567
+Form Type 0619E
+Tax Type WE
+Return Period 043020
+Date/Time 07 June 2020 05:12:55 PM
+GCash Ref. No. 0000333344

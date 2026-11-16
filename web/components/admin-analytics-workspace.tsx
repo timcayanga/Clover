@@ -1,0 +1,475 @@
+import Link from "next/link";
+import type { CSSProperties } from "react";
+import { ADMIN_ANALYTICS_EVENTS, type AdminAnalyticsSnapshot } from "@/lib/admin-analytics";
+
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+
+const categoryLabels: Record<string, string> = {
+  activation: "Activation",
+  imports: "Imports",
+  review: "Review and trust",
+  insights: "Insights",
+  retention: "Retention",
+  billing: "Billing",
+  reliability: "Reliability",
+};
+
+const percent = (value: number, total: number) =>
+  total > 0 ? `${Math.min(100, Math.round((value / total) * 100))}%` : "—";
+
+const formatDuration = (milliseconds: number) => {
+  const seconds = Math.max(0, Math.round(milliseconds / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+};
+
+const posthogStatusCopy = (snapshot: AdminAnalyticsSnapshot) => {
+  const live = snapshot.posthog.live;
+
+  if (live.status === "ready") {
+    return {
+      title: "Live event queries are ready",
+      detail: `Aggregates loaded from ${formatDate(live.rangeStartedAt)}${live.isCached ? " using PostHog cache" : ""}`,
+      tone: "is-good",
+    };
+  }
+
+  if (live.status === "not_configured") {
+    return {
+      title: "Live event queries not configured",
+      detail: "Add a Query Read personal API key to enable Admin aggregates",
+      tone: "is-neutral",
+    };
+  }
+
+  const detailByError = {
+    timeout: "PostHog took too long, so Clover continued without live aggregates",
+    unauthorized: "The PostHog key or its Query Read permission needs attention",
+    rate_limited: "PostHog temporarily rate-limited the Admin query",
+    query_failed: "PostHog could not return aggregates; Clover data is unaffected",
+    missing_credentials: "The PostHog project ID or personal API key is missing",
+  } as const;
+
+  return {
+    title: "Live event queries temporarily unavailable",
+    detail: live.errorCode ? detailByError[live.errorCode] : "Clover continued with database analytics",
+    tone: live.errorCode === "unauthorized" ? "is-danger" : "is-warning",
+  };
+};
+
+function MetricCard({ label, value, detail, tone = "default" }: { label: string; value: string | number; detail: string; tone?: "default" | "warning" | "danger" }) {
+  return (
+    <article className={`admin-analytics-card admin-analytics-card--${tone}`}>
+      <span>{label}</span>
+      <strong>{typeof value === "number" ? value.toLocaleString() : value}</strong>
+      <small>{detail}</small>
+    </article>
+  );
+}
+
+export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalyticsSnapshot }) {
+  const posthogStatus = posthogStatusCopy(snapshot);
+  const livePostHog = snapshot.posthog.live;
+  const growth = snapshot.growth.posthog;
+
+  return (
+    <section className="admin-analytics-workspace">
+      <div className="admin-analytics-workspace__hero table-panel">
+        <div>
+          <p className="eyebrow">Product analytics</p>
+          <h2>Track Clover’s usage and performance.</h2>
+          <p className="panel-muted">Metrics are measured from {formatDate(snapshot.beta.startedAt)}. Earlier records remain available for audit and comparison.</p>
+        </div>
+        <div className="admin-analytics-workspace__hero-actions">
+          <span className={`admin-analytics-status ${snapshot.posthog.configured ? "is-ready" : "is-muted"}`}>
+            {snapshot.posthog.configured ? "PostHog connected" : "PostHog event queries not configured"}
+          </span>
+          {snapshot.posthog.dashboardUrl ? (
+            <a className="button button-secondary button-small" href={snapshot.posthog.dashboardUrl} target="_blank" rel="noreferrer">
+              Open PostHog
+            </a>
+          ) : null}
+          <Link className="button button-secondary button-small" href="/admin/errors">Review errors</Link>
+        </div>
+      </div>
+
+      <section className="table-panel">
+        <h2>Plans and access</h2>
+        <div className="admin-analytics-metric-grid">
+          <MetricCard label="Free" value={snapshot.plans.free} detail="Current access" />
+          <MetricCard label="Plus" value={snapshot.plans.plus} detail="Current access" />
+          <MetricCard label="Pro" value={snapshot.plans.pro} detail="Current access" />
+          <MetricCard label="Manual overrides" value={snapshot.plans.manualOverrides} detail="Access overrides do not change billing" />
+        </div>
+        <p className="panel-muted">Current account totals include complimentary access and are not paid-subscriber counts. Billing events distinguish provider, tier, and access source. Historical events retain their original schema; new events use Free, Plus, and Pro.</p>
+      </section>
+      <section className="table-panel">
+        <h2>Plan and billing events · Last 30 days</h2>
+        {snapshot.planBilling.status === "ready" ? snapshot.planBilling.rows.length ? <div style={{ overflowX: "auto" }}><table><thead><tr><th>Event</th><th>Plan</th><th>Provider</th><th>Platform</th><th>Events</th></tr></thead><tbody>{snapshot.planBilling.rows.map((row, i) => <tr key={i}><td>{row.event.replaceAll("_", " ")}</td><td>{row.plan}</td><td>{row.provider}</td><td>{row.platform}</td><td>{row.count.toLocaleString()}</td></tr>)}</tbody></table></div> : <p>No plan or billing events in this environment yet.</p> : <p>Plan event queries are {snapshot.planBilling.status === "not_configured" ? "not configured" : "temporarily unavailable"}. Account totals remain available.</p>}
+      </section>
+      <div className="admin-analytics-metric-grid">
+        <MetricCard label="Users in reporting period" value={snapshot.users.total} detail={`+${snapshot.users.new7d.toLocaleString()} accounts created in the last 7d`} />
+        <MetricCard label="Active users" value={snapshot.users.active7d} detail={`${snapshot.users.active30d.toLocaleString()} active in the last 30d`} />
+        <MetricCard label="Onboarding complete" value={snapshot.users.onboardingCompleted} detail={`${percent(snapshot.users.onboardingCompleted, snapshot.users.total)} of users`} />
+        <MetricCard label="Transactions in reporting period" value={snapshot.product.transactions} detail={`${snapshot.product.accounts.toLocaleString()} accounts added in the reporting period`} />
+        <MetricCard label="Imports, 7d" value={snapshot.product.completedImports7d} detail={`${snapshot.product.failedImports7d.toLocaleString()} failed`} tone={snapshot.product.failedImports7d ? "warning" : "default"} />
+        <MetricCard label="Reviewed, 7d" value={snapshot.product.reviewedTransactions7d} detail="Confirmed or edited transactions" />
+        <MetricCard label="Review queue" value={snapshot.product.reviewQueueItems} detail={`${snapshot.product.lowConfidenceItems.toLocaleString()} low-confidence`} tone={snapshot.product.reviewQueueItems ? "warning" : "default"} />
+        <MetricCard label="Current deploy errors" value={snapshot.reliability.errors24h} detail={`${snapshot.reliability.errors7d.toLocaleString()} from this deployment in the last 7d`} tone={snapshot.reliability.errors24h ? "danger" : "default"} />
+        <MetricCard label="Stale imports" value={snapshot.product.staleImports} detail={`${snapshot.product.processingImports.toLocaleString()} processing now`} tone={snapshot.product.staleImports ? "danger" : "default"} />
+        <MetricCard
+          label="PostHog events"
+          value={livePostHog.status === "ready" ? livePostHog.totalEvents : "—"}
+          detail={livePostHog.status === "ready" ? `${livePostHog.observedEventTypes.toLocaleString()} event types observed` : "Database analytics remain available"}
+          tone={livePostHog.status === "unavailable" ? "warning" : "default"}
+        />
+        <MetricCard
+          label="Event coverage"
+          value={livePostHog.status === "ready" ? percent(livePostHog.observedInstrumentedEvents, livePostHog.instrumentedEventTypes) : "—"}
+          detail={livePostHog.status === "ready" ? `${livePostHog.observedInstrumentedEvents} of ${livePostHog.instrumentedEventTypes} instrumented events seen` : "Available after Query Read setup"}
+        />
+      </div>
+
+      <section className="admin-hub__panel glass admin-growth-panel" aria-labelledby="admin-acquisition-title">
+        <div className="admin-hub__panel-head">
+          <div>
+            <p className="eyebrow">Acquisition</p>
+            <h3 id="admin-acquisition-title">Website visits to unique account creation</h3>
+          </div>
+          <span className="admin-analytics__caption">Tracking from {formatDate(snapshot.growth.trackingStartedAt)}</span>
+        </div>
+        {growth.sections.acquisition === "ready" ? (
+          <>
+            <div className="admin-acquisition-funnel" aria-label="Acquisition funnel">
+              <div><span>Website visits</span><strong>{growth.websiteVisits.toLocaleString()}</strong></div>
+              <i aria-hidden="true">→</i>
+              <div><span>Unique visitors</span><strong>{growth.uniqueVisitors.toLocaleString()}</strong></div>
+              <i aria-hidden="true">→</i>
+              <div><span>Unique accounts</span><strong>{snapshot.growth.uniqueAccountsCreated.toLocaleString()}</strong></div>
+              <div className="admin-acquisition-funnel__rate"><span>Visitor conversion</span><strong>{percent(snapshot.growth.uniqueAccountsCreated, growth.uniqueVisitors)}</strong></div>
+            </div>
+            <div className="admin-analytics-table-wrap">
+              <table className="admin-analytics-table">
+                <thead><tr><th>Channel</th><th>Source</th><th>Visitors</th><th>Visits</th><th>Attributed accounts</th></tr></thead>
+                <tbody>
+                  {growth.channels.map((row) => (
+                    <tr key={`${row.channel}:${row.source}`}><td><strong>{row.channel}</strong></td><td>{row.source}</td><td>{row.visitors.toLocaleString()}</td><td>{row.visits.toLocaleString()}</td><td>{row.accounts.toLocaleString()}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="admin-analytics__footnote">Customer analytics exclude known staff, demo/test identities, simulators and browser bots. Operational server events are retained. Unique accounts come from Clover's database. Attribution is first-touch and begins at the tracking date, so earlier accounts are intentionally excluded.</p>
+          </>
+        ) : (
+          <p className="panel-muted">Acquisition aggregates are {growth.status === "not_configured" ? "not configured" : "temporarily unavailable"}. Database account counts and the other analytics panels remain available.</p>
+        )}
+      </section>
+
+      <section className="admin-hub__panel glass" aria-labelledby="admin-geography-title">
+        <div className="admin-hub__panel-head">
+          <div>
+            <p className="eyebrow">Geography</p>
+            <h3 id="admin-geography-title">Where visitors and active accounts are located</h3>
+          </div>
+          <span className="admin-analytics__caption">
+            {growth.geographySource === "stale_cache" ? "Showing cached locations while PostHog refreshes" : "Active accounts used Clover in the last 30 days"}
+          </span>
+        </div>
+        {growth.sections.geography === "ready" && (growth.countries.length || growth.cities.length) ? (
+          <div className="admin-geography-grid">
+            <div className="admin-analytics-table-wrap">
+              <table className="admin-analytics-table">
+                <caption>Countries</caption>
+                <thead><tr><th>Country</th><th>Website visitors</th><th>Active accounts</th></tr></thead>
+                <tbody>{growth.countries.map((location) => (
+                  <tr key={location.country}><td><strong>{location.country}</strong></td><td>{location.websiteVisitors.toLocaleString()}</td><td>{location.activeAccounts.toLocaleString()}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <div className="admin-analytics-table-wrap">
+              <table className="admin-analytics-table">
+                <caption>Cities</caption>
+                <thead><tr><th>City</th><th>Country</th><th>Website visitors</th><th>Active accounts</th></tr></thead>
+                <tbody>{growth.cities.map((location) => (
+                  <tr key={`${location.country}:${location.city}`}><td><strong>{location.city}</strong></td><td>{location.country}</td><td>{location.websiteVisitors.toLocaleString()}</td><td>{location.activeAccounts.toLocaleString()}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+        ) : growth.sections.geography === "ready" ? (
+          <p className="panel-muted">Location summaries will appear after PostHog receives geolocation-enriched visitor and signed-in activity.</p>
+        ) : (
+          <p className="panel-muted">Location aggregates are temporarily unavailable. Acquisition, engagement, and heatmap data continue loading independently.</p>
+        )}
+        <p className="admin-analytics__footnote">Locations are approximate city and country aggregates supplied by PostHog. Clover does not store IP addresses or precise coordinates in this dashboard.</p>
+      </section>
+
+      <div className="admin-behavior-grid">
+        <section className="admin-hub__panel glass" aria-labelledby="admin-engagement-title">
+          <div className="admin-hub__panel-head">
+            <div><p className="eyebrow">Engagement</p><h3 id="admin-engagement-title">Time and scroll depth by page</h3></div>
+          </div>
+          {growth.sections.engagement === "ready" && growth.pages.length ? (
+            <div className="admin-analytics-table-wrap">
+              <table className="admin-analytics-table">
+                <thead><tr><th>Page</th><th>Views</th><th>Visitors</th><th>Avg. time</th><th>Avg. scroll</th></tr></thead>
+                <tbody>{growth.pages.map((page) => (
+                  <tr key={page.route}><td><code>{page.route}</code></td><td>{page.views.toLocaleString()}</td><td>{page.uniqueVisitors.toLocaleString()}</td><td>{formatDuration(page.averageDurationMs)}</td><td>{page.averageScrollPercent}%</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          ) : growth.sections.engagement === "ready" ? (
+            <p className="panel-muted">Page engagement will appear after visitors browse pages under the new tracking schema.</p>
+          ) : (
+            <p className="panel-muted">Page engagement is temporarily unavailable. Other analytics panels remain available.</p>
+          )}
+        </section>
+
+        <section className="admin-hub__panel glass" aria-labelledby="admin-heatmaps-title">
+          <div className="admin-hub__panel-head">
+            <div><p className="eyebrow">Behavior</p><h3 id="admin-heatmaps-title">Click and scroll heatmaps</h3></div>
+            <span className="admin-analytics__caption">5 × 5 viewport grid</span>
+          </div>
+          {growth.sections.heatmaps === "ready" && growth.heatmaps.length ? (
+            <div className="admin-heatmap-list">
+              {growth.heatmaps.map((heatmap) => {
+                const cells = new Map(heatmap.cells.map((cell) => [`${cell.x}:${cell.y}`, cell.count]));
+                const maximum = Math.max(1, ...heatmap.cells.map((cell) => cell.count));
+                return (
+                  <article className="admin-heatmap-card" key={heatmap.route}>
+                    <div><code>{heatmap.route}</code><span>{heatmap.totalClicks.toLocaleString()} clicks</span></div>
+                    <div className="admin-heatmap-grid" aria-label={`Click heatmap for ${heatmap.route}`}>
+                      {Array.from({ length: 25 }, (_, index) => {
+                        const x = index % 5;
+                        const y = Math.floor(index / 5);
+                        const count = cells.get(`${x}:${y}`) ?? 0;
+                        return <span key={index} title={`${count} clicks`} aria-label={`Column ${x + 1}, row ${y + 1}: ${count} clicks`} style={{ "--heat": count / maximum } as CSSProperties} />;
+                      })}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : growth.sections.heatmaps === "ready" ? (
+            <p className="panel-muted">Heatmaps will appear after visitors interact with Clover under the new tracking schema.</p>
+          ) : (
+            <p className="panel-muted">Heatmap aggregates are temporarily unavailable. Other analytics panels remain available.</p>
+          )}
+          <p className="admin-analytics__footnote">Clover records normalized positions and page routes only. Input text, financial values, and clicked labels are never included.</p>
+        </section>
+      </div>
+
+      <div className="admin-analytics-workspace__grid">
+        <section className="admin-hub__panel glass" aria-labelledby="admin-funnels-title">
+          <div className="admin-hub__panel-head">
+            <div>
+              <p className="eyebrow">Funnels</p>
+              <h3 id="admin-funnels-title">Activation and core tracking</h3>
+            </div>
+            <span className="admin-analytics__caption">Live database counts</span>
+          </div>
+          <div className="admin-funnel-list">
+            {snapshot.funnels.map((funnel) => {
+              const first = funnel.steps[0]?.count ?? 0;
+              return (
+                <article key={funnel.name} className="admin-funnel-card">
+                  <div className="admin-funnel-card__head">
+                    <div>
+                      <strong>{funnel.name}</strong>
+                      <span>{funnel.description}</span>
+                    </div>
+                    <strong>{percent(funnel.steps.at(-1)?.count ?? 0, first)}</strong>
+                  </div>
+                  <div className="admin-funnel-card__steps">
+                    {funnel.steps.map((step, index) => (
+                      <div key={step.label} className="admin-funnel-card__step">
+                        <div>
+                          <span>{index + 1}. {step.label}</span>
+                          <strong>{step.count.toLocaleString()}</strong>
+                        </div>
+                        <div className="admin-funnel-card__bar"><span style={{ width: `${first ? Math.min(100, (step.count / first) * 100) : 0}%` }} /></div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="admin-hub__panel glass" aria-labelledby="admin-alerts-title">
+          <div className="admin-hub__panel-head">
+            <div>
+              <p className="eyebrow">Alerts</p>
+              <h3 id="admin-alerts-title">What may need attention</h3>
+            </div>
+            <Link className="button button-secondary button-small" href="/admin/errors">Open logs</Link>
+          </div>
+          <div className="admin-alert-list">
+            <div className={`admin-alert-item ${snapshot.reliability.errors24h ? "is-danger" : "is-good"}`}>
+              <strong>{snapshot.reliability.errors24h ? `${snapshot.reliability.errors24h.toLocaleString()} current-deployment errors` : "No current-deployment errors"}</strong>
+              <span>Current build, last 24 hours</span>
+            </div>
+            <div className={`admin-alert-item ${snapshot.product.staleImports ? "is-danger" : "is-good"}`}>
+              <strong>{snapshot.product.staleImports ? `${snapshot.product.staleImports.toLocaleString()} stale imports` : "No stale imports"}</strong>
+              <span>Processing longer than 30 minutes</span>
+            </div>
+            <div className={`admin-alert-item ${snapshot.product.failedImports7d ? "is-warning" : "is-good"}`}>
+              <strong>{snapshot.product.failedImports7d ? `${snapshot.product.failedImports7d.toLocaleString()} failed imports` : "No failed imports"}</strong>
+              <span>Last 7 days</span>
+            </div>
+            <div className={`admin-alert-item ${snapshot.product.reviewQueueItems ? "is-warning" : "is-good"}`}>
+              <strong>{snapshot.product.reviewQueueItems ? `${snapshot.product.reviewQueueItems.toLocaleString()} items awaiting review` : "Review queue is clear"}</strong>
+              <span>Low-confidence or unresolved records</span>
+            </div>
+            <div className="admin-alert-item is-neutral">
+              <strong>{snapshot.reliability.openInquiries.toLocaleString()} open inquiries</strong>
+              <span>Support workload</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="admin-hub__panel glass" aria-labelledby="admin-posthog-title">
+          <div className="admin-hub__panel-head">
+            <div>
+              <p className="eyebrow">PostHog</p>
+              <h3 id="admin-posthog-title">Analytics connection health</h3>
+            </div>
+            <span className="admin-analytics__caption">Environment scoped</span>
+          </div>
+          <div className="admin-alert-list">
+            <div className={`admin-alert-item ${snapshot.posthog.captureConfigured ? "is-good" : "is-danger"}`}>
+              <strong>{snapshot.posthog.captureConfigured ? "Client capture configured" : "Client capture missing"}</strong>
+              <span>Browser events can be sent to PostHog</span>
+            </div>
+            <div className={`admin-alert-item ${snapshot.posthog.projectId ? "is-good" : "is-warning"}`}>
+              <strong>{snapshot.posthog.projectId ? `Project ${snapshot.posthog.projectId}` : "Project ID missing"}</strong>
+              <span>Admin dashboard link and project targeting</span>
+            </div>
+            <div className={`admin-alert-item ${posthogStatus.tone}`}>
+              <strong>{posthogStatus.title}</strong>
+              <span>{posthogStatus.detail}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section className="admin-hub__panel glass" aria-labelledby="admin-events-title">
+        <div className="admin-hub__panel-head">
+          <div>
+            <p className="eyebrow">Events</p>
+            <h3 id="admin-events-title">Instrumentation inventory</h3>
+          </div>
+          <span className="admin-analytics__caption">{snapshot.posthog.configured ? "Ready for live PostHog queries" : "Tracked event names in the codebase"}</span>
+        </div>
+        <div className="admin-event-grid">
+          {Object.entries(
+            ADMIN_ANALYTICS_EVENTS.reduce<Record<string, typeof ADMIN_ANALYTICS_EVENTS>>((groups, event) => {
+              (groups[event.category] ??= []).push(event);
+              return groups;
+            }, {})
+          ).map(([category, events]) => (
+            <article key={category} className="admin-event-group">
+              <div className="admin-event-group__head">
+                <strong>{categoryLabels[category] ?? category}</strong>
+                <span>{events.length} events</span>
+              </div>
+              <div className="admin-event-group__list">
+                {events.map((event) => (
+                  <div key={event.name} className="admin-event-row">
+                    <code>{event.name}</code>
+                    <span>{event.description}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="admin-hub__panel glass" aria-labelledby="admin-posthog-events-title">
+        <div className="admin-hub__panel-head">
+          <div>
+            <p className="eyebrow">Live PostHog aggregates</p>
+            <h3 id="admin-posthog-events-title">Observed product behavior</h3>
+          </div>
+          <span className="admin-analytics__caption">
+            {livePostHog.status === "ready" ? `Since ${formatDate(livePostHog.rangeStartedAt)}` : "Graceful fallback active"}
+          </span>
+        </div>
+        {livePostHog.status === "ready" ? (
+          <>
+            <div className="admin-event-grid">
+              {livePostHog.topEvents.map((event) => (
+                <article key={event.name} className="admin-event-group">
+                  <div className="admin-event-group__head">
+                    <code>{event.name}</code>
+                    <span>{event.count.toLocaleString()} events</span>
+                  </div>
+                  <div className="admin-event-row">
+                    <span>{event.uniqueUsers.toLocaleString()} unique users</span>
+                    <span>{event.lastSeen ? `Last seen ${formatDate(event.lastSeen)}` : "Last seen unavailable"}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {livePostHog.missingInstrumentedEvents.length ? (
+              <p className="admin-analytics__footnote">
+                {livePostHog.missingInstrumentedEvents.length.toLocaleString()} instrumented event types were not observed in this window. This can be normal for rare workflows and does not necessarily indicate broken tracking.
+              </p>
+            ) : (
+              <p className="admin-analytics__footnote">Every instrumented event type was observed in this window.</p>
+            )}
+          </>
+        ) : (
+          <p className="panel-muted">{posthogStatus.detail}. This section never blocks Clover or the database-backed Admin metrics.</p>
+        )}
+      </section>
+
+      <section className="admin-hub__panel glass" aria-labelledby="admin-performance-title">
+        <div className="admin-hub__panel-head">
+          <div>
+            <p className="eyebrow">Performance and reliability</p>
+            <h3 id="admin-performance-title">Signals to keep watching</h3>
+          </div>
+          <Link className="button button-secondary button-small" href="/admin/logs">Audit activity</Link>
+        </div>
+        <div className="admin-hub__panel-stats">
+          <div><span>Users verified</span><strong>{snapshot.users.verified.toLocaleString()} / {snapshot.users.total.toLocaleString()}</strong></div>
+          <div><span>Workspaces</span><strong>{snapshot.product.workspaces.toLocaleString()}</strong></div>
+          <div><span>Imports total</span><strong>{snapshot.product.imports.toLocaleString()}</strong></div>
+          <div><span>Current deploy errors, 7d</span><strong>{snapshot.reliability.errors7d.toLocaleString()}</strong></div>
+        </div>
+        <p className="admin-analytics__footnote">Generated {formatDate(snapshot.generatedAt)}. Counts are scoped to production and the reporting period.</p>
+      </section>
+
+      <section className="admin-hub__panel glass" aria-labelledby="admin-top-errors-title">
+        <div className="admin-hub__panel-head">
+          <div>
+            <p className="eyebrow">Reliability</p>
+            <h3 id="admin-top-errors-title">Top error sources for the current deployment</h3>
+          </div>
+          <Link className="button button-secondary button-small" href="/admin/errors">Open error log</Link>
+        </div>
+        {snapshot.reliability.topErrors.length ? (
+          <div className="admin-event-grid">
+            {snapshot.reliability.topErrors.map((error) => (
+              <article key={error.label} className="admin-event-group">
+                <div className="admin-event-group__head">
+                  <strong>{error.label}</strong>
+                  <span>{error.count.toLocaleString()} occurrences</span>
+                </div>
+                <div className="admin-event-row">
+                  <span>Last seen {formatDate(error.lastSeen)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="panel-muted">No application errors have been recorded for the current deployment in the last 24 hours.</p>
+        )}
+      </section>
+    </section>
+  );
+}

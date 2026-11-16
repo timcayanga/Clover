@@ -1,0 +1,111 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { includedTransactionWhere } from "../lib/transaction-review-inclusion-where";
+import { buildActiveWorkspaceTransactionWhere, buildTransactionQueryWhere } from "../lib/transaction-query";
+import {
+  classifyWorkspaceMutation,
+  getAffectedWorkspaceDataDomains,
+} from "../lib/workspace-data-sync";
+
+const workspaceId = "workspace-consistency";
+const activeWhere = buildActiveWorkspaceTransactionWhere(workspaceId, { currency: "PHP" });
+assert.equal(activeWhere.deletedAt, null);
+assert.equal(activeWhere.isExcluded, undefined, "Automatic bank-review exclusions must not be filtered out before the inclusion predicate");
+assert.deepEqual((activeWhere.AND as unknown[])[0], includedTransactionWhere(), "Financial reads include regular rows plus the protected unconfirmed bank-overlap exception");
+const explicitlyFiltered = buildActiveWorkspaceTransactionWhere(workspaceId, {isExcluded:false});
+assert.equal(explicitlyFiltered.isExcluded,false,"An explicit exclusion filter is preserved");
+assert.equal(activeWhere.currency, "PHP");
+assert.ok(Array.isArray(activeWhere.AND), "The active ledger must retain the workspace fallback scope.");
+
+const transactionPageWhere = buildTransactionQueryWhere(workspaceId, {});
+assert.equal(transactionPageWhere.deletedAt, null);
+assert.deepEqual((transactionPageWhere.AND as unknown[])[0],includedTransactionWhere(),"Transaction totals and the other pages must share the identical inclusion rule");
+
+assert.equal(classifyWorkspaceMutation("/api/transactions", "POST"), "transactions");
+assert.equal(classifyWorkspaceMutation("/api/accounts/account-1", "PATCH"), "accounts");
+assert.equal(classifyWorkspaceMutation("/api/commitments", "DELETE"), "recurring");
+assert.equal(classifyWorkspaceMutation("/api/investment-holdings", "POST"), "investments");
+assert.equal(classifyWorkspaceMutation("/api/transactions", "GET"), null);
+assert.equal(classifyWorkspaceMutation("/api/analytics/events", "POST"), null);
+
+const transactionDependents = getAffectedWorkspaceDataDomains("transactions");
+for (const domain of [
+  "accounts",
+  "transactions",
+  "recurring",
+  "circles",
+  "split-bills",
+  "budgeting",
+  "goals",
+  "investments",
+  "adviser",
+  "home",
+  "reports",
+] as const) {
+  assert.ok(transactionDependents.includes(domain), `Transaction changes must invalidate ${domain}.`);
+}
+
+const investmentDependents = getAffectedWorkspaceDataDomains("investments");
+for (const domain of ["accounts", "investments", "circles", "goals", "adviser", "home", "reports"] as const) {
+  assert.ok(investmentDependents.includes(domain), `Investment changes must invalidate ${domain}.`);
+}
+
+const source = (relativePath: string) => readFileSync(path.join(process.cwd(), relativePath), "utf8");
+for (const file of [
+  "components/dashboard-page-content.tsx",
+  "app/adviser/page.tsx",
+  "app/reports/reports-page-content.tsx",
+  "lib/budgeting-data.ts",
+  "lib/recurring-page.ts",
+]) {
+  assert.match(source(file), /buildActiveWorkspaceTransactionWhere/, `${file} must use the active ledger scope.`);
+}
+
+const goalsSource = source("app/goals/page.tsx");
+assert.match(goalsSource, /buildActiveWorkspaceTransactionWhere/);
+assert.ok(
+  (goalsSource.match(/"deletedAt" IS NULL/g) ?? []).length >= 2,
+  "Every raw Goals aggregate must exclude deleted transactions."
+);
+assert.ok(
+  (goalsSource.match(/SELECT "id" FROM "Account" WHERE "workspaceId"/g) ?? []).length >= 2,
+  "Every raw Goals aggregate must retain account-linked legacy rows."
+);
+
+assert.match(goalsSource, /loadGoalActivity\(resolvedWorkspace.id, goalCurrency, goalPeriod\)/);
+assert.match(source("lib/mobile-goals.ts"), /buildActiveWorkspaceTransactionWhere\(workspaceId/);
+
+const dashboardSource = source("components/dashboard-page-content.tsx");
+assert.match(dashboardSource, /account\.source === "manual"/);
+assert.match(dashboardSource, /selectLatestAccountCheckpoint\(account\.statementCheckpoints\)/);
+assert.match(dashboardSource, /resolveEffectiveAccountBalance\(\{/);
+assert.match(
+  dashboardSource,
+  /const spendableAccounts = dashboardAccounts\.filter[\s\S]{0,1400}balanceRateEntries = await Promise\.all/,
+  "Home must derive Spendable from all accounts and estimate foreign currencies in the user's default currency."
+);
+assert.match(dashboardSource, /loadDashboardExchangeRate[\s\S]{0,800}revalidate: 6 \* 60 \* 60/);
+assert.match(dashboardSource, /<p className="eyebrow">My Balance<\/p>/);
+assert.doesNotMatch(dashboardSource, /Across currencies in/);
+
+const adviserSource = source("app/adviser/page.tsx");
+assert.match(adviserSource, /defaultCurrencyCookieKey/);
+assert.match(adviserSource, /loadAdviserExchangeRate/);
+assert.match(adviserSource, /selectLatestAccountCheckpoint\(account\.statementCheckpoints\)/);
+assert.match(adviserSource, /resolveEffectiveAccountBalance\(\{/);
+assert.match(
+  adviserSource,
+  /const spendableAccounts = workspaceAccounts\.filter[\s\S]{0,1200}normalizeAccountBalanceSign/,
+  "Adviser must use the same all-currency spendable balance basis as Home and Accounts."
+);
+
+const circleSource = source("lib/circle-loaders.ts");
+assert.match(circleSource, /isExcluded: false/);
+
+const shellSource = source("components/clover-shell.tsx");
+assert.match(shellSource, /installWorkspaceMutationObserver\(\)/);
+assert.match(shellSource, /subscribeWorkspaceDataChanges/);
+assert.match(shellSource, /router\.refresh\(\)/);
+
+console.log("[PASS] Cross-page reads share one active ledger and successful mutations invalidate every dependent view.");

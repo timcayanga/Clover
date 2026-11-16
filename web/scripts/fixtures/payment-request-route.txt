@@ -1,0 +1,24 @@
+export const splitBillRecordInclude={};
+export let currency='PHP';
+export const requests:any[]=[];export const settlements:any[]=[];
+const bill=()=>({id:'bill',userId:'owner',currency,rawPayload:{},participants:[{id:'bea',name:'Bea'},{id:'alex',name:'Alex'}]});
+export const getSplitBillCurrentUser=async()=>({id:'owner'});
+export const loadSplitBillBill=async(user,id)=>user==='owner'&&id==='bill'?bill():null;
+export const loadSplitBillTransferSettlementsForBill=async()=>settlements;
+export const serializeSplitBillRecord=(b)=>({...b,resolved:false,settlement:{transfers:900-settlements.reduce((s,t)=>s+Number(t.amount),0)>0?[{fromParticipantId:'bea',toParticipantId:'alex',amount:900-settlements.reduce((s,t)=>s+Number(t.amount),0)}]:[]}});
+export const appendSplitBillActivity=()=>({});export const splitBillGroupMemberOrderBy=[];export const splitBillItemOrderBy=[];
+const matches=(r,w)=>r.billId===w.billId&&(!w.id||r.id===w.id)&&(!w.status||w.status.in.includes(r.status))&&(!w.amount||r.amount===w.amount)&&(!w.currency||r.currency===w.currency)&&(!w.OR||w.OR.some(x=>r.billAmount===x.billAmount&&r.billCurrency===x.billCurrency));
+export const prisma:any={
+ $queryRaw:async()=>[{id:'bill'}],
+ $transaction:async(fn)=>fn(prisma),
+ splitBill:{findFirst:async()=>bill(),findUniqueOrThrow:async()=>bill(),update:async()=>bill()},
+ splitBillTransferSettlement:{findMany:async()=>settlements,create:async({data})=>{const r={id:'s'+settlements.length,...data};settlements.push(r);return r;}},
+ splitBillPaymentProfile:{findFirst:async({where})=>({id:where.id,currency:where.id==='usd'?'USD':'PHP'})},
+ splitBillPaymentRequest:{
+  findFirst:async({where,include})=>{const r=requests.find(r=>matches(r,where));return r?{...r,...(include?.bill?{bill:bill()}: {})}:null;},
+  findMany:async({where})=>requests.filter(r=>matches(r,where)),
+  create:async({data})=>{const r={id:'r'+requests.length,status:'requested',...data};requests.push(r);return r;},
+  update:async({where,data})=>{const r=requests.find(r=>r.id===where.id);Object.assign(r,data);return r;}
+ }
+};
+export function changeBillCurrency(c){currency=c;}

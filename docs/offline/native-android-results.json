@@ -1,0 +1,24 @@
+{
+  "platform": "android",
+  "checks": [
+    "SQLCipher encrypted storage persists across reopen",
+    "Database file does not expose plaintext/header",
+    "Incorrect encryption key rejected",
+    "Explicit local purge removes stored data",
+    "Native capability check responds",
+    "Concurrent first opens share the same encryption key",
+    "Native OCR reads synthetic receipt amount"
+  ],
+  "capability": {
+    "model": "unavailable",
+    "provider": "Gemini Nano",
+    "detail": "On-device availability depends on this device and its downloaded model. Local calculations and OCR remain available."
+  },
+  "ocr": {
+    "text": "CLOVER QA RECEIPT\nCoffee PHP 125.00\nDate 2026-09-14",
+    "pagesRead": 1,
+    "totalPages": 1,
+    "complete": true
+  },
+  "ok": true
+}

@@ -1,0 +1,1125 @@
+import { usePageAskClover } from "./page-ask-context";
+import { askPageContext } from "../../shared/ask-clover-page";
+import { Modal } from "./adaptive-modal";
+import { FocusVisibility, useKeyboardVisibility } from "./keyboard-visibility";
+import { useAccessibilityPreferences } from "./accessibility-preferences";
+import { useAdaptiveLayout } from "./adaptive";
+import { refreshScreen } from "./screen-refresh";
+import { apiBase } from "./api-base";
+import { telemetry, safeAction } from "../../shared/analytics";
+import { Text, TextInput } from "./app-text";
+import { useUser } from "@clerk/expo";
+import { Image as ExpoImage } from "expo-image";
+import { GlassContent } from "./glass-backdrop";
+import { NavigationBar, NavigationItem } from "./navigation-bar";
+import { navigationGroups } from "./navigation-groups";
+import { Children, isValidElement } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { useAccess } from "./access";
+import { useDisplayPreferences } from "./display-preferences";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { router, usePathname, useGlobalSearchParams } from "expo-router";
+import {
+  Image,
+  Animated,
+  PanResponder,
+  AccessibilityInfo,
+  Linking,
+  useColorScheme,
+  useWindowDimensions,
+  Pressable,
+  ScrollView,
+  RefreshControl,
+  StyleSheet,
+  View,
+  type ColorValue,
+  type ScrollViewInstance,
+  type TextInputProps,
+  type ViewStyle,
+} from "react-native";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import {
+  mobileNavigationIcons,
+  mobileInterfaceIcons,
+  mobileCategoryIcons,
+} from "./icon-assets";
+import { useSession } from "./session";
+
+const lightColors = {
+  ink: "#202B37",
+  muted: "#687386",
+  teal: "#00ACC0",
+  bright: "#00ACC0",
+  pale: "#E7F7F6",
+  bg: "#F7F9FA",
+  line: "#D4E0E8",
+  white: "#FFFFFF",
+  danger: "#FF3F4C",
+  positive: "#16C763",
+};
+export function Icon({
+  name,
+  color,
+  size = 24,
+  line = false,
+}: {
+  name: ComponentProps<typeof Ionicons>["name"];
+  color?: ColorValue;
+  size?: number;
+  line?: boolean;
+}) {
+  const { colors, styles, dark } = useTheme();
+  const resolvedColor = color ?? colors.teal;
+  const iconColor = typeof resolvedColor === "number" ? `#${(resolvedColor >>> 0).toString(16).padStart(8, "0")}` : resolvedColor;
+  const source = line
+    ? undefined
+    : (mobileNavigationIcons[name] ?? mobileInterfaceIcons[name]);
+  // Bundled Android resource IDs can change between same-version preview installs.
+  // Keep these small local icons out of the persistent resource-ID cache.
+  if (source)
+    return (
+      <ExpoImage
+        source={source}
+        cachePolicy="memory"
+        accessible={false}
+        resizeMode="contain"
+        style={{
+          width: size,
+          height: size,
+          ...(mobileInterfaceIcons[name]
+            ? { tintColor: color ?? colors.teal }
+            : {}),
+        }}
+      />
+    );
+  return <Ionicons accessible={false} importantForAccessibility="no" name={name} color={iconColor} size={size} />;
+}
+export function CategoryMark({
+  name,
+  size = 24,
+}: {
+  name?: string | null;
+  size?: number;
+}) {
+  const key = name?.trim().toLowerCase() ?? "uncategorized";
+  return (
+    <Image
+      source={mobileCategoryIcons[key] ?? mobileCategoryIcons.uncategorized}
+      accessible={false}
+      resizeMode="contain"
+      style={{ width: size, height: size }}
+    />
+  );
+}
+export function Button({
+  title,
+  onPress,
+  secondary = false,
+  disabled = false,
+  icon,
+  leading,
+  fullWidth = false,
+  textOnly = false,
+  danger = false,
+}: {
+  title: string;
+  onPress: () => void;
+  secondary?: boolean;
+  disabled?: boolean;
+  icon?: ComponentProps<typeof Ionicons>["name"];
+  leading?: ReactNode;
+  fullWidth?: boolean;
+  textOnly?: boolean;
+  danger?: boolean;
+}) {
+  const { colors, styles } = useTheme();
+  const { highContrast } = useAccessibilityPreferences();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      hitSlop={4}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={() => {
+        telemetry("ui_interaction", {
+          target_type: "button",
+          action: safeAction(title),
+        });
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.button,
+        secondary && styles.secondary,
+        danger && { backgroundColor: highContrast ? "#BB2035" : colors.danger, borderColor: highContrast ? "#BB2035" : colors.danger },
+        textOnly && { backgroundColor: "transparent", borderWidth: 0, paddingHorizontal: 0, minHeight: 44 },
+        fullWidth && { alignSelf: "stretch", width: "100%", minHeight: 52 },
+        (pressed || disabled) && { opacity: 0.6 },
+      ]}
+    >
+      {!secondary && !textOnly && !danger ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={highContrast ? ["#006675", "#006675"] : ["#03A8C0", "#34D3D0"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
+        />
+      ) : null}
+      {leading}
+      {icon ? (
+        <Icon
+          name={icon}
+          size={18}
+          color={secondary ? colors.ink : "#FFFFFF"}
+        />
+      ) : null}
+      <Text style={[styles.buttonText, secondary && { color: colors.ink }, textOnly && { color: danger ? colors.danger : colors.teal, fontSize: 13 }, danger && !textOnly && { color: "#FFFFFF" }]}>
+        {title}
+      </Text>
+    </Pressable>
+  );
+}
+export function Heading({ children }: { children: ReactNode }) {
+  const { colors, styles, dark } = useTheme();
+  return (
+    <Text accessibilityRole="header" style={styles.heading}>
+      {children}
+    </Text>
+  );
+}
+/** Shared container heading, distinct from onboarding's larger headline. */
+export function SectionTitle({ children }: { children: ReactNode }) {
+  const { styles } = useTheme();
+  return (
+    <Text accessibilityRole="header" style={styles.sectionTitle}>
+      {children}
+    </Text>
+  );
+}
+export function Body({
+  children,
+  muted = true,
+}: {
+  children: ReactNode;
+  muted?: boolean;
+}) {
+  const { colors, styles, dark } = useTheme();
+  return (
+    <Text style={[styles.body, !muted && { color: colors.ink }]}>
+      {children}
+    </Text>
+  );
+}
+export function Card({
+  children,
+  style,
+  onPress,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  style?: ViewStyle;
+}) {
+  const { colors, styles, dark } = useTheme();
+  return onPress ? <Pressable accessibilityRole="button" onPress={onPress} style={[styles.card, style]}>{children}</Pressable> : <View style={[styles.card, style]}>{children}</View>;
+}
+export function Screen({
+  children,
+  gap = 16,
+  sheet = false,
+  scrollKey,
+  onDismiss,
+  layout = "reading",
+  keyboardInsets = true,
+  scrollController,
+  onScroll,
+}: {
+  children: ReactNode;
+  gap?: number;
+  sheet?: boolean;
+  scrollKey?: string;
+  layout?: "reading" | "dashboard" | "form";
+  keyboardInsets?: boolean;
+  scrollController?: {ref: import("react").RefObject<ScrollViewInstance|null>;offset:import("react").RefObject<number>};
+  onDismiss?: () => void;
+  onScroll?: () => void;
+}) {
+  const { colors, styles, dark } = useTheme();
+  const session = useSession();
+  const adaptive = useAdaptiveLayout();
+  const insets = useSafeAreaInsets();
+  const keyboardVisibility = useKeyboardVisibility(sheet ? insets.bottom : adaptive.dockHeight + insets.bottom + 8);
+  const { reduceMotion } = useAccessibilityPreferences();
+  const reduceMotionRef = useRef(reduceMotion); reduceMotionRef.current = reduceMotion;
+  const slide = useRef(new Animated.Value(0)).current;
+  const dismissRef = useRef(onDismiss); dismissRef.current = onDismiss;
+  const drag = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > Math.abs(gesture.dx),
+    onPanResponderMove: (_, gesture) => slide.setValue(Math.max(0, gesture.dy)),
+    onPanResponderRelease: (_, gesture) => {
+      if (reduceMotionRef.current) { slide.setValue(0); if (gesture.dy > 90 || gesture.vy > 0.8) dismissRef.current?.(); return; }
+      if (gesture.dy > 90 || gesture.vy > 0.8) Animated.timing(slide, { toValue: 900, duration: 180, useNativeDriver: true }).start(() => { dismissRef.current?.(); slide.setValue(0); });
+      else Animated.spring(slide, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+    },
+    onPanResponderTerminate: () => Animated.spring(slide, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start(),
+  })).current;
+  const path = usePathname();
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshBusy = useRef(false);
+  const preventScrollBounce = path === "/settings";
+  const refreshable = !sheet && ["/", "/accounts", "/recurring", "/reports", "/investments", "/budgeting", "/goals", "/circles", "/split-bills"].includes(path);
+  const onRefresh = async () => {
+    if (refreshBusy.current) return;
+    refreshBusy.current = true; setRefreshing(true);
+    try { await refreshScreen(path); } finally { refreshBusy.current = false; setRefreshing(false); }
+  };
+  const detailNavigation = !sheet && (path.startsWith("/transaction/") || path.startsWith("/import/") || ["/accounts", "/recurring", "/offline", "/settings", "/notifications", "/budgeting", "/goals", "/investments", "/circles", "/split-bills", "/reports"].includes(path));
+  const content = Children.toArray(children);
+  const headerIndex = content.findIndex(child => isValidElement(child) && Boolean((child.type as { screenHeader?: boolean }).screenHeader));
+  const header = headerIndex >= 0 ? content.splice(headerIndex, 1)[0] : null;
+  const body = (
+    <Animated.View style={{ flex: 1, backgroundColor: sheet ? colors.white : colors.bg, ...(sheet ? { width: "100%", maxWidth: 720, alignSelf: "center", marginTop: adaptive.short ? 0 : 12, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" as const, transform: [{ translateY: slide }] } : {}) }}>
+      {sheet ? <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel="Dismiss sheet" accessibilityHint="Swipe down to return to the previous page" accessibilityActions={[{name:"activate",label:"Dismiss"}]} onAccessibilityAction={() => onDismiss?.()} style={{ height: 28, alignItems: "center", justifyContent: "center" }}><View style={{ width: 36, height: 4, borderRadius: 4, backgroundColor: colors.line }}/></View> : null}
+      {header}
+    <FocusVisibility.Provider value={keyboardVisibility.focus}><ScrollView
+      ref={node=>{keyboardVisibility.scroll.current=node;if(scrollController)scrollController.ref.current=node;}}
+      onScroll={event => { keyboardVisibility.offset.current = event.nativeEvent.contentOffset.y; if(scrollController)scrollController.offset.current=event.nativeEvent.contentOffset.y; onScroll?.(); }}
+      scrollEventThrottle={16}
+      onLayout={keyboardVisibility.ensureVisible}
+      key={scrollKey}
+      bounces={preventScrollBounce ? false : undefined}
+      overScrollMode={preventScrollBounce ? "never" : "auto"}
+      contentInsetAdjustmentBehavior="never"
+      automaticallyAdjustContentInsets={false}
+      refreshControl={refreshable ? <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.teal} colors={[colors.teal]} /> : undefined}
+      alwaysBounceVertical={refreshable && !preventScrollBounce}
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={[
+        styles.content,
+        { gap, paddingHorizontal: adaptive.gutter, maxWidth: sheet || layout === "form" ? adaptive.formMaxWidth : layout === "dashboard" ? adaptive.pageMaxWidth : adaptive.readingMaxWidth, paddingBottom: (sheet ? 24 : adaptive.dockHeight + 28) + insets.bottom },
+      ]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={keyboardInsets}
+      keyboardDismissMode="interactive"
+    >
+      {!session.demo &&
+      (!session.offlineStatus.online || session.offlineStatus.pending > 0) ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/offline")}
+          style={styles.notice}
+        >
+          <Text style={{ color: colors.ink, fontWeight: "600" }}>
+            {session.offlineStatus.online
+              ? `${session.offlineStatus.pending} changes pending sync`
+              : "You are offline. Changes are saved on this device."}
+          </Text>
+          <Text style={{ color: colors.muted }}>
+            View sync status · Charts reflect the last downloaded data
+          </Text>
+        </Pressable>
+      ) : null}
+      {content}
+    </ScrollView></FocusVisibility.Provider>
+    </Animated.View>
+  );
+  // Keep the blur target and its navigation backdrop as siblings. Including
+  // the backdrop in its own Android target creates a recursive render tree.
+  return detailNavigation ? (
+    <View style={{ flex: 1 }}><GlassContent>{body}</GlassContent><DetailNavigation /></View>
+  ) : body;
+}
+export function Field({
+  label,
+  trailing,
+  ...props
+}: TextInputProps & { label?: string; trailing?: ReactNode }) {
+  const { colors, styles, dark } = useTheme();
+  return (
+    <View style={{ gap: 8 }}>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
+      <View>
+        <TextInput
+          accessibilityLabel={label}
+          placeholderTextColor={colors.muted}
+          keyboardAppearance={dark ? "dark" : "light"}
+          {...props}
+          style={[
+            styles.input,
+            props.multiline ? { textAlignVertical: "top" } : undefined,
+            trailing ? { paddingRight: 56 } : undefined,
+            props.style,
+          ]}
+        />
+        {trailing ? (
+          <View
+            style={{
+              position: "absolute",
+              right: 4,
+              top: 0,
+              bottom: 0,
+              justifyContent: "center",
+            }}
+          >
+            {trailing}
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+export function Notice({ children }: { children: ReactNode }) {
+  const { colors, styles, dark } = useTheme();
+  const content: ReactNode[] = [];
+  let text = "";
+  const flush = () => {
+    if (text) {
+      content.push(<Body key={`text-${content.length}`}>{text}</Body>);
+      text = "";
+    }
+  };
+  Children.toArray(children).forEach((child) => {
+    if (typeof child === "string" || typeof child === "number")
+      text += String(child);
+    else {
+      flush();
+      content.push(child);
+    }
+  });
+  flush();
+  return (
+    <View accessibilityLiveRegion="polite" style={[styles.notice, { gap: 12 }]}>
+      {content}
+    </View>
+  );
+}
+export function AppHeader({
+  title,
+  back = false,
+  onClose,
+  trailing,
+  leading,
+}: {
+  trailing?: ReactNode;
+  leading?: ReactNode;
+  title: string;
+  back?: boolean;
+  onClose?: () => void;
+}) {
+  const { colors, styles } = useTheme();
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const session = useSession();
+  const profileRef = useRef(session.profileId);
+  profileRef.current = session.profileId;
+  const [leadingWidth, setLeadingWidth] = useState(48);
+  const [trailingWidth, setTrailingWidth] = useState(48);
+  const [panel, setPanel] = useState<"menu" | "notifications" | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+  const signingOutRef = useRef(false);
+  const drawerProgress = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useRef(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { reduceMotion.current = value; });
+    const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", value => { reduceMotion.current = value; });
+    return () => listener.remove();
+  }, []);
+  useEffect(() => {
+    if (panel) Animated.timing(drawerProgress, { toValue: 1, duration: reduceMotion.current ? 0 : 220, useNativeDriver: true }).start();
+  }, [panel, drawerProgress]);
+  const closePanel = (after?: () => void) => {
+    Animated.timing(drawerProgress, { toValue: 0, duration: reduceMotion.current ? 0 : 180, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) { setPanel(null); after?.(); }
+    });
+  };
+  const goBack = onClose ?? (() => router.canGoBack() ? router.back() : router.navigate("/(tabs)"));
+  const [feed, setFeed] = useState<
+    Array<{ id: string; title: string; message: string; href: string | null }>
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    setPanel(null);
+    setFeed([]);
+  }, [session.profileId]);
+  useEffect(() => {
+    if (panel !== "notifications") return;
+    let active = true;
+    setError("");
+    setLoading(true);
+    const request = session.demo
+      ? Promise.resolve({ notifications: [] })
+      : session.request<{ notifications: typeof feed }>(
+          `notifications?workspaceId=${encodeURIComponent(session.profileId)}`,
+        );
+    void request
+      .then((data) => {
+        if (active) setFeed(data.notifications);
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [panel, session.demo, session.profileId, session.request, revision]);
+  const askClover = usePageAskClover();
+  const askPath = usePathname();
+  const askParams = useGlobalSearchParams();
+  const adviser = askPath.startsWith("/settings") ? null : (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Open Ask Clover"
+      onPress={() => askClover(askPageContext(askPath, askParams, title))}
+      style={[styles.iconButton, {backgroundColor:"transparent",borderWidth:0,shadowOpacity:0,elevation:0}]}
+    >
+      <Icon name="chatbubble-ellipses-outline" size={32} />
+    </Pressable>
+  );
+  const navigate = (href: string) => {
+    const native: Record<
+      string,
+      | "/(tabs)"
+      | "/accounts"
+      | "/(tabs)/transactions"
+      | "/recurring"
+      | "/(tabs)/adviser"
+      | "/(tabs)/account"
+      | "/add-transaction"
+      | "/budgeting"
+      | "/goals"
+      | "/investments"
+      | "/circles"
+      | "/reports"
+      | "/split-bills"
+      | "/settings"
+    > = {
+      "/": "/(tabs)",
+      "/dashboard": "/(tabs)",
+      "/accounts": "/accounts",
+      "/transactions": "/(tabs)/transactions",
+      "/recurring": "/recurring",
+      "/adviser": "/(tabs)/adviser",
+      "/account": "/(tabs)/account",
+      "/add": "/add-transaction",
+      "/budgeting": "/budgeting",
+      "/goals": "/goals",
+      "/investments": "/investments",
+      "/circles": "/circles",
+      "/reports": "/reports",
+      "/split-bills": "/split-bills",
+      "/settings": "/settings",
+    };
+    closePanel(() => {
+      if (href === "/adviser") { askClover(askPageContext(askPath, askParams, title)); return; }
+      if (native[href]) router.navigate(native[href]);
+      else if (href.startsWith("/") && !href.startsWith("//"))
+        void Linking.openURL(`${apiBase()}${href}`);
+    });
+  };
+  const home = title === "Home";
+  const adviserShortcut = [
+    "Reports",
+    "Transactions",
+    "Recurring",
+    "Accounts",
+    "Investments",
+    "Split Bills",
+    "Budgeting",
+    "Goals",
+    "Circles",
+    "Settings",
+    "Transaction Details",
+    "Account Details",
+  ].includes(title);
+  const canAdd = ["Accounts", "Transactions", "Recurring"].includes(title);
+  return (
+    <>
+      <View style={styles.header}>
+        <View
+          onLayout={event => setLeadingWidth(event.nativeEvent.layout.width)}
+          style={{ flexShrink: 0, flexDirection: "row", alignItems: "center" }}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={back || onClose ? "Back" : "Open navigation menu"}
+            onPress={back || onClose ? goBack : () => setPanel("menu")}
+            style={styles.iconButton}
+          >
+            <Icon name={back || onClose ? "arrow-back-outline" : "menu-outline"} size={22} />
+          </Pressable>
+          {leading}
+        </View>
+        <Text
+          accessibilityRole="header"
+          numberOfLines={2}
+          style={[styles.headerTitle, {
+            minWidth: 0,
+            paddingHorizontal: 4,
+            marginLeft: Math.max(0, trailingWidth - leadingWidth),
+            marginRight: Math.max(0, leadingWidth - trailingWidth),
+          }]}
+        >
+          {title}
+        </Text>
+        <View
+          onLayout={event => setTrailingWidth(event.nativeEvent.layout.width)}
+          style={{
+            flexShrink: 0,
+            minWidth: 48,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          {(home || (adviserShortcut && (trailing || canAdd))) && !(back || onClose) ? adviser : null}
+          {trailing ??
+            (title === "Ask Clover" ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="View Reports"
+                onPress={() => router.navigate("/reports")}
+                style={styles.iconButton}
+              >
+                <Icon name="pie-chart-outline" size={30} />
+              </Pressable>
+            ) : home ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open notifications"
+                  onPress={() => setPanel("notifications")}
+                  style={styles.iconButton}
+                >
+                  <Icon name="notifications-outline" size={32} />
+                </Pressable>
+              </>
+            ) : canAdd ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  title === "Accounts"
+                    ? "Add account"
+                    : title === "Recurring"
+                      ? "Add recurring"
+                      : "Add transaction"
+                }
+                style={styles.iconButton}
+                onPress={() =>
+                  title === "Transactions"
+                    ? router.navigate("/add-transaction")
+                    : router.navigate({
+                        pathname:
+                          title === "Accounts"
+                            ? "/accounts"
+                            : "/recurring",
+                        params: { add: String(Date.now()) },
+                      })
+                }
+              >
+                <AddNavigationMark size={32} />
+              </Pressable>
+            ) : back || onClose ? (
+              adviser
+            ) : (
+              adviser
+            ))}
+        </View>
+      </View>
+      <Modal
+        visible={panel !== null}
+        transparent
+        animationType="none"
+        onRequestClose={() => closePanel()}
+      >
+        <View style={{ flex: 1, backgroundColor: "#0007" }}>
+          <Pressable
+            accessibilityLabel="Close panel"
+            onPress={() => closePanel()}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View
+            accessibilityViewIsModal
+            style={{
+              width: panel === "menu" ? Math.min(width - 48, 248) : "100%",
+              transform: [{ translateX: drawerProgress.interpolate({ inputRange: [0, 1], outputRange: [-320, 0] }) }],
+              maxWidth: panel === "menu" ? 320 : 600,
+              flex: 1,
+              backgroundColor: colors.white,
+              padding: 20,
+              paddingTop: Math.max(insets.top, 16),
+              paddingBottom: Math.max(insets.bottom, 16),
+              gap: 16,
+            }}
+          >
+            <View style={styles.row}>
+              <Text style={[styles.headerTitle, { textAlign: "left" }]}>
+                {panel === "menu" ? "Navigation" : "Notifications"}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close panel"
+                onPress={() => closePanel()}
+                style={styles.iconButton}
+              >
+                <Icon name="close" />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ gap: 12 }}>
+              {panel === "menu" ? (
+                navigationGroups.map((group) => (
+                  <View key={group.title} style={{ gap: 4 }}>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: colors.muted,
+                        marginTop: 6,
+                      }}
+                    >
+                      {group.title}
+                    </Text>
+                    {group.items.map((item) => (
+                      <Pressable
+                        key={item.route}
+                        accessibilityRole="button"
+                        onPress={() => navigate(item.route)}
+                        style={{
+                          minHeight: 44,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <Icon name={item.icon} size={28} />
+                        <Text style={{ fontSize: 13, color: colors.ink }}>
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ))
+              ) : (
+                <>
+                  {loading ? (
+                    <Text style={styles.body}>Loading notifications…</Text>
+                  ) : error ? (
+                    <>
+                      <Text style={styles.body}>{error}</Text>
+                      <Button
+                        title="Try again"
+                        onPress={() => setRevision((v) => v + 1)}
+                      />
+                    </>
+                  ) : !feed.length ? (
+                    <Text style={styles.body}>You’re all caught up.</Text>
+                  ) : (
+                    feed.map((item) => (
+                      <View key={item.id} style={styles.card}>
+                        <Text style={styles.label}>{item.title}</Text>
+                        <Text style={styles.body}>{item.message}</Text>
+                        {item.href ? (
+                          <Button
+                            title="View details"
+                            secondary
+                            onPress={() => navigate(item.href!)}
+                          />
+                        ) : null}
+                        <Button
+                          title="Dismiss"
+                          secondary
+                          onPress={() => {
+                            const profileId = session.profileId;
+                            void session
+                              .request<{ notifications: typeof feed }>(
+                                `notifications?workspaceId=${encodeURIComponent(profileId)}`,
+                                {
+                                  method: "PATCH",
+                                  body: JSON.stringify({
+                                    ids: [item.id],
+                                    action: "dismiss",
+                                  }),
+                                },
+                              )
+                              .then((data) => {
+                                if (profileRef.current === profileId)
+                                  setFeed(data.notifications);
+                              })
+                              .catch((e) => {
+                                if (profileRef.current === profileId)
+                                  setError(e.message);
+                              });
+                          }}
+                        />
+                      </View>
+                    ))
+                  )}
+                </>
+              )}
+            </ScrollView>
+            {panel === "menu" && (
+              <View style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 }}>
+                {signOutError ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 12 }}>{signOutError}</Text> : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={session.demo ? "Leave sample preview" : "Sign out"}
+                  accessibilityState={{ disabled: signingOut, busy: signingOut }}
+                  disabled={signingOut}
+                  onPress={() => {
+                    if (signingOutRef.current) return;
+                    signingOutRef.current = true;
+                    setSigningOut(true);
+                    setSignOutError("");
+                    void session.signOut()
+                      .catch(() => setSignOutError("Unable to sign out. Please try again."))
+                      .finally(() => { signingOutRef.current = false; setSigningOut(false); });
+                  }}
+                  style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12, opacity: signingOut ? 0.5 : 1 }}
+                >
+                  <Icon name="log-out-outline" size={24} />
+                  <Text style={{ fontSize: 13, color: colors.ink }}>{signingOut ? "Signing out…" : session.demo ? "Leave sample preview" : "Sign out"}</Text>
+                </Pressable>
+              </View>
+            )}
+          </Animated.View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+export function ProfileGate({ children }: { children: ReactNode }) {
+  const session = useSession();
+  const { colors } = useTheme();
+  if (session.error)
+    return (
+      <Screen>
+        <Heading>Let’s reconnect</Heading>
+        <Notice>{session.error}</Notice>
+        <Button title="Try again" onPress={session.refresh} />
+        <Button
+          title="Sign out"
+          secondary
+          onPress={() => void session.signOut()}
+        />
+      </Screen>
+    );
+  if (!session.ready)
+    return (
+      <Screen>
+        <View accessibilityLabel="Opening Clover" style={{ minHeight: 180 }} />
+      </Screen>
+    );
+  if (!session.profileId)
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <GlassContent><View style={{ flex: 1, padding: 16, gap: 16 }}>
+        <Text accessibilityRole="header" style={{ fontFamily: "Poppins-SemiBold", fontSize: 22, textAlign: "center", color: colors.ink, paddingVertical: 12 }}>Home</Text>
+        <LinearGradient colors={["#03A8C0", "#34D3D0"]} style={{ borderRadius: 20, padding: 24, gap: 16 }}>
+          <Text style={{ color: "white", textAlign: "center" }}>My Balance</Text>
+          <View accessibilityLabel="Opening your balance" style={{ height: 44, borderRadius: 12, backgroundColor: "#FFFFFF33" }} />
+        </LinearGradient>
+        {!session.setupPending && !session.data?.needsOnboarding ? <>
+          <Notice>Your Profile could not load. Try again to open Home.</Notice>
+          <Button title="Try again" secondary onPress={session.refresh} />
+        </> : null}
+      </View></GlassContent>
+      <DetailNavigation disabled />
+      </View>
+    );
+  return <>{children}</>;
+}
+export function money(amount: string, currency: string) {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      ...(currency.toUpperCase() === "KRW" ? { minimumFractionDigits: 0, maximumFractionDigits: 2 } : {}),
+    }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
+}
+export function dateLabel(date: string) {
+  const value = new Date(date);
+  return Number.isNaN(value.getTime())
+    ? "Date unavailable"
+    : value.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+}
+const makeStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    content: {
+      padding: 16,
+      gap: 16,
+      paddingBottom: 44,
+      width: "100%",
+      maxWidth: 760,
+      alignSelf: "center",
+      flexGrow: 1,
+    },
+    heading: {
+      fontFamily: "Poppins-SemiBold",
+      fontSize: 24,
+      lineHeight: 32,
+      color: colors.ink,
+      letterSpacing: -0.7,
+    },
+    sectionTitle: {
+      fontFamily: "Poppins-SemiBold",
+      fontSize: 16,
+      lineHeight: 24,
+      color: "#7A879C",
+    },
+    body: {
+      fontFamily: "Poppins-Regular",
+      fontSize: 14,
+      lineHeight: 21,
+      color: colors.muted,
+    },
+    label: { fontFamily: "Poppins-Regular", fontSize: 13, color: colors.ink },
+    card: {
+      padding: 16,
+      borderRadius: 24,
+      backgroundColor: colors.white,
+      borderWidth: 1,
+      borderColor: colors.line,
+      gap: 14,
+    },
+    notice: { padding: 15, borderRadius: 16, backgroundColor: colors.pale },
+    button: {
+      minHeight: 40,
+      alignSelf: "flex-start",
+      maxWidth: "100%",
+      flexDirection: "row",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 26,
+      backgroundColor: colors.teal,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    secondary: {
+      backgroundColor: colors.white,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    buttonText: {
+      flexShrink: 1,
+      fontSize: 15,
+      lineHeight: 22,
+      fontFamily: "Poppins-Medium",
+      color: "#FFFFFF",
+      textAlign: "center",
+    },
+    input: {
+      fontFamily: "Poppins-Regular",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      minHeight: 48,
+      textAlignVertical: "center",
+      includeFontPadding: false,
+      lineHeight: 20,
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderRadius: 16,
+      backgroundColor: colors.white,
+      fontSize: 14,
+      color: colors.ink,
+    },
+    header: {
+      minHeight: 60,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.white,
+      paddingHorizontal: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    headerTitle: {
+      flex: 1,
+      textAlign: "center",
+      fontSize: 18,
+      fontFamily: "Poppins-SemiBold",
+      color: colors.ink,
+    },
+    iconButton: {
+      minHeight: 48,
+      minWidth: 48,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    row: { flexDirection: "row", alignItems: "center", gap: 14 },
+  });
+
+const darkColors: typeof lightColors = {
+  ink: "#EDF5F7",
+  muted: "#A6BBC4",
+  teal: "#00ACC0",
+  bright: "#5ED3D0",
+  pale: "#193A43",
+  bg: "#0D171D",
+  line: "#2A4653",
+  white: "#15252D",
+  danger: "#FF9D9D",
+  positive: "#69DB9E",
+};
+const contrastLight = { ...lightColors, teal: "#006675", bright: "#006675", muted: "#455160", line: "#7C8E9B", positive: "#08753A", danger: "#BB2035" };
+const contrastDark = { ...darkColors, teal: "#71E5E2", muted: "#CFDEE4", line: "#91AAB4" };
+const contrastLightStyles = makeStyles(contrastLight);
+const contrastDarkStyles = makeStyles(contrastDark);
+const lightStyles = makeStyles(lightColors);
+const darkStyles = makeStyles(darkColors);
+export function useTheme() {
+  const { highContrast } = useAccessibilityPreferences();
+  const systemDark = useColorScheme() === "dark";
+  const { appearance } = useDisplayPreferences();
+  const dark = appearance === "system" ? systemDark : appearance === "dark";
+  return {
+    dark,
+    colors: highContrast ? (dark ? contrastDark : contrastLight) : dark ? darkColors : lightColors,
+    styles: highContrast ? (dark ? contrastDarkStyles : contrastLightStyles) : dark ? darkStyles : lightStyles,
+  };
+}
+
+export function AccountAvatar() {
+  return useSession().demo ? <AvatarFallback /> : <UserAvatar />;
+}
+function UserAvatar() {
+  const { user } = useUser();
+  return user?.hasImage && user.imageUrl ? (
+    <Image
+      accessibilityLabel="Profile photo"
+      source={{ uri: user.imageUrl }}
+      style={{ width: 34, height: 34, borderRadius: 17 }}
+    />
+  ) : (
+    <AvatarFallback />
+  );
+}
+function AvatarFallback() {
+  const { colors } = useTheme();
+  const session = useSession();
+  const initial =
+    session.data?.firstName?.trim().slice(0, 1).toUpperCase() || "C";
+  return (
+    <View
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: colors.ink,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text
+        style={{
+          color: colors.white,
+          fontFamily: "Poppins-SemiBold",
+          fontSize: 14,
+        }}
+      >
+        {initial}
+      </Text>
+    </View>
+  );
+}
+export function AddNavigationMark({ size = 48 }: { size?: number } = {}) {
+  return (
+    <LinearGradient
+      colors={["#03A8C0", "#5ED3D0"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <View accessible={false} style={{ width: size * 0.5, height: size * 0.5, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ position: "absolute", width: "100%", height: 2, borderRadius: 1, backgroundColor: "white" }} />
+        <View style={{ position: "absolute", height: "100%", width: 2, borderRadius: 1, backgroundColor: "white" }} />
+      </View>
+    </LinearGradient>
+  );
+}
+export function DetailNavigation({
+  onNavigate,
+  disabled = false,
+}: { onNavigate?: () => void; disabled?: boolean } = {}) {
+  const access = useAccess();
+  const { colors, dark } = useTheme();
+  const path = usePathname();
+  const params = useGlobalSearchParams();
+  const askClover = usePageAskClover();
+  return (
+    <NavigationBar dark={dark}>
+      {(
+        [
+          { title: "Home", route: "/(tabs)", icon: "home-outline" },
+          {
+            title: "Transactions",
+            route: "/(tabs)/transactions",
+            icon: "swap-horizontal-outline",
+          },
+          { title: "Add", route: "/add-transaction", icon: "add" },
+          {
+            title: "Ask Clover",
+            route: "/(tabs)/adviser",
+            icon: "chatbubble-ellipses-outline",
+          },
+          {
+            title: "Account",
+            route: "/(tabs)/account",
+            icon: "person-outline",
+          },
+        ] as const
+      ).map((item) => (
+        <NavigationItem
+          key={item.title}
+          label={
+            access.active ? item.title : `${item.title}, log in required`
+          }
+          disabled={disabled}
+          color={colors.muted}
+          add={item.title === "Add"}
+          selected={path === item.route.replace("/(tabs)", "") || (item.title === "Home" && path === "/")}
+          onPress={() => {
+            if (access.active && item.title === "Ask Clover") { askClover(askPageContext(path, params)); return; }
+            onNavigate?.();
+            if (access.active) router.navigate(item.route);
+            else void access.signIn();
+          }}
+        >
+          {item.title === "Account" ? (
+            <AccountAvatar />
+          ) : item.title === "Add" ? (
+            <AddNavigationMark />
+          ) : (
+            <Icon name={item.icon} size={34} />
+          )}
+        </NavigationItem>
+      ))}
+    </NavigationBar>
+  );
+}

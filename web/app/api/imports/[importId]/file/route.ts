@@ -1,0 +1,80 @@
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
+import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { fetchImportFileCompat } from "@/lib/data-engine";
+import { downloadImportObject } from "@/lib/import-storage.server";
+import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+
+const getContentType = (fileName: string, fileType: string) => {
+  const lowerName = fileName.toLowerCase();
+  const lowerType = fileType.toLowerCase();
+
+  if (lowerName.endsWith(".pdf") || lowerType.includes("pdf")) {
+    return "application/pdf";
+  }
+
+  if (lowerName.endsWith(".csv") || lowerType.includes("csv")) {
+    return "text/csv; charset=utf-8";
+  }
+  if (lowerName.endsWith(".xlsx") || lowerType.includes("spreadsheetml")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (lowerName.endsWith(".xlsm") || lowerType.includes("macroenabled.12")) return "application/vnd.ms-excel.sheet.macroEnabled.12";
+  if (lowerName.endsWith(".xlsb") || lowerType.includes("binary.macroenabled.12")) return "application/vnd.ms-excel.sheet.binary.macroEnabled.12";
+  if (lowerName.endsWith(".xls") || lowerType === "application/vnd.ms-excel") return "application/vnd.ms-excel";
+  if (lowerName.endsWith(".ods") || lowerType.includes("opendocument.spreadsheet")) return "application/vnd.oasis.opendocument.spreadsheet";
+  if (lowerName.endsWith(".tsv") || lowerType.includes("tab-separated-values")) {
+    return "text/tab-separated-values; charset=utf-8";
+  }
+
+  if (lowerName.endsWith(".json") || lowerType.includes("json")) {
+    return "application/json; charset=utf-8";
+  }
+
+  return "application/octet-stream";
+};
+
+export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
+  try {
+    const { importId } = await params;
+    const localDev = await isLocalDevHost();
+    const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
+    const importFile = await fetchImportFileCompat(importId);
+
+    if (!importFile || !importFile.storageKey) {
+      return NextResponse.json({ error: "Import not found" }, { status: 404 });
+    }
+
+    if (!localDev) {
+      await assertWorkspaceAccess(userId, String(importFile.workspaceId));
+    }
+    const fileName = importFile.fileName || "imported-file";
+    const fileType = importFile.fileType || "application/octet-stream";
+    const bytes = await downloadImportObject(String(importFile.storageKey));
+
+    return new Response(Buffer.from(bytes), {
+      headers: {
+        "Content-Type": getContentType(fileName, fileType),
+        "Content-Disposition": `inline; filename="${fileName.replaceAll("\"", "")}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load file";
+
+    if (/specified key does not exist|missing imported file/i.test(message)) {
+      return NextResponse.json(
+        {
+          error:
+            "The original file is no longer available in storage. Open the latest QA run or re-upload the file to scan it again.",
+        },
+        { status: 404 }
+      );
+    }
+
+    if (message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

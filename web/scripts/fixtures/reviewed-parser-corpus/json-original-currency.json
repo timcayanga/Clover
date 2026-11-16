@@ -1,0 +1,18 @@
+{
+  "bankName": "Example Bank",
+  "accountName": "SGD savings",
+  "accountNumber": "000123",
+  "currency": "SGD",
+  "transactions": [
+    {
+      "transaction_date": "2026-09-02",
+      "transactionName": "Coffee",
+      "debit_amount": "6.25"
+    },
+    {
+      "transaction_date": "2026-09-03",
+      "transactionName": "Salary",
+      "credit_amount": "1000"
+    }
+  ]
+}

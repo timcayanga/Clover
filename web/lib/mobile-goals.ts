@@ -1,0 +1,195 @@
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { mobileHomePeriods } from "@/lib/mobile-home-periods";
+import { goalActivityTotals } from "@/lib/goal-activity-totals";
+import { prisma } from "@/lib/prisma";
+import {
+  getGoalDefinition,
+  getGoalProgressSnapshot,
+  normalizeGoalPlan,
+  type GoalKey,
+} from "@/lib/goals";
+import { mobileGoalInput } from "@/lib/mobile-goal-input";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
+
+// Authentication and explicit Profile ownership are checked by the gateway.
+// Never infer the native Profile from browser cookies.
+export async function loadGoalActivity(workspaceId: string, currency: string, period = mobileHomePeriods().rolling(30)) {
+  const { from: start, to: end } = period;
+  const rows = await prisma.transaction.findMany({
+    where: buildActiveWorkspaceTransactionWhere(workspaceId, {
+      currency,
+      date: { gte: start, lt: end },
+    }),
+    select: {
+      amount: true,
+      type: true,
+      isTransfer: true,
+      category: { select: { name: true } },
+      account: { select: { type: true } },
+    },
+  });
+  const totals = goalActivityTotals(rows);
+  return { ...totals, start: start.toISOString(), end: end.toISOString() };
+}
+export async function mobileGoals(workspaceId: string, userId: string, options: { goalId?: string; now?: Date } = {}) {
+  const { goalId, now } = options;
+  const [saved, user, currencies] = await Promise.all([
+    prisma.personalGoal.findMany({
+      where: { workspaceId, ...(goalId ? { id: goalId } : {}) },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        goalKey: true,
+        targetAmount: true,
+        currency: true,
+        goalPlan: true,
+      },
+    }),
+    goalId && goalId !== "primary" ? null : prisma.user.findUnique({
+      where: { id: userId },
+      select: { primaryGoal: true, goalPlan: true, goalTargetAmount: true },
+    }),
+    goalId && goalId !== "primary" ? [] : prisma.account.findMany({
+      where: { workspaceId },
+      select: { currency: true },
+      distinct: ["currency"],
+    }),
+  ]);
+  const legacyCurrency = currencies.length === 1 ? currencies[0].currency ?? "PHP" : "PHP";
+  const activityCurrencies = new Set(saved.map(goal => goal.currency));
+  if (user?.primaryGoal) activityCurrencies.add(legacyCurrency);
+  const period = mobileHomePeriods(now).rolling(30);
+  const activity = new Map(await Promise.all([...activityCurrencies].map(async currency =>
+    [currency, await loadGoalActivity(workspaceId, currency, period)] as const,
+  )));
+  const goals = saved.map((goal) => {
+    const plan = normalizeGoalPlan(
+      goal.goalPlan,
+      goal.goalKey as GoalKey,
+      Number(goal.targetAmount),
+    );
+    const values = activity.get(goal.currency)!;
+    const progress = getGoalProgressSnapshot(
+      {
+        goalKey: goal.goalKey as GoalKey,
+        targetAmount: null,
+        goalPlan: plan,
+        currentNet: values.income - values.spending,
+        currentSpend: values.spending,
+        monthlyIncome: values.income || null,
+        currentSavingsRate: values.income
+          ? Math.min(
+              1,
+              Math.max(0, (values.income - values.spending) / values.income),
+            )
+          : null,
+        previousSavingsRate: null,
+        spendDelta: null,
+        recurringShare: 0,
+        investmentFlow: values.investmentFlow,
+      },
+      goal.currency,
+    );
+    return {
+      progress,
+      activity: values,
+      id: goal.id,
+      goal: goal.goalKey,
+      name: plan?.purpose || getGoalDefinition(goal.goalKey).title,
+      category: getGoalDefinition(goal.goalKey).title,
+      targetAmount: Number(goal.targetAmount),
+      currency: goal.currency,
+      cadence: plan?.cadence ?? "monthly",
+      purpose: plan?.purpose ?? "",
+      legacy: false,
+    };
+  });
+  if (user?.primaryGoal) {
+    const plan = normalizeGoalPlan(
+      user.goalPlan,
+      user.primaryGoal as GoalKey,
+      user.goalTargetAmount ? Number(user.goalTargetAmount) : null,
+    );
+    return {
+      goals: [
+        {
+          id: "primary",
+          goal: user.primaryGoal,
+          name: plan?.purpose || getGoalDefinition(user.primaryGoal).title,
+          category: "Existing account goal",
+          targetAmount:
+            plan?.targetMode === "amount"
+              ? plan.targetAmount
+              : user.goalTargetAmount
+                ? Number(user.goalTargetAmount)
+                : null,
+          currency: legacyCurrency,
+          cadence: plan?.cadence ?? "monthly",
+          purpose: plan?.purpose ?? "",
+          legacy: true,
+          activity: activity.get(legacyCurrency),
+          progress: (() => {
+            const currency = legacyCurrency;
+            const v = activity.get(currency)!;
+            return getGoalProgressSnapshot(
+              {
+                goalKey: user.primaryGoal as GoalKey,
+                targetAmount: plan ? null : user.goalTargetAmount
+                  ? Number(user.goalTargetAmount)
+                  : null,
+                goalPlan: plan,
+                currentNet: v.income - v.spending,
+                currentSpend: v.spending,
+                monthlyIncome: v.income || null,
+                currentSavingsRate: v.income
+                  ? Math.min(1, Math.max(0, (v.income - v.spending) / v.income))
+                  : null,
+                previousSavingsRate: null,
+                spendDelta: null,
+                recurringShare: 0,
+                investmentFlow: v.investmentFlow,
+              },
+              currency,
+            );
+          })(),
+        },
+        ...goals,
+      ],
+    };
+  }
+  return { goals };
+}
+
+export async function saveMobileGoal(workspaceId: string, input: unknown) {
+  const { id, goal, targetAmount, currency, goalPlan } =
+    mobileGoalInput.parse(input);
+  const data = {
+    goalKey: goal,
+    targetAmount,
+    currency,
+    goalPlan: {
+      ...goalPlan,
+      goalKey: goal,
+      targetMode: "amount",
+      targetAmount,
+      targetPercent: null,
+    },
+  };
+  if (id) {
+    const result = await prisma.personalGoal.updateMany({
+      where: { id, workspaceId },
+      data,
+    });
+    if (!result.count) return null;
+    invalidateWorkspaceSummaryCache(workspaceId);
+    return { id };
+  }
+  const { assertPlanQuota } = await import("./plan-quota");
+  const created = await prisma.$transaction(async (tx) => {
+    const workspace = await tx.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    await assertPlanQuota(tx, workspace.userId, "goals");
+    return tx.personalGoal.create({ data: { ...data, workspaceId }, select: { id: true } });
+  });
+  invalidateWorkspaceSummaryCache(workspaceId);
+  return created;
+}

@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { bulkDestinationError, makeBulkDestinationRequest } from "../../shared/transaction-bulk-destination";
+
+const first = { id: "first", accountId: "cash", type: "expense", amount: "-100.50", currency: "PHP" };
+const second = { ...first, id: "second", accountId: "card" };
+const foreign = { ...second, currency: "USD" };
+const rows = [first, second];
+assert.equal(bulkDestinationError([first, foreign], 2, "circle"), "");
+assert.match(bulkDestinationError([first, foreign], 2, "split"), /one currency/);
+assert.match(bulkDestinationError(rows, 2, "recurring"), /one account/);
+assert.match(bulkDestinationError([first], 2, "circle"), /unavailable/);
+assert.match(bulkDestinationError([{ ...first, isTransfer: true }], 1, "split"), /expenses only/);
+const base = { workspaceId: "personal", rows, circleId: "circle", title: "Trip", people: "Bea, Alex", dueDate: "2026-12-15", amount: "100.50", recurrence: "monthly" };
+assert.deepEqual(makeBulkDestinationRequest({ ...base, destination: "circle" }).body, { action: "share_transactions", workspaceId: "personal", transactionIds: ["first", "second"] });
+assert.deepEqual(makeBulkDestinationRequest({ ...base, destination: "split" }).body, { fromTransactions: { title: "Trip", workspaceId: "personal", transactionIds: ["first", "second"], people: ["Bea", "Alex"] } });
+const recurringRows = [first, { ...first, id: "another" }];
+const recurring = makeBulkDestinationRequest({ ...base, rows: recurringRows, destination: "recurring" });
+assert.equal("amount" in recurring.body && recurring.body.amount, "100.50", "historical payments should never be summed");
+assert.throws(() => makeBulkDestinationRequest({ ...base, rows: recurringRows, destination: "recurring", dueDate: "2026-02-30" }), /valid next due date/);
+console.log("Transaction bulk actions regression passed");

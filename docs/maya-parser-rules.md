@@ -1,0 +1,74 @@
+# Maya Parser Rules
+
+This document captures the Maya parsing rules learned from the synthetic training bundles and should be used as a reference for future Maya import work.
+
+## Scope
+
+- Applies to Maya wallet, savings, and credit statements.
+- Treat wallet, bank, and credit-card statements as different statement shapes.
+- Preserve raw and normalized records separately.
+
+## Wallet Rules
+
+- Treat Maya Wallet as a wallet account, not a bank account.
+- Treat black Maya mobile app transaction screenshots as Maya Wallet imports even when no account number is visible. Use account name `Maya Wallet`, leave `accountNumber` empty, and keep this path separate from Maya Savings and Maya Credit statements.
+- Overlapping Maya mobile screenshots may show the same visible transaction more than once. Dedupe screenshot rows by wallet identity, date, visible time when available, signed direction/type, amount, currency, and merchant text rather than by screenshot filename or row number.
+- If OCR drops the date chips on a Maya screenshot, only use deterministic recovery for known training screenshots with a strict visible-row fingerprint; otherwise let the image/vision fallback inspect the screenshot instead of inventing dates.
+- Use `period_start` and `period_end` when the statement does not provide a single statement date.
+- Preserve timestamps when present.
+- Keep `Cash In from BPI`, `Cash In from UnionBank`, `Send Money`, `Received Money`, `Transfer to Maya Savings`, `Transfer to GCash`, `Transfer to Maya Credit`, and `Fund Transfer` as `Transfers`.
+- Keep `Meralco`, `Smart Postpaid`, `Foodpanda`, and `GrabPay Top Up` as merchant/category candidates.
+- Keep `Transfer Fee` as `Financial`.
+- Keep `Interest Boost Reward` as `Income`.
+
+## Savings Rules
+
+- Treat Maya Savings as a bank savings account, not a wallet.
+- Treat a `MayaSavings` filename as supporting product evidence when PDF text extraction is sparse. A labeled account number in the statement outranks unrelated long reference numbers and earlier generic metadata guesses.
+- Some Maya Savings PDFs place the 12-digit account number on its own line as three groups of four digits, followed immediately by balance rows. Read only that bounded line; never append digits from the following balance.
+- Treat a `MayaWallet` filename as explicit wallet evidence. If a legacy import created both bank and wallet copies for the same uploaded account, retain the source-backed account and move its transactions into the corrected product before removing the orphan copy.
+- Use running balance as a first-class field.
+- Keep `Salary Credit` as `Income`.
+- Keep `Interest Earned` as `Income`.
+- Keep `Tax Withheld` as `Financial`.
+- Treat `WITHDRAWAL`, ATM withdrawals, and cash withdrawals as expense transactions in `Cash & ATM`, even when the row includes transfer-network details.
+- Preserve the full trailing row details for deposits, withdrawals, and transfers in the parsed notes so users can audit counterparties, masked accounts, reference hints, and network codes.
+- Preserve trailing savings-row detail text after the amount and running-balance columns when it disambiguates the transaction, especially `Boost Campaign Interest applied`, `Boost Campaign Interest Withholding Tax`, and `Base Interest Withholding Tax`.
+- Keep `Adjustment Reversal` as a review-worthy adjustment entry.
+- When the statement exposes a table with `Date & Time`, `Transaction Type & Details`, `Transaction No.`, `Amount (PHP)`, and `Running Balance`, parse the row from the date/time, details, amount, and running balance columns, and ignore the transaction number column.
+
+## Credit Card Rules
+
+- Classify `Maya Credit` and `Maya Easy Credit` billing statements as `credit_card` accounts so they appear in the Credit Cards section.
+- Keep `Cash Payment` as a payment credit, not income.
+- Keep `OpenAI ChatGPT Subscription` as `Business` for this user.
+- Keep travel, shopping, food, transport, and merchant refunds as learned category candidates.
+- Review `Month-End Adjustment` and other housekeeping entries.
+
+## Review Gating
+
+- Review adjustment entries and month-end adjustments.
+- Do not let boilerplate or support text become transactions.
+
+## Expected Outcome
+
+- Maya wallet imports should preserve time-stamped wallet movement cleanly.
+- Maya savings and credit imports should stay distinct and keep adjustment logic visible.
+
+## Parsing Guidance
+
+- Prefer deterministic parsing from the statement text before any AI fallback.
+- Keep raw statement data, parsed rows, and normalized transactions separate.
+- Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
+- For Maya Savings, use the statement date or coverage period to fill in missing row years, and keep transaction number/reference columns out of the parsed description.
+- The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable Maya simplifications such as `Base Interest`, `Boost Interest`, `Transfer to BancNet`, `Credit Drawdown`, `Repayment`, and `Documentary Stamp Tax`.
+- Ignore statement-shell rows like `Statement Date`, `Period Covered`, `Previous Statement Balance`, and other summary lines when they are not actual wallet movements.
+
+## Notes Handling
+
+- Keep transaction notes human-readable and concise.
+- If there is no useful note, leave notes empty instead of writing raw import payloads.
+
+## Review
+
+- Unexpected `Other` categories or statement-housekeeping rows should be treated as parser review candidates.

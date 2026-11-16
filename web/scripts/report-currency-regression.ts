@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { resolveReportCurrency } from "../lib/report-currency";
+const own = ["EUR", "PHP", "USD", "php"];
+assert.deepEqual(resolveReportCurrency(own, "PHP"), {currencies:["EUR","PHP","USD"],defaultCurrency:"PHP",currentCurrency:"PHP"});
+assert.equal(resolveReportCurrency(own,"PHP","USD").currentCurrency,"USD");
+assert.equal(resolveReportCurrency(own,"PHP","JPY").currentCurrency,"PHP");
+assert.equal(resolveReportCurrency(own,"PHP","all").currentCurrency,"ALL");
+assert.equal(resolveReportCurrency(["USD"],"PHP").currentCurrency,"USD");
+assert.deepEqual(resolveReportCurrency([],"PHP").currencies,["PHP"]);
+console.log("Reports currency: owned options, preferred default, explicit selection, invalid links and empty Profiles passed.");

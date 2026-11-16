@@ -1,0 +1,491 @@
+import { AccountTypeMark } from "./account-type-mark";
+import { CardReplacementPanel } from "./card-replacement-panel";
+import { supportsCardReplacement, type PublicCardReplacement } from "../../shared/card-replacement";
+import { Pressable } from "react-native";
+import { suggestedDraftInstitution } from "../../shared/account-institution";
+import { investmentNameLabel, investmentTickerMatches, investmentTickerHint, investmentTypeLabel } from "../../shared/investment-entry";
+import { useLiveInvestmentValues } from "./use-live-investment-values";
+import { FinverseConnect } from "./finverse-connect";
+import { AddEntryMethods } from "./add-entry-methods";
+import { useEffect, useRef, useState } from "react";
+import { Body, Button, Card, Field, Notice, Screen, Icon, money } from "./ui";
+import { AssetSnapshot } from "./asset-snapshot";
+import { AccountValuationHistory } from "./investment-views";
+import { AccountHistory } from "./account-history";
+import { AccountIdentity } from "./account-identity";
+import { PlanAction, PlanHeader } from "./plan-ui";
+import { Choices, ChoiceField } from "./transaction-entry";
+import { useSession } from "./session";
+export const accountDisplayBalance = (account: AccountRecord) =>
+  account.displayBalance === undefined
+    ? account.balance
+    : account.displayBalance;
+
+export type AccountRecord = {
+  id: string;
+  name: string;
+  institution: string | null;
+  type: string;
+  currency: string;
+  balance: string | null;
+  displayBalance?: string | null;
+  brandLogoUrl?: string | null;
+  brandPalette?: import("../../shared/visual-identity").AccountCardPalette;
+  lastFour?: string;
+  cardNumberHistory?: PublicCardReplacement[];
+  source?: string;
+  favorite?: boolean;
+  transactionCount?: number;
+  creditLimit?: string | null;
+  creditPeriodStart?: string | null;
+  creditPeriodEnd?: string | null;
+  investmentSubtype?: string | null;
+  investmentSymbol?: string | null;
+  investmentQuantity?: string | null;
+  investmentCostBasis?: string | null;
+  investmentPrincipal?: string | null;
+  investmentStartDate?: string | null;
+  investmentMaturityDate?: string | null;
+  investmentInterestRate?: string | null;
+  investmentMaturityValue?: string | null;
+};
+const types = [
+  "bank",
+  "wallet",
+  "credit_card",
+  "cash",
+  "investment",
+  "loan",
+  "mortgage",
+  "line_of_credit",
+  "receivable",
+  "payable",
+  "bnpl",
+  "prepaid",
+  "insurance",
+  "other",
+];
+const labels: Record<string, string> = {
+  name: "Account name",
+  institution: "Institution",
+  currency: "Currency",
+  balance: "Opening balance",
+  accountNumber: "Account number",
+  creditLimit: "Credit limit",
+  creditPeriodStart: "Statement period start",
+  creditPeriodEnd: "Statement period end",
+  investmentSubtype: "Asset type",
+  investmentSymbol: "Ticker Name",
+  investmentQuantity: "Quantity",
+  investmentCostBasis: "Purchase Value",
+  investmentPrincipal: "Principal",
+  investmentStartDate: "Start date",
+  investmentMaturityDate: "Maturity date",
+  investmentInterestRate: "Interest rate (%)",
+  investmentMaturityValue: "Maturity value",
+};
+const dateFields = new Set([
+  "creditPeriodStart",
+  "creditPeriodEnd",
+  "investmentStartDate",
+  "investmentMaturityDate",
+]);
+const numericFields = new Set([
+  "balance",
+  "creditLimit",
+  "investmentQuantity",
+  "investmentCostBasis",
+  "investmentPrincipal",
+  "investmentInterestRate",
+  "investmentMaturityValue",
+]);
+export function AccountEditor({
+  initial,
+  callbackConnection,
+  connectInitially = false,
+  onboarding = false,
+  defaultType = "bank",
+  defaultInstitution = "",
+  defaultCurrency = "PHP",
+  onClose,
+  onSaved,
+}: {
+  initial: AccountRecord | null;
+  callbackConnection?: string;
+  connectInitially?: boolean;
+  onboarding?: boolean;
+  defaultType?: string;
+  defaultInstitution?: string;
+  defaultCurrency?: string;
+  onClose: () => void;
+  onSaved: (record: AccountRecord | null) => void;
+}) {
+  const session = useSession();
+  const [record, setRecord] = useState(initial);
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const [editing, setEditing] = useState(!initial);
+  const [loading, setLoading] = useState(Boolean(initial && !session.demo));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [moreDetails, setMoreDetails] = useState(false);
+  const automaticTicker = useRef("");
+  const automaticInstitution = useRef("");
+  const institutionEdited = useRef(Boolean(defaultInstitution));
+  const [draft, setDraft] = useState<Record<string, string>>({
+    name: "",
+    institution: defaultInstitution,
+    type: defaultType,
+    currency: defaultCurrency,
+    balance: "",
+    investmentSubtype: defaultType === "investment" ? "stock" : "",
+  });
+  const tickerMatches = investmentTickerMatches(draft.name, draft.investmentSubtype || "stock", draft.currency);
+  useEffect(() => {
+    const institution = suggestedDraftInstitution({
+      name: draft.name, type: draft.type, currentInstitution: draft.institution,
+      previousSuggestion: automaticInstitution.current, editedByUser: institutionEdited.current,
+      existingAccount: Boolean(record),
+    });
+    if (institution === draft.institution) return;
+    automaticInstitution.current = institution;
+    setDraft(current => ({ ...current, institution }));
+  }, [draft.name, draft.type, draft.institution, record]);
+  useEffect(() => {
+    if (record || draft.type !== "investment") return;
+    const matches = investmentTickerMatches(draft.name, draft.investmentSubtype || "stock", draft.currency);
+    const symbol = matches.length === 1 ? matches[0].symbol : "";
+    if (draft.investmentSymbol && draft.investmentSymbol !== automaticTicker.current) return;
+    automaticTicker.current = symbol;
+    setDraft(current => current.investmentSymbol === symbol ? current : { ...current, investmentSymbol: symbol });
+  }, [draft.name, draft.investmentSubtype, draft.currency, draft.type, draft.investmentSymbol, record]);
+  const previewValues = useLiveInvestmentValues(!record && draft.type === "investment" ? [{ id: "draft", name: draft.name, currency: draft.currency, subtype: draft.investmentSubtype, symbol: draft.investmentSymbol, quantity: draft.investmentQuantity }] : []);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    if (initial && !session.demo)
+      void session
+        .request<{ account: AccountRecord }>(
+          `accounts/${initial.id}?workspaceId=${encodeURIComponent(session.profileId)}`,
+        )
+        .then((r) => {
+          if (alive.current) setRecord(r.account);
+        })
+        .catch((e) => {
+          if (alive.current) setError(e.message);
+        })
+        .finally(() => {
+          if (alive.current) setLoading(false);
+        });
+    return () => {
+      alive.current = false;
+    };
+  }, [
+    initial?.id,
+    session.demo,
+    session.profileId,
+    session.request,
+    historyRevision,
+  ]);
+  const beginEdit = () => {
+    const values: Record<string, string> = {};
+    for (const field of [...Object.keys(labels), "type"]) {
+      const value = record?.[field as keyof AccountRecord];
+      values[field] = dateFields.has(field)
+        ? String(value ?? "").slice(0, 10)
+        : String(value ?? "");
+    }
+    // Displayed balance is reconciled; never treat it as an opening balance.
+    values.balance = "";
+    values.accountNumber = "";
+    setDraft(values);
+    setError("");
+    setEditing(true);
+  };
+  const save = async () => {
+    setError("");
+    if (!draft.name.trim() || !/^[A-Z]{3}$/.test(draft.currency))
+      return setError("Enter an account name and a three-letter currency.");
+    const payload: Record<string, string | null> = {};
+    const fields = record
+      ? [...Object.keys(labels), "type"]
+      : ["name", "institution", "type", "currency", "balance", ...(draft.type === "investment" ? ["investmentSubtype", ...investmentFields] : [])];
+    for (const field of fields) {
+      const value = (draft[field] ?? "").trim();
+      if (
+        record &&
+        (field === "balance" || field === "accountNumber") &&
+        !value
+      )
+        continue;
+      const previous = dateFields.has(field)
+        ? String(record?.[field as keyof AccountRecord] ?? "").slice(0, 10)
+        : String(record?.[field as keyof AccountRecord] ?? "");
+      if (record && value === previous) continue;
+      if (
+        value &&
+        numericFields.has(field) &&
+        !/^-?\d{1,12}(\.\d{1,8})?$/.test(value)
+      )
+        return setError(`Enter a valid ${labels[field].toLowerCase()}.`);
+      if (value && dateFields.has(field)) {
+        const d = new Date(`${value}T00:00:00Z`);
+        if (
+          !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+          !Number.isFinite(+d) ||
+          d.toISOString().slice(0, 10) !== value
+        )
+          return setError("Use a valid date in YYYY-MM-DD format.");
+      }
+      payload[field] =
+        value || (field === "institution" && !record ? "" : null);
+    }
+    if (!record) {
+      payload.balance = draft.type === "investment"
+        ? (fixedIncome ? draft.investmentPrincipal : draft.investmentCostBasis)?.trim() || "0"
+        : draft.balance.trim() || "0";
+    }
+    if (!Object.keys(payload).length) {
+      setEditing(false);
+      return;
+    }
+    setBusy(true);
+    try {
+      if (session.demo) {
+        onSaved({
+          ...(record ?? { id: `sample-${Date.now()}` }),
+          ...draft,
+          balance: record ? draft.balance || record.balance : payload.balance ?? "0",
+        } as AccountRecord);
+        return;
+      }
+      const result = await session.request<{ account: AccountRecord }>(
+        `accounts${record ? `/${record.id}` : ""}?workspaceId=${encodeURIComponent(session.profileId)}`,
+        { method: record ? "PATCH" : "POST", body: JSON.stringify(payload) },
+      );
+      if (alive.current) onSaved(result.account);
+    } catch (e) {
+      if (alive.current) setError((e as Error).message);
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  };
+  const remove = async () => {
+    if (!record) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (!session.demo)
+        await session.request(
+          `accounts/${record.id}?workspaceId=${encodeURIComponent(session.profileId)}`,
+          { method: "DELETE" },
+        );
+      if (alive.current) onSaved(null);
+    } catch (e) {
+      if (alive.current) setError((e as Error).message);
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  };
+  const investmentTypes = ["stock","etf","mutual_fund","money_market_fund","uitf","reit","crypto","real_world_asset","bond","time_deposit","savings","other"];
+  const fixedIncome = ["bond", "time_deposit", "savings"].includes(draft.investmentSubtype);
+  const investmentFields = fixedIncome ? ["investmentPrincipal", "investmentStartDate", "investmentMaturityDate", "investmentInterestRate", "investmentMaturityValue"] : ["investmentSymbol", "investmentQuantity", "investmentCostBasis"];
+  const extra = [...(record ? [...(supportsCardReplacement(record.type) ? [] : ["accountNumber"]), ...(record.source === "manual" ? ["balance"] : [])] : ["balance"]), ...(["credit_card", "line_of_credit"].includes(draft.type) ? ["creditLimit", "creditPeriodStart", "creditPeriodEnd"] : []), ...(draft.type === "investment" ? investmentFields : [])];
+  return (
+    <Screen sheet={editing && !record} onDismiss={() => { if (!busy) onClose(); }}>
+      <PlanHeader
+        titleInset={52}
+        title={
+          editing
+            ? record
+              ? "Edit Account"
+              : defaultType === "investment" ? "Add Investment" : "Add Account"
+            : record?.type === "investment"
+              ? "Asset Details"
+              : "Account Details"
+        }
+        back={() => {
+          if (busy) return;
+          if (editing && record) {
+            setEditing(false);
+            setError("");
+          } else onClose();
+        }}
+      />
+      {error ? <Notice>{error}</Notice> : null}
+      {loading ? (
+        <Body>Loading account details…</Body>
+      ) : editing ? (
+        <AddEntryMethods
+          connect={draft.type !== "investment" ? <FinverseConnect callbackConnection={callbackConnection} onSynced={() => {}} /> : undefined}
+          onboarding={onboarding}
+          initialMethod={callbackConnection || connectInitially ? "connect" : "manual"}
+          enabled={!record}
+          key={record?.id || "new"}
+          kind={draft.type === "investment" ? "investment" : "account"}
+          disabled={busy}
+          context={{
+            kind: draft.type === "investment" ? "investment" : "account",
+            fields: {
+              name: draft.name || "",
+              institution: draft.institution || "",
+              type: draft.type || "bank",
+              currency: draft.currency || "PHP",
+              balance: draft.balance || "",
+              investmentSubtype: draft.investmentSubtype || "",
+              investmentSymbol: draft.investmentSymbol || "",
+              investmentQuantity: draft.investmentQuantity || "",
+              investmentCostBasis: draft.investmentCostBasis || "",
+            },
+          }}
+          onDraft={(proposal) => {
+            const account = proposal.accounts[0];
+            if (account) setDraft((current) => ({ ...current, ...account }));
+          }}
+        >
+          <Card>
+            {defaultType !== "investment" ? <>
+            <ChoiceField
+              label="Account Type"
+              value={draft.type}
+              options={types.map((value) => ({
+                value,
+                icon: <AccountTypeMark type={value} size={26} />,
+                label: value === "bnpl" ? "Buy Now, Pay Later" : value === "line_of_credit" ? "Line of Credit" : value.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase()),
+                group: ["bank", "wallet", "cash", "prepaid"].includes(value) ? "Banks & Savings" : value === "investment" ? "Investments" : ["credit_card", "line_of_credit", "bnpl"].includes(value) ? "Credit Cards & Credit" : "Other Accounts",
+              })).sort((a, b) => a.group.localeCompare(b.group))}
+              onChange={(type) => setDraft((d) => ({ ...d, type, ...(type === "investment" ? {investmentSubtype:d.investmentSubtype || "stock"} : {}) }))}
+            />
+            </> : null}
+            {draft.type === "investment" ? <ChoiceField label="Investment Type" value={draft.investmentSubtype || "stock"} onChange={investmentSubtype=>setDraft(d=>({...d,investmentSubtype}))} options={investmentTypes.map(value=>({value,label:["etf","uitf","reit"].includes(value)?value.toUpperCase():investmentTypeLabel(value)}))}/> : null}
+            {["name", "institution", "currency", ...(draft.type === "investment" && !record ? [fixedIncome ? "investmentPrincipal" : "investmentCostBasis"] : extra)].map((field) => (
+              <Field key={field}
+                label={draft.type === "investment" && field === "name" ? investmentNameLabel(draft.investmentSubtype) : draft.type === "investment" && !record && ["investmentPrincipal", "investmentCostBasis"].includes(field) ? "Purchase Value" : draft.type === "investment" && field === "balance" ? "Recorded Value" : labels[field]}
+                value={draft[field] ?? ""}
+                placeholder={dateFields.has(field) ? "YYYY-MM-DD" : numericFields.has(field) ? "0" : undefined}
+                autoCapitalize={field === "currency" || field === "investmentSymbol" ? "characters" : "sentences"}
+                keyboardType={numericFields.has(field) ? "decimal-pad" : "default"}
+                onChangeText={value => {
+                  if (field === "institution") institutionEdited.current = true;
+                  setDraft(current => ({ ...current, [field]: ["currency", "investmentSymbol"].includes(field) ? value.toUpperCase() : value }));
+                }}
+              />
+            ))}
+            {draft.type === "investment" && !record ? <>
+              {tickerMatches.length > 1 ? <ChoiceField label="Which share class do you own?" value={draft.investmentSymbol || ""} options={tickerMatches.map(match => ({ value: match.symbol, label: `${match.name} (${match.symbol})` }))} onChange={investmentSymbol => { automaticTicker.current = ""; setDraft(current => ({ ...current, investmentSymbol })); }} /> : null}
+              {draft.investmentSymbol ? <Body>{investmentTickerHint(draft.name, draft.investmentSubtype, draft.currency, draft.investmentSymbol)}</Body> : null}
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: moreDetails }} onPress={() => setMoreDetails(value => !value)} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Body>More Details</Body><Icon line name={moreDetails ? "chevron-up" : "chevron-down"} size={18} />
+              </Pressable>
+              {moreDetails ? investmentFields.filter(field => !["investmentCostBasis", "investmentPrincipal"].includes(field)).map(field => <Field key={field}
+                label={labels[field]} value={draft[field] ?? ""} placeholder={dateFields.has(field) ? "YYYY-MM-DD" : undefined}
+                autoCapitalize={field === "investmentSymbol" ? "characters" : "sentences"}
+                keyboardType={numericFields.has(field) ? "decimal-pad" : "default"}
+                onChangeText={value => { if (field === "investmentSymbol") automaticTicker.current = ""; setDraft(current => ({ ...current, [field]: field === "investmentSymbol" ? value.toUpperCase() : value })); }} />) : null}
+              <Body>{previewValues.draft !== undefined ? `Estimated Current Value: ${money(String(previewValues.draft), draft.currency)}` : "Purchase Value is the total you paid. Add a ticker and quantity in More Details to calculate the current value when a matching quote is available."}</Body>
+            </> : null}
+            {record?.source === "manual" ? (
+              <Body>
+                Leave opening balance blank to keep it unchanged. Saving a new
+                opening balance changes the calculated account balance.
+              </Body>
+            ) : null}
+            {!record && draft.type !== "investment" ? (
+              <Body>
+                After adding the account, open Edit account for its credit or
+                asset details.
+              </Body>
+            ) : null}
+            <Button
+              title={busy ? "Saving…" : draft.type === "investment" ? "Save Investment" : "Save Account"}
+              disabled={busy}
+              onPress={() => void save()}
+            />
+            <Button
+              title="Cancel"
+              secondary
+              disabled={busy}
+              onPress={() =>
+                record ? (setEditing(false), setError("")) : onClose()
+              }
+            />
+          </Card>
+        </AddEntryMethods>
+      ) : record ? (
+        <Card>
+          {record.type === "investment" ? (
+            <AssetSnapshot account={record} onEdit={beginEdit} />
+          ) : (
+            <>
+              <AccountIdentity account={record} onEdit={beginEdit} />
+              <CardReplacementPanel key={record.id} account={record} onChanged={setRecord} />
+              <FinverseConnect mode="sync" accountId={record.id} onSynced={()=>{}} />
+              {Object.keys(labels)
+                .filter(
+                  (k) =>
+                    ![
+                      "name",
+                      "institution",
+                      "currency",
+                      "balance",
+                      "accountNumber",
+                    ].includes(k) && record[k as keyof AccountRecord] != null,
+                )
+                .map((k) => (
+                  <Body key={k}>
+                    {labels[k]}:{" "}
+                    {String(record[k as keyof AccountRecord]).slice(
+                      0,
+                      dateFields.has(k) ? 10 : undefined,
+                    )}
+                  </Body>
+                ))}
+            </>
+          )}
+          {record.type === "investment" ? (
+            <AccountValuationHistory
+              key={`valuation-${record.id}`}
+              accountId={record.id}
+              currency={record.currency}
+            />
+          ) : null}
+          <AccountHistory
+            key={record.id}
+            accountId={record.id}
+            investment={record.type === "investment"}
+            currency={record.currency}
+            onChanged={() => {
+              if (!session.demo) setHistoryRevision((v) => v + 1);
+            }}
+          />
+          <PlanAction
+            title="Delete account"
+            tone="delete"
+            onPress={() => setConfirmDelete(true)}
+          />
+          {confirmDelete ? (
+            <Notice>
+              <Body>
+                Delete this account and its linked transactions and import
+                artifacts? This cannot be undone.
+              </Body>
+              <PlanAction
+                tone="delete"
+                title="Confirm account deletion"
+                disabled={busy}
+                onPress={() => void remove()}
+              />
+              <Button
+                title="Keep account"
+                secondary
+                disabled={busy}
+                onPress={() => setConfirmDelete(false)}
+              />
+            </Notice>
+          ) : null}
+        </Card>
+      ) : null}
+
+    </Screen>
+  );
+}

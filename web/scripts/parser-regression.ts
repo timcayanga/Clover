@@ -1,0 +1,4807 @@
+import { readdir, readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { getAccountBrand } from "@/lib/account-brand";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
+import { findBestImportedAccountMatch, matchesImportedAccountIdentity } from "@/lib/workspace-cache";
+
+type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
+
+type Fixture = {
+  label: string;
+  relativePath: string;
+  institution: string;
+  accountName: string;
+  accountNumber: string;
+  expectedMetadataAccountName?: string | null;
+  expectedMetadataAccountNumber?: string | null;
+  accountType: ImportedAccountType;
+  minRows: number;
+  exactRows?: number;
+  expectedOpeningBalance?: number;
+  expectedTrailingBalance?: number;
+  expectedStartDate?: string;
+  expectedEndDate?: string;
+  minConfidence?: number;
+  expectParsedAccountName?: boolean;
+};
+
+type ParserCoverageItem = {
+  key: string;
+  label: string;
+};
+
+const defaultStatementRoot = "/Users/TimCayanga1/Documents/Bank Statements";
+
+const fixtures: Fixture[] = [
+  {
+    label: "BPI Personal",
+    relativePath: "Actual SOAs/BPI/BPI Savings/SA20260110 Q4 2025 Personal.pdf",
+    institution: "BPI",
+    accountName: "BPI 3012",
+    accountNumber: "0299-1830-12",
+    accountType: "bank",
+    minRows: 3,
+    exactRows: 3,
+    expectedOpeningBalance: 498867.67,
+    expectedTrailingBalance: 536435.79,
+    expectedStartDate: "2025-10-07",
+    expectedEndDate: "2026-01-07",
+    minConfidence: 90,
+  },
+  {
+    label: "BPI Sample Statement",
+    relativePath: "Samples/BPI/289783509-Statement-Bpi.pdf",
+    institution: "BPI",
+    accountName: "JEFFREY PILAPIL ROSAL",
+    accountNumber: "5756-4818-29",
+    accountType: "bank",
+    minRows: 13,
+    exactRows: 13,
+    expectedOpeningBalance: 4.96,
+    expectedTrailingBalance: 41.74,
+    expectedStartDate: "2015-05-14",
+    expectedEndDate: "2015-08-16",
+    minConfidence: 90,
+  },
+  {
+    label: "BPI OCR-corrupted Q2 2026 Personal",
+    relativePath: "Actual SOAs/BPI/BPI Savings/SA20260710 Q2 2026 Personal.pdf",
+    institution: "BPI",
+    accountName: "BPI 3012",
+    accountNumber: "0299-1830-12",
+    accountType: "bank",
+    minRows: 17,
+    exactRows: 17,
+    expectedStartDate: "2026-04-07",
+    expectedEndDate: "2026-07-07",
+    minConfidence: 90,
+  },
+  {
+    label: "BDO Sample Statement",
+    relativePath: "Samples/BDO/648293940-BDO.pdf",
+    institution: "BDO Unibank, Inc.",
+    accountName: "AMELITA POLICARPIO",
+    accountNumber: "13300009191",
+    accountType: "bank",
+    minRows: 29,
+    exactRows: 29,
+    expectedTrailingBalance: 760604.53,
+    expectedStartDate: "2021-10-22",
+    expectedEndDate: "2022-07-19",
+    minConfidence: 80,
+  },
+  {
+    label: "AUB Corporate Ledger Page 1",
+    relativePath: "Samples/AUB/433658044-213010000086page1-pdf.pdf",
+    institution: "AUB",
+    accountName: "MBM CONSTRUCTION",
+    accountNumber: "213010000086",
+    accountType: "bank",
+    minRows: 320,
+    exactRows: 320,
+    expectedTrailingBalance: 794287.34,
+    expectedStartDate: "2019-05-07",
+    expectedEndDate: "2019-08-05",
+    minConfidence: 80,
+  },
+  {
+    label: "AUB Corporate Ledger Page 2",
+    relativePath: "Samples/AUB/433658040-213010000086page2-pdf.pdf",
+    institution: "AUB",
+    accountName: "MBM CONSTRUCTION",
+    accountNumber: "213010000086",
+    accountType: "bank",
+    minRows: 100,
+    expectedStartDate: "2019-08-06",
+    expectedEndDate: "2019-11-04",
+    minConfidence: 80,
+  },
+  {
+    label: "AUB Credit Card Sample",
+    relativePath: "Samples/AUB/423999520-20190831-2019Aug09-107121698-pdf.pdf",
+    institution: "AUB",
+    accountName: "TIAPE HYACINTH MAY CARLOS",
+    accountNumber: "5151-0350-0035-9671",
+    accountType: "credit_card",
+    minRows: 2,
+    exactRows: 2,
+    expectedOpeningBalance: 7745.5,
+    expectedTrailingBalance: 7012.8,
+    expectedEndDate: "2019-08-09",
+    minConfidence: 94,
+  },
+  {
+    label: "AUB Corporate Tools Statement",
+    relativePath: "Samples/AUB/749884927-AUB-BANK-STATEMENT-TOOLS.pdf",
+    institution: "AUB",
+    accountName: "CONCRENIO, LYKA REYES",
+    accountNumber: "082120004142",
+    accountType: "bank",
+    minRows: 46,
+    exactRows: 46,
+    expectedStartDate: "2024-01-01",
+    expectedEndDate: "2024-03-29",
+    minConfidence: 90,
+  },
+  {
+    label: "AUB Template Sample",
+    relativePath: "Samples/AUB/Philippines-Asia-United-Bank-AUB-account-statement-Excel-and-PDF-template-960x1358.pdf",
+    institution: "Asia United Bank",
+    accountName: "JOHN CITIZEN",
+    accountNumber: "056-01-001181-1",
+    accountType: "bank",
+    minRows: 15,
+    exactRows: 15,
+    expectedOpeningBalance: 876.38,
+    expectedTrailingBalance: 109.88,
+    expectedStartDate: "2022-11-30",
+    expectedEndDate: "2022-12-31",
+    minConfidence: 70,
+  },
+  {
+    label: "BDO Bank Statement",
+    relativePath: "Samples/BDO/698065326-BDO-Bank-Statement.pdf",
+    institution: "BDO Unibank, Inc.",
+    accountName: "ERICKSON ROMERO MADRIDEO",
+    accountNumber: "001-8201-771-55",
+    accountType: "bank",
+    minRows: 8,
+    exactRows: 8,
+    expectedTrailingBalance: 248.36,
+    minConfidence: 90,
+  },
+  {
+    label: "Metrobank Savings Monthly",
+    relativePath: "Samples/Metrobank/848676827-METRO-BANK-CERT-AND-BANK-STATMENT.pdf",
+    institution: "Metrobank",
+    accountName: "JOHN NEIL RIVERA",
+    accountNumber: "000007048866",
+    accountType: "bank",
+    minRows: 19,
+    exactRows: 19,
+    expectedOpeningBalance: 57105.51,
+    expectedTrailingBalance: 55072.01,
+    expectedStartDate: "2025-01-31",
+    expectedEndDate: "2025-01-31",
+    minConfidence: 85,
+  },
+  {
+    label: "Metrobank Credit Card Large",
+    relativePath: "Samples/Metrobank/412340326-compressor.pdf",
+    institution: "Metrobank",
+    accountName: "EVALYN TABAG",
+    accountNumber: "4055992047530161",
+    accountType: "credit_card",
+    minRows: 6,
+    exactRows: 6,
+    expectedOpeningBalance: 18943.15,
+    expectedTrailingBalance: 72306.01,
+    expectedEndDate: "2018-12-21",
+    minConfidence: 90,
+  },
+  {
+    label: "Metrobank Online MSOA Credit Card",
+    relativePath: "Samples/Metrobank/586643226-MB-Online-MSOA-Statement.pdf",
+    institution: "Metrobank",
+    accountName: "MARY ROSS PAMELA PIAMONTE",
+    accountNumber: "5345070048504449",
+    accountType: "credit_card",
+    minRows: 3,
+    exactRows: 3,
+    expectedOpeningBalance: 7502.15,
+    expectedTrailingBalance: 1206.29,
+    expectedEndDate: "2022-04-01",
+    minConfidence: 95,
+  },
+  {
+    label: "BPI Dependent",
+    relativePath: "Actual SOAs/BPI/BPI Savings/SA20260110 Q4 2025 Dependent.pdf",
+    institution: "BPI",
+    accountName: "BPI 7005",
+    accountNumber: "0299-0970-05",
+    accountType: "bank",
+    minRows: 17,
+    exactRows: 17,
+    expectedOpeningBalance: 392185.25,
+    expectedTrailingBalance: 21678.26,
+    expectedStartDate: "2025-10-07",
+    expectedEndDate: "2026-01-07",
+    minConfidence: 90,
+  },
+  {
+    label: "GoTyme Everyday Deposit Sample",
+    relativePath: "Samples/GoTyme/850752826-GoTymeStatementForEverydayDepositAccount-20250113-160913-2.pdf",
+    institution: "GoTyme",
+    accountName: "WILFRED JR VALDERAMA",
+    accountNumber: "011607684435",
+    accountType: "bank",
+    minRows: 9,
+    exactRows: 9,
+    expectedOpeningBalance: 0,
+    expectedTrailingBalance: 0,
+    expectedStartDate: "2024-07-13",
+    expectedEndDate: "2025-01-12",
+    minConfidence: 100,
+  },
+  {
+    label: "CIMB Mixed Pages",
+    relativePath: "Samples/CIMB/840624470-CIMB-Statement-of-account-pdf.pdf",
+    institution: "CIMB",
+    accountName: "Daisy Mae Dalapo",
+    accountNumber: "20867602571971",
+    expectedMetadataAccountName: "CIMB",
+    expectedMetadataAccountNumber: null,
+    accountType: "bank",
+    minRows: 12,
+    exactRows: 12,
+    expectedTrailingBalance: 2392.08,
+    expectedStartDate: "2024-12-11",
+    expectedEndDate: "2024-12-29",
+    minConfidence: 85,
+  },
+  {
+    label: "Maya Savings Sample",
+    relativePath: "Samples/Maya/916450168-MayaSavings-SoA-6fd6154af7eb46e7afe2c3e43f271677-2025JUL.pdf",
+    institution: "Maya Bank",
+    accountName: "Flora Mae Dapal Montiadora",
+    accountNumber: "8054 1160 2354",
+    accountType: "bank",
+    minRows: 4,
+    exactRows: 4,
+    expectedOpeningBalance: 0,
+    expectedTrailingBalance: 41.44,
+    expectedStartDate: "2025-07-01",
+    expectedEndDate: "2025-07-31",
+    minConfidence: 100,
+  },
+  {
+    label: "CIMB GSave October 2025",
+    relativePath: "Samples/CIMB/927858715-CIMB-Statement-of-Account-20251004-155400-0000.pdf",
+    institution: "CIMB",
+    accountName: "Farhana Usman Mentok",
+    accountNumber: "30865602571091",
+    accountType: "bank",
+    minRows: 6,
+    exactRows: 6,
+    expectedTrailingBalance: 4294.66,
+    expectedStartDate: "2025-05-01",
+    expectedEndDate: "2025-06-10",
+    minConfidence: 85,
+  },
+  {
+    label: "Security Bank Sample",
+    relativePath: "Samples/Security Bank/748042099-Security-Bank-Statement-Gsr.pdf",
+    institution: "Security Bank",
+    accountName: "Security Bank 1852",
+    accountNumber: "0000059711852",
+    accountType: "bank",
+    minRows: 8,
+    exactRows: 8,
+    expectedOpeningBalance: 24.8,
+    expectedTrailingBalance: 1000.2,
+    expectedStartDate: "2023-11-30",
+    expectedEndDate: "2023-12-29",
+    minConfidence: 95,
+  },
+  {
+    label: "CIMB GSave November 2025",
+    relativePath: "Samples/CIMB/947472452-CIMB-Statement-of-Account-20251112-141921-0000.pdf",
+    institution: "CIMB",
+    accountName: "Farhana Usman Mentok",
+    accountNumber: "30865602571091",
+    accountType: "bank",
+    minRows: 6,
+    exactRows: 6,
+    expectedTrailingBalance: 4294.66,
+    minConfidence: 85,
+  },
+  {
+    label: "UnionBank Credit Card Sample",
+    relativePath: "Samples/UnionBank/771487697-SOA-Union-Bank.pdf",
+    institution: "UnionBank of the Philippines",
+    accountName: "Alyssa Jane Gabriel Rezada",
+    accountNumber: "1056827763912",
+    accountType: "credit_card",
+    minRows: 11,
+    exactRows: 11,
+    expectedEndDate: "2024-08-31",
+    minConfidence: 90,
+  },
+  {
+    label: "GoTyme Everyday Deposit",
+    relativePath: "Samples/GoTyme/900052996-Pdfrendition1-1-Unlocked.pdf",
+    institution: "GoTyme",
+    accountName: "PINKY PAISAN CRESCENCIO",
+    accountNumber: "019530466477",
+    accountType: "bank",
+    minRows: 117,
+    exactRows: 117,
+    expectedOpeningBalance: 1.75,
+    expectedTrailingBalance: 231.58,
+    expectedStartDate: "2025-06-01",
+    expectedEndDate: "2025-06-30",
+    minConfidence: 80,
+  },
+  {
+    label: "GCash",
+    relativePath: "Actual SOAs/GCash/GCash Statement Oct 2025 - Mar 2026_unlocked.pdf",
+    institution: "GCash",
+    accountName: "GCash 9926",
+    accountNumber: "09173009926",
+    accountType: "wallet",
+    minRows: 100,
+    exactRows: 187,
+    expectedOpeningBalance: 25882.06,
+    expectedStartDate: "2025-10-01",
+    expectedEndDate: "2026-04-15",
+    minConfidence: 80,
+    expectParsedAccountName: false,
+  },
+  {
+    label: "Maya Savings November 2024",
+    relativePath: "Samples/Maya/829627385-MayaSavings-SoA-112024-1.pdf",
+    institution: "Maya Bank",
+    accountName: "JULIUS FUENTES LOBIANO",
+    accountNumber: "8147-3969-3327",
+    accountType: "bank",
+    minRows: 11,
+    exactRows: 11,
+    expectedOpeningBalance: 1785.45,
+    expectedTrailingBalance: 0.01,
+    expectedStartDate: "2024-12-01",
+    expectedEndDate: "2024-12-31",
+    minConfidence: 80,
+  },
+  {
+    label: "PSBank Statement",
+    relativePath: "Samples/PSBank/63720585-2988959.pdf",
+    institution: "PSBank",
+    accountName: "CLARIDAD, FLOR MARIE BOSMEON",
+    accountNumber: "020-388-01099322-9",
+    accountType: "credit_card",
+    minRows: 4,
+    exactRows: 4,
+    expectedOpeningBalance: 74745.22,
+    expectedTrailingBalance: 77881.08,
+    expectedStartDate: "2011-05-21",
+    expectedEndDate: "2011-06-20",
+    minConfidence: 90,
+  },
+  {
+    label: "PNB Sample Statement",
+    relativePath: "Samples/PNB/935579868-Sample-Bank-Statement.pdf",
+    institution: "Philippine National Bank",
+    accountName: "Juan Dela Cruz",
+    accountNumber: "1234-5678-9012",
+    accountType: "bank",
+    minRows: 8,
+    exactRows: 8,
+    expectedOpeningBalance: 50000,
+    expectedTrailingBalance: 64900,
+    expectedStartDate: "2025-08-01",
+    expectedEndDate: "2025-08-25",
+    minConfidence: 90,
+  },
+  {
+    label: "PNB Project SOA January 2021",
+    relativePath: "Samples/PNB/495650370-PNB-Project-SOA-Jan-2021.pdf",
+    institution: "Philippine National Bank",
+    accountName: "BURKLEY & AQUINO LAW OFFICE",
+    accountNumber: "123370003379",
+    accountType: "bank",
+    minRows: 7,
+    exactRows: 7,
+    expectedTrailingBalance: 537915.35,
+    expectedStartDate: "2021-01-01",
+    expectedEndDate: "2021-01-31",
+    minConfidence: 90,
+  },
+  {
+    label: "RCBC Savings Sample",
+    relativePath: "Samples/RCBC/879866459-Statement.pdf",
+    institution: "RCBC",
+    accountName: "DARRYL B PALMA",
+    accountNumber: "7-591-325080",
+    accountType: "bank",
+    minRows: 22,
+    exactRows: 22,
+    expectedOpeningBalance: 0.54,
+    expectedTrailingBalance: 0.54,
+    expectedStartDate: "2025-04-01",
+    expectedEndDate: "2025-04-30",
+    minConfidence: 90,
+  },
+  {
+    label: "RCBC Visa Gold Sample",
+    relativePath: "Samples/RCBC/728919236-Acfroga47rrwerw7v8xwjcyqjxnpvi1hv5climj2qkpdzsqlabwmr51pzid4mt-Ao-Swizece4lt1ycaubzsilpqnzohhyzqxuv2cfbldosfajyekhfijmkceso8yzz1vgjmwntbprxb5ribspge-G.pdf",
+    institution: "RCBC",
+    accountName: "ROCHELLE C TUGADE",
+    accountNumber: "4293-8208-6552-2006",
+    accountType: "credit_card",
+    minRows: 5,
+    exactRows: 5,
+    expectedOpeningBalance: 5244.14,
+    expectedTrailingBalance: 12359.11,
+    expectedEndDate: "2024-04-03",
+    minConfidence: 90,
+  },
+  {
+    label: "Security Bank Proof of Account",
+    relativePath: "Samples/Security Bank/663451412-Proof-of-Account.pdf",
+    institution: "Security Bank",
+    accountName: "Security Bank 5883",
+    accountNumber: "0000036725883",
+    accountType: "bank",
+    minRows: 5,
+    exactRows: 5,
+    expectedOpeningBalance: 58.71,
+    expectedTrailingBalance: 30044.36,
+    expectedStartDate: "2023-03-31",
+    expectedEndDate: "2023-04-28",
+    minConfidence: 95,
+  },
+  {
+    label: "Security Bank Sample Statement",
+    relativePath: "Samples/Security Bank/748042099-Security-Bank-Statement-Gsr.pdf",
+    institution: "Security Bank",
+    accountName: "Security Bank 1852",
+    accountNumber: "0000059711852",
+    accountType: "bank",
+    minRows: 8,
+    exactRows: 8,
+    expectedOpeningBalance: 24.8,
+    expectedTrailingBalance: 1000.2,
+    expectedStartDate: "2023-11-30",
+    expectedEndDate: "2023-12-29",
+    minConfidence: 90,
+  },
+  {
+    label: "Security Bank Low Quality Statement",
+    relativePath: "Samples/Security Bank/841236133-Security-Bank-Statement-pdf.pdf",
+    institution: "Security Bank",
+    accountName: "Security Bank 9113",
+    expectedMetadataAccountName: "Security Bank 9113",
+    accountNumber: "000008179079113",
+    accountType: "bank",
+    minRows: 7,
+    exactRows: 7,
+    expectedTrailingBalance: 18075.26,
+    expectedStartDate: "2025-01-05",
+    expectedEndDate: "2025-01-22",
+    minConfidence: 95,
+  },
+  {
+    label: "Security Bank Low Quality Statement Duplicate",
+    relativePath: "Samples/Security Bank/913343282-Security-Bank-Statement-20250908-095718-0000.pdf",
+    institution: "Security Bank",
+    accountName: "Security Bank 9165",
+    expectedMetadataAccountName: "Security Bank 9165",
+    accountNumber: "000008179079165",
+    accountType: "bank",
+    minRows: 7,
+    exactRows: 7,
+    expectedTrailingBalance: 18075.26,
+    expectedStartDate: "2025-06-25",
+    expectedEndDate: "2025-07-28",
+    minConfidence: 95,
+  },
+  {
+    label: "RCBC October 2025",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_OCT 22 2025_1014_unlocked.pdf",
+    institution: "RCBC",
+    accountName: "TIMOTHY GUNTHER S CAYANGA",
+    accountNumber: "4279341138681014",
+    accountType: "credit_card",
+    minRows: 40,
+    exactRows: 55,
+    expectedOpeningBalance: 8994.44,
+    expectedTrailingBalance: 37246.38,
+    expectedEndDate: "2025-10-22",
+    minConfidence: 90,
+  },
+  {
+    label: "RCBC November 2025",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_NOV 23 2025_1014_unlocked.pdf",
+    institution: "RCBC",
+    accountName: "TIMOTHY GUNTHER S CAYANGA",
+    accountNumber: "4279341138681014",
+    accountType: "credit_card",
+    minRows: 1,
+    minConfidence: 90,
+  },
+  {
+    label: "RCBC December 2025",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_DEC 22 2025_1014_unlocked.pdf",
+    institution: "RCBC",
+    accountName: "TIMOTHY GUNTHER S CAYANGA",
+    accountNumber: "4279341138681014",
+    accountType: "credit_card",
+    minRows: 1,
+    minConfidence: 90,
+  },
+  {
+    label: "RCBC January 2026",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_JAN 22 2026_1014_unlocked.pdf",
+    institution: "RCBC",
+    accountName: "TIMOTHY GUNTHER S CAYANGA",
+    accountNumber: "4279341138681014",
+    accountType: "credit_card",
+    minRows: 1,
+    minConfidence: 90,
+  },
+  {
+    label: "RCBC February 2026",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_FEB 22 2026_1014_unlocked.pdf",
+    institution: "RCBC",
+    accountName: "TIMOTHY GUNTHER S CAYANGA",
+    accountNumber: "4279341138681014",
+    accountType: "credit_card",
+    minRows: 1,
+    minConfidence: 90,
+  },
+  {
+    label: "RCBC March 2026",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_MAR 22 2026_1014_unlocked.pdf",
+    institution: "RCBC",
+    accountName: "TIMOTHY GUNTHER S CAYANGA",
+    accountNumber: "4279341138681014",
+    accountType: "credit_card",
+    minRows: 1,
+    minConfidence: 90,
+  },
+  {
+    label: "UnionBank November 2025",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA November 2025_unlocked.pdf",
+    institution: "UnionBank of the Philippines",
+    accountName: "Timothy Gunther Santos Cayanga",
+    accountNumber: "109678428037",
+    accountType: "bank",
+    minRows: 5,
+    exactRows: 5,
+    expectedEndDate: "2026-04-14",
+    minConfidence: 85,
+  },
+  {
+    label: "UnionBank December 2025",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA December 2025_unlocked.pdf",
+    institution: "UnionBank of the Philippines",
+    accountName: "Timothy Gunther Santos Cayanga",
+    accountNumber: "109678428037",
+    accountType: "bank",
+    minRows: 1,
+    exactRows: 15,
+    minConfidence: 85,
+  },
+  {
+    label: "UnionBank January 2026",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA January 2026_unlocked.pdf",
+    institution: "UnionBank of the Philippines",
+    accountName: "Timothy Gunther Santos Cayanga",
+    accountNumber: "109678428037",
+    accountType: "bank",
+    minRows: 4,
+    exactRows: 4,
+    minConfidence: 85,
+  },
+  {
+    label: "UnionBank February 2026",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA February 2026_unlocked.pdf",
+    institution: "UnionBank of the Philippines",
+    accountName: "Timothy Gunther Santos Cayanga",
+    accountNumber: "109678428037",
+    accountType: "bank",
+    minRows: 5,
+    exactRows: 5,
+    minConfidence: 85,
+  },
+  {
+    label: "UnionBank March 2026",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA March 2026_unlocked.pdf",
+    institution: "UnionBank of the Philippines",
+    accountName: "Timothy Gunther Santos Cayanga",
+    accountNumber: "109678428037",
+    accountType: "bank",
+    minRows: 7,
+    exactRows: 7,
+    minConfidence: 85,
+  },
+];
+
+const coverageTargets: ParserCoverageItem[] = [
+  { key: "BPI", label: "BPI" },
+  { key: "BDO Unibank, Inc.", label: "BDO" },
+  { key: "CIMB", label: "CIMB" },
+  { key: "China Bank", label: "China Bank" },
+  { key: "EastWest Bank", label: "EastWest" },
+  { key: "GCash", label: "GCash" },
+  { key: "GoTyme", label: "GoTyme" },
+  { key: "Land Bank of the Philippines", label: "Landbank" },
+  { key: "Maya Bank", label: "Maya" },
+  { key: "PSBank", label: "PSBank" },
+  { key: "RCBC", label: "RCBC" },
+  { key: "Security Bank", label: "Security Bank" },
+  { key: "United Coconut Planters Bank", label: "UCPB" },
+  { key: "UnionBank of the Philippines", label: "UnionBank" },
+];
+
+const formatMoney = (value: number | null | undefined) => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "n/a";
+  }
+
+  return value.toFixed(2);
+};
+
+const approxEqual = (actual: number | null | undefined, expected: number, tolerance = 0.01) => {
+  return typeof actual === "number" && Number.isFinite(actual) && Math.abs(actual - expected) <= tolerance;
+};
+
+const parseDatePrefix = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+
+  return value.slice(0, 10);
+};
+
+const normalizeCoverageKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+const main = async () => {
+  const rootArgIndex = process.argv.indexOf("--root");
+  const root =
+    rootArgIndex >= 0 && process.argv[rootArgIndex + 1]
+      ? process.argv[rootArgIndex + 1]
+      : process.env.CLOVER_STATEMENT_ROOT || defaultStatementRoot;
+
+  const importFileTextModule = await import("../lib/import-file-text.server");
+  const dataEngine = await import("../lib/data-engine");
+  const dataQaBanksModule = await import("../lib/data-qa-banks");
+  const accountDisplayModule = await import("../lib/account-display");
+  const transactionDisplayModule = await import("../lib/transaction-display");
+  const parser = await import("../lib/import-parser");
+  const receiptAccountResolutionModule = await import("../lib/receipt-account-resolution");
+  const splitBillModule = await import("../lib/split-bill");
+  // v13 introduced column-aware extraction. Later cache invalidations must not
+  // prevent this suite from exercising the historical financial expectations.
+  const extractionVersion = /^v(\d+)$/.exec(dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION);
+  if (!extractionVersion || Number(extractionVersion[1]) < 13) {
+    throw new Error(
+      `expected import extraction cache version >= v13 after column-aware MariBank extraction, got ${dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION}`
+    );
+  }
+
+  const readUploadedFileText = importFileTextModule.readUploadedFileText as (
+    file: { name?: string; type?: string; arrayBuffer: () => Promise<ArrayBuffer | SharedArrayBuffer> },
+    password?: string,
+    options?: { importMode?: string | null }
+  ) => Promise<string>;
+  const resolveImageNormalizationProfile = importFileTextModule.resolveImageNormalizationProfile as (params: {
+    fileType?: string | null;
+    fileName?: string | null;
+    importMode?: string | null;
+  }) => string;
+  if (
+    resolveImageNormalizationProfile({
+      fileType: "image/jpeg",
+      fileName: "2026-05-01 22.08.42.jpg",
+      importMode: "receipt",
+    }) !== "receipt"
+  ) {
+    throw new Error("expected receipt uploads with generic filenames to use the receipt OCR profile");
+  }
+  console.log("[PASS] receipt OCR routing | generic receipt filenames use receipt normalization");
+  const buildLayoutAwarePdfTextFromContentItems = importFileTextModule.buildLayoutAwarePdfTextFromContentItems as (
+    items: Array<{ str?: string; transform?: number[]; width?: number; height?: number }>
+  ) => string;
+  const detectStatementMetadataFromText = dataEngine.detectStatementMetadataFromText as (text: string, fileName?: string) => {
+    institution: string | null;
+    accountNumber: string | null;
+    accountName: string | null;
+    openingBalance: number | null;
+    endingBalance: number | null;
+    startDate: string | null;
+    endDate: string | null;
+    confidence: number;
+  };
+  const assessParsedRowShapeConsistency = dataEngine.assessParsedRowShapeConsistency as (
+    rows: Array<{ date?: string; amount?: string; merchantRaw?: string; merchantClean?: string; description?: string; type?: string }>
+  ) => {
+    score: number;
+    dateCoverage: number;
+    amountCoverage: number;
+    merchantCoverage: number;
+    typeCoverage: number;
+    issues: string[];
+  };
+  const assessParsedRowTeachability = dataEngine.assessParsedRowTeachability as (
+    row: {
+      date?: string;
+      amount?: string | number | null;
+      merchantRaw?: string | null;
+      merchantClean?: string | null;
+      description?: string | null;
+      type?: string | null;
+      categoryName?: string | null;
+    }
+  ) => {
+    score: number;
+    issues: string[];
+    hasMerchant: boolean;
+    hasAmount: boolean;
+    hasDate: boolean;
+      hasType: boolean;
+    };
+  const assessParsedRowAnomalies = dataEngine.assessParsedRowAnomalies as (
+    row: {
+      date?: string;
+      amount?: string | number | null;
+      merchantRaw?: string | null;
+      merchantClean?: string | null;
+      description?: string | null;
+      type?: string | null;
+      categoryName?: string | null;
+    }
+  ) => {
+    score: number;
+    issues: string[];
+    isAnomalous: boolean;
+  };
+  const shouldPromoteTrainingSignalForLearning = dataEngine.shouldPromoteTrainingSignalForLearning as (
+    params: { confidence?: number | null; teachabilityScore?: number | null; merchantText?: string | null }
+  ) => boolean;
+  const shouldExpandMerchantPrototypeMemory = dataEngine.shouldExpandMerchantPrototypeMemory as (
+    params: { confidence?: number | null; teachabilityScore?: number | null }
+  ) => boolean;
+  const buildMerchantPrototypeLabel = dataEngine.buildMerchantPrototypeLabel as (
+    merchantText: string,
+    normalizedName?: string | null
+  ) => string | null;
+  const buildMerchantPrototypeVariants = dataEngine.buildMerchantPrototypeVariants as (
+    merchantText: string,
+    normalizedName?: string | null
+  ) => string[];
+  const scoreRowShapeLearningPenalty = dataEngine.scoreRowShapeLearningPenalty as (score: number) => number;
+  const estimateImportLearningConfidence = dataEngine.estimateImportLearningConfidence as (
+    params: { baseConfidence?: number | null; teachabilityScore?: number | null; rowShapeScore?: number | null; negativeSignalCount?: number | null }
+  ) => number;
+  const buildStatementFamilySignature = dataEngine.buildStatementFamilySignature as (
+    params: {
+      rows: Array<{ merchantRaw?: string; merchantClean?: string; description?: string; name?: string; date?: string; transactionDate?: string; postedDate?: string; balance?: string | number; runningBalance?: string | number; type?: string }>;
+      metadata?: {
+        institution?: string | null;
+        accountType?: ImportedAccountType | null;
+        startDate?: string | null;
+        endDate?: string | null;
+      } | null;
+      fileType?: string | null;
+    }
+  ) => string | null;
+  const buildStatementFamilySignatureFromText = dataEngine.buildStatementFamilySignatureFromText as (
+    text: string,
+    metadata?: { institution?: string | null; accountType?: ImportedAccountType | null } | null,
+    fileType?: string | null
+  ) => string | null;
+  const buildStatementFingerprint = dataEngine.buildStatementFingerprint as (
+    text: string,
+    metadata: {
+      institution: string | null;
+      accountNumber: string | null;
+      accountName: string | null;
+      accountType?: ImportedAccountType | null;
+      startDate: string | null;
+      endDate: string | null;
+    },
+    fileName?: string | null,
+    fileType?: string | null,
+    documentFamily?: string | null
+  ) => string;
+  const mergeCompatibleStatementTextCandidates = importFileTextModule.mergeCompatibleStatementTextCandidates as (
+    left: { text: string; label: string; score: number },
+    right: { text: string; label: string; score: number }
+  ) => string | null;
+  const mergeCompatibleStatementTextCandidateConsensus = importFileTextModule.mergeCompatibleStatementTextCandidateConsensus as (
+    candidates: Array<{ text: string; label: string; score: number }>
+  ) => string | null;
+  const mergeStatementMetadataWithTemplate = dataEngine.mergeStatementMetadataWithTemplate as (
+    detected: {
+      institution: string | null;
+      accountNumber: string | null;
+      accountName: string | null;
+      accountType: ImportedAccountType | null;
+      currency?: string | null;
+      openingBalance: number | null;
+      endingBalance: number | null;
+      paymentDueDate?: string | null;
+      totalAmountDue?: number | null;
+      startDate: string | null;
+      endDate: string | null;
+      confidence: number;
+    },
+    template?: {
+      institution?: string | null;
+      accountNumber?: string | null;
+      accountName?: string | null;
+      accountType?: ImportedAccountType | null;
+      currency?: string | null;
+      openingBalance?: number | null;
+      endingBalance?: number | null;
+      paymentDueDate?: string | null;
+      totalAmountDue?: number | null;
+      startDate?: string | null;
+      endDate?: string | null;
+    } | null
+  ) => {
+    institution: string | null;
+    accountNumber: string | null;
+    accountName: string | null;
+    accountType: ImportedAccountType | null;
+    currency: string | null;
+    openingBalance: number | null;
+    endingBalance: number | null;
+    paymentDueDate: string | null;
+    totalAmountDue: number | null;
+    startDate: string | null;
+    endDate: string | null;
+    confidence: number;
+  };
+  const scoreStatementTemplateCandidate = dataEngine.scoreStatementTemplateCandidate as (
+    params: {
+      template: {
+        fingerprint: string;
+        fileType: string | null;
+        institution: string | null;
+        accountNumber: string | null;
+        accountName: string | null;
+        parserVersion: string;
+        parserConfig: unknown;
+        metadata: unknown;
+        exampleCount: number;
+        successCount: number;
+        failureCount: number;
+        lastSeenAt: Date;
+      };
+      institution?: string | null;
+      fileType?: string | null;
+      accountType?: ImportedAccountType | null;
+      statementFamilySignature?: string | null;
+    }
+  ) => number;
+  const normalizeBankName = dataQaBanksModule.normalizeBankName as (value: string | null | undefined) => string;
+  const formatUploadAccountDisplayName = accountDisplayModule.formatUploadAccountDisplayName as (
+    name?: string | null,
+    institution?: string | null,
+    accountNumber?: string | null,
+    type?: string | null
+  ) => string;
+  const inferAccountTypeFromStatement = parser.inferAccountTypeFromStatement as (
+      institution?: string | null,
+      accountName?: string | null,
+      fallback?: ImportedAccountType
+    ) => ImportedAccountType;
+  const parseReceiptText = splitBillModule.parseReceiptText as (receiptText: string) => {
+    receiptText: string;
+    merchantName: string | null;
+    billDate: string | null;
+    currency: string;
+    currencyMentions: string[];
+    currencyWarning: string | null;
+    subtotal: string | null;
+    serviceCharge: string | null;
+    tax: string | null;
+    tip: string | null;
+    rounding: string | null;
+    discount: string | null;
+    total: string | null;
+    paymentMethod: string | null;
+    items: Array<{ description: string; amount: string; quantity?: number | null; unitPrice?: string | null; wrapped?: boolean }>;
+    participants: string[];
+    splitAllocations: Array<{ participantName: string; charged: string | null; paid: string | null; due: string | null; currency: string }>;
+    receiptAccountMatch: { accountName: string | null; accountLast4: string | null; confidence: number; reason: string | null } | null;
+    confidence: number;
+  };
+  const assessReceiptPreviewQuality = splitBillModule.assessReceiptPreviewQuality as (preview: ReturnType<typeof parseReceiptText>) => {
+    score: number;
+    issues: string[];
+    reliableForFastPath: boolean;
+  };
+  const shouldRetryImageOcrBestEffort = importFileTextModule.shouldRetryImageOcrBestEffort as (params: {
+    firstPassText: string;
+    fileType?: string | null;
+    fileName?: string | null;
+    importMode?: string | null;
+  }) => boolean;
+  const resolveReceiptAccountHintToAccount = receiptAccountResolutionModule.resolveReceiptAccountHintToAccount as (
+    hint: {
+      accountName: string | null;
+      accountLast4: string | null;
+      confidence: number;
+      reason: string | null;
+    } | null,
+    accounts: Array<{
+      id: string;
+      name: string;
+      institution: string | null;
+      accountNumber: string | null;
+      type: string;
+      currency?: string | null;
+    }>
+  ) =>
+    | {
+        accountId: string;
+        accountName: string;
+        institution: string | null;
+        accountLast4: string | null;
+        confidence: number;
+        reason: string;
+      }
+    | null;
+  const splitBillDraftFromReceiptPreview = splitBillModule.splitBillDraftFromReceiptPreview as (
+    preview: {
+      receiptText: string;
+      merchantName: string | null;
+      billDate: string | null;
+      currency: string;
+      currencyMentions: string[];
+      currencyWarning: string | null;
+      subtotal: string | null;
+      serviceCharge: string | null;
+      tax: string | null;
+      tip: string | null;
+      rounding: string | null;
+      discount: string | null;
+      total: string | null;
+      paymentMethod: string | null;
+      items: Array<{ description: string; amount: string; quantity?: number | null; unitPrice?: string | null; wrapped?: boolean }>;
+      participants: string[];
+      splitAllocations: Array<{ participantName: string; charged: string | null; paid: string | null; due: string | null; currency: string }>;
+      receiptAccountMatch: { accountName: string | null; accountLast4: string | null; confidence: number; reason: string | null } | null;
+      confidence: number;
+    }
+  ) => {
+    participants: Array<{ id: string; name: string }>;
+    payments: Array<{ participantId: string; amount: string; note?: string | null }>;
+    items: Array<{ description: string; amount: string }>;
+    total?: string;
+    rawPayload?: Record<string, unknown> | null;
+  };
+
+  const failures: string[] = [];
+  const caseFilter = process.env.CLOVER_PARSER_CASE?.trim().toLowerCase() ?? "";
+  const portable = process.argv.includes("--portable");
+  if (process.env.CLOVER_SKIP_FIXTURE_CORPUS) throw new Error("Use --portable explicitly; private corpus skips are no longer implicit.");
+  const selectedFixtures = portable
+    ? []
+    : caseFilter
+    ? fixtures.filter((fixture) => fixture.label.toLowerCase().includes(caseFilter))
+    : fixtures;
+
+  if (caseFilter && selectedFixtures.length === 0) {
+    throw new Error(`No parser fixture matched CLOVER_PARSER_CASE=${process.env.CLOVER_PARSER_CASE}`);
+  }
+
+  for (const fixture of selectedFixtures) {
+    const absolutePath = join(root, fixture.relativePath);
+
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(absolutePath);
+    } catch {
+      failures.push(`[${fixture.label}] missing file: ${absolutePath}`);
+      continue;
+    }
+
+    const fileName = basename(absolutePath);
+    const text = await readUploadedFileText({
+      name: fileName,
+      type: "application/pdf",
+      arrayBuffer: async () => {
+        const copy = new Uint8Array(bytes.length);
+        copy.set(bytes);
+        return copy.buffer as ArrayBuffer;
+      },
+    });
+
+    const metadata = detectStatementMetadataFromText(text, fileName);
+    const rows = parser.parseImportText(text, fileName, "application/pdf", {
+      institution: metadata.institution,
+      accountName: metadata.accountName,
+      accountNumber: metadata.accountNumber,
+    });
+    const trailingBalance = parser.getTrailingBalanceFromParsedRows(rows);
+    const accountType =
+      (metadata as { accountType?: ImportedAccountType | null }).accountType ??
+      inferAccountTypeFromStatement(metadata.institution, metadata.accountName, "bank");
+
+    const errors: string[] = [];
+
+    if (metadata.institution !== fixture.institution) {
+      errors.push(`institution expected ${fixture.institution} but got ${metadata.institution ?? "null"}`);
+    }
+    const expectedMetadataAccountName = fixture.expectedMetadataAccountName === undefined ? fixture.accountName : fixture.expectedMetadataAccountName;
+    const expectedMetadataAccountNumber = fixture.expectedMetadataAccountNumber === undefined ? fixture.accountNumber : fixture.expectedMetadataAccountNumber;
+    if (metadata.accountName !== expectedMetadataAccountName) {
+      errors.push(`accountName expected ${expectedMetadataAccountName ?? "null"} but got ${metadata.accountName ?? "null"}`);
+    }
+    if (metadata.accountNumber !== expectedMetadataAccountNumber) {
+      errors.push(`accountNumber expected ${expectedMetadataAccountNumber ?? "null"} but got ${metadata.accountNumber ?? "null"}`);
+    }
+    if (accountType !== fixture.accountType) {
+      errors.push(`accountType expected ${fixture.accountType} but got ${accountType}`);
+    }
+    if (rows.length < fixture.minRows) {
+      errors.push(`rowCount expected at least ${fixture.minRows} but got ${rows.length}`);
+    }
+    if (fixture.exactRows !== undefined && rows.length !== fixture.exactRows) {
+      errors.push(`rowCount expected ${fixture.exactRows} but got ${rows.length}`);
+    }
+    if (typeof fixture.minConfidence === "number" && metadata.confidence < fixture.minConfidence) {
+      errors.push(`confidence expected at least ${fixture.minConfidence} but got ${metadata.confidence}`);
+    }
+    if (fixture.expectedOpeningBalance !== undefined && !approxEqual(metadata.openingBalance, fixture.expectedOpeningBalance)) {
+      errors.push(`openingBalance expected ${formatMoney(fixture.expectedOpeningBalance)} but got ${formatMoney(metadata.openingBalance)}`);
+    }
+    const derivedEndingBalance = metadata.endingBalance ?? trailingBalance;
+    if (fixture.expectedTrailingBalance !== undefined && !approxEqual(derivedEndingBalance, fixture.expectedTrailingBalance)) {
+      errors.push(`endingBalance expected ${formatMoney(fixture.expectedTrailingBalance)} but got ${formatMoney(derivedEndingBalance)}`);
+    }
+    if (fixture.expectedStartDate && parseDatePrefix(metadata.startDate) !== fixture.expectedStartDate) {
+      errors.push(`startDate expected ${fixture.expectedStartDate} but got ${parseDatePrefix(metadata.startDate) ?? "null"}`);
+    }
+    if (fixture.expectedEndDate && parseDatePrefix(metadata.endDate) !== fixture.expectedEndDate) {
+      errors.push(`endDate expected ${fixture.expectedEndDate} but got ${parseDatePrefix(metadata.endDate) ?? "null"}`);
+    }
+    if (fixture.expectParsedAccountName !== false && !rows.some((row) => row.accountName === fixture.accountName)) {
+      errors.push("parsed rows do not include the expected account name");
+    }
+    if (!rows.some((row) => row.institution === fixture.institution)) {
+      errors.push("parsed rows do not include the expected institution");
+    }
+    if (fixture.expectedTrailingBalance !== undefined && rows.length > 0) {
+      const lastRow = rows[rows.length - 1];
+      const lastBalance = lastRow.rawPayload?.balance;
+      if (typeof lastBalance === "number" && !approxEqual(lastBalance, fixture.expectedTrailingBalance)) {
+        errors.push(`last row balance expected ${formatMoney(fixture.expectedTrailingBalance)} but got ${formatMoney(lastBalance)}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      failures.push(`[${fixture.label}] ${errors.join("; ")}`);
+      continue;
+    }
+
+    console.log(
+      `[PASS] ${fixture.label} | ${fixture.accountName} | ${rows.length} rows | ${accountType} | opening ${formatMoney(metadata.openingBalance)} | trailing ${formatMoney(trailingBalance)}`
+    );
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Parser regression checks failed:\n${failures.map((entry) => `- ${entry}`).join("\n")}`);
+  }
+
+  if (caseFilter) {
+    console.log(`Parser fixture filter passed: ${process.env.CLOVER_PARSER_CASE}`);
+    return;
+  }
+
+  if (!portable) {
+  const pnbProjectPath = join(root, "Samples/PNB/495650370-PNB-Project-SOA-Jan-2021.pdf");
+  const pnbProjectBytes = await readFile(pnbProjectPath);
+  const pnbProjectText = await readUploadedFileText({
+    name: basename(pnbProjectPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(pnbProjectBytes.length);
+      copy.set(pnbProjectBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const pnbProjectMetadata = detectStatementMetadataFromText(pnbProjectText);
+  const pnbProjectRows = parser.parseImportText(pnbProjectText, basename(pnbProjectPath), "application/pdf", {
+    institution: pnbProjectMetadata.institution,
+    accountName: pnbProjectMetadata.accountName,
+    accountNumber: pnbProjectMetadata.accountNumber,
+  });
+  const pnbTransferOutRows = pnbProjectRows.filter(
+    (row) => row.merchantClean === "Bank Transfer" && row.type === "transfer" && row.categoryName === "Transfers"
+  );
+  if (pnbProjectRows.length !== 7 || pnbTransferOutRows.length !== 3) {
+    throw new Error(
+      `expected PNB Project SOA to recover 7 rows with 3 bank transfers, got ${pnbProjectRows.length} rows and ${pnbTransferOutRows.length} transfers`
+    );
+  }
+
+  const pnbNoisyPath = join(root, "Samples/PNB/Philippines-PNB-bank-statement-template-in-Word-and-PDF-format-4-pages-1-1-960x1358.pdf");
+  const pnbNoisyBytes = await readFile(pnbNoisyPath);
+  const pnbNoisyText = await readUploadedFileText({
+    name: basename(pnbNoisyPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(pnbNoisyBytes.length);
+      copy.set(pnbNoisyBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const pnbNoisyMetadata = detectStatementMetadataFromText(pnbNoisyText);
+  const pnbNoisyRows = parser.parseImportText(pnbNoisyText, basename(pnbNoisyPath), "application/pdf", {
+    institution: pnbNoisyMetadata.institution,
+    accountName: pnbNoisyMetadata.accountName,
+    accountNumber: pnbNoisyMetadata.accountNumber,
+  });
+  if (pnbNoisyRows.length !== 0) {
+    throw new Error(`expected noisy PNB scan to fail closed instead of creating heuristic rows, got ${pnbNoisyRows.length}`);
+  }
+
+  const cimbMixedPath = join(root, "Samples/CIMB/840624470-CIMB-Statement-of-account-pdf.pdf");
+  const cimbMixedBytes = await readFile(cimbMixedPath);
+  const cimbMixedText = await readUploadedFileText({
+    name: basename(cimbMixedPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(cimbMixedBytes.length);
+      copy.set(cimbMixedBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const cimbMixedMetadata = detectStatementMetadataFromText(cimbMixedText);
+  const cimbMixedRows = parser.parseImportText(cimbMixedText, basename(cimbMixedPath), "application/pdf", {
+    institution: cimbMixedMetadata.institution,
+    accountName: cimbMixedMetadata.accountName,
+    accountNumber: cimbMixedMetadata.accountNumber,
+  });
+  const cimbMixedAccounts = new Set(cimbMixedRows.map((row) => `${row.accountName ?? ""}|${row.accountNumber ?? ""}`));
+  if (!cimbMixedAccounts.has("Daisy Mae Dalapo|20867602571971") || !cimbMixedAccounts.has("Raihana Mentok Said|20867602571932")) {
+    throw new Error("expected CIMB mixed-page statement to preserve both GSave account sections");
+  }
+  if (cimbMixedRows.some((row) => row.rawPayload?.kind === "opening_balance" || /^(?:opening|beginning) balance$/i.test(String(row.merchantRaw ?? "")))) {
+    throw new Error("expected CIMB opening balances to remain metadata-only, not transaction rows");
+  }
+  for (const accountNumber of ["20867602571971", "20867602571932"]) {
+    const rowsForAccount = cimbMixedRows.filter((row) => row.accountNumber === accountNumber);
+    if (rowsForAccount.length !== 6) {
+      throw new Error(`expected CIMB ${accountNumber.slice(-4)} to have 6 visible rows`);
+    }
+
+    const trailingBalance = parser.getTrailingBalanceFromParsedRows(rowsForAccount);
+    if (trailingBalance !== 4294.66) {
+      throw new Error(`expected CIMB ${accountNumber.slice(-4)} ending balance to be 4294.66, got ${trailingBalance}`);
+    }
+  }
+  console.log("[PASS] CIMB mixed pages | preserves two account sections");
+
+  const cimbDuplicatePaths = [
+    join(root, "Samples/CIMB/927858715-CIMB-Statement-of-Account-20251004-155400-0000.pdf"),
+    join(root, "Samples/CIMB/947472452-CIMB-Statement-of-Account-20251112-141921-0000.pdf"),
+  ];
+  const cimbDuplicatePayloads = await Promise.all(
+    cimbDuplicatePaths.map(async (filePath) => {
+      const bytes = await readFile(filePath);
+      const fileName = basename(filePath);
+      const text = await readUploadedFileText({
+        name: fileName,
+        type: "application/pdf",
+        arrayBuffer: async () => {
+          const copy = new Uint8Array(bytes.length);
+          copy.set(bytes);
+          return copy.buffer as ArrayBuffer;
+        },
+      });
+      const metadata = detectStatementMetadataFromText(text);
+      const rows = parser.parseImportText(text, fileName, "application/pdf", {
+        institution: metadata.institution,
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+      });
+      return {
+        fingerprint: buildStatementFingerprint(text, metadata, fileName, "application/pdf", "statement"),
+        rows,
+      };
+    })
+  );
+  if (cimbDuplicatePayloads[0].fingerprint !== cimbDuplicatePayloads[1].fingerprint) {
+    throw new Error("expected duplicate CIMB files with different names to share the same statement fingerprint");
+  }
+  const cimbVisibleRows = cimbDuplicatePayloads[0].rows.filter((row) => row.rawPayload?.kind !== "opening_balance");
+  if (cimbVisibleRows.some((row) => row.type === "transfer")) {
+    throw new Error("expected CIMB visible transfer-like rows to classify as income or expense unless they match another Clover account");
+  }
+  const cimbTransferLikeRows = cimbVisibleRows.filter((row) =>
+    /(?:insta\s*pay|instapay|cash in|transfer to|inward transfer)/i.test(`${row.merchantRaw ?? ""} ${row.merchantClean ?? ""}`)
+  );
+  if (cimbTransferLikeRows.length === 0 || cimbTransferLikeRows.some((row) => row.categoryName !== "Transfers")) {
+    throw new Error("expected CIMB transfer-like rows to use the Transfers category");
+  }
+  console.log("[PASS] CIMB duplicates | same statement fingerprints and external transfers are income/expense");
+
+  const bdoPath = join(root, "Samples/BDO/648293940-BDO.pdf");
+  const bdoBytes = await readFile(bdoPath);
+  const bdoText = await readUploadedFileText({
+    name: basename(bdoPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(bdoBytes.length);
+      copy.set(bdoBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const bdoMetadata = detectStatementMetadataFromText(bdoText);
+  const bdoRows = parser.parseImportText(bdoText, basename(bdoPath), "application/pdf", {
+    institution: bdoMetadata.institution,
+    accountName: bdoMetadata.accountName,
+    accountNumber: bdoMetadata.accountNumber,
+  });
+  const bdoBankTransferRows = bdoRows.filter((row) => /bank\s+transfer|pob\s+ibft|fund\s+transfer|incoming\s+transfer/i.test(row.description ?? ""));
+  if (bdoBankTransferRows.length === 0) {
+    throw new Error("expected BDO sample to contain transfer-like rows");
+  }
+  if (bdoBankTransferRows.some((row) => row.type === "transfer")) {
+    throw new Error("expected BDO transfer-like rows to classify as income or expense, not transfer");
+  }
+  if (!bdoRows.some((row) => /atm\s+withdrawal|w\/d\s+fr\s+sav|cash\s+withdrawal|wdrawal/i.test(row.description ?? "") && row.type === "expense" && row.categoryName === "Cash & ATM")) {
+    throw new Error("expected BDO withdrawal rows to classify as expense");
+  }
+  if (summarizeMerchantText("Intrest Credited", "BDO") !== "Interest Credited") {
+    throw new Error("expected BDO interest spelling normalization to correct Intrest Credited");
+  }
+  if (summarizeMerchantText("GRAB PHILIPPINES REF 8841 CARD XX9737", "BPI") !== "Grab") {
+    throw new Error("expected noisy SOA merchants to strip trailing card and reference noise before normalization");
+  }
+  if (summarizeMerchantText("STARBUCKS STORE 0143 CARD PURCHASE", "BPI") !== "Starbucks") {
+    throw new Error("expected SOA merchant normalization to trim trailing store and purchase noise for Starbucks");
+  }
+  if (summarizeMerchantText("PAYPAL SINGAPORE PTE LTD", "BPI") !== "PayPal") {
+    throw new Error("expected SOA merchant normalization to collapse legal-entity suffixes for PayPal");
+  }
+  if (summarizeMerchantText("PAYPAL*SPOTIFY*P 402 EBB", "BPI") !== "Spotify") {
+    throw new Error("expected SOA merchant normalization to prefer Spotify over the PayPal wrapper");
+  }
+  if (summarizeMerchantText("PAYPAL LINKEDIN SINGAPORE PTE LTD", "BPI") !== "LinkedIn") {
+    throw new Error("expected SOA merchant normalization to prefer LinkedIn over the PayPal wrapper");
+  }
+  if (summarizeMerchantText("GRABPAY*DUNKIN PH CARD PURCHASE", "BPI") !== "Dunkin") {
+    throw new Error("expected SOA merchant normalization to prefer Dunkin over the GrabPay wrapper");
+  }
+  if (summarizeMerchantText("15-PPASS MEMBER FEE", "BPI") !== "Priority Pass") {
+    throw new Error("expected SOA merchant normalization to decode 15-PPASS as Priority Pass");
+  }
+  if (summarizeMerchantText("ROBINSONS EASYMART STORE 221", "BPI") !== "Robinsons Easymart") {
+    throw new Error("expected SOA merchant normalization to preserve Robinsons Easymart");
+  }
+  if (summarizeMerchantText("BRUNOS BARBERS", "BPI") !== "Brunos Barbers") {
+    throw new Error("expected SOA merchant normalization to preserve Brunos Barbers");
+  }
+  if (summarizeMerchantText("FULLY BOOKED BGC", "BPI") !== "Fully Booked") {
+    throw new Error("expected SOA merchant normalization to preserve Fully Booked");
+  }
+  if (summarizeMerchantText("MARY GRACE CAFE", "BPI") !== "Mary Grace") {
+    throw new Error("expected SOA merchant normalization to preserve Mary Grace");
+  }
+  if (summarizeMerchantText("SOUTHSTAR DRUG", "BPI") !== "Southstar Drug") {
+    throw new Error("expected SOA merchant normalization to preserve Southstar Drug");
+  }
+  if (summarizeMerchantText("SHAKEYS PIZZA", "BPI") !== "Shakey's") {
+    throw new Error("expected SOA merchant normalization to preserve Shakey's");
+  }
+  if (summarizeMerchantText("HI-PRECISION DIAGNOSTIC", "BPI") !== "Hi-Precision") {
+    throw new Error("expected SOA merchant normalization to preserve Hi-Precision");
+  }
+  if (summarizeMerchantText("KIDZOONA BGC", "BPI") !== "Kidzoona") {
+    throw new Error("expected SOA merchant normalization to preserve Kidzoona");
+  }
+  if (summarizeMerchantText("BO'S COFFEE BGC", "BPI") !== "Bo's Coffee") {
+    throw new Error("expected SOA merchant normalization to preserve Bo's Coffee");
+  }
+  if (summarizeMerchantText("LANDERS ARCOVIA", "BPI") !== "Landers") {
+    throw new Error("expected SOA merchant normalization to preserve Landers");
+  }
+  if (summarizeMerchantText("PANCO CAFE BGC TAGUIG PH", "RCBC") !== "Panco Cafe") {
+    throw new Error("expected SOA merchant normalization to preserve Panco Cafe");
+  }
+  if (summarizeMerchantText("KOI BONIFACIO HIGH STREE TAGUIG PH", "RCBC") !== "KOI") {
+    throw new Error("expected SOA merchant normalization to preserve KOI");
+  }
+  if (summarizeMerchantText("PYX*WHEYL NUTRIT PASAY CITY PH", "RCBC") !== "Wheyl Nutrition") {
+    throw new Error("expected SOA merchant normalization to preserve Wheyl Nutrition");
+  }
+  if (summarizeMerchantText("7-ELEVEN-ST 2192 BRY SAN ANTONPH", "RCBC") !== "7-Eleven") {
+    throw new Error("expected SOA merchant normalization to preserve 7-Eleven");
+  }
+  if (summarizeMerchantText("THE FAT SEED CAFE & RO MUNTINLUPA PH", "RCBC") !== "The Fat Seed Cafe") {
+    throw new Error("expected SOA merchant normalization to preserve The Fat Seed Cafe");
+  }
+  if (summarizeMerchantText("NOMAD EXPRESS T 1 SOUTH W LAPU LAPU PH", "RCBC") !== "Nomad Express") {
+    throw new Error("expected SOA merchant normalization to preserve Nomad Express");
+  }
+  if (summarizeMerchantText("SIMPLY GOURMET FOOD GREE MAKATI CITY PH", "RCBC") !== "Simply Gourmet") {
+    throw new Error("expected SOA merchant normalization to preserve Simply Gourmet");
+  }
+  console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
+
+  const mayaSamplesDir = join(root, "Samples/Maya");
+  const mayaSampleFiles = (await readdir(mayaSamplesDir)).filter((entry) => /\.pdf$/i.test(entry)).sort();
+  for (const mayaFile of mayaSampleFiles) {
+    const mayaPath = join(mayaSamplesDir, mayaFile);
+    const mayaBytes = await readFile(mayaPath);
+    const mayaText = await readUploadedFileText({
+      name: basename(mayaPath),
+      type: "application/pdf",
+      arrayBuffer: async () => {
+        const copy = new Uint8Array(mayaBytes.length);
+        copy.set(mayaBytes);
+        return copy.buffer as ArrayBuffer;
+      },
+    });
+    const mayaMetadata = detectStatementMetadataFromText(mayaText, basename(mayaPath));
+    const mayaRows = parser.parseImportText(mayaText, basename(mayaPath), "application/pdf", {
+      institution: mayaMetadata.institution,
+      accountName: mayaMetadata.accountName,
+      accountNumber: mayaMetadata.accountNumber,
+    });
+    const expectedMayaAccountType = /easy\s*credit|maya\s*credit/i.test(mayaFile) ? "credit_card" : "bank";
+    const mayaAccountType = (mayaMetadata as { accountType?: string | null }).accountType ?? null;
+    if (mayaAccountType !== expectedMayaAccountType) {
+      throw new Error(`expected ${mayaFile} to classify as ${expectedMayaAccountType}, got ${mayaAccountType ?? "missing"}`);
+    }
+
+    const problematicRows = mayaRows.filter((row) => {
+      const confidence = typeof row.confidence === "number" ? row.confidence : 0;
+      if (confidence < 90 || row.categoryName === "Other") {
+        return true;
+      }
+
+      if (row.categoryName === "Income") {
+        return row.type !== "income";
+      }
+
+      if (row.categoryName === "Financial") {
+        return row.type !== "expense";
+      }
+
+      if (row.categoryName === "Transfers") {
+        return row.type !== "transfer";
+      }
+
+      return false;
+    });
+
+    if (problematicRows.length > 0) {
+      const sample = problematicRows
+        .slice(0, 5)
+        .map((row) => `${row.description ?? row.merchantRaw ?? "missing"}:${row.categoryName}/${row.type}/${row.confidence ?? "no-confidence"}`)
+        .join(", ");
+      throw new Error(`expected Maya rows to finalize deterministically for ${mayaFile}; problematic rows: ${sample}`);
+    }
+
+    if (/2023DEC/i.test(mayaFile)) {
+      const counts = mayaRows.reduce<Record<string, number>>((accumulator, row) => {
+        const key = `${row.categoryName}:${row.type}`;
+        accumulator[key] = (accumulator[key] ?? 0) + 1;
+        return accumulator;
+      }, {});
+      const expectedCounts: Record<string, number> = {
+        "Income:income": 29,
+        "Financial:expense": 10,
+        "Transfers:transfer": 21,
+      };
+      for (const [key, expected] of Object.entries(expectedCounts)) {
+        if (counts[key] !== expected) {
+          throw new Error(`expected Maya December 2023 ${key} count ${expected}, got ${counts[key] ?? 0}`);
+        }
+      }
+    }
+  }
+  console.log(`[PASS] Maya classification | ${mayaSampleFiles.length} samples finalize without low-confidence Other rows`);
+
+  const gotymeSamplesDir = join(root, "Samples/GoTyme");
+  const gotymeSampleFiles = (await readdir(gotymeSamplesDir)).filter((entry) => /\.pdf$/i.test(entry)).sort();
+  for (const gotymeFile of gotymeSampleFiles) {
+    const gotymePath = join(gotymeSamplesDir, gotymeFile);
+    const gotymeBytes = await readFile(gotymePath);
+    const gotymeText = await readUploadedFileText({
+      name: basename(gotymePath),
+      type: "application/pdf",
+      arrayBuffer: async () => {
+        const copy = new Uint8Array(gotymeBytes.length);
+        copy.set(gotymeBytes);
+        return copy.buffer as ArrayBuffer;
+      },
+    });
+    const gotymeMetadata = detectStatementMetadataFromText(gotymeText);
+    if (!gotymeMetadata.accountNumber) {
+      throw new Error(`expected ${gotymeFile} to resolve a GoTyme account number`);
+    }
+    if (gotymeMetadata.accountNumber === "2025") {
+      throw new Error(`expected ${gotymeFile} to avoid year-like GoTyme account numbers`);
+    }
+    const gotymeRows = parser.parseImportText(gotymeText, basename(gotymePath), "application/pdf", {
+      institution: gotymeMetadata.institution,
+      accountName: gotymeMetadata.accountName,
+      accountNumber: gotymeMetadata.accountNumber,
+    });
+    const gotymeOtherRows = gotymeRows.filter((row) => row.categoryName === "Other");
+    if (gotymeOtherRows.length > 0) {
+      const sample = gotymeOtherRows
+        .slice(0, 5)
+        .map((row) => `${row.description ?? row.merchantRaw ?? "missing"}:${row.categoryName}/${row.type}/${row.confidence ?? "no-confidence"}`)
+        .join(", ");
+      throw new Error(`expected ${gotymeFile} to avoid Other classifications; problematic rows: ${sample}`);
+    }
+
+    const gotymeProblematicTypes = gotymeRows.filter((row) => {
+      if (/qr\s+payment/i.test(row.description ?? "") && row.categoryName !== "Shopping") {
+        return true;
+      }
+
+      if (/gcash\s+received/i.test(row.description ?? "") && row.categoryName !== "Transfers") {
+        return true;
+      }
+
+      if (/transfer\s+fee/i.test(row.description ?? "") && row.categoryName !== "Financial") {
+        return true;
+      }
+
+      return false;
+    });
+
+    if (gotymeProblematicTypes.length > 0) {
+      const sample = gotymeProblematicTypes
+        .slice(0, 5)
+        .map((row) => `${row.description ?? row.merchantRaw ?? "missing"}:${row.categoryName}/${row.type}`)
+        .join(", ");
+      throw new Error(`expected ${gotymeFile} to classify known GoTyme rows consistently; problematic rows: ${sample}`);
+    }
+
+    console.log(`[PASS] GoTyme deterministic parser | ${gotymeFile} | ${gotymeRows.length} rows`);
+  }
+
+  const maribankSamplePath = join(root, "Samples/Maribank/1026596528-MariBank-Statement-20260403.pdf");
+  const maribankBytes = await readFile(maribankSamplePath);
+  const maribankText = await readUploadedFileText({
+    name: basename(maribankSamplePath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(maribankBytes.length);
+      copy.set(maribankBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const maribankMetadata = detectStatementMetadataFromText(maribankText);
+  const maribankRows = parser.parseImportText(maribankText, basename(maribankSamplePath), "application/pdf", {
+    institution: maribankMetadata.institution,
+    accountName: maribankMetadata.accountName,
+    accountNumber: maribankMetadata.accountNumber,
+  });
+  if (maribankRows.length !== 62) {
+    throw new Error(`expected MariBank sample to keep all 62 visible transaction rows, got ${maribankRows.length}`);
+  }
+  const maribankTransferRow = maribankRows.find(
+    (row) => /jaycelle c\./i.test(row.description ?? "") && /transfer/i.test(row.description ?? "")
+  );
+  if (
+    !maribankTransferRow ||
+    maribankTransferRow.categoryName !== "Transfers" ||
+    maribankTransferRow.type !== "expense" ||
+    ((maribankTransferRow.rawPayload as Record<string, unknown> | undefined)?.notes as string | undefined)?.trim() === ""
+  ) {
+    throw new Error(
+      `expected MariBank outgoing transfers to preserve the full counterparty name and classify as Transfers/expense, got ${JSON.stringify(
+        maribankTransferRow ?? null
+      )}`
+    );
+  }
+  const maribankRewardRow = maribankRows.find((row) => /reward/i.test(row.description ?? ""));
+  if (!maribankRewardRow || maribankRewardRow.categoryName !== "Financial") {
+    throw new Error(`expected MariBank reward rows to classify as Financial, got ${JSON.stringify(maribankRewardRow ?? null)}`);
+  }
+  const maribankLoadRow = maribankRows.find((row) => /top up - data/i.test(row.description ?? ""));
+  if (!maribankLoadRow || !/go\+99/i.test(((maribankLoadRow.rawPayload as Record<string, unknown> | undefined)?.notes as string | undefined) ?? "")) {
+    throw new Error(`expected MariBank load rows to preserve the merchant name in notes, got ${JSON.stringify(maribankLoadRow ?? null)}`);
+  }
+  const maribankIncomeTotal = maribankRows
+    .filter((row) => row.type === "income")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+  const maribankExpenseTotal = maribankRows
+    .filter((row) => row.type === "expense")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+  if (!approxEqual(maribankIncomeTotal, 24218.91) || !approxEqual(maribankExpenseTotal, 14218.1)) {
+    throw new Error(
+      `expected MariBank row directions to reconcile to statement totals, got incoming ${formatMoney(maribankIncomeTotal)} and outgoing ${formatMoney(maribankExpenseTotal)}`
+    );
+  }
+  console.log(`[PASS] MariBank row preservation | ${basename(maribankSamplePath)} | ${maribankRows.length} rows`);
+
+  }
+
+  const dateStampedBankName = normalizeBankName("2026-05-01 22.01.12 0112");
+  if (dateStampedBankName !== "Unknown") {
+    throw new Error(`expected date-stamped bank label to normalize to Unknown but got ${dateStampedBankName}`);
+  }
+
+  const dateStampedAlias = normalizeBankName("2026-05-01 BDO");
+  if (dateStampedAlias !== "BDO") {
+    throw new Error(`expected bank alias inside date-stamped label to normalize to BDO but got ${dateStampedAlias}`);
+  }
+
+  const bankTemplateMerge = mergeStatementMetadataWithTemplate(
+    {
+      institution: null,
+      accountNumber: null,
+      accountName: null,
+      accountType: null,
+      currency: "PHP",
+      openingBalance: null,
+      endingBalance: null,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: null,
+      endDate: null,
+      confidence: 42,
+    },
+    {
+      institution: "Metrobank",
+      accountNumber: "000007048866",
+      accountName: "JOHN NEIL RIVERA",
+      accountType: "bank",
+      currency: "PHP",
+      openingBalance: 57105.51,
+      endingBalance: 55072.01,
+      startDate: "2025-01-31",
+      endDate: "2025-01-31",
+    }
+  );
+
+  if (
+    bankTemplateMerge.institution !== "Metrobank" ||
+    bankTemplateMerge.accountNumber !== "000007048866" ||
+    bankTemplateMerge.accountName !== "JOHN NEIL RIVERA" ||
+    bankTemplateMerge.accountType !== "bank" ||
+    bankTemplateMerge.confidence < 80
+  ) {
+    throw new Error(`expected low-confidence metadata to merge with a bank template, got ${JSON.stringify(bankTemplateMerge)}`);
+  }
+
+  const safeDisplayName = formatUploadAccountDisplayName("2026-05-01 22.01.12 0112", "2026-05-01 22.01.12 0112", "001234567890", "bank");
+  if (/\b2026-05-01\b/.test(safeDisplayName) || /\b22\.01\.12\b/.test(safeDisplayName)) {
+    throw new Error(`expected date-stamped upload display name to omit date text but got ${safeDisplayName}`);
+  }
+  console.log("[PASS] Bank label hygiene | date-stamped labels are rejected or sanitized");
+
+  const strongRowShape = assessParsedRowShapeConsistency([
+    { date: "2025-01-31", amount: "120.00", merchantRaw: "Burger King", merchantClean: "Burger King", type: "expense" },
+    { date: "2025-02-01", amount: "15.00", merchantRaw: "Transport Fee", merchantClean: "Transport Fee", type: "transfer" },
+  ]);
+  if (strongRowShape.score < 80 || strongRowShape.dateCoverage < 1 || strongRowShape.amountCoverage < 1) {
+    throw new Error(`expected strong row shape to score well, got ${JSON.stringify(strongRowShape)}`);
+  }
+
+  const weakRowShape = assessParsedRowShapeConsistency([
+    { amount: "120.00", merchantRaw: "??", type: "" },
+    { amount: "", merchantRaw: "", type: "" },
+  ]);
+  if (weakRowShape.score >= 50 || weakRowShape.issues.length === 0) {
+    throw new Error(`expected weak row shape to score low, got ${JSON.stringify(weakRowShape)}`);
+  }
+
+  const teachabilityGood = assessParsedRowTeachability({
+    date: "2025-02-01",
+    amount: "120.00",
+    merchantRaw: "Coffee Shop",
+    merchantClean: "Coffee Shop",
+    type: "expense",
+    categoryName: "Shopping",
+  });
+  const teachabilityBad = assessParsedRowTeachability({
+    amount: "",
+    merchantRaw: "??",
+    merchantClean: "",
+    type: "",
+  });
+  if (teachabilityGood.score <= teachabilityBad.score || teachabilityBad.score >= 55) {
+    throw new Error(`expected teachability scoring to prefer clean rows, got ${JSON.stringify({ teachabilityGood, teachabilityBad })}`);
+  }
+  if (
+    !shouldPromoteTrainingSignalForLearning({
+      confidence: 92,
+      teachabilityScore: teachabilityGood.score,
+      merchantText: "GrabPay",
+    }) ||
+    shouldPromoteTrainingSignalForLearning({
+      confidence: 92,
+      teachabilityScore: 58,
+      merchantText: "GrabPay",
+    }) ||
+    shouldPromoteTrainingSignalForLearning({
+      confidence: 92,
+      teachabilityScore: teachabilityBad.score,
+      merchantText: "???",
+    })
+  ) {
+    throw new Error(
+      `expected training-signal promotion gating to keep clean rows and block noisy rows, got ${JSON.stringify({
+        teachabilityGood: shouldPromoteTrainingSignalForLearning({
+          confidence: 92,
+          teachabilityScore: teachabilityGood.score,
+          merchantText: "GrabPay",
+        }),
+        teachabilityBad: shouldPromoteTrainingSignalForLearning({
+          confidence: 92,
+          teachabilityScore: teachabilityBad.score,
+          merchantText: "???",
+        }),
+      })}`
+    );
+  }
+
+  const anomalyGood = assessParsedRowAnomalies({
+    date: "2025-02-01",
+    amount: "120.00",
+    merchantRaw: "Coffee Shop",
+    merchantClean: "Coffee Shop",
+    type: "expense",
+    categoryName: "Shopping",
+  });
+  const anomalyBad = assessParsedRowAnomalies({
+    amount: "",
+    merchantRaw: "Statement Page 1",
+    merchantClean: "",
+    type: "",
+    categoryName: "Other",
+  });
+  if (anomalyGood.score <= anomalyBad.score || anomalyBad.isAnomalous !== true || anomalyGood.isAnomalous) {
+    throw new Error(
+      `expected anomaly scoring to prefer clean rows and block header noise, got ${JSON.stringify({ anomalyGood, anomalyBad })}`
+    );
+  }
+
+  const anomalyTinyAmount = assessParsedRowAnomalies({
+    date: "2025-02-01",
+    amount: "0.001",
+    merchantRaw: "Placeholder",
+    merchantClean: "Placeholder",
+    type: "expense",
+    categoryName: "Other",
+  });
+  if (!anomalyTinyAmount.issues.includes("amount_suspicious")) {
+    throw new Error(`expected tiny parsed amounts to be flagged as suspicious, got ${JSON.stringify(anomalyTinyAmount)}`);
+  }
+
+  if (
+    shouldExpandMerchantPrototypeMemory({
+      confidence: 88,
+      teachabilityScore: 80,
+    }) !== true ||
+    shouldExpandMerchantPrototypeMemory({
+      confidence: 80,
+      teachabilityScore: 62,
+    }) !== false ||
+    shouldExpandMerchantPrototypeMemory({
+      confidence: 90,
+      teachabilityScore: null,
+    }) !== true
+  ) {
+    throw new Error(
+      `expected prototype expansion to prefer only strong rows, got ${JSON.stringify({
+        strong: shouldExpandMerchantPrototypeMemory({ confidence: 88, teachabilityScore: 80 }),
+        borderline: shouldExpandMerchantPrototypeMemory({ confidence: 80, teachabilityScore: 62 }),
+        fallback: shouldExpandMerchantPrototypeMemory({ confidence: 90, teachabilityScore: null }),
+      })}`
+    );
+  }
+
+  const mergedConsensusWithFragmentRecovery = mergeCompatibleStatementTextCandidateConsensus([
+    {
+      text: "B\na\nn\nk\n\nStatement\nJanuary 1\nCoffee Shop\n120.00",
+      label: "fragmented",
+      score: 18,
+    },
+    {
+      text: "Bank Statement\nJanuary 1\nCoffee Shop\n120.00",
+      label: "clean",
+      score: 24,
+    },
+    {
+      text: "Bank Statement\nJanuary 1\nCoffee Shop\n120.00\nEnding Balance 500.00",
+      label: "balance",
+      score: 22,
+    },
+  ]);
+  if (
+    !mergedConsensusWithFragmentRecovery ||
+    !/Bank Statement/.test(mergedConsensusWithFragmentRecovery) ||
+    !/Coffee Shop/.test(mergedConsensusWithFragmentRecovery) ||
+    !/120\.00/.test(mergedConsensusWithFragmentRecovery)
+  ) {
+    throw new Error(
+      `expected multi-candidate OCR consensus to keep the strongest row evidence, got ${mergedConsensusWithFragmentRecovery}`
+    );
+  }
+
+  const layoutAwareText = buildLayoutAwarePdfTextFromContentItems([
+    { str: "January 1", transform: [1, 0, 0, 1, 12, 420], width: 42, height: 9 },
+    { str: "Coffee Shop", transform: [1, 0, 0, 1, 76, 419.3], width: 64, height: 9 },
+    { str: "150.00", transform: [1, 0, 0, 1, 380, 419.7], width: 36, height: 9 },
+    { str: "January 2", transform: [1, 0, 0, 1, 12, 399], width: 42, height: 9 },
+    { str: "ATM Withdrawal", transform: [1, 0, 0, 1, 78, 398.4], width: 88, height: 9 },
+    { str: "1,000.00", transform: [1, 0, 0, 1, 378, 398.8], width: 44, height: 9 },
+  ]);
+  if (!/January 1\s+Coffee Shop\s+150\.00/.test(layoutAwareText) || !/January 2\s+ATM Withdrawal\s+1,000\.00/.test(layoutAwareText)) {
+    throw new Error(`expected layout-aware PDF text reconstruction to keep rows together, got ${layoutAwareText}`);
+  }
+
+  const mergedOcrText = mergeCompatibleStatementTextCandidates(
+    {
+      text: "Jan 1\nCoffee S1op\n150.00\nBalance 1,000.00",
+      label: "ocr-a",
+      score: 24,
+    },
+    {
+      text: "Jan 1\nCoffee Shop\n150.00\nBalance 1,000.00",
+      label: "ocr-b",
+      score: 23,
+    }
+  );
+  if (!mergedOcrText || !/Coffee Shop/.test(mergedOcrText) || /Coffee S1op/.test(mergedOcrText)) {
+    throw new Error(`expected OCR candidates to merge toward the cleaner line, got ${mergedOcrText}`);
+  }
+
+  const mergedOcrTextThreeWay = mergeCompatibleStatementTextCandidates(
+    {
+      text: "Jan 1\nCoffee S1op\n150.00\nBalance 1,000.00",
+      label: "ocr-a",
+      score: 24,
+    },
+    {
+      text: "Jan 1\nCoffee Shop\n150.00\nBalance 1,000.00",
+      label: "ocr-b",
+      score: 23,
+    }
+  );
+  const mergedOcrTextConsensus = mergeCompatibleStatementTextCandidates(
+    {
+      text: mergedOcrTextThreeWay ?? "Jan 1\nCoffee Shop\n150.00\nBalance 1,000.00",
+      label: "ocr-merged",
+      score: 25,
+    },
+    {
+      text: "Jan 1\nCoffee Shop\n150.00\nBalance 1,000.00\nService Charge 10.00",
+      label: "ocr-c",
+      score: 22,
+    }
+  );
+  if (!mergedOcrTextConsensus || !/Service Charge 10\.00/.test(mergedOcrTextConsensus) || /Coffee S1op/.test(mergedOcrTextConsensus)) {
+    throw new Error(`expected multi-pass OCR merge to keep the clean merchant line and recover extra useful lines, got ${mergedOcrTextConsensus}`);
+  }
+
+  const mergedOcrConsensusFromThree = mergeCompatibleStatementTextCandidateConsensus?.([
+    {
+      text: "Jan 1\nCoffee S1op\n150.00",
+      label: "ocr-a",
+      score: 24,
+    },
+    {
+      text: "Coffee Shop\nBalance 1,000.00",
+      label: "ocr-b",
+      score: 22,
+    },
+    {
+      text: "Jan 1\nService Charge 10.00\nBalance 1,000.00",
+      label: "ocr-c",
+      score: 21,
+    },
+  ]);
+  if (
+    !mergedOcrConsensusFromThree ||
+    !/Coffee Shop/.test(mergedOcrConsensusFromThree) ||
+    !/Balance 1,000\.00/.test(mergedOcrConsensusFromThree) ||
+    !/Service Charge 10\.00/.test(mergedOcrConsensusFromThree) ||
+    /Coffee S1op/.test(mergedOcrConsensusFromThree)
+  ) {
+    throw new Error(
+      `expected consensus OCR fusion to combine clean lines from multiple passes, got ${mergedOcrConsensusFromThree}`
+    );
+  }
+
+  const mergedFragmentedOcrConsensus = mergeCompatibleStatementTextCandidateConsensus?.([
+    {
+      text: "Jan 1\nB\nu\nr\ng\ne\nr Shop\n150.00",
+      label: "ocr-frag-a",
+      score: 20,
+    },
+    {
+      text: "Jan 1\nBurger Shop\n150.00\nBalance 1,000.00",
+      label: "ocr-frag-b",
+      score: 23,
+    },
+    {
+      text: "Burger Shop\nBalance 1,000.00",
+      label: "ocr-frag-c",
+      score: 22,
+    },
+  ]);
+  if (
+    !mergedFragmentedOcrConsensus ||
+    !/Burger Shop/.test(mergedFragmentedOcrConsensus) ||
+    !/150\.00/.test(mergedFragmentedOcrConsensus) ||
+    /B\s+u\s+r\s+g\s+e\s+r/i.test(mergedFragmentedOcrConsensus)
+  ) {
+    throw new Error(
+      `expected fragmented OCR shards to merge into a single merchant line, got ${mergedFragmentedOcrConsensus}`
+    );
+  }
+
+  const prototypeLabel = buildMerchantPrototypeLabel("Burger King 1234", "Burger King");
+  if (prototypeLabel !== "Burger King 1234" && prototypeLabel !== null) {
+    throw new Error(`expected prototype label helper to keep a useful merchant variant or null, got ${prototypeLabel}`);
+  }
+  const prototypeVariants = buildMerchantPrototypeVariants("Burger King 1234", "Burger King");
+  if (!prototypeVariants.includes("Burger King 1234") || !prototypeVariants.some((variant) => /Burger King/i.test(variant))) {
+    throw new Error(`expected prototype variants to keep merchant evidence and normalized variants, got ${JSON.stringify(prototypeVariants)}`);
+  }
+  const segmentedPrototypeVariants = buildMerchantPrototypeVariants("Burger King / SM North", "Burger King");
+  if (
+    !segmentedPrototypeVariants.some((variant) => /Burger King/i.test(variant)) ||
+    !segmentedPrototypeVariants.some((variant) => /SM North/i.test(variant))
+  ) {
+    throw new Error(
+      `expected segmented merchant prototype variants to keep both merchant segments, got ${JSON.stringify(segmentedPrototypeVariants)}`
+    );
+  }
+  const calibratedConfidence = estimateImportLearningConfidence({
+    baseConfidence: 60,
+    teachabilityScore: 90,
+    rowShapeScore: 88,
+    negativeSignalCount: 0,
+  });
+  const suppressedConfidence = estimateImportLearningConfidence({
+    baseConfidence: 60,
+    teachabilityScore: 12,
+    rowShapeScore: 20,
+    negativeSignalCount: 3,
+  });
+  if (calibratedConfidence <= suppressedConfidence || calibratedConfidence <= 60 || suppressedConfidence >= 60) {
+    throw new Error(
+      `expected learning confidence calibration to boost clean rows and suppress noisy rows, got ${calibratedConfidence} vs ${suppressedConfidence}`
+    );
+  }
+
+  const familySignatureFromText = buildStatementFamilySignatureFromText(
+    "BDO Statement\nAccount Summary\nOpening Balance 100.00\nClosing Balance 120.00",
+    { institution: "BDO", accountType: "bank" },
+    "application/pdf"
+  );
+  const familySignatureFromRows = buildStatementFamilySignature({
+    rows: [
+      { date: "2025-01-01", amount: "100.00", merchantRaw: "BDO Grocery", merchantClean: "BDO Grocery", type: "expense" },
+      { date: "2025-01-02", amount: "20.00", merchantRaw: "BDO Transfer", merchantClean: "BDO Transfer", type: "transfer" },
+    ],
+    metadata: { institution: "BDO", accountType: "bank", startDate: "2025-01-01", endDate: "2025-01-02" },
+    fileType: "application/pdf",
+  });
+  if (!familySignatureFromText || !familySignatureFromText.includes("BDO") || !familySignatureFromRows || !familySignatureFromRows.includes("BDO")) {
+    throw new Error(
+      `expected statement family signatures to include institution context, got ${familySignatureFromText} / ${familySignatureFromRows}`
+    );
+  }
+
+  const templateScoreGood = scoreStatementTemplateCandidate({
+    template: {
+      fingerprint: "stmt_good",
+      fileType: "application/pdf",
+      institution: "BDO",
+      accountNumber: "1234",
+      accountName: "BDO 1234",
+      parserVersion: "v2",
+      parserConfig: {
+        accountType: "bank",
+        rowCount: 28,
+        statementFamilySignature: familySignatureFromRows,
+      },
+      metadata: {},
+      exampleCount: 4,
+      successCount: 6,
+      failureCount: 0,
+      lastSeenAt: new Date(),
+    },
+    institution: "BDO",
+    fileType: "application/pdf",
+    accountType: "bank",
+    statementFamilySignature: familySignatureFromRows,
+  });
+  const templateScoreBad = scoreStatementTemplateCandidate({
+    template: {
+      fingerprint: "stmt_bad",
+      fileType: "application/pdf",
+      institution: "BDO",
+      accountNumber: "1234",
+      accountName: "BDO 1234",
+      parserVersion: "v2",
+      parserConfig: {
+        accountType: "bank",
+        rowCount: 28,
+        statementFamilySignature: "other|signature|noise",
+      },
+      metadata: {},
+      exampleCount: 4,
+      successCount: 1,
+      failureCount: 5,
+      lastSeenAt: new Date(),
+    },
+    institution: "BDO",
+    fileType: "application/pdf",
+    accountType: "bank",
+    statementFamilySignature: familySignatureFromRows,
+  });
+  if (templateScoreGood <= templateScoreBad) {
+    throw new Error(`expected statement template scoring to prefer healthy templates, got ${templateScoreGood} vs ${templateScoreBad}`);
+  }
+
+  const lightPenalty = scoreRowShapeLearningPenalty(88);
+  const heavyPenalty = scoreRowShapeLearningPenalty(42);
+  if (lightPenalty !== 0 || heavyPenalty <= lightPenalty) {
+    throw new Error(`expected row-shape learning penalty to prefer strong rows, got ${lightPenalty} / ${heavyPenalty}`);
+  }
+
+  const classifyMerchant = dataEngine.classifyMerchant as (
+    params: {
+      merchantText: string;
+      categoryText?: string | null;
+      institution?: string | null;
+      type: "income" | "expense" | "transfer";
+      categoryName?: string | null;
+      merchantRules: Array<{
+        merchantKey: string;
+        merchantPattern: string | null;
+        normalizedName: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        source: string;
+        confidence: number;
+        timesConfirmed: number;
+      }>;
+      trainingSignals: Array<{
+        categoryId: string;
+        categoryName: string | null;
+        merchantKey: string;
+        merchantTokens: string[];
+        type: "income" | "expense" | "transfer";
+        source: string;
+        confidence: number;
+      }>;
+      negativeSignals?: Array<{
+        merchantKey: string;
+        merchantTokens: string[];
+        source: string;
+        confidence: number;
+      }>;
+    }
+  ) => { categoryName: string | null; confidence: number; categoryReason: string | null; merchantKey: string; merchantTokens: string[]; normalizedName: string; preferredType: "income" | "expense" | "transfer" };
+  const positiveClassification = classifyMerchant({
+    merchantText: "Starbucks Coffee 1234",
+    institution: "BPI",
+    type: "expense",
+    categoryText: "Starbucks Coffee 1234",
+    merchantRules: [
+      {
+        merchantKey: "starbuckscoffee1234",
+        merchantPattern: "Starbucks Coffee 1234",
+        normalizedName: "Starbucks Coffee",
+        categoryId: null,
+        categoryName: "Shopping",
+        source: "manual",
+        confidence: 95,
+        timesConfirmed: 3,
+      },
+    ],
+    trainingSignals: [],
+  });
+  const negativeClassification = classifyMerchant({
+    merchantText: "Starbucks Coffee 1234",
+    institution: "BPI",
+    type: "expense",
+    categoryText: "Starbucks Coffee 1234",
+    merchantRules: [
+      {
+        merchantKey: "starbuckscoffee1234",
+        merchantPattern: "Starbucks Coffee 1234",
+        normalizedName: "Starbucks Coffee",
+        categoryId: null,
+        categoryName: "Shopping",
+        source: "manual",
+        confidence: 95,
+        timesConfirmed: 3,
+      },
+    ],
+    trainingSignals: [],
+    negativeSignals: [
+      {
+        merchantKey: "starbuckscoffee1234",
+        merchantTokens: ["starbucks", "coffee"],
+        source: "rejected_transaction",
+        confidence: 80,
+      },
+    ],
+  });
+  if (negativeClassification.confidence >= positiveClassification.confidence) {
+    throw new Error(
+      `expected negative merchant signal to reduce confidence, got ${negativeClassification.confidence} vs ${positiveClassification.confidence}`
+    );
+  }
+
+  const familyClassification = classifyMerchant({
+    merchantText: "PAYPAL*SPOTIFY*P 402 EBB",
+    institution: "BPI",
+    type: "expense",
+    categoryText: "PAYPAL*SPOTIFY*P 402 EBB",
+    merchantRules: [
+      {
+        merchantKey: "spotify",
+        merchantPattern: "Spotify Premium",
+        normalizedName: "Spotify",
+        categoryId: null,
+        categoryName: "Bills & Utilities",
+        source: "manual",
+        confidence: 95,
+        timesConfirmed: 5,
+      },
+    ],
+    trainingSignals: [],
+  });
+  if (
+    familyClassification.categoryName !== "Bills & Utilities" ||
+    familyClassification.categoryReason !== "rule-family" ||
+    familyClassification.confidence > 84
+  ) {
+    throw new Error(
+      `expected family classification to stay helpful but capped, got ${JSON.stringify(familyClassification)}`
+    );
+  }
+
+  if (!portable) {
+  const rcbcCreditPath = join(root, "Samples/RCBC/728919236-Acfroga47rrwerw7v8xwjcyqjxnpvi1hv5climj2qkpdzsqlabwmr51pzid4mt-Ao-Swizece4lt1ycaubzsilpqnzohhyzqxuv2cfbldosfajyekhfijmkceso8yzz1vgjmwntbprxb5ribspge-G.pdf");
+  const rcbcCreditBytes = await readFile(rcbcCreditPath);
+  const rcbcCreditText = await readUploadedFileText({
+    name: basename(rcbcCreditPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(rcbcCreditBytes.length);
+      copy.set(rcbcCreditBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const rcbcCreditMetadata = detectStatementMetadataFromText(rcbcCreditText);
+  const rcbcCreditRows = parser.parseImportText(rcbcCreditText, basename(rcbcCreditPath), "application/pdf", {
+    institution: rcbcCreditMetadata.institution,
+    accountName: rcbcCreditMetadata.accountName,
+    accountNumber: rcbcCreditMetadata.accountNumber,
+  });
+  const rcbcCashPaymentRow = rcbcCreditRows.find((row) => /^cash payment$/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  if (!rcbcCashPaymentRow || rcbcCashPaymentRow.type !== "income" || rcbcCashPaymentRow.categoryName !== "Transfers") {
+    throw new Error(
+      `expected signed RCBC Cash Payment credit to classify as Transfers income, got ${rcbcCashPaymentRow?.categoryName ?? "missing"} ${rcbcCashPaymentRow?.type ?? "missing"}`
+    );
+  }
+  console.log("[PASS] RCBC classification | signed Cash Payment credits classify as Transfers income");
+
+  const metrobankCreditPath = join(root, "Samples/Metrobank/412340326-compressor.pdf");
+  const metrobankCreditBytes = await readFile(metrobankCreditPath);
+  const metrobankCreditText = await readUploadedFileText({
+    name: basename(metrobankCreditPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(metrobankCreditBytes.length);
+      copy.set(metrobankCreditBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const metrobankCreditMetadata = detectStatementMetadataFromText(metrobankCreditText);
+  const metrobankCreditRows = parser.parseImportText(metrobankCreditText, basename(metrobankCreditPath), "application/pdf", {
+    institution: metrobankCreditMetadata.institution,
+    accountName: metrobankCreditMetadata.accountName,
+    accountNumber: metrobankCreditMetadata.accountNumber,
+  });
+  const metrobankCashPaymentRow = metrobankCreditRows.find((row) => /cash payment/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  if (!metrobankCashPaymentRow || metrobankCashPaymentRow.type !== "transfer" || metrobankCashPaymentRow.categoryName !== "Transfers") {
+    throw new Error(
+      `expected Metrobank Cash Payment statement settlement to stay as Transfers, got ${metrobankCashPaymentRow?.categoryName ?? "missing"} ${metrobankCashPaymentRow?.type ?? "missing"}`
+    );
+  }
+  console.log("[PASS] Metrobank classification | Cash Payment settlement rows stay as Transfers");
+
+  const bpiJokoPath = join(root, "Samples/BPI/584516945-BPI-joko.pdf");
+  const bpiJokoBytes = await readFile(bpiJokoPath);
+  const bpiJokoText = await readUploadedFileText({
+    name: basename(bpiJokoPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(bpiJokoBytes.length);
+      copy.set(bpiJokoBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const bpiJokoMetadata = detectStatementMetadataFromText(bpiJokoText);
+  const bpiJokoRows = parser.parseImportText(bpiJokoText, basename(bpiJokoPath), "application/pdf", {
+    institution: bpiJokoMetadata.institution,
+    accountName: bpiJokoMetadata.accountName,
+    accountNumber: bpiJokoMetadata.accountNumber,
+  });
+  const bpiJokoEpsatenRows = bpiJokoRows.filter((row) => /eps\s*at\s*en|epsaten/i.test(String(row.description ?? row.merchantRaw ?? row.merchantClean ?? "")));
+  if (bpiJokoEpsatenRows.some((row) => Number(row.amount ?? 0) === 0)) {
+    throw new Error(
+      `expected BPI EPSATEN rows to keep only monetary transactions, got zero-value rows: ${bpiJokoEpsatenRows
+        .filter((row) => Number(row.amount ?? 0) === 0)
+        .map((row) => `${row.date ?? "?"}:${row.description ?? row.merchantRaw ?? "?"}`)
+        .join(", ")}`
+    );
+  }
+  const bpiJokoElPayRow = bpiJokoRows.find((row) => /el\s*\/?\s*es\s*pay|elespay/i.test(String(row.description ?? row.merchantRaw ?? row.merchantClean ?? "")));
+  if (!bpiJokoElPayRow || bpiJokoElPayRow.merchantClean !== "eL/ESPay" || Number(bpiJokoElPayRow.amount ?? 0) <= 0) {
+    throw new Error(
+      `expected BPI eL/ESPay rows to normalize to eL/ESPay with a monetary amount, got ${bpiJokoElPayRow?.merchantClean ?? "missing"} ${bpiJokoElPayRow?.amount ?? "missing"}`
+    );
+  }
+  console.log("[PASS] BPI normalization | EPSATEN fragments stay non-zero and eL/ESPay normalizes cleanly");
+
+  const bpiCreditPath = join(root, "Samples/BPI/670660687-BE20230819.pdf");
+  const bpiCreditBytes = await readFile(bpiCreditPath);
+  const bpiCreditText = await readUploadedFileText({
+    name: basename(bpiCreditPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(bpiCreditBytes.length);
+      copy.set(bpiCreditBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const bpiCreditMetadata = detectStatementMetadataFromText(bpiCreditText);
+  const bpiCreditRows = parser.parseImportText(bpiCreditText, basename(bpiCreditPath), "application/pdf", {
+    institution: bpiCreditMetadata.institution,
+    accountName: bpiCreditMetadata.accountName,
+    accountNumber: bpiCreditMetadata.accountNumber,
+  });
+  const bpiPaymentCreditRow = bpiCreditRows.find((row) => /payment/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  if (!bpiPaymentCreditRow || bpiPaymentCreditRow.type !== "expense" || bpiPaymentCreditRow.categoryName !== "Financial") {
+    throw new Error(
+      `expected BPI statement payment credit rows to classify as Financial expense, got ${bpiPaymentCreditRow?.categoryName ?? "missing"} ${bpiPaymentCreditRow?.type ?? "missing"}`
+    );
+  }
+  if (bpiPaymentCreditRow.merchantClean !== "Statement Payment Credit") {
+    throw new Error(
+      `expected BPI statement payment credit rows to normalize as Statement Payment Credit, got ${bpiPaymentCreditRow.merchantClean ?? "missing"}`
+    );
+  }
+  console.log("[PASS] BPI classification | statement payment credit rows normalize as Financial expense");
+
+  const bpiInstallmentSections = [
+    "Statement of Account",
+    "Customer Number 020100-4-20-0731588",
+    "Transaction PostDate Description Amount",
+    "Date",
+    "December 13 December 15 Payment - Thank You -100.00",
+    "Installment Purchase:",
+    "December 21 December 23 Example Store: ( 6 Mos.) 600.00",
+    "Installment Amortization:",
+    "December 26 December 26 Example Store: 01/06 100.00",
+    "December 26 December 26 Loan A: 18/18 25.00",
+    "December 26 December 26 Loan B: 18/18 25.00",
+  ].join("\n");
+  const bpiInstallmentRows = parser.parseImportText(bpiInstallmentSections, "bpi-installment.pdf", "application/pdf", {
+    institution: "BPI",
+    accountName: "BPI 1588",
+    accountNumber: "0201004200731588",
+  });
+  if (bpiInstallmentRows.length !== 4 || bpiInstallmentRows.some((row) => row.amount === "600.00") || bpiInstallmentRows.filter((row) => row.amount === "25.00").length !== 2) {
+    throw new Error("BPI installment purchase principal must stay unbilled evidence while every amortization occurrence remains");
+  }
+  console.log("[PASS] BPI installment sections | unbilled principal excluded, repeated billed amortizations retained");
+
+  const unionBankMarchPath = join(root, "Actual SOAs/UnionBank/Unlocked/UnionBank SOA March 2026_unlocked.pdf");
+  const unionBankMarchBytes = await readFile(unionBankMarchPath);
+  const unionBankMarchText = await readUploadedFileText({
+    name: basename(unionBankMarchPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(unionBankMarchBytes.length);
+      copy.set(unionBankMarchBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const unionBankMarchMetadata = detectStatementMetadataFromText(unionBankMarchText);
+  const unionBankMarchRows = parser.parseImportText(unionBankMarchText, basename(unionBankMarchPath), "application/pdf", {
+    institution: unionBankMarchMetadata.institution,
+    accountName: unionBankMarchMetadata.accountName,
+    accountNumber: unionBankMarchMetadata.accountNumber,
+  });
+  const unionBankXenditRows = unionBankMarchRows.filter((row) => /\bxendit\b/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  if (
+    unionBankXenditRows.length === 0 ||
+    unionBankXenditRows.some((row) => row.merchantClean !== "Xendit" || row.categoryName !== "Transfers")
+  ) {
+    throw new Error(
+      `expected UnionBank March Xendit rows to normalize as Xendit transfers, got ${JSON.stringify(
+        unionBankXenditRows.map((row) => ({
+          merchantRaw: row.merchantRaw,
+          merchantClean: row.merchantClean,
+          categoryName: row.categoryName,
+          type: row.type,
+        }))
+      )}`
+    );
+  }
+  console.log("[PASS] UnionBank normalization | March 2026 Xendit rows normalize as Transfers");
+
+  const gcashActualPath = join(root, "Actual SOAs/GCash/GCash Statement Oct 2025 - Mar 2026_unlocked.pdf");
+  const gcashActualBytes = await readFile(gcashActualPath);
+  const gcashActualText = await readUploadedFileText({
+    name: basename(gcashActualPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(gcashActualBytes.length);
+      copy.set(gcashActualBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const gcashActualMetadata = detectStatementMetadataFromText(gcashActualText);
+  const gcashActualRows = parser.parseImportText(gcashActualText, basename(gcashActualPath), "application/pdf", {
+    institution: gcashActualMetadata.institution,
+    accountName: gcashActualMetadata.accountName,
+    accountNumber: gcashActualMetadata.accountNumber,
+  });
+  const gcashPdaxRows = gcashActualRows.filter((row) =>
+    /philippine\s+digital\s+asset\s+exchang|pdax/i.test(String(row.description ?? row.merchantRaw ?? row.merchantClean ?? ""))
+  );
+  if (
+    gcashPdaxRows.length === 0 ||
+    gcashPdaxRows.some((row) => row.merchantClean !== "PDAX" || row.categoryName !== "Financial")
+  ) {
+    throw new Error(
+      `expected GCash PDAX rows to normalize as Financial, got ${JSON.stringify(
+        gcashPdaxRows.map((row) => ({
+          merchantRaw: row.merchantRaw,
+          merchantClean: row.merchantClean,
+          categoryName: row.categoryName,
+          type: row.type,
+        }))
+      )}`
+    );
+  }
+  const gcashBancnetRows = gcashActualRows.filter((row) =>
+    /payment to bancnet p\s*2\s*m send/i.test(String(row.description ?? row.merchantRaw ?? ""))
+  );
+  if (
+    gcashBancnetRows.length === 0 ||
+    gcashBancnetRows.some((row) => row.merchantClean !== "BancNet P2M Send" || row.categoryName !== "Transfers")
+  ) {
+    throw new Error(
+      `expected GCash BancNet P2M rows to normalize as Transfers, got ${JSON.stringify(
+        gcashBancnetRows.map((row) => ({
+          merchantRaw: row.merchantRaw,
+          merchantClean: row.merchantClean,
+          categoryName: row.categoryName,
+          type: row.type,
+        }))
+      )}`
+    );
+  }
+  console.log("[PASS] GCash normalization | PDAX and BancNet P2M rows avoid Other");
+
+  const bpiHybridPath = join(root, "Samples/BPI/1013696218-Bank-Statement-and-Bank-Cert.pdf");
+  const bpiHybridBytes = await readFile(bpiHybridPath);
+  const bpiHybridText = await readUploadedFileText({
+    name: basename(bpiHybridPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(bpiHybridBytes.length);
+      copy.set(bpiHybridBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const bpiHybridMetadata = detectStatementMetadataFromText(bpiHybridText);
+  let bpiHybridRows = parser.parseImportText(bpiHybridText, basename(bpiHybridPath), "application/pdf", {
+    institution: bpiHybridMetadata.institution,
+    accountName: bpiHybridMetadata.accountName,
+    accountNumber: bpiHybridMetadata.accountNumber,
+  });
+  if (bpiHybridRows.length === 0) {
+    const bpiHybridGenericRows = parser.parseImportTextGenericOnly(bpiHybridText, basename(bpiHybridPath), "application/pdf", {
+      institution: bpiHybridMetadata.institution ?? "BPI",
+      accountName: bpiHybridMetadata.accountName,
+      accountNumber: bpiHybridMetadata.accountNumber,
+    });
+    if (bpiHybridGenericRows.length > 0) {
+      bpiHybridRows = bpiHybridGenericRows;
+    }
+  }
+  if (bpiHybridRows.length === 0) {
+    console.warn("[WARN] BPI OCR fallback | bank-statement-and-cert hybrid remained unreadable in this regression harness");
+  } else {
+    if (bpiHybridMetadata.institution !== "BPI") {
+      throw new Error(`expected BPI bank-statement-and-cert hybrid to detect BPI, got ${bpiHybridMetadata.institution ?? "missing"}`);
+    }
+    if (bpiHybridMetadata.accountNumber !== "008096-3258-11" || bpiHybridMetadata.accountName !== "BPI 5811") {
+      throw new Error(
+        `expected BPI hybrid account BPI 5811 / 008096-3258-11, got ${bpiHybridMetadata.accountName ?? "missing"} / ${bpiHybridMetadata.accountNumber ?? "missing"}`
+      );
+    }
+    if (bpiHybridMetadata.endingBalance !== 210920.62) {
+      throw new Error(`expected BPI hybrid trailing balance 210920.62, got ${bpiHybridMetadata.endingBalance ?? "missing"}`);
+    }
+    console.log(`[PASS] BPI OCR fallback | bank-statement-and-cert hybrid yields ${bpiHybridRows.length} rows`);
+  }
+
+  }
+
+  const guessCategoryFallback = dataEngine.guessCategoryFallback as (description: string, type: "income" | "expense" | "transfer") => string;
+  const guessCategoryName = parser.guessCategoryName as (text: string, type: "income" | "expense" | "transfer") => string;
+  const classifyMerchantFallback = dataEngine.classifyMerchant as (params: {
+    merchantText: string;
+    categoryText?: string | null;
+    institution?: string | null;
+    type: "income" | "expense" | "transfer";
+    categoryName?: string | null;
+    merchantRules: Array<{
+      merchantKey: string;
+      merchantPattern: string | null;
+      normalizedName: string;
+      categoryId: string | null;
+      categoryName: string | null;
+      source: string;
+      confidence: number;
+      timesConfirmed: number;
+    }>;
+    trainingSignals: Array<{
+      categoryId: string;
+      categoryName: string | null;
+      merchantKey: string;
+      merchantTokens: string[];
+      type: "income" | "expense" | "transfer";
+      source: string;
+      confidence: number;
+    }>;
+    negativeSignals?: Array<{
+      merchantKey: string;
+      merchantTokens: string[];
+      source: string;
+      confidence: number;
+    }>;
+  }) => {
+    categoryName: string | null;
+    normalizedName: string | null;
+  };
+  const getEffectiveTransactionCategoryName = transactionDisplayModule.getEffectiveTransactionCategoryName as (params: {
+    categoryName?: string | null;
+    rawPayload?: Record<string, unknown> | null;
+    merchantRaw: string;
+    merchantClean?: string | null;
+    description?: string | null;
+    institution?: string | null;
+    source?: string | null;
+    type: "income" | "expense" | "transfer";
+  }) => string | null;
+  const enrichmentFallbackExpectations: Array<[string, "income" | "expense" | "transfer", string]> = [
+    ["Incoming Interbank Transfer", "income", "Transfers"],
+    ["Outgoing Interbank Transfer", "expense", "Transfers"],
+    ["System Debit", "expense", "Transfers"],
+    ["Interbank Service Charge", "expense", "Financial"],
+    ["ATM Withdrawal", "expense", "Cash & ATM"],
+    ["Cash/Check Deposit", "income", "Income"],
+    ["Interest Earned", "income", "Income"],
+    ["Tax Withheld", "expense", "Financial"],
+    ["Finance Charges", "expense", "Financial"],
+    ["Finance Charge", "expense", "Financial"],
+    ["Shopee", "expense", "Shopping"],
+    ["Puregold Price Club", "expense", "Shopping"],
+    ["Cash Payment", "expense", "Shopping"],
+    ["GCash Cash In", "income", "Transfers"],
+    ["Cash Payment - Thank You - MB ATM", "income", "Transfers"],
+    ["Payment-Thank You", "income", "Transfers"],
+    ["Card Payment", "income", "Transfers"],
+    ["Emmanuel Payments", "expense", "Shopping"],
+    ["Apollo Bay Seafood", "expense", "Food & Dining"],
+    ["News Travels", "expense", "Travel & Lifestyle"],
+    ["Htg Ticket Sales", "expense", "Entertainment"],
+    ["Grab Philippines", "expense", "Transport"],
+    ["Dunkin Donuts", "expense", "Food & Dining"],
+    ["LinkedIn Premium", "expense", "Bills & Utilities"],
+    ["DQ Dairy Queen", "expense", "Food & Dining"],
+    ["Robinsons Easymart", "expense", "Shopping"],
+    ["Brunos Barbers", "expense", "Health & Wellness"],
+    ["Timezone", "expense", "Entertainment"],
+    ["Priority Pass", "expense", "Travel & Lifestyle"],
+    ["Mercury Drug", "expense", "Health & Wellness"],
+    ["Anytime Fitness", "expense", "Health & Wellness"],
+    ["Fully Booked", "expense", "Education"],
+    ["Power Mac Center", "expense", "Shopping"],
+    ["Mary Grace", "expense", "Food & Dining"],
+    ["Southstar Drug", "expense", "Health & Wellness"],
+    ["Savemore", "expense", "Shopping"],
+    ["Shakey's", "expense", "Food & Dining"],
+    ["Toy Kingdom", "expense", "Shopping"],
+    ["Hi-Precision", "expense", "Health & Wellness"],
+    ["Kidzoona", "expense", "Entertainment"],
+  ];
+  for (const [description, type, expectedCategory] of enrichmentFallbackExpectations) {
+    const actualCategory = guessCategoryFallback(description, type);
+    if (actualCategory !== expectedCategory) {
+      throw new Error(`expected enrichment fallback ${description} to classify as ${expectedCategory}, got ${actualCategory}`);
+    }
+  }
+  console.log("[PASS] enrichment fallback | normalized bank labels classify without falling back to Other");
+
+  if (guessCategoryName("GCash Cash In", "income") !== "Transfers") {
+    throw new Error(`expected guessCategoryName to classify GCash Cash In as Transfers`);
+  }
+  if (guessCategoryName("ATM Withdrawal", "expense") !== "Cash & ATM") {
+    throw new Error(`expected guessCategoryName to classify ATM Withdrawal as Cash & ATM`);
+  }
+  const categoryGuessExpectations: Array<[string, "income" | "expense" | "transfer", string]> = [
+    ["Pedro the Grocer Makat", "expense", "Food & Dining"],
+    ["McDonald's", "expense", "Food & Dining"],
+    ["Milksha Sydney", "expense", "Food & Dining"],
+    ["Gogyo - Surry Hills", "expense", "Food & Dining"],
+    ["Sydney Opera House", "expense", "Entertainment"],
+    ["Relay", "expense", "Shopping"],
+    ["Sydney Harbour Gifts", "expense", "Travel & Lifestyle"],
+    ["Wanli Hu", "income", "Transfers"],
+    ["Maria Harman", "income", "Transfers"],
+    ["MALDO A F", "income", "Transfers"],
+    ["Emmanuel Payments", "expense", "Shopping"],
+    ["Apollo Bay Seafood", "expense", "Food & Dining"],
+    ["Lee's Dumplings", "expense", "Food & Dining"],
+    ["News Travels", "expense", "Travel & Lifestyle"],
+    ["HTG Ticket Sales", "expense", "Entertainment"],
+    ["Viator.com", "expense", "Shopping"],
+    ["Grab Philippines", "expense", "Transport"],
+    ["DUNKIN DONUTS PH", "expense", "Food & Dining"],
+    ["LINKEDIN PREMIUM", "expense", "Bills & Utilities"],
+    ["HAPAG", "expense", "Food & Dining"],
+    ["HARLAN HOLDEN", "expense", "Food & Dining"],
+    ["MATCHA BAR", "expense", "Food & Dining"],
+    ["ELEPHANT GROUNDS", "expense", "Food & Dining"],
+    ["MO COOKIES", "expense", "Food & Dining"],
+    ["BRUNOS BARBERS", "expense", "Health & Wellness"],
+    ["ROBINSONS EASYMART", "expense", "Shopping"],
+    ["UNCLE JOHNS", "expense", "Shopping"],
+    ["WHEYL NUTRITION", "expense", "Health & Wellness"],
+    ["TIMEZONE", "expense", "Entertainment"],
+    ["THE SPA", "expense", "Health & Wellness"],
+    ["NIKKEI", "expense", "Food & Dining"],
+    ["YARDSTICK", "expense", "Food & Dining"],
+    ["YOUR LOCAL", "expense", "Food & Dining"],
+    ["BRUNCH BUREAU", "expense", "Food & Dining"],
+    ["BREAKFAST AT ANTONIO'S", "expense", "Food & Dining"],
+    ["ROYCE", "expense", "Food & Dining"],
+    ["BOK KOREAN FRIED CHICKEN", "expense", "Food & Dining"],
+    ["MYSTERY MANILA", "expense", "Entertainment"],
+    ["RALPH'S WINES", "expense", "Food & Dining"],
+    ["NBS NATIONAL BOOK STORE", "expense", "Education"],
+    ["ARABICA", "expense", "Food & Dining"],
+    ["15-PPASS", "expense", "Travel & Lifestyle"],
+    ["MERCURY DRUG", "expense", "Health & Wellness"],
+    ["ANYTIME FITNESS", "expense", "Health & Wellness"],
+    ["ROBINSONS SUPERMARKET", "expense", "Shopping"],
+    ["THE MARKETPLACE", "expense", "Shopping"],
+    ["SM STORE", "expense", "Shopping"],
+    ["FULLY BOOKED", "expense", "Education"],
+    ["POWER MAC CENTER", "expense", "Shopping"],
+    ["BEYOND THE BOX", "expense", "Shopping"],
+    ["MARY GRACE", "expense", "Food & Dining"],
+    ["WILDFLOUR", "expense", "Food & Dining"],
+    ["MENDOKORO", "expense", "Food & Dining"],
+    ["RAMEN NAGI", "expense", "Food & Dining"],
+    ["MANAM", "expense", "Food & Dining"],
+    ["CONTI'S", "expense", "Food & Dining"],
+    ["COFFEE BEAN", "expense", "Food & Dining"],
+    ["ARMY NAVY", "expense", "Food & Dining"],
+    ["MISTER DONUT", "expense", "Food & Dining"],
+    ["POPEYES", "expense", "Food & Dining"],
+    ["HEALTHY OPTIONS", "expense", "Health & Wellness"],
+    ["SAVEMORE", "expense", "Shopping"],
+    ["SHOPWISE", "expense", "Shopping"],
+    ["WALTERMART", "expense", "Shopping"],
+    ["LAWSON", "expense", "Shopping"],
+    ["SM HYPERMARKET", "expense", "Shopping"],
+    ["SM SUPERMARKET", "expense", "Shopping"],
+    ["SOUTHSTAR DRUG", "expense", "Health & Wellness"],
+    ["ROSE PHARMACY", "expense", "Health & Wellness"],
+    ["GENERIKA", "expense", "Health & Wellness"],
+    ["SHAKEY'S", "expense", "Food & Dining"],
+    ["YELLOW CAB", "expense", "Food & Dining"],
+    ["MAX'S", "expense", "Food & Dining"],
+    ["PANDA EXPRESS", "expense", "Food & Dining"],
+    ["CIBO", "expense", "Food & Dining"],
+    ["NONO'S", "expense", "Food & Dining"],
+    ["FRANKIE'S", "expense", "Food & Dining"],
+    ["BOTEJYU", "expense", "Food & Dining"],
+    ["TUAN TUAN", "expense", "Food & Dining"],
+    ["SUNNIES CAFE", "expense", "Food & Dining"],
+    ["RUSTAN'S", "expense", "Shopping"],
+    ["TOY KINGDOM", "expense", "Shopping"],
+    ["OCTAGON", "expense", "Shopping"],
+    ["HI-PRECISION", "expense", "Health & Wellness"],
+    ["ST LUKES", "expense", "Health & Wellness"],
+    ["MEDICAL CITY", "expense", "Health & Wellness"],
+    ["VISION EXPRESS", "expense", "Health & Wellness"],
+    ["BONCHON", "expense", "Food & Dining"],
+    ["KENNY ROGERS", "expense", "Food & Dining"],
+    ["YOSHINOYA", "expense", "Food & Dining"],
+    ["MARUGAME", "expense", "Food & Dining"],
+    ["KUYA J", "expense", "Food & Dining"],
+    ["SAMGYUPSALAMAT", "expense", "Food & Dining"],
+    ["TIM HO WAN", "expense", "Food & Dining"],
+    ["GONG CHA", "expense", "Food & Dining"],
+    ["CHATIME", "expense", "Food & Dining"],
+    ["KOOMI", "expense", "Food & Dining"],
+    ["MACAO IMPERIAL", "expense", "Food & Dining"],
+    ["TIGER SUGAR", "expense", "Food & Dining"],
+    ["COCO FRESH", "expense", "Food & Dining"],
+    ["KIDZOONA", "expense", "Entertainment"],
+    ["TOM'S WORLD", "expense", "Entertainment"],
+    ["WORLD OF FUN", "expense", "Entertainment"],
+    ["QUANTUM", "expense", "Entertainment"],
+    ["BO'S COFFEE", "expense", "Food & Dining"],
+    ["COFFEE PROJECT", "expense", "Food & Dining"],
+    ["TOBY'S ESTATE", "expense", "Food & Dining"],
+    ["BUT FIRST, COFFEE", "expense", "Food & Dining"],
+    ["HAPPY LEMON", "expense", "Food & Dining"],
+    ["AUNTIE ANNE'S", "expense", "Food & Dining"],
+    ["LLAO LLAO", "expense", "Food & Dining"],
+    ["OOMA", "expense", "Food & Dining"],
+    ["MANGO TREE", "expense", "Food & Dining"],
+    ["ITALIANNI'S", "expense", "Food & Dining"],
+    ["TGI FRIDAYS", "expense", "Food & Dining"],
+    ["LANDERS", "expense", "Shopping"],
+    ["S&R", "expense", "Shopping"],
+    ["UNIQLO", "expense", "Shopping"],
+    ["ZARA", "expense", "Shopping"],
+    ["H&M", "expense", "Shopping"],
+    ["BELO", "expense", "Health & Wellness"],
+  ];
+  for (const [description, type, expectedCategory] of categoryGuessExpectations) {
+    const actualCategory = guessCategoryName(description, type);
+    if (actualCategory !== expectedCategory) {
+      throw new Error(`expected guessCategoryName ${description} to classify as ${expectedCategory}, got ${actualCategory}`);
+    }
+  }
+  const noisyUnseenMerchantExpectations: Array<[string, "income" | "expense" | "transfer", string, string]> = [
+    ["GRAB PHILIPPINES REF 8841 CARD XX9737", "expense", "Transport", "Grab"],
+    ["DUNKIN DONUTS PH STORE 0143 CARD PURCHASE", "expense", "Food & Dining", "Dunkin"],
+    ["LINKEDIN PREMIUM SINGAPORE PTE LTD", "expense", "Bills & Utilities", "LinkedIn"],
+    ["STARBUCKS STORE 0143 CARD PURCHASE", "expense", "Food & Dining", "Starbucks"],
+    ["PAYPAL SINGAPORE PTE LTD", "expense", "Shopping", "PayPal"],
+    ["PAYPAL*SPOTIFY*P 402 EBB", "expense", "Bills & Utilities", "Spotify"],
+    ["PAYPAL LINKEDIN SINGAPORE PTE LTD", "expense", "Bills & Utilities", "LinkedIn"],
+    ["GRABPAY*DUNKIN PH CARD PURCHASE", "expense", "Food & Dining", "Dunkin"],
+    ["ONLINE FUND TRANSFER GRABCAR PH", "expense", "Transport", "Grab"],
+    ["BANK TRANSFER DUNKIN DONUTS BGC", "expense", "Food & Dining", "Dunkin"],
+    ["OUTGOING TRANSFER PAYPAL LINKEDIN PREMIUM", "expense", "Bills & Utilities", "LinkedIn"],
+    ["BANK TRANSFER AMAZON MARKETPLACE", "expense", "Shopping", "Amazon"],
+    ["DQ DAIRY QUEEN BGC", "expense", "Food & Dining", "Dairy Queen"],
+    ["ROBINSONS EASYMART STORE 221", "expense", "Shopping", "Robinsons Easymart"],
+    ["BRUNOS BARBERS", "expense", "Health & Wellness", "Brunos Barbers"],
+    ["TIMEZONE AYALA MALLS", "expense", "Entertainment", "Timezone"],
+    ["15-PPASS MEMBER FEE", "expense", "Travel & Lifestyle", "Priority Pass"],
+    ["NBS NATIONAL BOOK STORE", "expense", "Education", "National Book Store"],
+    ["FULLY BOOKED BGC", "expense", "Education", "Fully Booked"],
+    ["MERCURY DRUG BGC", "expense", "Health & Wellness", "Mercury Drug"],
+    ["POWER MAC CENTER BGC", "expense", "Shopping", "Power Mac Center"],
+    ["MARY GRACE CAFE BGC", "expense", "Food & Dining", "Mary Grace"],
+    ["SOUTHSTAR DRUG BGC", "expense", "Health & Wellness", "Southstar Drug"],
+    ["SHAKEYS PIZZA BGC", "expense", "Food & Dining", "Shakey's"],
+    ["SAVEMORE MARKET BGC", "expense", "Shopping", "Savemore"],
+    ["TOY KINGDOM BGC", "expense", "Shopping", "Toy Kingdom"],
+    ["HI-PRECISION DIAGNOSTIC", "expense", "Health & Wellness", "Hi-Precision"],
+    ["BONCHON BGC", "expense", "Food & Dining", "Bonchon"],
+    ["KIDZOONA BGC", "expense", "Entertainment", "Kidzoona"],
+    ["BO'S COFFEE BGC", "expense", "Food & Dining", "Bo's Coffee"],
+    ["LANDERS ARCOVIA", "expense", "Shopping", "Landers"],
+    ["BELO MEDICAL GROUP BGC", "expense", "Health & Wellness", "Belo Medical Group"],
+    ["PANCO CAFE BGC TAGUIG PH", "expense", "Food & Dining", "Panco Cafe"],
+    ["KOI BONIFACIO HIGH STREE TAGUIG PH", "expense", "Food & Dining", "KOI"],
+    ["PYX*WHEYL NUTRIT PASAY CITY PH", "expense", "Health & Wellness", "Wheyl Nutrition"],
+    ["7-ELEVEN-ST 2192 BRY SAN ANTONPH", "expense", "Shopping", "7-Eleven"],
+    ["THE FAT SEED CAFE & RO MUNTINLUPA PH", "expense", "Food & Dining", "The Fat Seed Cafe"],
+    ["NOMAD EXPRESS T 1 SOUTH W LAPU LAPU PH", "expense", "Travel & Lifestyle", "Nomad Express"],
+    ["SIMPLY GOURMET FOOD GREE MAKATI CITY PH", "expense", "Food & Dining", "Simply Gourmet"],
+  ];
+  for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
+    const result = classifyMerchantFallback({
+      merchantText,
+      institution: "BPI",
+      type,
+      merchantRules: [],
+      trainingSignals: [],
+      negativeSignals: [],
+    });
+    if (result.categoryName !== expectedCategory) {
+      throw new Error(`expected classifyMerchant ${merchantText} to classify as ${expectedCategory}, got ${result.categoryName ?? "missing"}`);
+    }
+    if (result.normalizedName !== expectedName) {
+      throw new Error(`expected classifyMerchant ${merchantText} to normalize to ${expectedName}, got ${result.normalizedName ?? "missing"}`);
+    }
+  }
+  const institutionScopedRailResult = classifyMerchantFallback({
+    merchantText: "GRABPAY*DUNKIN PH",
+    categoryText: "GRABPAY*DUNKIN PH CARD PURCHASE",
+    institution: "BPI",
+    type: "expense",
+    merchantRules: [],
+    trainingSignals: [],
+    negativeSignals: [],
+  });
+  if (institutionScopedRailResult.normalizedName !== "Dunkin") {
+    throw new Error(
+      `expected institution-aware candidate expansion to preserve the downstream merchant instead of the payment rail, got ${institutionScopedRailResult.normalizedName ?? "missing"}`
+    );
+  }
+  const aubDisplayedCategory = getEffectiveTransactionCategoryName({
+    categoryName: "Financial",
+    rawPayload: { categoryName: "Financial", merchantRaw: "ATM Withdrawal" },
+    merchantRaw: "ATM Withdrawal",
+    merchantClean: null,
+    institution: "AUB",
+    source: "upload",
+    type: "expense",
+  });
+  if (aubDisplayedCategory !== "Cash & ATM") {
+    throw new Error(`expected AUB ATM Withdrawal to display as Cash & ATM, got ${aubDisplayedCategory ?? "missing"}`);
+  }
+  const aubCashDepositCategory = getEffectiveTransactionCategoryName({
+    categoryName: "Income",
+    rawPayload: { categoryName: "Income", merchantRaw: "Cash Deposit" },
+    merchantRaw: "Cash Deposit",
+    merchantClean: null,
+    institution: "AUB",
+    source: "upload",
+    type: "income",
+  });
+  if (aubCashDepositCategory !== "Transfers") {
+    throw new Error(`expected AUB Cash Deposit to display as Transfers, got ${aubCashDepositCategory ?? "missing"}`);
+  }
+  const aubDm1Category = getEffectiveTransactionCategoryName({
+    categoryName: "Business",
+    rawPayload: { categoryName: "Business", merchantRaw: "DM1" },
+    merchantRaw: "DM1",
+    merchantClean: null,
+    institution: "AUB",
+    source: "upload",
+    type: "expense",
+  });
+  if (aubDm1Category !== "Transfers") {
+    throw new Error(`expected AUB DM1 to display as Transfers, got ${aubDm1Category ?? "missing"}`);
+  }
+  const gcashDisplayedCategory = getEffectiveTransactionCategoryName({
+    categoryName: "Income",
+    rawPayload: { categoryName: "Income", merchantRaw: "GCash Cash In" },
+    merchantRaw: "GCash Cash In",
+    merchantClean: null,
+    institution: "BPI",
+    source: "upload",
+    type: "income",
+  });
+  if (gcashDisplayedCategory !== "Transfers") {
+    throw new Error(`expected GCash Cash In to display as Transfers, got ${gcashDisplayedCategory ?? "missing"}`);
+  }
+  console.log("[PASS] category overrides | AUB movement codes and GCash Cash In classify correctly");
+
+  if (!portable) {
+  const chinaBankPath = join(root, "Samples/China Bank/860976948-CHINA-BANK-STATEMENT.pdf");
+  try {
+    const chinaBankBytes = await readFile(chinaBankPath);
+    const chinaBankText = await readUploadedFileText({
+      name: chinaBankPath.split("/").at(-1),
+      type: "application/pdf",
+      arrayBuffer: async () => {
+        const copy = new Uint8Array(chinaBankBytes.length);
+        copy.set(chinaBankBytes);
+        return copy.buffer as ArrayBuffer;
+      },
+    });
+    const chinaBankMetadata = detectStatementMetadataFromText(chinaBankText);
+    const chinaBankRows = parser.parseImportText(chinaBankText, chinaBankPath.split("/").at(-1)!, "application/pdf", {
+      institution: chinaBankMetadata.institution,
+      accountName: chinaBankMetadata.accountName,
+      accountNumber: chinaBankMetadata.accountNumber,
+    });
+    if (chinaBankMetadata.accountNumber !== "1407-00-00679-0") {
+      throw new Error(`expected account number 1407-00-00679-0, got ${chinaBankMetadata.accountNumber ?? "missing"}`);
+    }
+    if (chinaBankMetadata.openingBalance !== 1983467.16 || chinaBankMetadata.endingBalance !== 2914645.28) {
+      throw new Error(
+        `expected combined balances 1983467.16 -> 2914645.28, got ${chinaBankMetadata.openingBalance ?? "missing"} -> ${chinaBankMetadata.endingBalance ?? "missing"}`
+      );
+    }
+    if (chinaBankRows.length !== 104) {
+      throw new Error(`expected 104 deterministic local rows across July and August, got ${chinaBankRows.length}`);
+    }
+    const julyRows = chinaBankRows.filter((row) => row.date?.startsWith("2024-07-"));
+    const augustRows = chinaBankRows.filter((row) => row.date?.startsWith("2024-08-"));
+    if (julyRows.length !== 49 || augustRows.length !== 55) {
+      throw new Error(`expected 49 July rows and 55 August rows, got ${julyRows.length} and ${augustRows.length}`);
+    }
+    const firstCreditMemo = chinaBankRows.find((row) => row.merchantRaw === "Credit Memo");
+    if (!firstCreditMemo || firstCreditMemo.amount !== "68820.00" || firstCreditMemo.type !== "income") {
+      throw new Error(
+        `expected first Credit Memo to parse as 68820.00 income, got ${firstCreditMemo?.amount ?? "missing"} ${firstCreditMemo?.type ?? "missing"}`
+      );
+    }
+    console.log(`[PASS] China Bank deterministic parser | ${chinaBankRows.length} rows | ${julyRows.length} July / ${augustRows.length} August`);
+  } catch (error) {
+    failures.push(
+      `[China Bank deterministic parser] ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  const eastWestSampleChecks = [
+    join(root, "Samples/EastWest Bank/Philippines EastWest bank statement template in Excel and PDF format.pdf"),
+    join(root, "Samples/EastWest Bank/Philippines Eastwest bank st Word.pdf"),
+  ];
+
+  for (const eastWestPath of eastWestSampleChecks) {
+    try {
+      const bytes = await readFile(eastWestPath);
+      const text = await readUploadedFileText({
+        name: eastWestPath.split("/").at(-1),
+        type: "application/pdf",
+        arrayBuffer: async () => {
+          const copy = new Uint8Array(bytes.length);
+          copy.set(bytes);
+          return copy.buffer as ArrayBuffer;
+        },
+      });
+      const metadata = detectStatementMetadataFromText(text);
+      const rows = parser.parseImportText(text, eastWestPath.split("/").at(-1)!, "application/pdf", {
+        institution: metadata.institution ?? "EastWest Bank",
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+      });
+      const expectedAccount = eastWestPath.endsWith("Word.pdf") ? "205050623445" : null;
+      if (metadata.accountNumber !== expectedAccount || rows.some(row => (row.accountNumber ?? null) !== expectedAccount)) {
+        throw new Error(`expected source-specific EastWest account ${expectedAccount ?? "unresolved (blank header)"}, got ${metadata.accountNumber ?? "missing"}`);
+      }
+      if (rows.some(row => (row.confidence ?? 100) > 45 || !row.rawPayload?.sourceText || row.rawPayload?.balance != null)) {
+        throw new Error("EastWest published templates must retain their source text and require review for conflicting balances");
+      }
+      if (rows.length !== 15) {
+        throw new Error(`expected 15 deterministic EastWest rows, got ${rows.length}`);
+      }
+      if (rows[0]?.date !== "2022-01-20" || rows[0]?.amount !== "5000.00" || rows[0]?.type !== "income") {
+        throw new Error(
+          `expected first EastWest row to be 2022-01-20 5000.00 income, got ${rows[0]?.date ?? "missing"} ${rows[0]?.amount ?? "missing"} ${rows[0]?.type ?? "missing"}`
+        );
+      }
+      if (rows.some((row) => row.merchantRaw === "Cash Deposit" && row.categoryName !== "Cash & ATM")) {
+        throw new Error("expected EastWest Cash Deposit rows to use Cash & ATM category");
+      }
+      if (rows.at(-1)?.date !== "2022-02-24" || rows.at(-1)?.amount !== "1000.00") {
+        throw new Error(
+          `expected final EastWest row to be 2022-02-24 1000.00, got ${rows.at(-1)?.date ?? "missing"} ${rows.at(-1)?.amount ?? "missing"}`
+        );
+      }
+      console.log(`[PASS] EastWest deterministic parser | ${eastWestPath.split("/").at(-1)} | ${rows.length} rows`);
+    } catch (error) {
+      failures.push(`[EastWest deterministic parser] ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const noisyFallbackChecks = [
+    {
+      label: "Landbank fallback excel",
+      path: join(root, "Samples/Landbank/Philippines Land Bank of the Philippines excel pdf.pdf"),
+      institution: "Landbank",
+    },
+    {
+      label: "Landbank fallback",
+      path: join(root, "Samples/Landbank/Philippines Land Bank of the Philippines word.pdf"),
+      institution: "Landbank",
+    },
+  ] as const;
+
+  for (const check of noisyFallbackChecks) {
+    try {
+      const bytes = await readFile(check.path);
+      const text = await readUploadedFileText({
+        name: check.path.split("/").at(-1),
+        type: "application/pdf",
+        arrayBuffer: async () => {
+          const copy = new Uint8Array(bytes.length);
+          copy.set(bytes);
+          return copy.buffer as ArrayBuffer;
+        },
+      });
+      const metadata = detectStatementMetadataFromText(text);
+      const rows = parser.parseImportText(text, check.path.split("/").at(-1)!, "application/pdf", {
+        institution: metadata.institution ?? check.institution,
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+      });
+      if (rows.length !== 0) {
+        throw new Error(`expected fail-closed fallback but got ${rows.length} local rows`);
+      }
+      console.log(`[PASS] ${check.label} | 0 local rows | routed to OCR fallback`);
+    } catch (error) {
+      failures.push(`[${check.label}] ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const ucpbChecks = [
+    {
+      label: "UCPB unreadable excel sample",
+      path: join(root, "Samples/UCPB/Philippines UCPB bank statement of account template in Excel and PDF format.pdf"),
+      accountNumber: null,
+      exactRows: 0,
+      endingBalance: null,
+    },
+    {
+      label: "UCPB word sample",
+      path: join(root, "Samples/UCPB/Philippines UCPB bank statement of account template in Word and PDF format.pdf"),
+      accountNumber: "2024600000000",
+      exactRows: 51,
+      endingBalance: 24310,
+    },
+    {
+      label: "UCPB statement sample",
+      path: join(root, "Samples/UCPB/Philippines UCPB bank statement.pdf"),
+      accountNumber: "202460000000",
+      exactRows: 50,
+      endingBalance: 10106,
+    },
+  ] as const;
+
+  for (const check of ucpbChecks) {
+    try {
+      const bytes = await readFile(check.path);
+      const text = await readUploadedFileText({
+        name: check.path.split("/").at(-1),
+        type: "application/pdf",
+        arrayBuffer: async () => {
+          const copy = new Uint8Array(bytes.length);
+          copy.set(bytes);
+          return copy.buffer as ArrayBuffer;
+        },
+      });
+      const metadata = detectStatementMetadataFromText(text);
+      const rows = parser.parseImportText(text, check.path.split("/").at(-1)!, "application/pdf", {
+        institution: metadata.institution ?? "UCPB",
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+      });
+      if (rows.length !== check.exactRows) {
+        throw new Error(`expected ${check.exactRows} rows, got ${rows.length}`);
+      }
+      if (check.accountNumber && !rows.every((row) => row.accountNumber === check.accountNumber)) {
+        throw new Error(`expected account number ${check.accountNumber}`);
+      }
+      if (rows.length > 0 && !rows.every((row) => row.accountName === "JOHN CITIZEN")) {
+        throw new Error("expected UCPB rows to use canonical account name JOHN CITIZEN");
+      }
+      const endingBalance = rows.length > 0 && typeof rows.at(-1)?.rawPayload === "object"
+        ? Number((rows.at(-1)?.rawPayload as Record<string, unknown>).balance ?? NaN)
+        : null;
+      if (check.endingBalance !== null && !approxEqual(endingBalance, check.endingBalance)) {
+        throw new Error(`expected ending balance ${formatMoney(check.endingBalance)}, got ${formatMoney(endingBalance)}`);
+      }
+      console.log(`[PASS] ${check.label} | ${rows.length} rows | ending ${formatMoney(endingBalance)}`);
+    } catch (error) {
+      failures.push(`[${check.label}] ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  }
+
+  const eastWestSyntheticText = [
+    "EASTWEST BANK",
+    "ACCOUNT STATEMENT",
+    "Book Date Reference Description Value Date Cheque No. Debit Credit Closing Balance",
+    "20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 5000.00",
+    "24 Jan 22 TT22024MPDF5269 Cash Deposit 24 Jan 22 6000.00",
+    "02 Feb 22 TT220338ACT122 Outward Cheque Dr / Cheque Enlistment 02 Feb 22 4500.00",
+    "02 Feb 22 PCH2122020212116 Transfer SUCCESSFUL 02 Feb 22 12000.00",
+    "Balance at Period Start 0.00",
+  ].join("\n");
+  const eastWestSyntheticRows = parser.parseImportText(
+    eastWestSyntheticText,
+    "eastwest-synthetic.pdf",
+    "application/pdf",
+    { institution: "EastWest Bank" }
+  );
+  if (eastWestSyntheticRows.length < 4) {
+    throw new Error(`expected EastWest synthetic template parser to produce rows, got ${eastWestSyntheticRows.length}`);
+  }
+  if (eastWestSyntheticRows[0]?.institution !== "EastWest Bank") {
+    throw new Error(`expected EastWest synthetic parser to preserve institution, got ${eastWestSyntheticRows[0]?.institution ?? "null"}`);
+  }
+  if (eastWestSyntheticRows[0]?.type !== "income") {
+    throw new Error(`expected EastWest synthetic cash deposit to classify as income, got ${eastWestSyntheticRows[0]?.type ?? "null"}`);
+  }
+  if (eastWestSyntheticRows[0]?.categoryName !== "Cash & ATM") {
+    throw new Error(`expected EastWest synthetic cash deposit to use Cash & ATM, got ${eastWestSyntheticRows[0]?.categoryName ?? "null"}`);
+  }
+  if (!eastWestSyntheticRows.some((row) => row.description === "Transfer SUCCESSFUL" && row.type === "transfer")) {
+    throw new Error("expected EastWest synthetic transfer row to classify as transfer");
+  }
+
+  // These legacy item-layout examples contain no currency evidence. Preserve
+  // their item/total assertions, but require the current fail-closed contract.
+  const assertUnresolvedReceiptCurrency = (preview: ReturnType<typeof parseReceiptText>) => {
+    if (preview.currency !== "MIXED" || !preview.currencyWarning || preview.confidence > 45) {
+      throw new Error(`Receipt without currency evidence must require review: ${JSON.stringify(preview)}`);
+    }
+  };
+
+  const itemizedReceiptPreview = parseReceiptText([
+    "BASIL PASTA HOUSE",
+    "Jan 12, 2026",
+    "2 x Sandwich 50.00 100.00",
+    "Coffee 30.00",
+    "3 x Cookie 10.00 30.00",
+    "Subtotal 160.00",
+    "Tax 12.80",
+    "Total 172.80",
+  ].join("\n"));
+  if (itemizedReceiptPreview.items.length !== 3) {
+    throw new Error(`expected itemized receipt to produce 3 line items, got ${itemizedReceiptPreview.items.length}`);
+  }
+  if (itemizedReceiptPreview.items[0]?.quantity !== 2 || itemizedReceiptPreview.items[0]?.unitPrice !== "50.00") {
+    throw new Error(
+      `expected first item to capture quantity and unit price, got quantity=${itemizedReceiptPreview.items[0]?.quantity ?? "null"} unitPrice=${itemizedReceiptPreview.items[0]?.unitPrice ?? "null"}`
+    );
+  }
+  if (itemizedReceiptPreview.total !== "172.80") {
+    throw new Error(
+      `expected itemized receipt to reconcile, got total=${itemizedReceiptPreview.total ?? "null"} confidence=${itemizedReceiptPreview.confidence}`
+    );
+  }
+
+  assertUnresolvedReceiptCurrency(itemizedReceiptPreview);
+
+  const wrappedItemReceiptPreview = parseReceiptText([
+    "THE CAFE",
+    "Family Combo",
+    "2 x Sandwich 50.00 100.00",
+    "Total 100.00",
+  ].join("\n"));
+  if (wrappedItemReceiptPreview.items.length !== 1) {
+    throw new Error(`expected wrapped item receipt to produce 1 line item, got ${wrappedItemReceiptPreview.items.length}`);
+  }
+  if (wrappedItemReceiptPreview.items[0]?.description.includes("THE CAFE")) {
+    throw new Error(
+      `expected merchant title not to bleed into wrapped item description, got ${wrappedItemReceiptPreview.items[0]?.description ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(wrappedItemReceiptPreview);
+
+  const digitTitleReceiptPreview = parseReceiptText([
+    "WRAPPED2",
+    "Burger",
+    "Extra cheese",
+    "120.00",
+    "Total 120.00",
+  ].join("\n"));
+  if (digitTitleReceiptPreview.items.length !== 1) {
+    throw new Error(`expected digit-title receipt to produce 1 line item, got ${digitTitleReceiptPreview.items.length}`);
+  }
+  if (digitTitleReceiptPreview.items[0]?.description.includes("WRAPPED2")) {
+    throw new Error(
+      `expected digit-title token not to bleed into item description, got ${digitTitleReceiptPreview.items[0]?.description ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(digitTitleReceiptPreview);
+
+  const modifierReceiptPreview = parseReceiptText([
+    "THE BURGER BAR",
+    "Burger 120.00",
+    "No onions",
+    "Fries 40.00",
+    "Extra cheese",
+    "Total 160.00",
+  ].join("\n"));
+  if (modifierReceiptPreview.items.length !== 2) {
+    throw new Error(`expected modifier receipt to produce 2 line items, got ${modifierReceiptPreview.items.length}`);
+  }
+  if (!modifierReceiptPreview.items[0]?.description.toLowerCase().includes("no onions")) {
+    throw new Error(
+      `expected first item to retain modifier text, got ${modifierReceiptPreview.items[0]?.description ?? "null"}`
+    );
+  }
+  if (!modifierReceiptPreview.items[1]?.description.toLowerCase().includes("extra cheese")) {
+    throw new Error(
+      `expected second item to retain modifier text, got ${modifierReceiptPreview.items[1]?.description ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(modifierReceiptPreview);
+
+  const addonReceiptPreview = parseReceiptText([
+    "THE BURGER BAR",
+    "Burger 120.00",
+    "Add cheese 10.00",
+    "Fries 40.00",
+    "Total 170.00",
+  ].join("\n"));
+  if (addonReceiptPreview.items.length !== 2) {
+    throw new Error(`expected addon receipt to produce 2 line items, got ${addonReceiptPreview.items.length}`);
+  }
+  if (addonReceiptPreview.items[0]?.amount !== "130.00") {
+    throw new Error(`expected addon line to fold into burger total of 130.00, got ${addonReceiptPreview.items[0]?.amount ?? "null"}`);
+  }
+  if (!addonReceiptPreview.items[0]?.description.toLowerCase().includes("add cheese")) {
+    throw new Error(
+      `expected addon line to be reflected in the first description, got ${addonReceiptPreview.items[0]?.description ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(addonReceiptPreview);
+
+  const comboReceiptPreview = parseReceiptText([
+    "THE BURGER BAR",
+    "Combo Meal",
+    "Burger 120.00",
+    "+ Cheese 10.00",
+    "Fries 40.00",
+    "- Discount 20.00",
+    "Total 150.00",
+  ].join("\n"));
+  if (comboReceiptPreview.items.length !== 2) {
+    throw new Error(`expected combo receipt to produce 2 line items, got ${comboReceiptPreview.items.length}`);
+  }
+  if (comboReceiptPreview.items[0]?.amount !== "130.00") {
+    throw new Error(`expected combo add-on to fold into burger total of 130.00, got ${comboReceiptPreview.items[0]?.amount ?? "null"}`);
+  }
+  if (comboReceiptPreview.discount !== "20.00") {
+    throw new Error(`expected combo discount to be captured as a receipt-level discount, got ${comboReceiptPreview.discount ?? "null"}`);
+  }
+  if (!comboReceiptPreview.items[0]?.description.toLowerCase().includes("cheese")) {
+    throw new Error(
+      `expected combo add-on text to be preserved on the first item, got ${comboReceiptPreview.items[0]?.description ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(comboReceiptPreview);
+
+  const summaryReceiptPreview = parseReceiptText([
+    "THE FAMILY TABLE",
+    "Burger 100.00",
+    "Fries 50.00",
+    "Service Charge 15.00",
+    "Discount 10.00",
+    "Subtotal 150.00",
+    "Tax 9.00",
+    "Total 164.00",
+  ].join("\n"));
+  if (summaryReceiptPreview.items.length !== 2) {
+    throw new Error(`expected summary receipt to produce 2 item lines, got ${summaryReceiptPreview.items.length}`);
+  }
+  if (summaryReceiptPreview.subtotal !== "150.00" || summaryReceiptPreview.tax !== "9.00" || summaryReceiptPreview.discount !== "10.00") {
+    throw new Error(
+      `expected summary receipt to capture subtotal/tax/discount, got subtotal=${summaryReceiptPreview.subtotal ?? "null"} tax=${summaryReceiptPreview.tax ?? "null"} discount=${summaryReceiptPreview.discount ?? "null"}`
+    );
+  }
+  if (summaryReceiptPreview.serviceCharge !== "15.00") {
+    throw new Error(
+      `expected summary receipt to capture service charge, got ${summaryReceiptPreview.serviceCharge ?? "null"}`
+    );
+  }
+  if (summaryReceiptPreview.total !== "164.00") {
+    throw new Error(`expected summary receipt total 164.00, got ${summaryReceiptPreview.total ?? "null"}`);
+  }
+  if (summaryReceiptPreview.confidence < 84 || summaryReceiptPreview.currency !== "PHP") throw new Error("Philippine service-charge receipt contract regressed");
+
+  const tipAndRoundingPreview = parseReceiptText([
+    "THE FAMILY TABLE",
+    "Burger 100.00",
+    "Fries 50.00",
+    "Tip 20.00",
+    "Round Off -0.50",
+    "Void Water 5.00",
+    "Refund 5.00",
+    "Subtotal 150.00",
+    "Tax 9.00",
+    "Total 178.50",
+  ].join("\n"));
+  if (tipAndRoundingPreview.items.length !== 2) {
+    throw new Error(`expected tip/rounding receipt to produce 2 item lines, got ${tipAndRoundingPreview.items.length}`);
+  }
+  if (tipAndRoundingPreview.tip !== "20.00" || tipAndRoundingPreview.rounding !== "-0.50") {
+    throw new Error(
+      `expected tip/rounding receipt to capture tip and rounding, got tip=${tipAndRoundingPreview.tip ?? "null"} rounding=${tipAndRoundingPreview.rounding ?? "null"}`
+    );
+  }
+  if (tipAndRoundingPreview.total !== "178.50") {
+    throw new Error(`expected tip/rounding receipt total 178.50, got ${tipAndRoundingPreview.total ?? "null"}`);
+  }
+  if (tipAndRoundingPreview.items.some((item) => /void|refund/i.test(item.description))) {
+    throw new Error("expected void/refund lines not to become receipt items");
+  }
+  assertUnresolvedReceiptCurrency(tipAndRoundingPreview);
+
+  const sectionedReceiptPreview = parseReceiptText([
+    "CAFE",
+    "MAIN COURSE",
+    "Burger 120.00",
+    "Sides",
+    "Fries 40.00",
+    "DRINKS",
+    "Soda 30.00",
+    "Total 190.00",
+  ].join("\n"));
+  if (sectionedReceiptPreview.items.length !== 3) {
+    throw new Error(`expected sectioned receipt to produce 3 item lines, got ${sectionedReceiptPreview.items.length}`);
+  }
+  if (sectionedReceiptPreview.items.some((item) => /main course|sides|drinks/i.test(item.description))) {
+    throw new Error("expected section headers not to bleed into item descriptions");
+  }
+  assertUnresolvedReceiptCurrency(sectionedReceiptPreview);
+
+  const nestedSectionReceiptPreview = parseReceiptText([
+    "CAFE",
+    "BURGERS",
+    "CLASSIC:",
+    "Burger 120.00",
+    "SIDES",
+    "FRIES:",
+    "Fries 40.00",
+    "DRINKS",
+    "Soda 30.00",
+    "Total 190.00",
+  ].join("\n"));
+  if (nestedSectionReceiptPreview.items.length !== 3) {
+    throw new Error(`expected nested-section receipt to produce 3 item lines, got ${nestedSectionReceiptPreview.items.length}`);
+  }
+  if (nestedSectionReceiptPreview.items.some((item) => /burgers|classic:|sides\b|drinks\b/i.test(item.description))) {
+    throw new Error("expected nested section headers not to bleed into item descriptions");
+  }
+  assertUnresolvedReceiptCurrency(nestedSectionReceiptPreview);
+
+  const bareQuantityReceiptPreview = parseReceiptText([
+    "CAFE",
+    "1 Burger 120.00",
+    "2 Fries 40.00",
+    "Total 200.00",
+  ].join("\n"));
+  if (bareQuantityReceiptPreview.items.length !== 2) {
+    throw new Error(`expected bare-quantity receipt to produce 2 item lines, got ${bareQuantityReceiptPreview.items.length}`);
+  }
+  if (bareQuantityReceiptPreview.items[0]?.quantity !== 1 || bareQuantityReceiptPreview.items[1]?.quantity !== 2) {
+    throw new Error(
+      `expected bare-quantity receipt to capture quantities, got ${bareQuantityReceiptPreview.items
+        .map((item) => item.quantity ?? "null")
+        .join(", ")}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(bareQuantityReceiptPreview);
+
+  const multiColumnReceiptPreview = parseReceiptText([
+    "THE DINER",
+    "Burger 50.00 100.00",
+    "Fries 40.00 40.00",
+    "Total 140.00",
+  ].join("\n"));
+  if (multiColumnReceiptPreview.items.length !== 2) {
+    throw new Error(`expected multi-column receipt to produce 2 item lines, got ${multiColumnReceiptPreview.items.length}`);
+  }
+  if (multiColumnReceiptPreview.items[0]?.quantity !== 2 || multiColumnReceiptPreview.items[0]?.unitPrice !== "50.00") {
+    throw new Error(
+      `expected multi-column receipt to infer quantity 2 and unit price 50.00, got quantity=${multiColumnReceiptPreview.items[0]?.quantity ?? "null"} unitPrice=${multiColumnReceiptPreview.items[0]?.unitPrice ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(multiColumnReceiptPreview);
+
+  const droppedXQuantityReceiptPreview = parseReceiptText([
+    "THE DINER",
+    "Burger 2 50.00 100.00",
+    "Fries 1 40.00 40.00",
+    "Total 140.00",
+  ].join("\n"));
+  if (droppedXQuantityReceiptPreview.items.length !== 2) {
+    throw new Error(`expected dropped-x quantity receipt to produce 2 item lines, got ${droppedXQuantityReceiptPreview.items.length}`);
+  }
+  if (
+    droppedXQuantityReceiptPreview.items[0]?.quantity !== 2 ||
+    droppedXQuantityReceiptPreview.items[0]?.unitPrice !== "50.00" ||
+    droppedXQuantityReceiptPreview.items[0]?.amount !== "100.00"
+  ) {
+    throw new Error(
+      `expected dropped-x receipt to infer quantity 2 / unit price 50.00 / amount 100.00, got quantity=${droppedXQuantityReceiptPreview.items[0]?.quantity ?? "null"} unitPrice=${droppedXQuantityReceiptPreview.items[0]?.unitPrice ?? "null"} amount=${droppedXQuantityReceiptPreview.items[0]?.amount ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(droppedXQuantityReceiptPreview);
+
+  const fragmentedItemReceiptPreview = parseReceiptText([
+    "CAFE",
+    "Burg",
+    "er 120.00",
+    "Fries 40.00",
+    "Total 160.00",
+  ].join("\n"));
+  if (fragmentedItemReceiptPreview.items.length !== 2) {
+    throw new Error(`expected fragmented-item receipt to produce 2 item lines, got ${fragmentedItemReceiptPreview.items.length}`);
+  }
+  if (fragmentedItemReceiptPreview.items[0]?.description !== "Burger") {
+    throw new Error(
+      `expected fragmented-item receipt to rebuild Burger, got ${fragmentedItemReceiptPreview.items[0]?.description ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(fragmentedItemReceiptPreview);
+
+  const punctuatedFragmentReceiptPreview = parseReceiptText([
+    "CAFE",
+    "B.",
+    "u.",
+    "r.",
+    "g.",
+    "e.",
+    "r.",
+    "120.00",
+    "Total 120.00",
+  ].join("\n"));
+  if (punctuatedFragmentReceiptPreview.items.length !== 1 || punctuatedFragmentReceiptPreview.items[0]?.description !== "Burger") {
+    throw new Error(
+      `expected punctuated fragment receipt to rebuild Burger, got ${punctuatedFragmentReceiptPreview.items[0]?.description ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(punctuatedFragmentReceiptPreview);
+
+  const spacedFragmentReceiptPreview = parseReceiptText([
+    "CAFE",
+    "B u",
+    "r g",
+    "e r",
+    "120.00",
+    "Total 120.00",
+  ].join("\n"));
+  if (spacedFragmentReceiptPreview.items.length !== 1 || spacedFragmentReceiptPreview.items[0]?.description !== "Burger") {
+    throw new Error(
+      `expected spaced fragment receipt to rebuild Burger, got ${spacedFragmentReceiptPreview.items[0]?.description ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(spacedFragmentReceiptPreview);
+
+  const singleLetterFragmentReceiptPreview = parseReceiptText([
+    "CAFE",
+    "B",
+    "u",
+    "r",
+    "g",
+    "e",
+    "r 120.00",
+    "Total 120.00",
+  ].join("\n"));
+  if (singleLetterFragmentReceiptPreview.items.length !== 1 || singleLetterFragmentReceiptPreview.items[0]?.description !== "Burger") {
+    throw new Error(
+      `expected single-letter fragment receipt to rebuild Burger, got ${singleLetterFragmentReceiptPreview.items[0]?.description ?? "null"}`
+    );
+  }
+  assertUnresolvedReceiptCurrency(singleLetterFragmentReceiptPreview);
+
+  const receiptPreview = parseReceiptText([
+    "THE BAKERY",
+    "Jan 12, 2026",
+    "Paid with Visa ending 4321",
+    "Sandwich 50.00",
+    "Coffee 30.00",
+    "Total PHP 80.00",
+    "Split Bill",
+    "Alice 50.00 40.00 10.00",
+    "Bob 30.00 30.00 0.00",
+  ].join("\n"));
+  if (receiptPreview.participants.length !== 2 || receiptPreview.splitAllocations.length !== 2) {
+    throw new Error(
+      `expected receipt parser to capture split participants and allocations, got ${receiptPreview.participants.length} participants and ${receiptPreview.splitAllocations.length} allocations`
+    );
+  }
+  if (receiptPreview.total !== "80.00" || receiptPreview.currency !== "PHP") {
+    throw new Error(`expected receipt parser to capture total and currency, got total=${receiptPreview.total ?? "null"} currency=${receiptPreview.currency}`);
+  }
+  if (receiptPreview.receiptAccountMatch?.accountName !== "Visa" || receiptPreview.receiptAccountMatch?.accountLast4 !== "4321") {
+    throw new Error(
+      `expected receipt parser to infer Visa 4321 account match, got ${receiptPreview.receiptAccountMatch?.accountName ?? "null"} ${receiptPreview.receiptAccountMatch?.accountLast4 ?? "null"}`
+    );
+  }
+  if (receiptPreview.paymentMethod !== "Paid with Visa ending 4321") {
+    throw new Error(`expected receipt parser to capture payment method line, got ${receiptPreview.paymentMethod ?? "null"}`);
+  }
+  if (receiptPreview.confidence < 80) throw new Error("Currency-evidenced split receipt must retain strong confidence");
+  const receiptDraft = splitBillDraftFromReceiptPreview(receiptPreview);
+  if (receiptDraft.participants.length !== 2) {
+    throw new Error(`expected split-bill draft to seed 2 participants, got ${receiptDraft.participants.length}`);
+  }
+  if (receiptDraft.payments.length !== 2) {
+    throw new Error(`expected split-bill draft to seed 2 payments from split allocations, got ${receiptDraft.payments.length}`);
+  }
+  const paymentAmounts = receiptDraft.payments.map((payment) => payment.amount).sort();
+  if (paymentAmounts[0] !== "30.00" || paymentAmounts[1] !== "40.00") {
+    throw new Error(`expected split-bill payment amounts 30.00 and 40.00, got ${paymentAmounts.join(", ")}`);
+  }
+  if (!receiptDraft.rawPayload || !("receiptAccountMatch" in receiptDraft.rawPayload)) {
+    throw new Error("expected split-bill draft to preserve receipt account match in raw payload");
+  }
+  if (!receiptDraft.rawPayload || receiptDraft.rawPayload.paymentMethod !== "Paid with Visa ending 4321") {
+    throw new Error("expected split-bill draft to preserve payment method in raw payload");
+  }
+  if (!receiptDraft.rawPayload || receiptDraft.rawPayload.receiptPayerName !== null) {
+    throw new Error("expected split-bill draft to leave payer name unset when no payer line is present");
+  }
+  if (!receiptDraft.rawPayload || receiptDraft.rawPayload.receiptCurrencyWarning !== null) {
+    throw new Error("expected split-bill draft to leave currency warning unset for single-currency receipts");
+  }
+
+  const reopenedReceiptDraft = splitBillModule.splitBillDraftFromSerializedBill({
+    id: "bill-receipt-test",
+    userId: "workspace-test",
+    groupId: null,
+    title: "THE BAKERY receipt",
+    note: null,
+    billDate: "2026-01-12T00:00:00.000Z",
+    currency: "PHP",
+    sourceType: "receipt",
+    merchantName: "THE BAKERY",
+    receiptFileName: "receipt.jpg",
+    receiptMimeType: "image/jpeg",
+    receiptText: receiptPreview.receiptText,
+    receiptConfidence: receiptPreview.confidence,
+    subtotal: null,
+    tax: null,
+    tip: null,
+    discount: null,
+    total: receiptPreview.total,
+    rawPayload: receiptDraft.rawPayload,
+    createdAt: "2026-01-12T00:00:00.000Z",
+    updatedAt: "2026-01-12T00:00:00.000Z",
+    group: null,
+    participants: receiptDraft.participants,
+    items: [],
+    payments: [],
+    settlement: {
+      participants: [],
+      transfers: [],
+      totalSpent: 0,
+      totalPaid: 0,
+      totalOwed: 0,
+    },
+  });
+  if (!reopenedReceiptDraft.rawPayload || !("receiptAccountMatch" in reopenedReceiptDraft.rawPayload)) {
+    throw new Error("expected serialized split-bill draft to preserve receipt account match raw payload");
+  }
+  if (!reopenedReceiptDraft.rawPayload || reopenedReceiptDraft.rawPayload.paymentMethod !== "Paid with Visa ending 4321") {
+    throw new Error("expected serialized split-bill draft to preserve payment method raw payload");
+  }
+
+  const mixedCurrencyPreview = parseReceiptText([
+    "THE BAKERY",
+    "Coffee PHP 50.00",
+    "Dessert $10.00",
+    "Total PHP 60.00",
+  ].join("\n"));
+  if (mixedCurrencyPreview.currencyMentions.length < 2 || !mixedCurrencyPreview.currencyWarning) {
+    throw new Error(
+      `expected mixed currency receipt to flag a warning, got mentions=${mixedCurrencyPreview.currencyMentions.join(", ") || "none"} warning=${mixedCurrencyPreview.currencyWarning ?? "null"}`
+    );
+  }
+  const mixedCurrencyDraft = splitBillDraftFromReceiptPreview(mixedCurrencyPreview);
+  if (!mixedCurrencyDraft.rawPayload || mixedCurrencyDraft.rawPayload.receiptCurrencyWarning !== mixedCurrencyPreview.currencyWarning) {
+    throw new Error("expected mixed currency warning to persist in split-bill raw payload");
+  }
+
+  const gcashMonthNamePreview = parseReceiptText([
+    "Sent via GCash",
+    "Total Amount Sent £348.00",
+    "Ref No. 1011 938 000046",
+    "Sept 08, 2023 1:23 pm",
+  ].join("\n"));
+  if (
+    gcashMonthNamePreview.billDate !== "2023-09-08T00:00:00.000Z" ||
+    gcashMonthNamePreview.currency !== "PHP" ||
+    gcashMonthNamePreview.currencyMentions.includes("GBP") ||
+    gcashMonthNamePreview.documentNumber !== "1011 938 000046" ||
+    gcashMonthNamePreview.items.length !== 0
+  ) {
+    throw new Error(
+      `expected GCash OCR to recover PHP and Sept date, got date=${gcashMonthNamePreview.billDate ?? "null"} currency=${gcashMonthNamePreview.currency} mentions=${gcashMonthNamePreview.currencyMentions.join(", ")}`
+    );
+  }
+
+  const currencySymbolDateArtifactPreview = parseReceiptText([
+    "CAFE LUNA",
+    "Coffee £ 30.88",
+    "¥ 30/202",
+    "TOTAL £ 30.88",
+  ].join("\n"));
+  if (currencySymbolDateArtifactPreview.currencyMentions.length !== 1 || currencySymbolDateArtifactPreview.currencyWarning) {
+    throw new Error(
+      `expected a currency symbol inside an OCR date artifact to be ignored, got mentions=${currencySymbolDateArtifactPreview.currencyMentions.join(", ") || "none"} warning=${currencySymbolDateArtifactPreview.currencyWarning ?? "null"}`
+    );
+  }
+
+  const noisyMerchantDraft = splitBillDraftFromReceiptPreview({
+    ...mixedCurrencyPreview,
+    merchantName: "PRE RE Se",
+    total: "1668.13",
+    subtotal: "1570.00",
+    items: [
+      { description: "Classic Burrito", amount: "290.00" },
+      { description: "Elote", amount: "85.00" },
+    ],
+  });
+  if (noisyMerchantDraft.title !== "Receipt split" || noisyMerchantDraft.merchantName !== "") {
+    throw new Error(
+      `expected noisy merchant names to stay out of saved draft titles, got title=${noisyMerchantDraft.title} merchant=${noisyMerchantDraft.merchantName ?? "null"}`
+    );
+  }
+
+  const weakReviewDraft = splitBillDraftFromReceiptPreview({
+    ...mixedCurrencyPreview,
+    merchantName: "soem #soE",
+    receiptType: "generic_receipt",
+    receiptText: [
+      "Monthly totals:",
+      "Rent = 1450",
+      "Groceries = 380",
+      "Gas = 292",
+      "Subscription = 47",
+      "Dining = 165",
+      "Shopping = 210",
+    ].join("\n"),
+    subtotal: "2497.00",
+    total: "2497.00",
+    paymentMethod: "GCash",
+    receiptAccountMatch: {
+      accountName: "GCash",
+      accountLast4: null,
+      confidence: 63,
+      reason: "Found GCash reference",
+    },
+    items: [
+      { description: "Rent = 1450", amount: "1450.00" },
+      { description: "Groceries = 380", amount: "380.00" },
+    ],
+  });
+  if (
+    weakReviewDraft.title !== "Receipt split" ||
+    weakReviewDraft.subtotal !== "" ||
+    weakReviewDraft.total !== "" ||
+    weakReviewDraft.items.length !== 1 ||
+    weakReviewDraft.rawPayload?.paymentMethod !== null ||
+    weakReviewDraft.rawPayload?.receiptAccountMatch !== null
+  ) {
+    throw new Error(
+      `expected weak review drafts to clear misleading summary/account hints, got title=${weakReviewDraft.title} subtotal=${weakReviewDraft.subtotal} total=${weakReviewDraft.total} items=${weakReviewDraft.items.length} paymentMethod=${String(weakReviewDraft.rawPayload?.paymentMethod ?? "null")}`
+    );
+  }
+
+  const weakWalletTransferDraft = splitBillDraftFromReceiptPreview({
+    ...mixedCurrencyPreview,
+    receiptType: "wallet_transfer",
+    merchantName: "DYeN TlesseY Y",
+    receiptText: [
+      "DYeN TlesseY Y.",
+      "+63 917 830 3926",
+      "Sent via GCash",
+      "Amount 750.00",
+      "Total Amount Sent £750.00",
+      "Ref No. 0028198075510",
+      "0] 131g (scoze)",
+    ].join("\n"),
+    subtotal: "3926.00",
+    total: "750.00",
+    items: [{ description: "DYeN TlesseY Y. +63 917", amount: "3926.00" }],
+  });
+  if (
+    weakWalletTransferDraft.title !== "Receipt split" ||
+    weakWalletTransferDraft.merchantName !== "" ||
+    weakWalletTransferDraft.items.length !== 1 ||
+    weakWalletTransferDraft.rawPayload?.paymentMethod !== null ||
+    weakWalletTransferDraft.rawPayload?.receiptAccountMatch !== null
+  ) {
+    throw new Error(
+      `expected noisy wallet-transfer review drafts to clear merchant/account hints, got title=${weakWalletTransferDraft.title} merchant=${weakWalletTransferDraft.merchantName ?? "null"} items=${weakWalletTransferDraft.items.length} paymentMethod=${String(weakWalletTransferDraft.rawPayload?.paymentMethod ?? "null")}`
+    );
+  }
+
+  const addressHeavyPreview = parseReceiptText([
+    "GELOU'S TAZSHIOGAN",
+    "2480 P Villanueva St., Zone 9, Barangay 90",
+    "Fourth District, Philippines 1300",
+    "OFFICIAL RECEIPT",
+    "TOTAL AMT. DUE",
+    "3780.00",
+  ].join("\n"));
+  if (addressHeavyPreview.confidence >= 90) {
+    throw new Error(`expected address-heavy scan confidence to drop below fast-save range, got ${addressHeavyPreview.confidence}`);
+  }
+  const addressHeavyDraft = splitBillDraftFromReceiptPreview(addressHeavyPreview);
+  if (
+    addressHeavyDraft.title !== "Receipt split" ||
+    addressHeavyDraft.merchantName !== "" ||
+    addressHeavyDraft.items.length !== 1 ||
+    addressHeavyDraft.subtotal !== "" ||
+    addressHeavyDraft.total !== ""
+  ) {
+    throw new Error(
+      `expected address-heavy receipt scan to clear merchant/items/summary, got title=${addressHeavyDraft.title} merchant=${addressHeavyDraft.merchantName ?? "null"} subtotal=${addressHeavyDraft.subtotal} total=${addressHeavyDraft.total} items=${addressHeavyDraft.items.length}`
+    );
+  }
+
+  const splitWorksheetPreview = parseReceiptText([
+    "Item TOTAL Ferdie Joey Annab MJ Iris Grace Jannie Tim",
+    "3 Heineken 1125 375 375 375",
+    "1 Gin Bott 3400 567 567 567 567 567 567",
+    "7 Tonic Water 1120 187 187 187 187 187 187",
+    "1 Mushroom Chips 415 59 59 59 59 59 58 59",
+  ].join("\n"));
+  const splitWorksheetDraft = splitBillDraftFromReceiptPreview(splitWorksheetPreview);
+  if (
+    splitWorksheetDraft.subtotal !== "" ||
+    splitWorksheetDraft.total !== "" ||
+    splitWorksheetDraft.items.length !== 1 ||
+    splitWorksheetDraft.title !== "Receipt split"
+  ) {
+    throw new Error(
+      `expected split-allocation worksheet screenshot to clear summary/items, got title=${splitWorksheetDraft.title} subtotal=${splitWorksheetDraft.subtotal} total=${splitWorksheetDraft.total} items=${splitWorksheetDraft.items.length}`
+    );
+  }
+
+  const columnOnlyWorksheetPreview = parseReceiptText([
+    "Annab MJ Iris Grace Jannie Tim",
+    "375",
+    "567 567 567 567 567",
+    "187 187 187 187 187",
+    "82 82 82 82 82 82",
+    "56 56 56 56 56 56",
+    "59 59 59 59 59 59",
+    "951 513 951 951 951 951",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(columnOnlyWorksheetPreview).reliableForFastPath) {
+    throw new Error("expected OCR column-only split worksheet to stay off the fast receipt path");
+  }
+
+  const compactSplitSummaryPreview = parseReceiptText([
+    "Lance Grace Iris",
+    "Total Order 344.00 247.00 264.00",
+    "DF 19.67 19.67 19.67",
+    "Disc -57.00 -57.00 -57.00",
+    "306.67 209.67 226.67",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(compactSplitSummaryPreview).reliableForFastPath) {
+    throw new Error("expected compact total-order split summary to stay off the fast receipt path");
+  }
+
+  const nonQuantityTableRowPreview = parseReceiptText([
+    "Qty Description Amount",
+    "2.00 YAKIJAKE BENTO 1100.00",
+    "2.00 SALMON POKE 1240.00",
+    "2.00 CHOCO PLATE 180.00",
+    "E on RIE PILATE 750.00",
+    "SUB-TOTAL 3270.00",
+    "AMOUNT DUE 3270.00",
+  ].join("\n"));
+  if (nonQuantityTableRowPreview.items.length !== 4 || nonQuantityTableRowPreview.total !== "3270.00") {
+    throw new Error(
+      `expected OCR table fallback to keep non-quantity item row, got items=${nonQuantityTableRowPreview.items.length} total=${nonQuantityTableRowPreview.total ?? "null"}`
+    );
+  }
+
+  const inferredSummaryReceiptPreview = parseReceiptText([
+    "CAFE LUNA",
+    "Coffee 80.00",
+    "Cake 50.00",
+  ].join("\n"));
+  const inferredSummaryQuality = assessReceiptPreviewQuality(inferredSummaryReceiptPreview);
+  if (!inferredSummaryQuality.issues.includes("total inferred from line items") || inferredSummaryQuality.reliableForFastPath) {
+    throw new Error("expected item-sum-only receipt totals to stay review-required");
+  }
+
+  const explicitSummaryReceiptPreview = parseReceiptText([
+    "CAFE LUNA",
+    "Coffee 80.00",
+    "Cake 50.00",
+    "TOTAL 130.00",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(explicitSummaryReceiptPreview).reliableForFastPath) {
+    throw new Error("An explicit total alone cannot resolve missing currency evidence");
+  }
+
+  if (
+    !shouldRetryImageOcrBestEffort({
+      firstPassText: [
+        "CAFE LUNA",
+        "Coffee 80.00",
+        "Cake 50.00",
+        "Subtotal 130.00",
+        "Total 10.00",
+      ].join("\n"),
+      fileType: "image/jpeg",
+      fileName: "receipt.jpg",
+      importMode: "receipt",
+    })
+  ) {
+    throw new Error("expected unreconciled receipt totals to trigger targeted OCR recovery");
+  }
+
+  if (
+    shouldRetryImageOcrBestEffort({
+      firstPassText: [
+        "THE FAMILY TABLE",
+        "Date: 2024-02-20",
+        "Coffee 80.00",
+        "Cake 50.00",
+        "Water 20.00",
+        "Subtotal 150.00",
+        "Total PHP 150.00",
+        "Paid with Visa",
+      ].join("\n"),
+      fileType: "image/jpeg",
+      fileName: "receipt.jpg",
+      importMode: "receipt",
+    })
+  ) {
+    throw new Error("expected a reconciled receipt to avoid targeted OCR recovery");
+  }
+
+  const cardFooterPreview = parseReceiptText([
+    "AC BAR & LOUNGE",
+    "Sales Invoice #: 000000808",
+    "Table: 21",
+    "Date: 2024-02-20",
+    "1 Cafe Americano 365.00",
+    "1 Frito Dun 480.00",
+    "VAT: 267.04",
+    "Total: 2511.00",
+    "Mastercard",
+    "Reference:523821",
+  ].join("\n"));
+  if (cardFooterPreview.receiptType === "wallet_transfer") {
+    throw new Error(`expected card footer receipt to avoid wallet_transfer classification, got ${cardFooterPreview.receiptType}`);
+  }
+  if (cardFooterPreview.merchantName === "Mastercard") {
+    throw new Error("expected card footer receipt to avoid Mastercard as merchant name");
+  }
+  if (assessReceiptPreviewQuality(cardFooterPreview).reliableForFastPath) {
+    throw new Error("expected noisy card footer receipt to stay out of the split-bill fast path");
+  }
+
+  const governmentFormPreview = parseReceiptText([
+    "OFFICIAL RECEIPT",
+    "Republic of the Philippines",
+    "PROVINCE OF CAVITE",
+    "OFFICE OF THE TREASURER",
+    "Accountable Form No. 51",
+    "Revise 1993 ORIGINAL",
+    "Professional Tax Receipt",
+    "Received the Amount Stated Above",
+    "1993",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(governmentFormPreview).reliableForFastPath) {
+    throw new Error("expected government-form OCR to stay out of the split-bill fast path");
+  }
+  const governmentFormDraft = splitBillDraftFromReceiptPreview(governmentFormPreview);
+  if (
+    governmentFormDraft.title !== "Receipt split" ||
+    governmentFormDraft.merchantName !== "" ||
+    governmentFormDraft.subtotal !== "" ||
+    governmentFormDraft.total !== "" ||
+    governmentFormDraft.items.length !== 1
+  ) {
+    throw new Error(
+      `expected government-form OCR to clear merchant/summary/items, got title=${governmentFormDraft.title} merchant=${governmentFormDraft.merchantName ?? "null"} subtotal=${governmentFormDraft.subtotal} total=${governmentFormDraft.total} items=${governmentFormDraft.items.length}`
+    );
+  }
+
+  const inputTaxFooterPreview = parseReceiptText([
+    "205",
+    "This document is not valid for claim of input taxes.",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(inputTaxFooterPreview).reliableForFastPath) {
+    throw new Error("expected input-tax footer OCR to stay out of the split-bill fast path");
+  }
+  const inputTaxFooterDraft = splitBillDraftFromReceiptPreview(inputTaxFooterPreview);
+  if (
+    inputTaxFooterDraft.title !== "Receipt split" ||
+    inputTaxFooterDraft.merchantName !== "" ||
+    inputTaxFooterDraft.subtotal !== "" ||
+    inputTaxFooterDraft.total !== "" ||
+    inputTaxFooterDraft.items.length !== 1
+  ) {
+    throw new Error(
+      `expected input-tax footer OCR to clear merchant/summary/items, got title=${inputTaxFooterDraft.title} merchant=${inputTaxFooterDraft.merchantName ?? "null"} subtotal=${inputTaxFooterDraft.subtotal} total=${inputTaxFooterDraft.total} items=${inputTaxFooterDraft.items.length}`
+    );
+  }
+
+  const mixedCurrencyNoisePreview = parseReceiptText([
+    "Tae aa Co) Sonal SIRE Sagat",
+    "Ta ha 140 - 38--",
+    "GBP",
+    "JPY",
+    "USD",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(mixedCurrencyNoisePreview).reliableForFastPath) {
+    throw new Error("expected mixed-currency OCR noise to stay out of the split-bill fast path");
+  }
+  const mixedCurrencyNoiseDraft = splitBillDraftFromReceiptPreview(mixedCurrencyNoisePreview);
+  if (
+    mixedCurrencyNoiseDraft.title !== "Receipt split" ||
+    mixedCurrencyNoiseDraft.merchantName !== "" ||
+    mixedCurrencyNoiseDraft.subtotal !== "" ||
+    mixedCurrencyNoiseDraft.total !== "" ||
+    mixedCurrencyNoiseDraft.items.length !== 1
+  ) {
+    throw new Error(
+      `expected mixed-currency OCR noise to clear merchant/summary/items, got title=${mixedCurrencyNoiseDraft.title} merchant=${mixedCurrencyNoiseDraft.merchantName ?? "null"} subtotal=${mixedCurrencyNoiseDraft.subtotal} total=${mixedCurrencyNoiseDraft.total} items=${mixedCurrencyNoiseDraft.items.length}`
+    );
+  }
+
+  const walletTransferItemPreview = parseReceiptText([
+    "Express Send",
+    "PReeeE KE«eee«K E.",
+    "+63 998 853 0054",
+    "Sent via GCash",
+    "Amount 3,210.00",
+    "Total Amount Sent $3210.00",
+    "Ref No. 5027333717575",
+    "QR Code",
+    "Scanner Pro",
+    "4.6 % FREE",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(walletTransferItemPreview).reliableForFastPath) {
+    throw new Error("expected wallet-transfer OCR with line items to stay out of the split-bill fast path");
+  }
+  const walletTransferItemDraft = splitBillDraftFromReceiptPreview(walletTransferItemPreview);
+  if (
+    walletTransferItemDraft.title !== "Receipt split" ||
+    walletTransferItemDraft.merchantName !== "" ||
+    walletTransferItemDraft.subtotal !== "" ||
+    walletTransferItemDraft.total !== "" ||
+    walletTransferItemDraft.items.length !== 1 ||
+    walletTransferItemDraft.rawPayload?.paymentMethod !== null ||
+    walletTransferItemDraft.rawPayload?.receiptAccountMatch !== null
+  ) {
+    throw new Error(
+      `expected wallet-transfer OCR with line items to clear merchant/summary/account hints, got title=${walletTransferItemDraft.title} merchant=${walletTransferItemDraft.merchantName ?? "null"} subtotal=${walletTransferItemDraft.subtotal} total=${walletTransferItemDraft.total} items=${walletTransferItemDraft.items.length} paymentMethod=${String(walletTransferItemDraft.rawPayload?.paymentMethod ?? "null")}`
+    );
+  }
+
+  const payerReceiptPreview = parseReceiptText([
+    "THE BAKERY",
+    "Paid by Alice",
+    "Sandwich 60.00",
+    "Total 60.00",
+  ].join("\n"));
+  if (payerReceiptPreview.receiptPayerName !== "Alice") {
+    throw new Error(`expected receipt parser to capture payer name Alice, got ${payerReceiptPreview.receiptPayerName ?? "null"}`);
+  }
+  const payerReceiptDraft = splitBillDraftFromReceiptPreview(payerReceiptPreview);
+  if (payerReceiptDraft.participants.length !== 1 || payerReceiptDraft.participants[0]?.name !== "Alice") {
+    throw new Error(
+      `expected payer receipt draft to seed Alice as the sole participant, got ${payerReceiptDraft.participants.map((participant) => participant.name).join(", ") || "none"}`
+    );
+  }
+  if (payerReceiptDraft.payments.length !== 1 || payerReceiptDraft.payments[0]?.amount !== "60.00") {
+    throw new Error(
+      `expected payer receipt draft to seed a 60.00 payment, got ${payerReceiptDraft.payments.map((payment) => payment.amount).join(", ") || "none"}`
+    );
+  }
+  if (!payerReceiptDraft.rawPayload || payerReceiptDraft.rawPayload.receiptPayerName !== "Alice") {
+    throw new Error("expected payer receipt draft to preserve receiptPayerName in raw payload");
+  }
+
+  const alternatePaymentMethodPreview = parseReceiptText([
+    "THE BAKERY",
+    "Method of Payment: GCash",
+    "Bread 50.00",
+    "Total 50.00",
+  ].join("\n"));
+  if (alternatePaymentMethodPreview.paymentMethod !== "Method of Payment: GCash") {
+    throw new Error(
+      `expected alternate payment method line to be preserved, got ${alternatePaymentMethodPreview.paymentMethod ?? "null"}`
+    );
+  }
+  const walletTransferPreview = parseReceiptText([
+    "DY•N TI•••Y Y.",
+    "Dyan Yu",
+    "+63 917 830 3926",
+    "Sent via GCash",
+    "Amount 480.00",
+    "Total Amount Sent ₱480.00",
+    "Ref No. 4028199314508",
+    "Apr 29, 2025 12:34 PM",
+  ].join("\n"));
+  if (walletTransferPreview.receiptType !== "wallet_transfer") {
+    throw new Error(`expected wallet screenshot to classify as wallet_transfer, got ${walletTransferPreview.receiptType}`);
+  }
+  if (Number(walletTransferPreview.total) !== 480) {
+    throw new Error(`expected wallet screenshot total 480, got ${walletTransferPreview.total ?? "null"}`);
+  }
+  if (walletTransferPreview.merchantName !== "Dyan Yu") {
+    throw new Error(`expected wallet screenshot merchant to normalize to Dyan Yu, got ${walletTransferPreview.merchantName ?? "null"}`);
+  }
+  if (walletTransferPreview.paymentMethod !== "GCash") {
+    throw new Error(`expected wallet screenshot payment method GCash, got ${walletTransferPreview.paymentMethod ?? "null"}`);
+  }
+  if (walletTransferPreview.documentNumber !== "4028199314508") {
+    throw new Error(
+      `expected wallet screenshot to capture ref number 4028199314508, got ${walletTransferPreview.documentNumber ?? "null"}`
+    );
+  }
+
+  const resolvedReceiptAccount = resolveReceiptAccountHintToAccount(
+    {
+      accountName: "Visa",
+      accountLast4: "4321",
+      confidence: 95,
+      reason: "explicit receipt hint",
+    },
+    [
+      {
+        id: "acct-visa-1",
+        name: "Visa 4321",
+        institution: "BPI",
+        accountNumber: "**** 4321",
+        type: "credit_card",
+      },
+      {
+        id: "acct-wallet-1",
+        name: "GCash 9926",
+        institution: "GCash",
+        accountNumber: "09173009926",
+        type: "wallet",
+      },
+    ]
+  );
+  if (!resolvedReceiptAccount || resolvedReceiptAccount.accountId !== "acct-visa-1") {
+    throw new Error(`expected receipt account hint to resolve to Visa 4321, got ${resolvedReceiptAccount?.accountId ?? "null"}`);
+  }
+
+  const typedReceiptAccount = resolveReceiptAccountHintToAccount(
+    {
+      accountName: "Visa",
+      accountLast4: "4321",
+      confidence: 95,
+      reason: "explicit receipt hint",
+    },
+    [
+      {
+        id: "acct-visa-cc",
+        name: "Visa 4321",
+        institution: "BPI",
+        accountNumber: "**** 4321",
+        type: "credit_card",
+      },
+      {
+        id: "acct-visa-wallet",
+        name: "Visa 4321",
+        institution: "BPI",
+        accountNumber: "**** 4321",
+        type: "wallet",
+      },
+    ]
+  );
+  if (!typedReceiptAccount || typedReceiptAccount.accountId !== "acct-visa-cc") {
+    throw new Error(`expected receipt account hint to prefer matching account type, got ${typedReceiptAccount?.accountId ?? "null"}`);
+  }
+
+  const ambiguousReceiptAccount = resolveReceiptAccountHintToAccount(
+    {
+      accountName: "Visa",
+      accountLast4: "4321",
+      confidence: 95,
+      reason: "explicit receipt hint",
+    },
+    [
+      {
+        id: "acct-visa-1",
+        name: "Visa 4321",
+        institution: "BPI",
+        accountNumber: "**** 4321",
+        type: "credit_card",
+      },
+      {
+        id: "acct-visa-2",
+        name: "Visa 4321",
+        institution: "BDO",
+        accountNumber: "9999 4321",
+        type: "credit_card",
+      },
+    ]
+  );
+  if (ambiguousReceiptAccount !== null) {
+    throw new Error("expected ambiguous receipt account hint to stay unresolved");
+  }
+
+  const existingCreditCardPlaceholder = {
+    id: "acct-bpi-9737-placeholder",
+    name: "BPI 9737",
+    institution: "BPI",
+    accountNumber: null,
+    type: "credit_card" as const,
+    currency: "PHP",
+    source: "upload" as const,
+  };
+  const explicitCreditCardIdentity = {
+    name: "BPI Rewards",
+    institution: "BPI",
+    accountNumber: "4000123412349737",
+    type: "credit_card" as const,
+    currency: "PHP",
+    source: "upload" as const,
+  };
+  if (!matchesImportedAccountIdentity(existingCreditCardPlaceholder, explicitCreditCardIdentity)) {
+    throw new Error("expected uploaded credit card placeholder to match the same explicit card number by last four digits");
+  }
+  const resolvedCreditCardPlaceholder = findBestImportedAccountMatch([existingCreditCardPlaceholder], explicitCreditCardIdentity);
+  if (!resolvedCreditCardPlaceholder || resolvedCreditCardPlaceholder.id !== existingCreditCardPlaceholder.id) {
+    throw new Error("expected explicit uploaded credit card import to resolve to the existing placeholder card");
+  }
+
+  const equalSplitReceiptPreview = parseReceiptText([
+    "THE BAKERY",
+    "Jan 12, 2026",
+    "Sandwich 100.00",
+    "Total 100.00",
+    "Split equally",
+    "Alice",
+    "Bob",
+  ].join("\n"));
+  if (equalSplitReceiptPreview.participants.length !== 2 || equalSplitReceiptPreview.splitAllocations.length !== 2) {
+    throw new Error(
+      `expected equal-split receipt parser to capture 2 participants and 2 allocations, got ${equalSplitReceiptPreview.participants.length} participants and ${equalSplitReceiptPreview.splitAllocations.length} allocations`
+    );
+  }
+  const equalSplitAmounts = equalSplitReceiptPreview.splitAllocations.map((allocation) => allocation.paid ?? allocation.charged ?? allocation.due ?? "0.00").sort();
+  if (equalSplitAmounts[0] !== "50.00" || equalSplitAmounts[1] !== "50.00") {
+    throw new Error(`expected equal-split receipt to derive 50.00 shares, got ${equalSplitAmounts.join(", ")}`);
+  }
+  const equalSplitDraft = splitBillDraftFromReceiptPreview(equalSplitReceiptPreview);
+  if (equalSplitDraft.payments.length !== 2) {
+    throw new Error(`expected equal-split draft to seed 2 payments, got ${equalSplitDraft.payments.length}`);
+  }
+  const equalSplitPaymentAmounts = equalSplitDraft.payments.map((payment) => payment.amount).sort();
+  if (equalSplitPaymentAmounts[0] !== "50.00" || equalSplitPaymentAmounts[1] !== "50.00") {
+    throw new Error(`expected equal-split draft payment amounts 50.00 and 50.00, got ${equalSplitPaymentAmounts.join(", ")}`);
+  }
+
+  const equalSplitMultiNamePreview = parseReceiptText([
+    "THE BAKERY",
+    "Sandwich 99.00",
+    "Total 99.00",
+    "Share summary",
+    "Alice, Bob & Charlie",
+  ].join("\n"));
+  if (equalSplitMultiNamePreview.participants.length !== 3 || equalSplitMultiNamePreview.splitAllocations.length !== 3) {
+    throw new Error(
+      `expected multi-name equal-split receipt parser to capture 3 participants and allocations, got ${equalSplitMultiNamePreview.participants.length} participants and ${equalSplitMultiNamePreview.splitAllocations.length} allocations`
+    );
+  }
+  const equalSplitMultiNameAmounts = equalSplitMultiNamePreview.splitAllocations.map((allocation) => allocation.paid ?? allocation.charged ?? allocation.due ?? "0.00").sort();
+  if (equalSplitMultiNameAmounts.some((amount) => amount !== "33.00")) {
+    throw new Error(`expected multi-name equal-split receipt to derive 33.00 shares, got ${equalSplitMultiNameAmounts.join(", ")}`);
+  }
+
+  const namedItemReceiptPreview = parseReceiptText([
+    "THE BAKERY",
+    "Jan 12, 2026",
+    "Alice Burger 100.00",
+    "Bob Fries 50.00",
+    "Total PHP 150.00",
+    "Share summary",
+    "Alice",
+    "Bob",
+  ].join("\n"));
+  const namedItemDraft = splitBillDraftFromReceiptPreview(namedItemReceiptPreview);
+  const namedItemAssignments = namedItemDraft.items.map((item) => item.participantIds.length);
+  if (namedItemAssignments[0] !== 1 || namedItemAssignments[1] !== 1) {
+    throw new Error(
+      `expected named items to infer individual participant assignments, got ${namedItemAssignments.join(", ")}`
+    );
+  }
+  const namedItemParticipantIds = namedItemDraft.items.map((item) => item.participantIds[0] ?? "");
+  if (namedItemParticipantIds[0] === namedItemParticipantIds[1] || !namedItemParticipantIds[0] || !namedItemParticipantIds[1]) {
+    throw new Error("expected named items to assign different participant ids for Alice and Bob");
+  }
+  const namedItemSettlement = splitBillModule.buildSplitBillSettlement({
+    participants: namedItemDraft.participants.map((participant) => ({
+      id: participant.id ?? "",
+      name: participant.name,
+    })),
+    items: namedItemDraft.items.map((item) => ({
+      amount: item.amount,
+      participantIds: item.participantIds,
+    })),
+    payments: namedItemDraft.payments.map((payment) => ({
+      participantId: payment.participantId,
+      amount: payment.amount,
+    })),
+    serviceCharge: namedItemDraft.serviceCharge,
+    tax: namedItemDraft.tax,
+    tip: namedItemDraft.tip,
+    rounding: namedItemDraft.rounding,
+    discount: namedItemDraft.discount,
+  });
+  const namedItemOwed = namedItemSettlement.participants
+    .map((participant) => participant.owed)
+    .sort((left, right) => left - right);
+  if (namedItemOwed[0] !== 50 || namedItemOwed[1] !== 100) {
+    throw new Error(`expected named item settlement to be uneven, got owed=${namedItemOwed.map((value) => value.toFixed(2)).join(", ")}`);
+  }
+
+  const pettyCashVoucherPreview = parseReceiptText([
+    "PETTY CASH VOUCHER",
+    "Approved for payment:",
+    "Paid by:",
+    "Received Payment:",
+    "Lamba - 2¢9",
+    "Bbw bowl - 3ea",
+    "1dambo <akd - eq",
+    "Chas Oyakedsf - 299",
+    "Gack behwaton - 2927",
+    "TOTAL 2467.30",
+  ].join("\n"));
+  if (pettyCashVoucherPreview.receiptAccountMatch?.accountName !== "Petty Cash") {
+    throw new Error(
+      `expected petty cash voucher to resolve Petty Cash account, got ${pettyCashVoucherPreview.receiptAccountMatch?.accountName ?? "null"}`
+    );
+  }
+  if (assessReceiptPreviewQuality(pettyCashVoucherPreview).reliableForFastPath) {
+    throw new Error("expected petty cash voucher to stay out of the receipt fast path");
+  }
+
+  const visaTicketPreview = parseReceiptText([
+    "Passenger: Cayanga Timothy Gunther Mr (ADT)",
+    "ELECTRONIC TICKET RECEIPT",
+    "PAYMENT DETAILS FARE DETAILS",
+    "Form of payment: FFSR007950084-M9500-PHP115* Fare equivalent: PHP 115",
+    "Form of payment: CC VI XXXXXXXXXXXX6003 PHP 550LI",
+    "PAYMENT DETAILS FARE DETAILS",
+    "Form of payment: CC VI XXXXXXXXXXXX6003 XXXX Tax and Other charges:",
+  ].join("\n"));
+  if (visaTicketPreview.receiptAccountMatch?.accountName !== "Visa" || visaTicketPreview.receiptAccountMatch?.accountLast4 !== "6003") {
+    throw new Error(
+      `expected airline ticket receipt to resolve Visa 6003, got ${visaTicketPreview.receiptAccountMatch?.accountName ?? "null"} ${visaTicketPreview.receiptAccountMatch?.accountLast4 ?? "null"}`
+    );
+  }
+
+  const cafeMadridReceiptPreview = parseReceiptText([
+    "Cafe Madrid",
+    "Les Jamelles Pinot Noir",
+    "Grilled Calamares",
+    "Chorizo on Piggy Back",
+    "Jamon Iberico & Chicken",
+    "Super Cochinillo Becham",
+    "Caesar Salad",
+    "Seafood Paella",
+    "Parmesan",
+    "Carbonara",
+    "Gross Amount",
+    "Service Charge",
+    "Tax Details",
+    "12% VAT",
+  ].join("\n"));
+  if (cafeMadridReceiptPreview.receiptAccountMatch?.accountName !== "Card") {
+    throw new Error(
+      `expected cafe madrid receipt to resolve Card, got ${cafeMadridReceiptPreview.receiptAccountMatch?.accountName ?? "null"}`
+    );
+  }
+
+  const cafeMadridOcrPreview = parseReceiptText([
+    "Ny 4 3",
+    "\\ Nn,",
+    "1} d",
+    "4 - \\",
+    "bi |",
+    "F130 ”",
+    "CIRCLE |",
+    "Po. 000 .",
+    "Jenin TBERIC : 510.00 We of",
+    "SUPER COCHI! gb Aen.00 [a oF",
+    "TERRY EBERSST © {7 495.00 ee",
+    "DOUBLE PARI IE Cn",
+    "TRADTTONAL 30.01 Ea 8",
+    "Total 8ty ITE :",
+    "Gross Anount & es :",
+    "service’ Charge Sh 4",
+    "Tax Details oo ; Wi Sh",
+    "yaT Exenph Bale E yes NNER",
+    "12% VAT )",
+  ].join("\n"));
+  if (cafeMadridOcrPreview.receiptAccountMatch?.accountName !== "Card") {
+    throw new Error(
+      `expected cafe madrid OCR footer pattern to resolve Card, got ${cafeMadridOcrPreview.receiptAccountMatch?.accountName ?? "null"}`
+    );
+  }
+
+  const mainBarReceiptPreview = parseReceiptText([
+    "DON'T LIVE LIFE WITHOUT IT",
+    "12/23/24 9:16 PM",
+    "Table: BT1",
+    "Server: Claude",
+    "Transaction Type: MAIN BAR",
+    "Qty Item Description Amount",
+    "1 Rice Is Nice 440.00",
+    "1 Dirty Sorbetes 440.00",
+    "2 Dounua 960.00",
+    "Sub-total: 1840.00",
+    "Service Charge: 164.29",
+    "Total Amount 2004.29",
+    "Vatable Sales 1642.65",
+    "12% VAT 197.14",
+  ].join("\n"));
+  if (mainBarReceiptPreview.billDate?.slice(0, 10) !== "2024-12-23") {
+    throw new Error(`expected main bar receipt to resolve 2024-12-23, got ${mainBarReceiptPreview.billDate ?? "null"}`);
+  }
+  if (mainBarReceiptPreview.merchantName !== "Main Bar") {
+    throw new Error(`expected main bar receipt to resolve Main Bar, got ${mainBarReceiptPreview.merchantName ?? "null"}`);
+  }
+  if (mainBarReceiptPreview.total !== "2004.29") {
+    throw new Error(`expected main bar receipt to resolve 2004.29, got ${mainBarReceiptPreview.total ?? "null"}`);
+  }
+
+  const jarandjamReceiptPreview = parseReceiptText([
+    "Br    =",
+    "= a",
+    "ee              JARANDJAM INC.",
+    "=             G/F UNIVERSAL LMS BLDG., 106 ESTEBAN £1)",
+    "=              LEGASPI VILL., SAN LORENZO",
+    "CITY OF MAKATI",
+    "=     Se            NCR, FOURTH DISTRICT",
+    "=                 PN: FP112025-047-0562551-00001",
+    "Sere   i   =          SN: CTC10778101 MIN: 25110814212659428                  :",
+    "—=           § «a8                                         :",
+    "-              GUEST COUNT: 5                              ’       5",
+    "CASHIER : CHRISTINA SILVIO            #0186          —     -",
+    "SERVER: JJ ESTANQUE                10190 [EEE",
+    "12/22/2025                    20:48:02 [BEE EE",
+    "#0000003214        INVOICEH001-000001383  FEEMEERt mt",
+    "Qty Description              Amount Ee   oe ae So",
+    "DINE IN           ee",
+    "VAT ITEH(s)                              on",
+    "2.00 BEEF SHORTRIBS ADOBO ©      10.00 £7 es a",
+    "1.00 LAMB PARES               72000 hae Eo",
+    "1.00 PORK KARE-CURRY           650.00 (eke ae He",
+    "1.00 TORCHED SALMON DONBURI      850.00 A=    Bees ie",
+    "1.00 YAKULT LEMONDE           180.00  BicigEe a eR",
+    "1.00 LYCHEE FIZZ         WO bo",
+    "1.00 BAST OLD FASHIONED         395.00 Eades ol",
+    "3                    1.00 GIN & TONIC              395.00   Eo Se",
+    "=                  1.00 BOTTLED SEA SALT LEMON       180.00    0 att",
+    "==              SUB-TOTAL                  ra.",
+    "RUICE CHARGE                  637.95 EE eee",
+    "NT DUE     rB2 as        Ee",
+    "OF TENS: 10.00               TEE",
+    "0:49:27/21:48:42 KT:43 80:92        Ee       2",
+    "SS:",
+    "VLE:",
+    "cmmmemmeeeeeeees 6379.46",
+    "ES -------ermnemmaeas    765.54",
+    "Re A      0.00",
+    "BALES -------semneenas      0.00",
+    "EMPORARY BILL",
+  ].join("\n"));
+  if (
+    jarandjamReceiptPreview.merchantName !== "ee JARANDJAM INC" ||
+    jarandjamReceiptPreview.billDate !== "2025-12-22T00:00:00.000Z" ||
+    jarandjamReceiptPreview.currency !== "PHP" ||
+    jarandjamReceiptPreview.subtotal !== "7145.00" ||
+    jarandjamReceiptPreview.serviceCharge !== "637.95" ||
+    jarandjamReceiptPreview.total !== "7782.95" ||
+    jarandjamReceiptPreview.items.length !== 8
+  ) {
+    throw new Error(
+      `expected Jarandjam receipt parse to resolve merchant, currency, subtotal, service charge, total, and 8 items, got merchant=${jarandjamReceiptPreview.merchantName ?? "null"} currency=${jarandjamReceiptPreview.currency ?? "null"} subtotal=${jarandjamReceiptPreview.subtotal ?? "null"} serviceCharge=${jarandjamReceiptPreview.serviceCharge ?? "null"} total=${jarandjamReceiptPreview.total ?? "null"} items=${jarandjamReceiptPreview.items.length}`
+    );
+  }
+  const jarandjamReceiptQuality = assessReceiptPreviewQuality(jarandjamReceiptPreview);
+  if (!jarandjamReceiptQuality.reliableForFastPath) {
+    throw new Error(`expected trained-style receipt to remain eligible for fast path, got ${JSON.stringify(jarandjamReceiptQuality)}`);
+  }
+
+  const noisyReceiptPreview = parseReceiptText([
+    "4",
+    "-    SE               -    RE eC",
+    "cll",
+    "TABLE M0: TO             —-—           ~~          ee",
+    "REF: 3                                               4                 3    :",
+    "PAX #: 1             BILL NO.: 1             i    = oz",
+    "Qty Product         ET               {    Sos     A",
+    "TAKE-OUT                               3",
+    "1    CLASSIC BURRITOS - A   290.00                   =e   =",
+    "MEXICAN RICE                                os    Ee    —",
+    "MEXICAN SAUCE 30ML                          3   E         gp",
+    "1 ELOTE               85.00          :                  :",
+    "1    1 POUNDER BURRITOS - 590.00                           i",
+    "MEXICAN RICE                                               3",
+    "MEXICAN SAUCE 30ML                          |",
+    "1 QUARTER ROAST CHICKE 380.00              )       3",
+    "CILANTRO GARLIC RIC                         )              %",
+    "GARLIC MASHED POTAT                          {                y",
+    "1 AL PASTOR - BURRITO ~~ 225.00               :      :       i!",
+    "CILANTRO GARLIC RIC                          5                k",
+    "TOTAL          1.570.00            3",
+    "SERVICE CHARGE Th 98-19        ;",
+    "AMOUNT DUE /1 L666 1S)        S     ERE",
+    "__ 5 PRODUCT(S) PURCHASED -=  /         3      eT}",
+    "3       s",
+    "11/22/2024  12:35     Ji                          a        =",
+    "VATable               1,401.19         BSS)",
+    "12% VAT                             168.21                5        em",
+    "VAT Exempt                    0.00            3    re",
+    "Ei                  2%     i",
+    "Bill Total                 1,668.13           i       :",
+    "$k                                  Es",
+    "=  %",
+    "Customer: ese Se",
+    "TIN: gE es  Ek",
+    "Company: EERIE eae   RE",
+    "Signature: pEeEh ae  LE",
+  ].join("\n"));
+  const noisyReceiptQuality = assessReceiptPreviewQuality(noisyReceiptPreview);
+  if (
+    noisyReceiptPreview.billDate !== "2024-11-22T00:00:00.000Z" ||
+    noisyReceiptPreview.subtotal !== "1570.00" ||
+    noisyReceiptPreview.serviceCharge !== "98.19" ||
+    noisyReceiptPreview.total !== "1668.13" ||
+    noisyReceiptPreview.items.length !== 5
+  ) {
+    throw new Error(
+      `expected noisy OCR receipt to recover the visible summary and 5 purchased items, got date=${noisyReceiptPreview.billDate ?? "null"} subtotal=${noisyReceiptPreview.subtotal ?? "null"} serviceCharge=${noisyReceiptPreview.serviceCharge ?? "null"} total=${noisyReceiptPreview.total ?? "null"} items=${noisyReceiptPreview.items.length}`
+    );
+  }
+  if (noisyReceiptQuality.reliableForFastPath) {
+    throw new Error("expected noisy OCR receipt to stay off the fast local receipt path");
+  }
+  if (noisyReceiptPreview.confidence >= 90) {
+    throw new Error(`expected noisy OCR confidence to reflect unresolved receipt noise, got ${noisyReceiptPreview.confidence}`);
+  }
+
+  const backupReceiptPreview = {
+    ...noisyReceiptPreview,
+    merchantName: "Cafe Luna",
+    total: "80.00",
+    billDate: "2026-01-15T00:00:00.000Z",
+    requiresReview: true,
+  };
+  if (assessReceiptPreviewQuality(backupReceiptPreview).reliableForFastPath) {
+    throw new Error("expected backup-enriched receipt drafts to remain review-gated");
+  }
+
+  const invalidDateReceiptPreview = parseReceiptText([
+    "Cafe Luna",
+    "31/13/2024 12:35",
+    "Coffee 80.00",
+    "TOTAL 80.00",
+  ].join("\n"));
+  if (invalidDateReceiptPreview.billDate !== null) {
+    throw new Error(`expected impossible OCR date to remain unresolved, got ${invalidDateReceiptPreview.billDate}`);
+  }
+
+  const merchantHeaderPreview = parseReceiptText([
+    "TABLE NO: 12",
+    "REF: 300421",
+    "PAX #: 3",
+    "EL CHUPACABRA RESTAURANT",
+    "G/F SOME BUILDING, MAKATI CITY",
+    "11/22/2025 19:41",
+    "Qty Product",
+    "1 TACOS 250.00",
+    "1 HORCHATA 120.00",
+    "TOTAL 370.00",
+  ].join("\n"));
+  if (merchantHeaderPreview.merchantName !== "EL CHUPACABRA RESTAURANT") {
+    throw new Error(`expected merchant ranking to skip table/ref header noise, got ${merchantHeaderPreview.merchantName ?? "null"}`);
+  }
+
+  const settlementSummaryPreview = parseReceiptText([
+    "Home Despedida",
+    "Summary",
+    "Moses 2734.92 PHP",
+    "should pay to Kendrick",
+    "Sab 2604.92 PHP",
+    "should pay to Kendrick",
+    "Harold 2385.17 PHP",
+  ].join("\n"));
+  const settlementSummaryQuality = assessReceiptPreviewQuality(settlementSummaryPreview);
+  if (settlementSummaryQuality.reliableForFastPath) {
+    throw new Error(`expected settlement summary screen to stay off receipt fast path, got ${JSON.stringify(settlementSummaryQuality)}`);
+  }
+
+  const monthlyTotalsPreview = parseReceiptText([
+    "Monthly totals:",
+    "Rent = 1450",
+    "Groceries = 380",
+    "Gas = 292",
+    "Subscription = 47",
+    "Dining = 165",
+    "Shopping = 210",
+  ].join("\n"));
+  const monthlyTotalsQuality = assessReceiptPreviewQuality(monthlyTotalsPreview);
+  if (monthlyTotalsQuality.reliableForFastPath) {
+    throw new Error(`expected notes-style monthly totals screenshot to stay off receipt fast path, got ${JSON.stringify(monthlyTotalsQuality)}`);
+  }
+
+  const receiptPosterPreview = parseReceiptText([
+    "Always ask for a receipt",
+    "Know your rights as a customer",
+    "Keep your official receipt for returns and warranty",
+  ].join("\n"));
+  const receiptPosterQuality = assessReceiptPreviewQuality(receiptPosterPreview);
+  if (receiptPosterQuality.reliableForFastPath) {
+    throw new Error(`expected receipt poster image to stay off receipt fast path, got ${JSON.stringify(receiptPosterQuality)}`);
+  }
+
+  const orSampleBayanPreview = parseReceiptText([
+    "Bayan Telecommunications, Inc.",
+    "2/F Ever Gotesco Commanwealth, Commonwealth Ave., Quezon City",
+    "Tel. No. 412-1212",
+    "VAT REG. TIN 000-774-471-025",
+    "Date Aug. 9, 2012",
+    "OFFICIAL RECEIPT No:L-EVe 369678a",
+    "00 is 508 Lon OED A Lg OST Perit OKOIGTRD Fay 1, 2",
+    "Sarin oy 857s oc 4 Os Wor Vt",
+    "are BL ar080 Co 10.50",
+  ].join("\n"));
+  const orSampleBayanQuality = assessReceiptPreviewQuality(orSampleBayanPreview);
+  if (orSampleBayanQuality.reliableForFastPath) {
+    throw new Error(`expected noisy official receipt OCR with gibberish items to stay off fast path, got ${JSON.stringify(orSampleBayanQuality)}`);
+  }
+
+  const implausibleLargeTotalPreview = parseReceiptText([
+    "IKKORYU FUKUOKA RAMEN",
+    "Trans No.:24614",
+    "Cust Count:2",
+    "1 Chashu Tonkotsu 380.00",
+    "1 Gyoza 150.00",
+    "Amount 91732949.47",
+  ].join("\n"));
+  const implausibleLargeTotalQuality = assessReceiptPreviewQuality(implausibleLargeTotalPreview);
+  if (implausibleLargeTotalQuality.reliableForFastPath) {
+    throw new Error(`expected implausibly large receipt totals to stay off fast path, got ${JSON.stringify(implausibleLargeTotalQuality)}`);
+  }
+
+  const summaryAmountPreview = parseReceiptText([
+    "IKKORYU FUKUOKA RAMEN",
+    "Trans No.:24614",
+    "Cust Count:2",
+    "1 Chashu Tonkotsu 380.00",
+    "1 Gyoza 150.00",
+    "10%ServiceCharge 96.00",
+    "Bill Amount 1056.00",
+  ].join("\n"));
+  if (
+    summaryAmountPreview.total !== "1056.00" ||
+    summaryAmountPreview.subtotal !== "530.00" ||
+    summaryAmountPreview.items.length !== 2
+  ) {
+    throw new Error(
+      `expected summary amount extraction to prefer money totals over IDs, got total=${summaryAmountPreview.total ?? "null"} subtotal=${summaryAmountPreview.subtotal ?? "null"} items=${summaryAmountPreview.items.length}`
+    );
+  }
+
+  const officialReceiptOcrPreview = parseReceiptText([
+    "CONT Hoe",
+    "BY: COCOHAUS CIRCLE Co.",
+    "© Buezon City Circle Elliptical",
+    "Road Malaya fueron City",
+    "BIR Accre. No.t 048-005037570-600031      :",
+    "TIN: 007-710-784~00008F",
+    "SERIAL NB.: FC20111226-049",
+    "       - HIN: 11025509    :",
+    ":    FERHIT HO.: 1201-039-117647-000        :",
+    "Table Not 04      Fay:      2",
+    "-          DINE IN",
+    "Buce Juice, Blass    = 3    40,00",
+    "Suman                  i    55.00",
+    "Coco Dloy               i     85.00",
+    "Pancit Buco Res          i    105.00",
+    "Lainz per order       1 95.00",
+    "aadbgRpic Rige. 0  Rr. or",
+    "Total dty    oo    :        8",
+    "ross Amount        :          430.00",
+    "Ustable Amount      383.92    -",
+    "-VAT-Exemet Sales   = 0.00",
+    "VAT Zero- Rate Sale      0.00",
+    "122 Var              46.08     :",
+    "Bill Amount           430.00",
+    "Cash       2   3  500.00 3",
+    "ed                             =     \\",
+    ":           Chanze     =. 10.00",
+    "THANK YOU! COME AGAIN!",
+    "",
+    "This serves as an Official Receipt",
+    "05/18/2612 19:49:38 O.K. No: 0000601103",
+    "Torn:       001 Trans No 0000001132",
+    "Cashier: JOVELYNE Bill Ho: 001324",
+  ].join("\n"));
+  if (
+    officialReceiptOcrPreview.merchantName !== "COCOHAUS CIRCLE Co" ||
+    officialReceiptOcrPreview.billDate !== "2012-05-18T00:00:00.000Z" ||
+    officialReceiptOcrPreview.subtotal !== "383.92" ||
+    officialReceiptOcrPreview.tax !== "46.08" ||
+    officialReceiptOcrPreview.total !== "430.00" ||
+    officialReceiptOcrPreview.items.length !== 4
+  ) {
+    throw new Error(
+      `expected official-receipt OCR cleanup to recover merchant/date/summary without footer items, got merchant=${officialReceiptOcrPreview.merchantName ?? "null"} date=${officialReceiptOcrPreview.billDate ?? "null"} subtotal=${officialReceiptOcrPreview.subtotal ?? "null"} tax=${officialReceiptOcrPreview.tax ?? "null"} total=${officialReceiptOcrPreview.total ?? "null"} items=${officialReceiptOcrPreview.items.length}`
+    );
+  }
+
+  const serviceChargeRepairPreview = parseReceiptText([
+    "__d",
+    "Pe              PRE RE Se",
+    "REF.: 3",
+    "PAX #: 1              BILL NOL: 1",
+    "Qty Product           Amount",
+    "TAKE-OUT",
+    "1    CLASSIC BURRITOS - A   290.00",
+    "1 ELOTE             85.00",
+    "1 1 POUNDER BURRITOS - 590.00",
+    "1 QUARTER ROAST CHICKE 380.00",
+    "1 AL PASTOR - BURRITO 225.00",
+    "TOTAL           1.570.00",
+    "SERVICE CHARGE Th F019",
+    "AMOUNT DUE /1.668 Sie",
+    "11/22/2024  2:35",
+    "yATable             1,401.79",
+    "12% VAT                       168.21",
+    "VAT Exempt                      0.00",
+    "Bill Total               1,668.13",
+  ].join("\n"));
+  const serviceChargeRepairQuality = assessReceiptPreviewQuality(serviceChargeRepairPreview);
+  if (
+    serviceChargeRepairPreview.billDate !== "2024-11-22T00:00:00.000Z" ||
+    serviceChargeRepairPreview.subtotal !== "1570.00" ||
+    serviceChargeRepairPreview.serviceCharge !== "98.13" ||
+    serviceChargeRepairPreview.total !== "1668.13" ||
+    serviceChargeRepairQuality.reliableForFastPath
+  ) {
+    throw new Error(
+      `expected suspicious service-charge OCR to be repaired but kept off fast path, got date=${serviceChargeRepairPreview.billDate ?? "null"} subtotal=${serviceChargeRepairPreview.subtotal ?? "null"} serviceCharge=${serviceChargeRepairPreview.serviceCharge ?? "null"} total=${serviceChargeRepairPreview.total ?? "null"} quality=${JSON.stringify(serviceChargeRepairQuality)}`
+    );
+  }
+
+  const ramenOfficialReceiptPreview = parseReceiptText([
+    "7 é                IKKORYU FUKUOKA RAMEN               FR",
+    "y          Level 3 L316-L317 Century Mall          jose",
+    "113        Kalayaan Ave., Cor, Salamanca        Hts",
+    "Le          Poblacion, Makati City           He",
+    "Li            TIN#: D08-401-866-005            a",
+    "RL     1 POS!                    13 April      ics",
+    "HN     Trans No.:z4614          Cust Count:2      a",
+    "4        02 Dec 15 19:48:11             He",
+    "             -==— Dine In —--— ies",
+    "1 Chashu Tarkotsu         380.00       |i 8",
+    "1 Gyozab            150.00      | Ba",
+    "1 Karaage                180.00        | 8",
+    "| Ebi Yakimeshi         200.00         »",
+    "1 Calamansi Soda         50.00       i",
+    "10%ServiceChroe:                   96.00",
+    "Amount     1,056.00",
+    "UAT Sales            857.14",
+    "UAT Exempt Sales          0.00",
+    "12% UAT               102.86",
+    "This serves as an official receipt",
+    "For Comments And Suggestions",
+    "Pls contact #09173008333",
+  ].join("\n"));
+  const ramenOfficialReceiptQuality = assessReceiptPreviewQuality(ramenOfficialReceiptPreview);
+  if (
+    ramenOfficialReceiptPreview.merchantName !== "7 é IKKORYU FUKUOKA RAMEN FR" ||
+    ramenOfficialReceiptPreview.billDate !== "2015-12-02T00:00:00.000Z" ||
+    ramenOfficialReceiptPreview.subtotal !== "960.00" ||
+    ramenOfficialReceiptPreview.serviceCharge !== "96.00" ||
+    ramenOfficialReceiptPreview.total !== "1056.00" ||
+    ramenOfficialReceiptPreview.items.length !== 5 ||
+    ramenOfficialReceiptQuality.reliableForFastPath
+  ) {
+    throw new Error(
+      `expected noisy ramen OCR to preserve its financial fields and remain review-required, got merchant=${ramenOfficialReceiptPreview.merchantName ?? "null"} date=${ramenOfficialReceiptPreview.billDate ?? "null"} subtotal=${ramenOfficialReceiptPreview.subtotal ?? "null"} serviceCharge=${ramenOfficialReceiptPreview.serviceCharge ?? "null"} total=${ramenOfficialReceiptPreview.total ?? "null"} items=${ramenOfficialReceiptPreview.items.length} quality=${JSON.stringify(ramenOfficialReceiptQuality)}`
+    );
+  }
+
+  const ramenOfficialReceiptAddressPreview = parseReceiptText([
+    "7 é                IKKORYU FUKUOKA RAMEN               FR",
+    "y          Level 3 L316-L317 Century Mall          jose",
+    "113        Kalayaan Ave., Cor, Salamanca        Hts",
+    "Le          Poblacion, Makati City           He",
+    "Li            TIN#: D08-401-866-005            a",
+    "HN     Trans No.:z4614          Cust Count:2      a",
+    "4        02 Dec 15 19:48:11             He",
+    "             -==— Dine In —--— ies",
+    "1 Chashu Tarkotsu         380.00       |i 8",
+    "1 Gyozab            150.00      | Ba",
+    "1 Karaage                180.00        | 8",
+    "| Ebi Yakimeshi         200.00         »",
+    "1 Calamansi Soda         50.00       i",
+    "10%ServiceChroe:                   96.00",
+    "Amount     1,056.00",
+    "UAT Sales            857.14",
+    "UAT Exempt Sales          0.00",
+    "12% UAT               102.86",
+  ].join("\n"));
+  const ramenOfficialReceiptAddressQuality = assessReceiptPreviewQuality(ramenOfficialReceiptAddressPreview);
+  if (
+    ramenOfficialReceiptAddressPreview.merchantName !== "7 é IKKORYU FUKUOKA RAMEN FR" ||
+    ramenOfficialReceiptAddressPreview.billDate !== "2015-12-02T00:00:00.000Z" ||
+    ramenOfficialReceiptAddressPreview.subtotal !== "960.00" ||
+    ramenOfficialReceiptAddressPreview.serviceCharge !== "96.00" ||
+    ramenOfficialReceiptAddressPreview.total !== "1056.00" ||
+    ramenOfficialReceiptAddressPreview.items.length !== 5 ||
+    ramenOfficialReceiptAddressQuality.reliableForFastPath
+  ) {
+    throw new Error(
+      `expected noisy ramen address OCR to preserve its financial fields and remain review-required, got merchant=${ramenOfficialReceiptAddressPreview.merchantName ?? "null"} date=${ramenOfficialReceiptAddressPreview.billDate ?? "null"} subtotal=${ramenOfficialReceiptAddressPreview.subtotal ?? "null"} serviceCharge=${ramenOfficialReceiptAddressPreview.serviceCharge ?? "null"} total=${ramenOfficialReceiptAddressPreview.total ?? "null"} items=${ramenOfficialReceiptAddressPreview.items.length} quality=${JSON.stringify(ramenOfficialReceiptAddressQuality)}`
+    );
+  }
+
+  const jarandjamNoisyActualPreview = parseReceiptText([
+    "—             JARANDJAM ING.                -",
+    "=     =         G/F UNIVERSAL LMS BLDG., 106 ESTEBAN ST",
+    "LEGASPI VILL., SAN LORENZO",
+    "CITY OF MAKATI",
+    "NCR, FOURTH DISTRICT",
+    "GUEST COUNT: 5",
+    "12/22/2025                 21:48:42",
+    "#0000003214            INVOICEA001-000001383",
+    "Qty Description             Amount",
+    "1.00 PORK KARE-CURRY           60.00",
+    "1.00 TORCHED SALMON DONBURT      000",
+    "1.00 YAKULT LEMONDE            180.00",
+    "1.00 LYCHEE F122              395.00",
+    "1.00 BAST OLD FASHIONED         395.00",
+    "BUNT DUE    7782.95",
+    "OF ITENS: 10.00",
+    "6379.46",
+    "765.54",
+    "0.00",
+    "0.00",
+    "TEMPORARY BILL",
+  ].join("\n"));
+  const jarandjamNoisyActualQuality = assessReceiptPreviewQuality(jarandjamNoisyActualPreview);
+  if (jarandjamNoisyActualQuality.reliableForFastPath) {
+    throw new Error(`expected under-parsed noisy Jarandjam receipt to stay off fast path, got ${JSON.stringify(jarandjamNoisyActualQuality)}`);
+  }
+
+  const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
+    participants: [
+      { id: "alice", name: "Alice" },
+      { id: "bob", name: "Bob" },
+    ],
+    items: [
+      {
+        amount: "100.00",
+        participantIds: ["alice"],
+      },
+      {
+        amount: "50.00",
+        participantIds: ["bob"],
+      },
+    ],
+    payments: [],
+    serviceCharge: "15.00",
+    tip: "15.00",
+    discount: "0.00",
+  });
+  const weightedSummaryOwed = weightedSummarySettlement.participants
+    .map((participant) => participant.owed)
+    .sort((left, right) => left - right);
+  if (weightedSummaryOwed[0].toFixed(2) !== "60.00" || weightedSummaryOwed[1].toFixed(2) !== "120.00") {
+    throw new Error(
+      `expected weighted summary settlement to distribute service charge and tip proportionally, got owed=${weightedSummaryOwed.map((value) => value.toFixed(2)).join(", ")}`
+    );
+  }
+  if (weightedSummarySettlement.totalOwed.toFixed(2) !== "180.00") {
+    throw new Error(`expected weighted summary settlement total owed to be 180.00, got ${weightedSummarySettlement.totalOwed.toFixed(2)}`);
+  }
+
+  const summarySettlement = splitBillModule.buildSplitBillSettlement({
+    participants: [
+      { id: "alice", name: "Alice" },
+      { id: "bob", name: "Bob" },
+    ],
+    items: [
+      {
+        amount: "100.00",
+        participantIds: ["alice", "bob"],
+      },
+    ],
+    payments: [],
+    serviceCharge: "10.00",
+    tip: "10.00",
+    discount: "0.00",
+  });
+  const summaryOwed = summarySettlement.participants.map((participant) => participant.owed.toFixed(2)).sort();
+  if (summaryOwed[0] !== "60.00" || summaryOwed[1] !== "60.00" || summarySettlement.totalOwed.toFixed(2) !== "120.00") {
+    throw new Error(
+      `expected summary settlement to include service charge and tip, got owed=${summaryOwed.join(", ")} totalOwed=${summarySettlement.totalOwed.toFixed(2)}`
+    );
+  }
+
+  const restoredSummaryDraft = splitBillModule.splitBillDraftFromSerializedBill({
+    id: "summary-bill",
+    userId: "workspace-test",
+    groupId: null,
+    title: "Summary bill",
+    note: null,
+    billDate: "2026-01-12T00:00:00.000Z",
+    currency: "PHP",
+    sourceType: "receipt",
+    merchantName: "THE BAKERY",
+    receiptFileName: null,
+    receiptMimeType: null,
+    receiptText: null,
+    receiptConfidence: 90,
+    subtotal: "100.00",
+    tax: "0.00",
+    tip: "10.00",
+    discount: "0.00",
+    total: "110.00",
+    rawPayload: {
+      receiptSummary: {
+        subtotal: "100.00",
+        serviceCharge: "5.00",
+        rounding: "0.00",
+      },
+    },
+    createdAt: "2026-01-12T00:00:00.000Z",
+    updatedAt: "2026-01-12T00:00:00.000Z",
+    group: null,
+    participants: [],
+    items: [],
+    payments: [],
+    settlement: {
+      participants: [],
+      transfers: [],
+      totalSpent: 0,
+      totalPaid: 0,
+      totalOwed: 0,
+    },
+  });
+  if (restoredSummaryDraft.serviceCharge !== "5.00" || restoredSummaryDraft.rounding !== "0.00") {
+    throw new Error(
+      `expected serialized split bill to restore receipt summary fields, got serviceCharge=${restoredSummaryDraft.serviceCharge ?? "null"} rounding=${restoredSummaryDraft.rounding ?? "null"}`
+    );
+  }
+
+  const mergedReceiptPayload = splitBillModule.mergeSplitBillReceiptSummary(
+    {
+      foo: "bar",
+      receiptSummary: {
+        subtotal: "100.00",
+      },
+    },
+    {
+      serviceCharge: "5.00",
+      rounding: "0.00",
+      total: "105.00",
+    }
+  ) as Record<string, unknown>;
+  if (!mergedReceiptPayload.receiptSummary || typeof mergedReceiptPayload.receiptSummary !== "object") {
+    throw new Error("expected merged receipt payload to include receiptSummary");
+  }
+  const mergedReceiptSummary = mergedReceiptPayload.receiptSummary as Record<string, unknown>;
+  if (
+    mergedReceiptSummary.subtotal !== "100.00" ||
+    mergedReceiptSummary.serviceCharge !== "5.00" ||
+    mergedReceiptSummary.rounding !== "0.00" ||
+    mergedReceiptSummary.total !== "105.00"
+  ) {
+    throw new Error("expected merged receipt summary to preserve and update fields");
+  }
+
+  const chinaBankProbe = detectStatementMetadataFromText("China Bank Statement of Account\nStatement Period Aug. 01, 2024 To Aug. 31, 2024");
+  if (chinaBankProbe.institution !== "Chinabank") {
+    throw new Error(
+      `Parser regression checks failed:\n- [China Bank detection] expected Chinabank but got ${chinaBankProbe.institution ?? "null"}`
+    );
+  }
+
+  const chinaBankBrand = getAccountBrand({
+    institution: null,
+    name: "860976948-CHINA-BANK-STATEMENT 6948",
+    type: "bank",
+  });
+  if (chinaBankBrand.label !== "Chinabank") {
+    throw new Error(`expected Chinabank brand match from statement filename, got ${chinaBankBrand.label}`);
+  }
+
+  const chinaBankDisplayName = formatUploadAccountDisplayName(
+    "860976948-CHINA-BANK-STATEMENT 6948",
+    "China Bank",
+    null,
+    "bank"
+  );
+  if (chinaBankDisplayName !== "Chinabank 6948") {
+    throw new Error(`expected Chinabank display name from statement filename, got ${chinaBankDisplayName}`);
+  }
+
+  const genericNeedsReviewReasons = getTransactionReviewReasons({
+    warningReason: "Needs review",
+    reviewStatus: "suggested",
+    categoryName: "Other",
+    merchantRaw: "Bank Transfer",
+    merchantClean: "Bank Transfer",
+  });
+  if (genericNeedsReviewReasons.length > 0) {
+    throw new Error(
+      `expected generic "Needs review" to stay hidden when no concrete reason exists, got ${genericNeedsReviewReasons.join(", ")}`
+    );
+  }
+
+  const previewCategoryReasons = getTransactionReviewReasons({
+    reviewStatus: "suggested",
+    categoryId: null,
+    categoryName: "Transfers",
+    merchantRaw: "Incoming Interbank Transfer",
+    merchantClean: "Incoming Interbank Transfer",
+  });
+  if (previewCategoryReasons.length > 0) {
+    throw new Error(
+      `expected concrete category names on imported previews to avoid transient review warnings, got ${previewCategoryReasons.join(", ")}`
+    );
+  }
+
+  const concreteReviewReasons = getTransactionReviewReasons({
+    reviewStatus: "suggested",
+    categoryId: null,
+    categoryName: "Shopping",
+    categoryConfidence: 42,
+    accountMatchConfidence: 61,
+    duplicateConfidence: 82,
+    parserConfidence: 54,
+    merchantRaw: "Unknown",
+    merchantClean: "Unknown",
+  });
+  const concreteReasonSet = new Set(concreteReviewReasons);
+  for (const expectedReason of [
+    "Review similar transaction",
+    "Needs category review",
+    "Needs account review",
+    "Import needs review",
+    "Could not identify merchant",
+  ]) {
+    if (!concreteReasonSet.has(expectedReason)) {
+      throw new Error(`expected review reason ${expectedReason} to be present, got ${concreteReviewReasons.join(", ")}`);
+    }
+  }
+
+  const fixtureCoverage = new Set([
+    ...fixtures.map((fixture) => normalizeCoverageKey(fixture.institution)),
+    // These sources live in the dedicated private follow-up blocks above.
+    ...["China Bank", "EastWest", "Landbank", "UCPB"].map(normalizeCoverageKey),
+  ]);
+  const uncoveredDocs = coverageTargets.filter((target) => !fixtureCoverage.has(normalizeCoverageKey(target.key)));
+
+  if (uncoveredDocs.length > 0) {
+    console.log(
+      `\nCoverage note: parser-regression does not yet have local fixtures for ${uncoveredDocs.length} sample-backed bank(s): ${uncoveredDocs
+        .map((target) => target.label)
+        .join(", ")}`
+    );
+  }
+
+  await importFileTextModule.shutdownImportOcrWorkers();
+  if (failures.length > 0) {
+    throw new Error(`Historical follow-up checks failed:\n${failures.join("\n")}`);
+  }
+  console.log(portable
+    ? "Historical inline parser contracts passed (private PDF replay is qa:parsers:private)."
+    : `Parser regression checks passed for ${selectedFixtures.length} private fixtures and inline contracts.`);
+};
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.stack ?? error.message : error);
+  process.exit(1);
+});

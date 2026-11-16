@@ -1,0 +1,12 @@
+"use client";
+import { useEffect, useState } from "react";
+import { AdminSwitchCampaign } from "./admin-switch-campaign";
+import { AdminCampaigns } from "./admin-campaigns";
+import styles from "./growth.module.css";
+type Row = {id:string;name:string;status:string;endsAt:string|null;kind:"switch"|"referral"};
+export function AdminCampaignList(){
+ const [rows,setRows]=useState<Row[]>([]),[selected,setSelected]=useState<Row|null>(null),[error,setError]=useState(""),[revision,setRevision]=useState(0),[loading,setLoading]=useState(true);
+ useEffect(()=>{let live=true;setLoading(true);setError("");void Promise.all(["/api/admin/campaigns/switch-to-clover","/api/admin/campaigns"].map(async url=>{const r=await fetch(url,{cache:"no-store"});if(!r.ok)throw new Error("Unable to load campaigns.");return r.json();})).then(([s,r])=>{if(live)setRows([{id:"switch",name:"Switch to Clover",status:s.config.status,endsAt:s.config.endsAt,kind:"switch"},...r.campaigns.map((c:Omit<Row,"kind">)=>({...c,kind:"referral"})),...(!r.campaigns.length?[{id:"new",name:"Referral campaign",status:"Not configured",endsAt:null,kind:"referral" as const}]:[])]);}).catch(e=>{if(live)setError(e.message);}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};},[revision]);
+ if(selected)return <><button className="button button-secondary" onClick={()=>{setSelected(null);setRevision(x=>x+1);}}>← All campaigns</button>{selected.kind==="switch"?<AdminSwitchCampaign/>:<AdminCampaigns initialId={selected.id==="new"?undefined:selected.id}/>}</>;
+ return <section className={styles.card}><h2>Campaigns</h2>{error?<p role="alert">{error} <button onClick={()=>setRevision(x=>x+1)}>Retry</button></p>:loading?<p role="status">Loading campaigns…</p>:<div style={{overflowX:"auto"}}><table className="settings-plan-comparison"><thead><tr><th>Campaign</th><th>Status</th><th>End date</th><th>Action</th></tr></thead><tbody>{rows.map(row=><tr key={row.id}><td>{row.name}</td><td>{row.status.replaceAll("_"," ")}</td><td>{row.endsAt?new Date(row.endsAt).toLocaleDateString():"No scheduled end"}</td><td><button className="button button-secondary" onClick={()=>setSelected(row)}>Manage</button></td></tr>)}</tbody></table></div>}<button className="button button-secondary" onClick={()=>setSelected({id:"new",name:"Referral campaign",kind:"referral",status:"draft",endsAt:null})}>New referral campaign</button></section>;
+}

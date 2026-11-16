@@ -1,0 +1,505 @@
+import { buildReportOutlook, buildNetWorthChange } from "./report-outlook";
+import { serializeFinancialCommitment } from "./commitments";
+import { buildRecoveryReport } from "../../shared/reports/recoveries";
+import {
+  accountImportCoverage,
+  isStatementPeriodSource,
+} from "../../shared/reports/import-coverage";
+import { reportTransactionSelect, normalizeReportRows } from "./report-rows";
+import { prisma } from "./prisma";
+import { buildActiveWorkspaceTransactionWhere } from "./transaction-query";
+import { normalizeRegionalPreferences } from "./regional-preferences";
+import {
+  reportAccountBalance,
+  reportCashMovements,
+  buildReportBalanceSeries,
+} from "./report-balances";
+import { buildReportNetWorth } from "./report-net-worth-data";
+import { getCalendarDayEndInTimeZone } from "./report-window";
+import { finverseBalances } from "./finverse-balances";
+import { normalizeAccountBalanceSign } from "./account-balance";
+import { getProAccess } from "./pro-access";
+import { hasFullFeatureAccess } from "./beta-access";
+import { resolveReportCurrency } from "./report-currency";
+import {
+  getGoalProgressSnapshot,
+  normalizeGoalPlan,
+  type GoalKey,
+} from "./goals";
+import {
+  analyzeReport,
+  reportDay,
+  reportPeriod,
+  selectedReportRows,
+  savingsRate,
+  shiftDay,
+  type ReportView,
+  type ReportRow,
+} from "../../shared/reports/analysis";
+import type { ReportsWorkspace } from "../../shared/reports/workspace";
+import { reportMerchants, reportCoverage } from "../../shared/reports/details";
+import { buildReportBudgets } from "./report-budget";
+
+/** All report reads are scoped to a Profile authorized by the caller. No financial writes. */
+export async function loadReportsWorkspace(
+  userId: string,
+  workspaceId: string,
+  view: ReportView,
+  now = new Date(),
+): Promise<ReportsWorkspace> {
+  const [user, access, accounts, transactions, categories, bankBalances] =
+    await Promise.all([
+      prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: {
+          regionalPreferences: true,
+          primaryGoal: true,
+          goalTargetAmount: true,
+          goalPlan: true,
+        },
+      }),
+      getProAccess(userId),
+      prisma.account.findMany({
+        where: { workspaceId },
+        include: {
+          transactions: {
+            where: {
+              deletedAt: null,
+              isExcluded: false,
+              account: {
+                OR: [
+                  { source: { in: ["manual", "adviser_manual"] } },
+                  { type: "cash" },
+                ],
+              },
+            },
+            select: {
+              id: true,
+              date: true,
+              createdAt: true,
+              amount: true,
+              currency: true,
+              type: true,
+              merchantRaw: true,
+              merchantClean: true,
+              description: true,
+              rawPayload: true,
+            },
+          },
+          statementCheckpoints: {
+            orderBy: { createdAt: "desc" },
+            include: {
+              importFile: {
+                select: {
+                  status: true,
+                  documentImport: { select: { documentFamily: true } },
+                },
+              },
+            },
+          },
+          finverseAccountLink: {
+            select: {
+              unlinkedAt: true,
+              connection: {
+                select: { lastSyncedAt: true, status: true, syncError: true },
+              },
+            },
+          },
+          lunchFlowAccountLink: {
+            select: {
+              connection: {
+                select: { lastSyncedAt: true, status: true, syncError: true },
+              },
+            },
+          },
+        },
+      }),
+      prisma.transaction.findMany({
+        where: buildActiveWorkspaceTransactionWhere(workspaceId),
+        select: reportTransactionSelect(workspaceId),
+      }),
+      prisma.category.findMany({
+        where: { workspaceId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      finverseBalances(workspaceId),
+    ]);
+  const { timeZone, baseCurrency } = normalizeRegionalPreferences(
+      user.regionalPreferences,
+    ),
+    today = reportDay(now, timeZone);
+  const paid = hasFullFeatureAccess(access.planTier);
+  // Keep the second read batch small enough for the shared database pool.
+  const [budgets, tags, profile, revisions, recoveries, commitments] =
+    await Promise.all([
+      paid
+        ? prisma.budget.findMany({
+            where: { workspaceId },
+            include: { category: { select: { name: true } } },
+          })
+        : [],
+      prisma.tag.findMany({
+        where: { workspaceId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { name: true },
+      }),
+      paid
+        ? prisma.budgetRevision.findMany({
+            where: { workspaceId },
+            orderBy: [{ effectiveAt: "asc" }, { sequence: "asc" }],
+          })
+        : [],
+      prisma.reportRecovery.findMany({
+        where: { workspaceId },
+        select: {
+          id: true,
+          expenseId: true,
+          incomingId: true,
+          kind: true,
+          amount: true,
+        },
+      }),
+      prisma.financialCommitment.findMany({
+        where: { workspaceId, status: "active" },
+        include: {
+          occurrences: { where: { workspaceId }, select: { dueDate: true } },
+        },
+      }),
+    ]);
+  const currencySelection = resolveReportCurrency(
+    [
+      ...accounts.map((a) => a.currency),
+      ...transactions.map((t) => t.currency),
+      ...commitments.map((c) => c.currency),
+    ],
+    baseCurrency,
+    view.currency || undefined,
+  );
+  view = { ...view, currency: currencySelection.currentCurrency };
+  const rows = normalizeReportRows(transactions, timeZone);
+  const selected = selectedReportRows(rows, view);
+  const earliest =
+    selected
+      .map((t) => t.date)
+      .filter((d) => d <= today)
+      .sort()[0] ?? today;
+  const period = reportPeriod(view, today, earliest);
+  const asOf = getCalendarDayEndInTimeZone(now, timeZone);
+  const dayDate = (s: string) => new Date(`${s}T23:59:59.999`);
+  const colors = [
+    "#08abc4",
+    "#35b878",
+    "#8771bb",
+    "#f5aa38",
+    "#e2758c",
+    "#6286b7",
+  ];
+  const reports = (
+    view.currency === "ALL" ? currencySelection.currencies : [view.currency]
+  ).map((currency) => {
+    const analysis = analyzeReport(
+      selected.filter((t) => t.currency === currency),
+      period,
+    );
+    const scopedAccounts = accounts.filter(
+      (a) =>
+        a.currency === currency &&
+        (!view.accounts.length || view.accounts.includes(a.id)),
+    );
+    const snapshot = scopedAccounts.map((a) => {
+      const compatible = {
+        ...a,
+        transactions: a.transactions.map((t) => ({
+          ...t,
+          amount: String(t.amount),
+          rawPayload: t.rawPayload as never,
+        })),
+      };
+      const cash = reportCashMovements(compatible);
+      return {
+        id: a.id,
+        currency: a.currency,
+        balance: bankBalances.has(a.id)
+          ? normalizeAccountBalanceSign(
+              a.type,
+              Number(bankBalances.get(a.id)!.bankBalance),
+            )
+          : reportAccountBalance(compatible),
+        cashMovements: cash
+          ? {
+              ...cash,
+              knownFrom: cash.knownFrom
+                ? getCalendarDayEndInTimeZone(
+                    new Date(cash.knownFrom),
+                    timeZone,
+                  )
+                : null,
+              movements: cash.movements.map((m) => ({
+                ...m,
+                date: m.date
+                  ? getCalendarDayEndInTimeZone(new Date(m.date), timeZone)
+                  : m.date,
+              })),
+            }
+          : undefined,
+      };
+    });
+    const known = snapshot.filter(
+      (a) => a.balance !== null && Number.isFinite(a.balance),
+    );
+    const movements = transactions.map((t) => ({
+      ...t,
+      amount: String(t.amount),
+      rawPayload: t.rawPayload as never,
+      date: getCalendarDayEndInTimeZone(t.date, timeZone),
+    }));
+    const balances =
+      buildReportBalanceSeries(
+        known,
+        movements,
+        dayDate(period.from),
+        dayDate(period.to),
+        asOf,
+      ).find((s) => s.currency === currency)?.points ?? [];
+    const history = buildReportNetWorth(
+      scopedAccounts,
+      currency,
+      new Date(period.from),
+      dayDate(period.to),
+    );
+    const goal =
+      user.primaryGoal && currency === baseCurrency
+        ? getGoalProgressSnapshot(
+            {
+              goalKey: user.primaryGoal as GoalKey,
+              targetAmount:
+                user.goalTargetAmount === null
+                  ? null
+                  : Number(user.goalTargetAmount),
+              goalPlan: normalizeGoalPlan(user.goalPlan),
+              currentNet: analysis.current.income - analysis.current.expense,
+              currentSpend: analysis.current.expense,
+              monthlyIncome: analysis.current.income || null,
+              currentSavingsRate:
+                (savingsRate(
+                  analysis.current.income,
+                  analysis.current.expense,
+                ) ?? 0) / 100,
+              previousSavingsRate:
+                (savingsRate(
+                  analysis.previous.income,
+                  analysis.previous.expense,
+                ) ?? 0) / 100,
+              spendDelta: analysis.previous.expense
+                ? ((analysis.current.expense - analysis.previous.expense) /
+                    analysis.previous.expense) *
+                  100
+                : null,
+              recurringShare:
+                analysis.drivers.recurringTotal /
+                Math.max(1, analysis.current.expense),
+            },
+            currency,
+          )
+        : null;
+    // Beginning balance uses all movements, even when category/review filters narrow the spending view.
+    const cashFlow = paid
+      ? analysis.accounts.map((a, i) => {
+          const account = scopedAccounts.find((x) => x.id === a.id);
+          const snap = known.find((x) => x.id === a.id);
+          const openingDay = shiftDay(period.from, -1);
+          const opening =
+            account && snap
+              ? buildReportBalanceSeries(
+                  [snap],
+                  movements,
+                  dayDate(openingDay),
+                  dayDate(openingDay),
+                  asOf,
+                )[0]?.points[0]?.balance
+              : null;
+          return {
+            id: a.id,
+            label: a.account,
+            beginningBalance: Math.max(0, opening ?? 0),
+            incomeAmount: a.income,
+            color: colors[i % colors.length],
+            flows: [
+              ...a.destinations.map((d) => ({
+                key: d.name,
+                label: d.name,
+                amount: d.amount,
+              })),
+              ...(Math.max(0, opening ?? 0) + a.income > a.expense
+                ? [
+                    {
+                      key: "__remaining__",
+                      label: "Unspent",
+                      amount: Math.max(0, opening ?? 0) + a.income - a.expense,
+                    },
+                  ]
+                : []),
+            ],
+          };
+        })
+      : [];
+    const outlook = buildReportOutlook(
+      commitments
+        .filter(
+          (c) =>
+            c.currency === currency &&
+            (!view.accounts.length ||
+              (c.accountId !== null && view.accounts.includes(c.accountId))),
+        )
+        .map((c) => ({
+          ...serializeFinancialCommitment(c),
+          completedPaymentDates: c.occurrences.map((o) =>
+            o.dueDate.toISOString().slice(0, 10),
+          ),
+        })),
+      scopedAccounts.map((a) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        balance: snapshot.find((s) => s.id === a.id)?.balance ?? null,
+      })),
+      rows.filter((r) => r.currency === currency),
+      today,
+    );
+    // Paid data is omitted at the server boundary, not merely hidden in the app.
+    if (!paid) {
+      analysis.statement = [];
+      analysis.trends = [];
+      analysis.accounts = [];
+      analysis.drivers = { category: null, merchant: null, recurringTotal: 0 };
+    }
+    return {
+      currency,
+      recurringCosts: outlook.recurringCosts,
+      forecast: paid ? outlook.forecast : undefined,
+      netWorthChange: paid
+        ? buildNetWorthChange(
+            scopedAccounts.map((a) => ({
+              ...a,
+              statementCheckpoints: a.statementCheckpoints.filter(
+                (p) =>
+                  p.status === "reconciled" && p.importFile?.status === "done",
+              ),
+            })),
+            period.from,
+            period.to,
+            timeZone,
+          )
+        : undefined,
+      budgets: paid
+        ? buildReportBudgets(
+            budgets,
+            selected,
+            period,
+            view,
+            currency,
+            timeZone,
+            revisions,
+            new Map(categories.map((c) => [c.id, c.name])),
+          )
+        : [],
+      recoveries: buildRecoveryReport(
+        rows,
+        selected,
+        recoveries.map((r) => ({ ...r, amount: Number(r.amount) })),
+        period,
+        currency,
+      ),
+      importCoverage: scopedAccounts.map((a) =>
+        accountImportCoverage(
+          {
+            id: a.id,
+            name: a.name,
+            type: a.type,
+            createdDay: reportDay(a.createdAt, timeZone),
+          },
+          a.statementCheckpoints.map((c) => ({
+            from: c.statementStartDate?.toISOString().slice(0, 10) ?? null,
+            to: c.statementEndDate?.toISOString().slice(0, 10) ?? null,
+            status: c.status,
+            done: c.importFile?.status === "done",
+            statement: isStatementPeriodSource(
+              c.importFile?.documentImport?.documentFamily,
+              c.sourceMetadata,
+            ),
+          })),
+          [a.finverseAccountLink, a.lunchFlowAccountLink].flatMap((l) =>
+            l &&
+            (!("unlinkedAt" in l) || !l.unlinkedAt) &&
+            !["disconnected", "unlinked", "revoked"].includes(
+              l.connection.status,
+            )
+              ? [
+                  {
+                    lastSyncedAt:
+                      l.connection.lastSyncedAt?.toISOString() ?? null,
+                    status: l.connection.status,
+                    error: !!l.connection.syncError,
+                  },
+                ]
+              : [],
+          ),
+          period,
+          now,
+        ),
+      ),
+      merchantAnalysis: reportMerchants(
+        selected.filter((t) => t.currency === currency),
+        period,
+      ),
+      coverage: reportCoverage(
+        selected.filter((t) => t.currency === currency),
+        period,
+        view,
+        scopedAccounts
+          .filter((a) => !known.some((k) => k.id === a.id))
+          .map((a) => a.name),
+        history.points.length > 0,
+      ),
+      analysis,
+      balances,
+      netWorth: history.points,
+      knownAccounts: known.length,
+      accountCount: scopedAccounts.length,
+      cashFlow,
+      goal:
+        goal && paid
+          ? {
+              title: user.primaryGoal!.replaceAll("_", " "),
+              detail: goal.nextAction,
+              progress: goal.progressPercent,
+            }
+          : null,
+    };
+  });
+  return {
+    workspaceId,
+    profileName: profile?.name ?? "Profile",
+    paid,
+    timeZone,
+    today,
+    view,
+    period,
+    currencies: currencySelection.currencies,
+    accounts: accounts.map((a) => ({ id: a.id, name: a.name })),
+    merchants: [...new Set(rows.map((r) => r.merchant))].sort(),
+    tags,
+    categories: [...new Set(rows.map((r) => r.category))]
+      .sort()
+      .map((name) => ({
+        id: categories.find((c) => c.name === name)?.id ?? "",
+        name,
+      })),
+    reports,
+  };
+}

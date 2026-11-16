@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
+const accounts = [{ id: "cash", transactionCount: 3 }, { id: "bank", transactionCount: 240 }, { id: "wallet", transactionCount: 10 }];
+assert.equal(mostUsedTransactionAccount(accounts)?.id, "bank");
+assert.equal(mostUsedTransactionAccount([...accounts].reverse())?.id, "bank");
+assert.equal(mostUsedTransactionAccount([]), undefined);
+assert.equal(mostUsedTransactionAccount([{ id: "a", transactionCount: 0 }, { id: "b", transactionCount: 0 }])?.id, "a");
+assert.equal(mostUsedTransactionAccount([{ id: "missing", transactionCount: undefined }, { id: "used", transactionCount: 1 }])?.id, "used");
+assert.equal(mostUsedTransactionAccount([{ id: "bad", transactionCount: NaN }, { id: "used", transactionCount: 2 }])?.id, "used");
+assert.deepEqual(accounts.map(a => a.id), ["cash", "bank", "wallet"], "selection must not reorder displayed account options");
+console.log("Default transaction account regression passed");

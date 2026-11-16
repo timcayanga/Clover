@@ -1,0 +1,25 @@
+klikbcabisnis@klikbca.com
+EXAMPLE SENDER telah melakukan transfer dana dengan informasi sebagai berikut:
+Tanggal : 02/01/2026
+Jam : 10:20:30
+Pengirim : EXAMPLE SENDER
+Rekening Tujuan : 123-0004567
+No. Referensi : 000000000000123456
+Nominal : Rp 12.345
+Berita : Example invoice
+Catatan:
+Biaya Termasuk PPN (Bila ada)
+PT. BANK CENTRAL ASIA TBK.
+EXAMPLE SENDER has done fund transfer with the following information:
+Date : 02/01/2026
+Time : 10:20:30
+Sender : EXAMPLE SENDER
+To Account : 123-0004567
+Reference No. : 000000000000123456
+Amount : Rp 12.345
+Remark : Example invoice
+Notes:
+Charges VAT Inclusive (If any)
+Best regards,
+PT. Bank Central Asia,Tbk
+BCA_NATIVE_PAGES 1

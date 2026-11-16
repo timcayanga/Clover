@@ -1,0 +1,85 @@
+import { getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { getIndonesianIncomeCategoryHint } from "@/lib/indonesian-merchant-context";
+
+export type MerchantEnrichmentInput = {
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+  categoryName?: string | null;
+  preserveCategory?: boolean;
+  type?: "income" | "expense" | "transfer";
+  institution?: string | null;
+};
+
+export type MerchantEnrichmentResult = MerchantEnrichmentInput & {
+  merchantClean: string | null;
+  categoryName: string | null;
+  type: "income" | "expense" | "transfer";
+  applied: boolean;
+  reason: string | null;
+};
+
+const nonEmpty = (value: string | null | undefined) => (typeof value === "string" && value.trim() ? value.trim() : null);
+
+const isAllCapsMerchant = (value: string) => /[A-Z]{4,}/.test(value) && value === value.toUpperCase();
+
+export const hasConfirmedMerchantCategoryRule = (rawPayload: unknown): boolean => {
+  if (!rawPayload || typeof rawPayload !== "object" || !("classification" in rawPayload)) return false;
+  const classification = rawPayload.classification;
+  if (!classification || typeof classification !== "object") return false;
+  const { categorySource, categoryReason } = classification as Record<string, unknown>;
+  return typeof categorySource === "string" &&
+    (categorySource === "manual" || categorySource.startsWith("manual_") || categorySource === "import_confirmation") &&
+    (categoryReason === "rule-exact" || categoryReason === "learned-exact");
+};
+
+export const applyDeterministicMerchantRescue = (input: MerchantEnrichmentInput): MerchantEnrichmentResult => {
+  const raw = nonEmpty(input.merchantRaw);
+  const clean = nonEmpty(input.merchantClean);
+  const description = nonEmpty(input.description);
+  const sourceText = [raw, description].filter(Boolean).join(" ") || clean || "";
+  const normalizedCandidate = sourceText ? nonEmpty(summarizeMerchantText(sourceText, input.institution)) : null;
+  const merchantClean =
+    normalizedCandidate && (!clean || clean === raw || (raw ? isAllCapsMerchant(raw) : false))
+      ? normalizedCandidate
+      : clean;
+  const hintCandidates = [raw, clean, description, normalizedCandidate].filter(
+    (value): value is string => Boolean(value)
+  );
+  const hint =
+    getIndonesianIncomeCategoryHint(raw || description || clean || "", input.type ?? "expense") ??
+    hintCandidates.map((value) => getStrongMerchantCategoryHint(value)).find(Boolean) ??
+    (hintCandidates.length > 0 ? getStrongMerchantCategoryHint(hintCandidates.join(" ")) : null);
+  const currentCategory = nonEmpty(input.categoryName);
+  // Imported rows are not confirmed data. A strong merchant identity is more
+  // reliable than a parser's generic transfer guess (for example, "DiDi
+  // Tianjin" is ride-hailing, not a person-to-person transfer). Structured
+  // files can mark their supplied category as authoritative.
+  const categoryName =
+    !input.preserveCategory &&
+    hint &&
+    (!currentCategory || currentCategory.toLowerCase() === "other" || currentCategory.toLowerCase() === "transfers")
+      ? hint
+      : currentCategory;
+  const type =
+    categoryName === "Transfers"
+      ? "transfer"
+      : categoryName === "Income"
+        ? "income"
+        : input.type ?? "expense";
+  const applied = merchantClean !== clean || categoryName !== currentCategory || type !== (input.type ?? "expense");
+
+  return {
+    ...input,
+    merchantClean,
+    categoryName,
+    type,
+    applied,
+    reason: applied
+      ? categoryName !== currentCategory
+        ? "strong_merchant_category_hint"
+        : "merchant_label_normalized"
+      : null,
+  };
+};

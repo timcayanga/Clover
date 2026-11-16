@@ -1,0 +1,33 @@
+Terima kasih Anda telah menggunakan fasilitas KlikBCA Bisnis.
+Berikut ini adalah informasi transaksi yang telah Anda lakukan di Internet Banking BCA:
+Tanggal : 30/11/2021
+Jam : 19:01:29
+Jenis Transaksi : TRANSFER DANA
+Dari Rekening : 123-0001234
+Ke Rekening : 234-0002345
+Nominal : Rp 240.00
+Jenis Transfer : Sekarang
+Keterangan : Example invoice
+No Referensi : 000000000000987654
+Status : Berhasil
+Semoga informasi ini bermanfaat bagi Anda.
+Terima kasih.
+Hormat Kami,
+PT. Bank Central Asia,Tbk
+Thank you for using KlikBCA Bisnis.
+We would like to inform you transactions you have performed for the following period:
+Date : 30/11/2021
+Time : 19:01:29
+Transaction Type : FUND TRANSFER
+From Account : 123-0001234
+To Account : 234-0002345
+Amount : Rp 240.00
+Transfer Type : Immediate
+Remark : Example invoice
+Reference No : 000000000000987654
+Status : Success
+We hope this information is useful for you.
+Thank you.
+Best Regards,
+PT. Bank Central Asia,Tbk
+BCA_NATIVE_PAGES 2

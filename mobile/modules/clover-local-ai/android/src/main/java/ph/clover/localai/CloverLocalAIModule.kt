@@ -1,0 +1,133 @@
+package ph.clover.localai
+
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.functions.Coroutine
+import expo.modules.kotlin.modules.ModuleDefinition
+import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.genai.prompt.TextPart
+import com.google.mlkit.genai.prompt.generateContentRequest
+import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.common.InputImage
+import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.tasks.await
+
+class CloverLocalAIModule : Module() {
+  companion object {
+    private val ocrSlot = Mutex()
+  }
+  override fun definition() = ModuleDefinition {
+    Name("CloverLocalAI")
+    AsyncFunction("capabilities") Coroutine { ->
+      val status = Generation.getClient().checkStatus()
+      mapOf("model" to when(status) {
+        FeatureStatus.AVAILABLE -> "available"
+        FeatureStatus.DOWNLOADABLE -> "downloadable"
+        FeatureStatus.DOWNLOADING -> "downloading"
+        else -> "unavailable"
+      }, "provider" to "Gemini Nano", "detail" to "On-device availability depends on this device and its downloaded model. Local calculations and OCR remain available.")
+    }
+    AsyncFunction("download") Coroutine { ->
+      val model=Generation.getClient()
+      model.download().collect { }
+      check(model.checkStatus()==FeatureStatus.AVAILABLE) { "Model download did not complete. Try again while connected." }
+    }
+    AsyncFunction("generate") Coroutine { prompt: String ->
+      require(prompt.length<=10000) { "Shorten this on-device request." }
+      val model=Generation.getClient()
+      check(model.checkStatus()==FeatureStatus.AVAILABLE) { "The on-device model is unavailable." }
+      model.generateContent(generateContentRequest(TextPart(prompt)) { temperature=0.2f; maxOutputTokens=512 }).candidates.firstOrNull()?.text ?: error("No on-device response was generated.")
+    }
+    AsyncFunction("extractText") Coroutine { uri: String -> extractText(uri, fast = false) }
+    AsyncFunction("extractPhotoTextFast") Coroutine { uri: String -> extractText(uri, fast = true) }
+  }
+
+  private suspend fun extractText(uri: String, fast: Boolean): Map<String, Any> = withContext(Dispatchers.IO) {
+      val parsed=Uri.parse(uri)
+      require(parsed.scheme=="file") { "Choose a local file." }
+      val file=File(parsed.path ?: error("Invalid file."))
+      val pdf = file.extension.lowercase() == "pdf"
+      require(!fast || !pdf) { "Choose a local photo." }
+      val maximum = if (pdf) 25L*1024*1024 else 10L*1024*1024
+      require(file.length() in 1..maximum) { "Choose a photo up to 10 MB or a PDF up to 25 MB." }
+      check(ocrSlot.tryLock()) { "Clover is already reading a file. Try again in a moment." }
+      try {
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        try {
+          var count=1;var total=1
+          var opticalLines = emptyList<Map<String, Any>>()
+          val text=if(file.extension.lowercase()=="pdf") {
+            ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+              PdfRenderer(fd).use { renderer ->
+                total=renderer.pageCount;count=minOf(total,5)
+                (0 until count).map { index -> renderer.openPage(index).use { page ->
+                  val scale=minOf(1400f/page.width,1800f/page.height)
+                  val bitmap=Bitmap.createBitmap(maxOf(1,(page.width*scale).toInt()),maxOf(1,(page.height*scale).toInt()),Bitmap.Config.ARGB_8888)
+                  try {bitmap.eraseColor(android.graphics.Color.WHITE);page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);recognizer.process(InputImage.fromBitmap(bitmap,0)).await().text} finally {bitmap.recycle()}
+                }}.joinToString("\n\n")
+              }
+            }
+          } else {
+            val bounds=BitmapFactory.Options().apply { inJustDecodeBounds=true };BitmapFactory.decodeFile(file.path,bounds)
+            require(bounds.outWidth>0&&bounds.outHeight>0&&bounds.outWidth.toLong()*bounds.outHeight<=200000000) { "This image needs online processing or a smaller copy for local OCR." }
+            // Read an OCR-sized copy, including 48 MP camera photos, without
+            // decoding a full-resolution bitmap or changing the retained source.
+            var sample=1
+            val maxEdge = if (fast) 1600 else 2400
+            while(maxOf(bounds.outWidth,bounds.outHeight)/sample>maxEdge) sample*=2
+            val bitmap=BitmapFactory.decodeFile(file.path,BitmapFactory.Options().apply { inSampleSize=sample })
+              ?: error("This image needs online processing.")
+            var oriented=bitmap
+            try {
+              val orientation=runCatching { ExifInterface(file.path).getAttributeInt(ExifInterface.TAG_ORIENTATION,ExifInterface.ORIENTATION_NORMAL) }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+              val matrix=Matrix()
+              when(orientation) {
+                ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.setScale(-1f,1f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.setRotate(180f)
+                ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.setScale(1f,-1f)
+                ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.setRotate(90f);matrix.postScale(-1f,1f) }
+                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.setRotate(90f)
+                ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.setRotate(270f);matrix.postScale(-1f,1f) }
+                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.setRotate(270f)
+              }
+              if(!matrix.isIdentity) oriented=Bitmap.createBitmap(bitmap,0,0,bitmap.width,bitmap.height,matrix,true)
+              val result = recognizer.process(InputImage.fromBitmap(oriented,0)).await()
+              val lines = result.textBlocks.flatMap { it.lines }
+              if (lines.size <= 300 && result.text.length <= 40000) {
+                val width = oriented.width.toDouble()
+                val height = oriented.height.toDouble()
+                opticalLines = lines.mapNotNull { line ->
+                  val box = line.boundingBox ?: return@mapNotNull null
+                  val coordinates = listOf(box.left / width, box.top / height, box.right / width, box.bottom / height)
+                    .map { it.coerceIn(0.0, 1.0) }
+                  buildMap<String, Any> {
+                    put("text", line.text)
+                    put("box", coordinates)
+                    val confidence = line.confidence
+                    if (confidence.isFinite() && confidence > 0f && confidence <= 1f) put("confidence", confidence)
+                  }
+                }
+              }
+              result.text
+            } finally { if(oriented!==bitmap) oriented.recycle();bitmap.recycle() }
+          }
+          mapOf("text" to text.take(40000),"opticalLines" to opticalLines,"pagesRead" to count,"totalPages" to total,"complete" to (!fast && count == total && text.length <= 40000))
+        } finally {
+          recognizer.close()
+        }
+      } finally {
+        ocrSlot.unlock()
+      }
+  }
+}

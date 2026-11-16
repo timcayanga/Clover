@@ -1,0 +1,121 @@
+# Clover
+
+Clover is a personal finance app focused on statement import, transaction parsing, categorization, and user-guided learning.
+
+## Read First
+
+1. `docs/user-management-spec.md`
+2. `docs/bpi-parser-rules.md` when working on BPI imports
+3. `docs/rcbc-parser-rules.md` when working on RCBC credit-card imports
+4. `docs/bdo-parser-rules.md` when working on BDO imports
+5. `docs/unionbank-parser-rules.md` when working on UnionBank imports
+6. `docs/gcash-parser-rules.md` when working on GCash imports
+7. `docs/gsave-parser-rules.md` when working on GSave imports
+8. `docs/metrobank-parser-rules.md` when working on Metrobank imports
+9. `docs/citibank-parser-rules.md` when working on Citibank imports
+10. `docs/security-bank-parser-rules.md` when working on Security Bank imports
+11. `docs/maya-parser-rules.md` when working on Maya imports
+12. `docs/landbank-parser-rules.md` when working on LandBank imports
+13. `docs/wise-parser-rules.md` when working on Wise imports
+14. `docs/atram-parser-rules.md` when working on ATRAM imports
+15. `docs/uno-parser-rules.md` when working on UNO Digital Bank imports
+16. `docs/ab-capital-securities-parser-rules.md` when working on AB Capital Securities imports
+17. `docs/gcrypto-parser-rules.md` when working on GCrypto imports
+18. `docs/pdax-parser-rules.md` when working on PDAX imports
+19. `docs/maribank-parser-rules.md` when working on MariBank imports
+20. `docs/psbank-parser-rules.md` when working on PS Bank imports
+21. `docs/chinabank-parser-rules.md` when working on China Bank imports
+21. `docs/hsbc-parser-rules.md` when working on HSBC imports
+22. `docs/eastwest-parser-rules.md` when working on EastWest imports
+23. `docs/gotyme-parser-rules.md` when working on GoTyme imports
+24. `docs/gotrade-parser-rules.md` when working on GoTrade imports
+25. `docs/bank-of-commerce-parser-rules.md` when working on Bank of Commerce imports
+26. `docs/bank-of-china-parser-rules.md` when working on Bank of China imports
+27. `docs/aub-parser-rules.md` when working on AUB imports
+28. `docs/pnb-parser-rules.md` when working on PNB imports
+29. `docs/ucpb-parser-rules.md` when working on UCPB imports
+30. `docs/cimb-parser-rules.md` when working on CIMB imports
+31. `docs/paypal-parser-rules.md` when working on PayPal imports
+32. `web/prisma/schema.prisma`
+33. `web/lib/import-parser.ts`
+34. `web/lib/data-engine.ts`
+35. `web/workers/import-processor.ts`
+36. `docs/generic-screenshot-parser-rules.md` when working on unfamiliar screenshot imports or generic parser fallbacks
+37. `docs/structured-csv-parser-rules.md` when working on CSV, TSV, or other delimited financial imports
+38. `docs/digital-notes-split-bills-parser-rules.md` when working on digital notes or split-bill receipt imports
+39. `docs/import-parser-arbitration.md` when changing fallback routing, parser selection, or import safety scoring
+40. `docs/financial-exchange-parser-rules.md` when working on OFX, QFX, QIF, MT940, CAMT.053, or structured JSON financial exports
+41. `docs/korean-import-parser-rules.md` when working on Korean text, receipts, spreadsheets, or KRW amounts
+42. `docs/indonesian-import-parser-rules.md` when working on Indonesian text, receipts, spreadsheets, or IDR amounts
+
+43. `docs/app-migration-parser-rules.md` when working on source-app exports or migration templates
+44. `docs/parser-release-corpus.md` when changing parsing, extraction, enrichment, import persistence, or regression expectations
+45. `docs/durable-learning.md` when changing learning writes, retrieval, retries, or learning administration
+46. `docs/posb-parser-rules.md` when working on POSB payroll imports
+47. `docs/boost-bank-parser-rules.md` when reviewing Boost Bank imports
+48. `docs/bca-parser-rules.md` when working on Indonesian KlikBCA transfer proofs
+49. `docs/grab-parser-rules.md` when working on Grab and GrabFood email receipts
+50. `docs/rhb-parser-rules.md` when reviewing Malaysian RHB imports
+51. `docs/ocbc-parser-rules.md` when reviewing OCBC imports
+52. `docs/dbs-parser-rules.md` when reviewing DBS consolidated multi-product imports
+53. `docs/seabank-indonesia-parser-rules.md` when working on Indonesian SeaBank IDR statements
+54. `docs/maybank-islamic-parser-rules.md` when working on Malaysian Maybank Islamic savings statements
+55. `docs/word-receipt-parser-rules.md` when working on native DOCX receipts
+56. `docs/grab-driver-parser-rules.md` when working on driver earnings and wallet settlement reports
+
+If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
+
+## Core Rules
+
+- AI suggests, user confirms, system learns.
+- Never overwrite confirmed financial data.
+- Keep raw import data separate from normalized data.
+- Keep raw descriptions and simplified titles separate when both are available.
+- Use confidence scores for all AI or heuristic outputs.
+- Send low-confidence results to a review queue instead of auto-confirming them.
+- Preserve the raw statement/file payloads needed for traceability.
+
+## Parsing And Categorization
+
+- Prefer deterministic parsing before any AI fallback.
+- Reuse existing statement detection, merchant normalization, and category fallback logic before inventing new rules.
+- Learn from confirmed user edits and merchant rules.
+- Treat merchant rules as durable memory, not one-off guesses.
+- Avoid silently changing category or merchant values when a row is already confirmed.
+- When a new institution appears, add a dedicated `docs/<institution>-parser-rules.md` file and link it here so the rules persist.
+
+## Data Handling
+
+- Source files, parsed rows, normalized transactions, and learned rules are distinct stages.
+- If a change affects the import pipeline, preserve the audit trail from raw file to parsed row to transaction.
+- Keep confidence, reason, and review status fields updated together.
+- Do not collapse raw and normalized payloads into one structure.
+
+## Implementation Notes
+
+- The main app lives under `web/`.
+- Import and categorization logic is primarily in `web/lib/import-parser.ts`, `web/lib/data-engine.ts`, and `web/workers/import-processor.ts`.
+- Bank-specific merchant simplifiers live in `web/lib/merchant-labels.ts`; add new bank mappings there when parser notes discover durable title normalization rules.
+- Schema changes belong in `web/prisma/schema.prisma`.
+- When behavior changes, prefer updating the relevant tests or check scripts in `scripts/` or `web/scripts/`.
+
+## Branching And Deployment
+
+- Use `staging` as the only shared development and Vercel preview branch.
+- Do not push temporary `codex/*`, task, or worktree branches to GitHub.
+- Push completed changes directly to `staging`; production deployments must use the tested `staging` commit.
+- Automatically deploy completed changes to staging after the required checks pass; do not ask for staging approval again. Verify the staging deployment is ready.
+- Do not create or deploy to alternate Vercel projects for Clover.
+
+## Safety
+
+- If a task could change confirmed financial records, pause and verify the intended behavior before making the change.
+- If a rule conflicts with the product spec, the spec wins.
+- If a rule conflicts with existing confirmed data, preserve the confirmed data and adapt the new logic around it.
+
+## Required Before Pushing
+
+- Run `npm run qa:prepush` from the repository root before every push to `staging` or `main`.
+- Do not push if the command fails. Fix the failing regression, rerun the complete command, and only push after it passes.
+- Keep `.github/workflows/quality-gate.yml` aligned with `qa:prepush` so local and GitHub validation cannot drift.
+- Keep the reviewed parser corpus and real-worker preservation checks in `qa:release`. Do not regenerate expected financial labels from parser output or remove failing cases to make a refactor pass. For parser/extraction changes, also replay the retained private corpus using the existing originals; preserve any missing-source inventory instead of requesting wholesale reuploads.

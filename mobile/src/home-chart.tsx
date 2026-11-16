@@ -1,0 +1,96 @@
+import { Text } from "./app-text";
+import { useState } from "react";
+import { Pressable, ScrollView, View } from "react-native";
+import { Body, money, useTheme } from "./ui";
+type Day = { date: string; income: number; expense: number };
+export function HomeChart({
+  days,
+  hidden,
+  currency,
+}: {
+  days: Day[];
+  hidden: boolean;
+  currency: string;
+}) {
+  const { colors } = useTheme();
+  const [selected, setSelected] = useState<string | null>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+  const barWidth = Math.max(44, (chartWidth - Math.max(0, days.length - 1) * 4) / Math.max(1, days.length));
+  const peak = Math.max(1, ...days.flatMap((d) => [d.income, d.expense]));
+  const current = days.find((d) => d.date === selected);
+  if (!days.length)
+    return <Body>No daily activity recorded for this period.</Body>;
+  return (
+    <View onLayout={event => setChartWidth(event.nativeEvent.layout.width)} style={{ gap: 10 }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator
+        contentContainerStyle={{ gap: 4 }}
+      >
+        {days.map((d) => (
+          <Pressable
+            key={d.date}
+            accessibilityRole="button"
+            accessibilityLabel={`${d.date}${hidden ? ", amounts hidden" : `, income ${money(String(d.income), currency)}, expenses ${money(String(d.expense), currency)}`}`}
+            accessibilityState={{ selected: d.date === selected }}
+            onPress={() => setSelected(d.date)}
+            style={{
+              width: barWidth,
+              minHeight: 130,
+              justifyContent: "flex-end",
+              gap: 8,
+              padding: 4,
+              borderWidth: 1,
+              borderColor: d.date === selected ? colors.teal : "transparent",
+              borderRadius: 8,
+            }}
+          >
+            <View
+              style={{
+                height: 96,
+                flexDirection: "row",
+                alignItems: "flex-end",
+                gap: 4,
+                justifyContent: "center",
+              }}
+            >
+              <View
+                style={{
+                  width: 12,
+                  height: Math.max(2, (d.income / peak) * 96),
+                  backgroundColor: "#00BA63",
+                  borderRadius: 3,
+                }}
+              />
+              <View
+                style={{
+                  width: 12,
+                  height: Math.max(2, (d.expense / peak) * 96),
+                  backgroundColor: "#FF4E59",
+                  borderRadius: 3,
+                }}
+              />
+            </View>
+            <Text
+              style={{ color: colors.muted, fontSize: 10, textAlign: "center" }}
+            >
+              {days.length === 7
+                ? new Date(d.date).toLocaleDateString("en-US", {
+                    weekday: "short",
+                    timeZone: "UTC",
+                  })
+                : new Date(d.date).getUTCDate()}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      {current ? (
+        <Body>
+          {current.date} · Income{" "}
+          {hidden ? "••••" : money(String(current.income), currency)} · Expenses{" "}
+          {hidden ? "••••" : money(String(current.expense), currency)}
+        </Body>
+      ) : null}
+    </View>
+  );
+}

@@ -1,0 +1,1642 @@
+{
+  "version": 1,
+  "createdAt": "2026-10-01",
+  "provenance": "Original synthetic test records. No customer statements, account tokens, credentials, or copied provider example payloads. Schemas inform edge cases, not live connector support.",
+  "sources": [
+    {
+      "id": "kftc-transaction-list",
+      "url": "https://developers.kftc.or.kr/dev/openapi/open-banking/transaction",
+      "reviewedAt": "2026-10-01",
+      "facts": [
+        "Compact transaction dates and separate times",
+        "Explicit incoming/outgoing labels",
+        "Signed after-transaction balances",
+        "25-row pagination and next_page_yn",
+        "Table uses print_content; example uses printed_content. No currency field."
+      ]
+    },
+    {
+      "id": "bri-snap-statement",
+      "url": "https://developers.bri.co.id/id/snap-bi/api-bank-statement-snap-bi-v1.0",
+      "reviewedAt": "2026-10-01",
+      "facts": [
+        "ISO timestamps with offsets",
+        "Explicit debit/credit type",
+        "amount.value uses decimal dot and explicit currency",
+        "Balance and aggregate entries are not purchases"
+      ]
+    },
+    {
+      "id": "clover-synthetic",
+      "description": "Original regression scenarios for Clover-supported generic JSON and delimited exports; not bank-certified layouts."
+    }
+  ],
+  "cases": [
+    {
+      "id": "id-bad-date-no-partial",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-bad-date-no-partial.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    },\n    {\n      \"date\": \"2026-02-30\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "1473ea7ed515172570aaf148a5761af75b59e253bb40cab90b4c29ec84fc1c1b",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-bad-money-no-partial",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-bad-money-no-partial.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    },\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"error 12345\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "f6c991f78742b43b9597aaf3267d94463bfbfd8a9b033aca13b6fbfb1873cb0d",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-balance-and-fee",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-balance-and-fee.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"balance\": \"-1.000,25\",\n      \"fee\": \"500,50\"\n    }\n  ]\n}",
+      "sha256": "0f898165c029e1361e948424004a3f568c5aa520bf0887cc6701166fcfce791e",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balance": -1000.25,
+            "fee": 500.5
+          }
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-broken-record-no-partial",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-broken-record-no-partial.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    },\n    null\n  ]\n}",
+      "sha256": "172b3a2c12257c9c79df27b9d7a56a51a23fe16fc5aae5dfca03f970772ddcf5",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-context-currency",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-context-currency.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "92f6a6bd5b6f508ee4a9494fb5931be5088155e392ee2c8455ba07ffa25b34ae",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "context": {
+        "currency": "KRW"
+      },
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-credit-suffix",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-credit-suffix.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50 CR\"\n    }\n  ]\n}",
+      "sha256": "9e1e70e00ff360de8352f67e3bebc1cd0732bfb2665f00700be051d71c667c08",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-currency-alias-routing",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-currency-alias-routing.json",
+      "input": "{\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ],\n  \"currencyCode\": \"IDR\"\n}",
+      "sha256": "5c075597e2397899c4444f641e9ad5ed9938a7854dcbcbced58cacddf4fde2e2",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-date-alias-conflict",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-date-alias-conflict.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"transactionDate\": \"2026-09-01\"\n    }\n  ]\n}",
+      "sha256": "05231511f224cfaa6294395b05a60885594ce8acf39292e1f22d7549a7fb52c1",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-debit-zero-credit",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-debit-zero-credit.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"Synthetic refund\",\n      \"debit\": \"0\",\n      \"credit\": \"12.500,50\",\n      \"type\": \"Kredit\"\n    }\n  ]\n}",
+      "sha256": "103e134343e30498f6078d0726b8873972b11666dcb4e3a38696a4be748ca90f",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-dual-columns",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-dual-columns.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"debit\": \"12.500,50\",\n      \"credit\": \"12.500,50\"\n    }\n  ]\n}",
+      "sha256": "25bb6e57d8a4d6a43be44362a4fd630f1b1a001a22d406130dbdbbcfdb34f6cd",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-empty-first-list",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-empty-first-list.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [],\n  \"records\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "e164d0181c70fd265bd8d4b3a2c3bd1da37ef12edb53569edf0a1b89184788a4",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-equivalent-money-aliases",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-equivalent-money-aliases.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"transactionAmount\": 12500.5\n    }\n  ]\n}",
+      "sha256": "f76dc0279491359e2a9556aa6b67b458ece805caceadca3246821cdb7582906d",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-explicit-foreign",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-explicit-foreign.json",
+      "input": "{\n  \"currency\": \"USD\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "73339d0e91818481b14d066a49bb0d2c1a143b21b0cae5677a0318e4a1e02675",
+      "expectedRows": [
+        {
+          "amount": "12.50",
+          "currency": "USD",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-explicit-sign-conflict",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-explicit-sign-conflict.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"-12500.50\",\n      \"type\": \"income\"\n    }\n  ]\n}",
+      "sha256": "352d4636ad8cc1f961fc4ccdabecccbe7a2c56fa3531c4e9bd51430b7b09a3e3",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-invalid-balance",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-invalid-balance.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"balance\": {\n        \"available\": 100\n      }\n    }\n  ]\n}",
+      "sha256": "0ea87de9880466dc4d5ace3ef87ed5298f7c6f130d7783e7986df4b87e8dcf0c",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-invalid-clock",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-invalid-clock.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"2026-10-01T25:01:00+07:00\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "a265216b319d5716afe8a3677fc40c25b90860e1733584135b34ab4bfbea6576",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-invalid-fee",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-invalid-fee.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"fee\": \"fee 12\"\n    }\n  ]\n}",
+      "sha256": "eaabf67539fc859c3a04c800687f27f46bd72c3e1b860474c82fc96c7830159c",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-json-number",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-json-number.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": 12500.5,\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "c1cebe7fe67b22484a7a49b5a10fbca9d33e2260a108c2312a77513f7231bfd8",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-local-midnight",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-local-midnight.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"2026-10-01T00:05:00+07:00\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "35e309cfd6a14e5f483e132ae2a3927285361e219f32043ed46b61336e622c01",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-localized-json",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-localized-json.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "0e81bf6fb40f8fd592a8b78e712f0e1d8a3a0d6781dca28e1c3145c5f2fa10c5",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-missing-currency",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-missing-currency.json",
+      "input": "{\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "dca1e8f8f2a6768adda7eca255c2be709d82c62555ec15e345f5525c39d89e94",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": null,
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-money-alias-conflict",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-money-alias-conflict.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"transactionAmount\": \"99\"\n    }\n  ]\n}",
+      "sha256": "51034b7ce858779fc315d199413c483089eb31b03e63da7c4fc4ca9e071ff871",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-multiple-record-lists",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-multiple-record-lists.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ],\n  \"records\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"99\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "505dd8def42ad8c7c97c16f302e0369bbb342f86f2c4bc0f68616cddee4f8bd0",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-nested-money-unsupported",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-nested-money-unsupported.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": {\n        \"value\": \"12500.5\",\n        \"currency\": \"IDR\"\n      },\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "e40a9723737291e926e9e2d22c4fdbc8d16ffeca8176f3ffb355aee3355faab2",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-numeric-account",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-numeric-account.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": 5678,\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "747500ca7640eb9f9a5d7778e8e3531c064582e142d103f8d577be6d7cd5a5e3",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-original-currency",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-original-currency.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"originalAmount\": \"9.25\",\n      \"originalCurrency\": \"USD\"\n    }\n  ]\n}",
+      "sha256": "6b7a516cee680c048e5a85ed6c6b83b5da0e59073137c24115a25463fb412a5d",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "originalAmount": 9.25,
+            "originalCurrency": "USD"
+          }
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-original-currency-conflict",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-original-currency-conflict.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"originalAmount\": \"Rp500\",\n      \"originalCurrency\": \"USD\"\n    }\n  ]\n}",
+      "sha256": "6d16326bb0e3b6432d15f9a41f9e02931d48aac92a3dbf5811e29af9f0eb3d1b",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-partial-page",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-partial-page.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ],\n  \"hasMore\": true\n}",
+      "sha256": "ccccfc87f9615c8112bcd05c0250415f7dfa79e1894873b8e8a0f5b41af0af6e",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-pending-excluded",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-pending-excluded.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"status\": \"tertunda\"\n    },\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"status\": \"berhasil\"\n    }\n  ]\n}",
+      "sha256": "0884266a5e1e869fef3250a8d97edec9d174cd75f06bbbcb03aaae75d008741b",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-printed-currency-conflict",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-printed-currency-conflict.json",
+      "input": "{\n  \"currency\": \"USD\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"Rp12.500,50\",\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "20ebfef416dfa9359296e86f29a795f2af87131f97c75601610f5e3a50c0f3eb",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "USD",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-quoted-multiline",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-quoted-multiline.csv",
+      "input": "Tanggal;Keterangan;Debet;Kredit;Saldo;Mata uang;Nomor rekening;Referensi\r\n1 Oktober 2026;\"KOPI KENANGAN JAKARTA; \"\"synthetic branch\"\"\nSynthetic note\";12.500,50;0;-1.000,25;IDR;00005678;synthetic-1\r\n",
+      "sha256": "f12eab020ae695ba041e4d900e8e12edd7e5578aa3925390bb4893dff0d5f470",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-delimited-ledger"
+    },
+    {
+      "id": "id-raw-and-normalized-merchant",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-raw-and-normalized-merchant.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"merchantRaw\": \"SYNTHETIC COFFEE 001\",\n      \"merchantClean\": \"Team refreshments\"\n    }\n  ]\n}",
+      "sha256": "251c624a175282408d52ac03256ecdc4746e3db588fa7ae9a8f22add2b4a721e",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "merchantClean": "Team refreshments",
+          "description": "KOPI KENANGAN JAKARTA"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-refund",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-refund.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Kredit\",\n      \"status\": \"refund selesai\"\n    }\n  ]\n}",
+      "sha256": "081bb105f528da2897254cd398e76a26de619adfdaa5b4f5cba6b6daaa57ccc9",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-row-account",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-row-account.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"accountName\": \"Synthetic second account\",\n      \"accountNumber\": \"00009999\"\n    }\n  ]\n}",
+      "sha256": "7765a8041b42939fc409d2fb09c3837353768f59b72d76128c43ef42322f2184",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00009999",
+          "accountName": "Synthetic second account"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-same-reference-two-currencies",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-same-reference-two-currencies.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"reference\": \"synthetic-shared-ref\",\n      \"currency\": \"IDR\"\n    },\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"reference\": \"synthetic-shared-ref\",\n      \"currency\": \"USD\"\n    }\n  ]\n}",
+      "sha256": "ffd9fcb31e827566744f702c981dc3e63e88b8c46ba7344d41b84bc6baab0595",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        },
+        {
+          "amount": "12500.50",
+          "currency": "USD",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-snap-native-envelope",
+      "country": "ID",
+      "source": "bri-snap-statement",
+      "synthetic": true,
+      "fileName": "id-snap-native-envelope.json",
+      "input": "{\n  \"responseCode\": \"2001400\",\n  \"responseMessage\": \"Successful\",\n  \"detailData\": [\n    {\n      \"amount\": {\n        \"value\": \"12500.50\",\n        \"currency\": \"IDR\"\n      },\n      \"transactionDate\": \"2026-10-01T00:05:00+07:00\",\n      \"remark\": \"Synthetic coffee\",\n      \"transactionId\": \"synthetic-001\",\n      \"type\": \"DEBIT\"\n    }\n  ]\n}",
+      "sha256": "6a1c0596bfb363912ec2bf236d8b3182d983ff6bc50a7fc09c19f774ce10e6fa",
+      "expectedRows": [],
+      "family": "id-native-envelope"
+    },
+    {
+      "id": "id-source-category",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-source-category.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"category\": \"Business\"\n    }\n  ]\n}",
+      "sha256": "ff343053383d1fdc64433f2c3a7395b85e9c2b10f9bb04b3c103ee01f211e14c",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "categoryName": "Business",
+          "categoryConfidence": 100
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-source-low-confidence",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-source-low-confidence.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"confidence\": 0.4\n    }\n  ]\n}",
+      "sha256": "763aff271cef1fc7981c49f42db9631a9f85b01ec850bd32d40c782b6b7798f7",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-subcent-money",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-subcent-money.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": 12.345,\n      \"type\": \"Debet\"\n    }\n  ]\n}",
+      "sha256": "e8eb1525eaaf638004276203749163b7a9b5015b0c654879a0c98d677c7de017",
+      "expectedError": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-two-references",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-two-references.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"reference\": \"synthetic-001\"\n    },\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"reference\": \"synthetic-002\"\n    }\n  ]\n}",
+      "sha256": "2e5e3b078b16c97c1269d32082d2d6eb9110c1900fce732ae7003634d91581df",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        },
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-unknown-direction-review",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-unknown-direction-review.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\"\n    }\n  ]\n}",
+      "sha256": "997f4b21e43635a054fead5dfb4dd9a5bf452743c7d3c43e6124eec33989e1a0",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-unknown-status",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-unknown-status.json",
+      "input": "{\n  \"currency\": \"IDR\",\n  \"locale\": \"id-ID\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"1 Oktober 2026\",\n      \"description\": \"KOPI KENANGAN JAKARTA\",\n      \"amount\": \"12.500,50\",\n      \"type\": \"Debet\",\n      \"status\": \"perlu pemeriksaan\"\n    }\n  ]\n}",
+      "sha256": "ef41886d4e3c1b61636a10db4c6311c60920b181f34d0e68714602424ed6a661",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "id-flat-json-export"
+    },
+    {
+      "id": "id-utf-16",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-utf-16.csv",
+      "input": "Tanggal\tKeterangan\tDebet\tKredit\tSaldo\tMata uang\tNomor rekening\tReferensi\r\n1 Oktober 2026\tKOPI KENANGAN JAKARTA\t12.500,50\t0\t-1.000,25\tIDR\t00005678\tsynthetic-1\r\n1 Oktober 2026\tSynthetic refund\t0\t12.500,50\t11.500,25\tIDR\t00005678\tsynthetic-2\r\n",
+      "sha256": "53e4668e8109d8c141d7a7a2d13df5e06bf1994fd217bf6125c5be31228c8d1e",
+      "bytesBase64": "//5UAGEAbgBnAGcAYQBsAAkASwBlAHQAZQByAGEAbgBnAGEAbgAJAEQAZQBiAGUAdAAJAEsAcgBlAGQAaQB0AAkAUwBhAGwAZABvAAkATQBhAHQAYQAgAHUAYQBuAGcACQBOAG8AbQBvAHIAIAByAGUAawBlAG4AaQBuAGcACQBSAGUAZgBlAHIAZQBuAHMAaQANAAoAMQAgAE8AawB0AG8AYgBlAHIAIAAyADAAMgA2AAkASwBPAFAASQAgAEsARQBOAEEATgBHAEEATgAgAEoAQQBLAEEAUgBUAEEACQAxADIALgA1ADAAMAAsADUAMAAJADAACQAtADEALgAwADAAMAAsADIANQAJAEkARABSAAkAMAAwADAAMAA1ADYANwA4AAkAcwB5AG4AdABoAGUAdABpAGMALQAxAA0ACgAxACAATwBrAHQAbwBiAGUAcgAgADIAMAAyADYACQBTAHkAbgB0AGgAZQB0AGkAYwAgAHIAZQBmAHUAbgBkAAkAMAAJADEAMgAuADUAMAAwACwANQAwAAkAMQAxAC4ANQAwADAALAAyADUACQBJAEQAUgAJADAAMAAwADAANQA2ADcAOAAJAHMAeQBuAHQAaABlAHQAaQBjAC0AMgANAAoA",
+      "encoding": "utf-16",
+      "bytesSha256": "5074614733450fab7887a98e9f5cbf5e98c759394cdc5eb692e825f83e7537db",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balance": -1000.25
+          }
+        },
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balanceReconciliation": "matched"
+          }
+        }
+      ],
+      "family": "id-delimited-ledger"
+    },
+    {
+      "id": "id-utf-16-be",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-utf-16-be.csv",
+      "input": "﻿Tanggal\tKeterangan\tDebet\tKredit\tSaldo\tMata uang\tNomor rekening\tReferensi\r\n1 Oktober 2026\tKOPI KENANGAN JAKARTA\t12.500,50\t0\t-1.000,25\tIDR\t00005678\tsynthetic-1\r\n1 Oktober 2026\tSynthetic refund\t0\t12.500,50\t11.500,25\tIDR\t00005678\tsynthetic-2\r\n",
+      "sha256": "df6a082ddcc0a7ee831c8270063efb276fc55f9173fc194434c01cd80f3cfb87",
+      "bytesBase64": "/v8AVABhAG4AZwBnAGEAbAAJAEsAZQB0AGUAcgBhAG4AZwBhAG4ACQBEAGUAYgBlAHQACQBLAHIAZQBkAGkAdAAJAFMAYQBsAGQAbwAJAE0AYQB0AGEAIAB1AGEAbgBnAAkATgBvAG0AbwByACAAcgBlAGsAZQBuAGkAbgBnAAkAUgBlAGYAZQByAGUAbgBzAGkADQAKADEAIABPAGsAdABvAGIAZQByACAAMgAwADIANgAJAEsATwBQAEkAIABLAEUATgBBAE4ARwBBAE4AIABKAEEASwBBAFIAVABBAAkAMQAyAC4ANQAwADAALAA1ADAACQAwAAkALQAxAC4AMAAwADAALAAyADUACQBJAEQAUgAJADAAMAAwADAANQA2ADcAOAAJAHMAeQBuAHQAaABlAHQAaQBjAC0AMQANAAoAMQAgAE8AawB0AG8AYgBlAHIAIAAyADAAMgA2AAkAUwB5AG4AdABoAGUAdABpAGMAIAByAGUAZgB1AG4AZAAJADAACQAxADIALgA1ADAAMAAsADUAMAAJADEAMQAuADUAMAAwACwAMgA1AAkASQBEAFIACQAwADAAMAAwADUANgA3ADgACQBzAHkAbgB0AGgAZQB0AGkAYwAtADIADQAK",
+      "encoding": "utf-16-be",
+      "bytesSha256": "71409eca8d18aca1db7b6373496b75325854d4007cf6f1a7b9d3366ef0326f46",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balance": -1000.25
+          }
+        },
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balanceReconciliation": "matched"
+          }
+        }
+      ],
+      "family": "id-delimited-ledger"
+    },
+    {
+      "id": "id-utf-8-sig",
+      "country": "ID",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "id-utf-8-sig.csv",
+      "input": "Tanggal\tKeterangan\tDebet\tKredit\tSaldo\tMata uang\tNomor rekening\tReferensi\r\n1 Oktober 2026\tKOPI KENANGAN JAKARTA\t12.500,50\t0\t-1.000,25\tIDR\t00005678\tsynthetic-1\r\n1 Oktober 2026\tSynthetic refund\t0\t12.500,50\t11.500,25\tIDR\t00005678\tsynthetic-2\r\n",
+      "sha256": "53e4668e8109d8c141d7a7a2d13df5e06bf1994fd217bf6125c5be31228c8d1e",
+      "bytesBase64": "77u/VGFuZ2dhbAlLZXRlcmFuZ2FuCURlYmV0CUtyZWRpdAlTYWxkbwlNYXRhIHVhbmcJTm9tb3IgcmVrZW5pbmcJUmVmZXJlbnNpDQoxIE9rdG9iZXIgMjAyNglLT1BJIEtFTkFOR0FOIEpBS0FSVEEJMTIuNTAwLDUwCTAJLTEuMDAwLDI1CUlEUgkwMDAwNTY3OAlzeW50aGV0aWMtMQ0KMSBPa3RvYmVyIDIwMjYJU3ludGhldGljIHJlZnVuZAkwCTEyLjUwMCw1MAkxMS41MDAsMjUJSURSCTAwMDA1Njc4CXN5bnRoZXRpYy0yDQo=",
+      "encoding": "utf-8-sig",
+      "bytesSha256": "df6a082ddcc0a7ee831c8270063efb276fc55f9173fc194434c01cd80f3cfb87",
+      "expectedRows": [
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balance": -1000.25
+          }
+        },
+        {
+          "amount": "12500.50",
+          "currency": "IDR",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balanceReconciliation": "matched"
+          }
+        }
+      ],
+      "family": "id-delimited-ledger"
+    },
+    {
+      "id": "kr-bad-date-no-partial",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-bad-date-no-partial.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    },\n    {\n      \"date\": \"2026-02-30\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "32a5e7ddd6bb6416b971b68cc00a1db657ca09fbf1e8e127ca025189096dde68",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-bad-money-no-partial",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-bad-money-no-partial.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    },\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"error 12345\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "c661ac4438dfff161db704281e7b0ac72fe65ff26f4a55ce8c1aec6bfb379004",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-balance-and-fee",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-balance-and-fee.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"balance\": \"-1,000\",\n      \"fee\": \"500\"\n    }\n  ]\n}",
+      "sha256": "ca7d6059aaeeb06ef8c37e42936e922455c05bd978f5863f9fe907063292bfb2",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balance": -1000,
+            "fee": 500
+          }
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-broken-record-no-partial",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-broken-record-no-partial.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    },\n    null\n  ]\n}",
+      "sha256": "8ed3571d1cca0edb1e5e8bd21dac3cc6e37d0e946ee80429d3875f0648a8fbf2",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-context-currency",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-context-currency.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "d3cd4731263d83dc607a42e521adc31e36d4e59d746334324db65fc20989e251",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "context": {
+        "currency": "IDR"
+      },
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-cp949",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-cp949.csv",
+      "input": "거래일자\t적요\t출금금액\t입금금액\t거래후잔액\t통화\t계좌번호\t거래번호\r\n20261001\t이디야커피 강남점\t12,500\t0\t-1,000\tKRW\t00005678\tsynthetic-1\r\n20261001\tSynthetic refund\t0\t12,500\t11,500\tKRW\t00005678\tsynthetic-2\r\n",
+      "sha256": "10925a38e176a0ddd3ea414bca8a75d0946952ce8a8de3f7207226ee16ac3c95",
+      "bytesBase64": "sMW3ocDPwNoJwPu/5AnD4rHdsd2+1wnA1LHdsd2+1wmwxbehyMTA3L7XCcXryK0JsOjBwrn4yKMJsMW3obn4yKMNCjIwMjYxMDAxCcDMtfC+38S/x8cgsK2zssGhCTEyLDUwMAkwCS0xLDAwMAlLUlcJMDAwMDU2NzgJc3ludGhldGljLTENCjIwMjYxMDAxCVN5bnRoZXRpYyByZWZ1bmQJMAkxMiw1MDAJMTEsNTAwCUtSVwkwMDAwNTY3OAlzeW50aGV0aWMtMg0K",
+      "encoding": "cp949",
+      "bytesSha256": "3eb2869f13540ab80bed50db69ca276c6c04340824665fefe7c5cb140585b06f",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balance": -1000
+          }
+        },
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balanceReconciliation": "matched"
+          }
+        }
+      ],
+      "family": "kr-delimited-ledger"
+    },
+    {
+      "id": "kr-currency-alias-routing",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-currency-alias-routing.json",
+      "input": "{\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ],\n  \"currencyCode\": \"KRW\"\n}",
+      "sha256": "3d2527524eb3e4d84437accb1aa4355f148f369cbe0debaeb6705510ec33a560",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-date-alias-conflict",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-date-alias-conflict.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"transactionDate\": \"2026-09-01\"\n    }\n  ]\n}",
+      "sha256": "b17908adcfdd82446f90c8ab10d277837694b9a79253292d4725f2b82efd987e",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-debit-zero-credit",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-debit-zero-credit.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"Synthetic refund\",\n      \"debit\": \"0\",\n      \"credit\": \"12,500\",\n      \"type\": \"입금\"\n    }\n  ]\n}",
+      "sha256": "b2418bed6e4814a336bdb1d985d3422b0f76486f4b3e16c8d3816d48547db7a7",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-dual-columns",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-dual-columns.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"debit\": \"12,500\",\n      \"credit\": \"12,500\"\n    }\n  ]\n}",
+      "sha256": "12931fe3d38b6e48fb5e55ffc19e749e96c25a9d105a3aaad240e3f528610d73",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-empty-first-list",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-empty-first-list.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [],\n  \"records\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "c02500eae841abe5d8c5a1019aa5dfa619ac6c8415f9ad1e84826e3802655759",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-equivalent-money-aliases",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-equivalent-money-aliases.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"transactionAmount\": 12500\n    }\n  ]\n}",
+      "sha256": "2cb958db92ab4859c4ffc5fb8a90de15c77e8af932aa59c72aaaf4de52ddd820",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-explicit-foreign",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-explicit-foreign.json",
+      "input": "{\n  \"currency\": \"USD\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12.50\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "b8fa6e4e9ba4e38a8d3022c81d974a7b11bde40e056a746e71683074ac84fc33",
+      "expectedRows": [
+        {
+          "amount": "12.50",
+          "currency": "USD",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-explicit-sign-conflict",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-explicit-sign-conflict.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"-12500.00\",\n      \"type\": \"income\"\n    }\n  ]\n}",
+      "sha256": "fc6ffad905b1e462ebae6fbb266876a6fff16ec6f3278bf8a23784aa8d7981d8",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-invalid-balance",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-invalid-balance.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"balance\": {\n        \"available\": 100\n      }\n    }\n  ]\n}",
+      "sha256": "c83ba888205bc7583bcf99f1853a6c3ad77d2cb60ca79f5aee38e2996916cd6b",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-invalid-clock",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-invalid-clock.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"2026-10-01T25:01:00+07:00\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "5facd0ee29092478a3b494e1333cb882abe0adee7cf07119ba42af092deec348",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-invalid-fee",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-invalid-fee.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"fee\": \"fee 12\"\n    }\n  ]\n}",
+      "sha256": "eca7bd958cbec574eebc51b8b7062edde7cf44e18b584ab4b11e324022eec8b5",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-json-number",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-json-number.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": 12500,\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "61e48d58151b1dfae9511c7a762be4b22cb65a5f8fb91f64a653dcfaf851d342",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-kftc-native-envelope",
+      "country": "KR",
+      "source": "kftc-transaction-list",
+      "synthetic": true,
+      "fileName": "kr-kftc-native-envelope.json",
+      "input": "{\n  \"rsp_code\": \"A0000\",\n  \"page_record_cnt\": 1,\n  \"next_page_yn\": \"N\",\n  \"res_list\": [\n    {\n      \"tran_date\": \"20261001\",\n      \"tran_time\": \"000500\",\n      \"inout_type\": \"출금\",\n      \"printed_content\": \"Synthetic coffee\",\n      \"tran_amt\": \"12500\",\n      \"after_balance_amt\": \"-1000\"\n    }\n  ]\n}",
+      "sha256": "c1a173842d222256636960e9a47d570efb9d7d8e9dfccaa4b62a73a9a252023c",
+      "expectedRows": [],
+      "family": "kr-native-envelope"
+    },
+    {
+      "id": "kr-local-midnight",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-local-midnight.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"2026-10-01T00:05:00+09:00\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "7d5fb343c9affa8d7ddd7d6ec8af21ced26de1604ba40b1966586bf15519e21a",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-localized-json",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-localized-json.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "0db14c9b2e6a6865169c4f8d9edd95758ca6430b09d0ee4da886f25fa533a211",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-missing-currency",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-missing-currency.json",
+      "input": "{\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "5a0d2d8f6c2ac7ba2e0ed8d992b027ea8312b4ae7968a9abd6a8662afbc42aa7",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": null,
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-money-alias-conflict",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-money-alias-conflict.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"transactionAmount\": \"99\"\n    }\n  ]\n}",
+      "sha256": "69a6e219acc5c137e9c4ceb2f66192d1ec73660c8a54de62344ff08d2e45e64b",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-multiple-record-lists",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-multiple-record-lists.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ],\n  \"records\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"99\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "cf2b3df412dc06d7fbabb5203d574490ce020a8d4b1a1de1310ca748cd64a5dc",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-nested-money-unsupported",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-nested-money-unsupported.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": {\n        \"value\": \"12500\",\n        \"currency\": \"KRW\"\n      },\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "00e68e9dab5e1f3acee8c353356ce8bd6b76c601d05d838de51cc6bc8863f0ac",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-numeric-account",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-numeric-account.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": 5678,\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "b9035676ab74831b870d0bc470e74ec11eda91dcd4fb798f3279e5e7c2b08f9d",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-original-currency",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-original-currency.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"originalAmount\": \"9.25\",\n      \"originalCurrency\": \"USD\"\n    }\n  ]\n}",
+      "sha256": "d7874b2bb843337a71188052391adc5813bdd463cac3968c2ad110019beecb1b",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "originalAmount": 9.25,
+            "originalCurrency": "USD"
+          }
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-original-currency-conflict",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-original-currency-conflict.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"originalAmount\": \"₩500\",\n      \"originalCurrency\": \"USD\"\n    }\n  ]\n}",
+      "sha256": "7c124d03dac8063a964a602bed790006197fba818903f2aeed08b374aef24dce",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-partial-page",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-partial-page.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\"\n    }\n  ],\n  \"hasMore\": true\n}",
+      "sha256": "ed0afbf0605b70fedb17ffd7a3a6c0b23bb6fbcada9cc29c2ff21a03fefd4c5e",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-pending-excluded",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-pending-excluded.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"status\": \"대기\"\n    },\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"status\": \"완료\"\n    }\n  ]\n}",
+      "sha256": "07b34a8263be6789f23a65315bcf139d85a9fa54c35631f4ba420d97b7f86a84",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-printed-currency-conflict",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-printed-currency-conflict.json",
+      "input": "{\n  \"currency\": \"USD\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"₩12,500\",\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "276e06b28fe2d02eb31af9cd378351f64d455305c9c29e4fb4846d76952ad17a",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "USD",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-quoted-multiline",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-quoted-multiline.csv",
+      "input": "거래일자;적요;출금금액;입금금액;거래후잔액;통화;계좌번호;거래번호\r\n20261001;\"이디야커피 강남점; \"\"synthetic branch\"\"\nSynthetic note\";12,500;0;-1,000;KRW;00005678;synthetic-1\r\n",
+      "sha256": "c840a772b8ea4968ec863e51a80c732510dd1cb9eae7c8e381be604182e394d9",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-delimited-ledger"
+    },
+    {
+      "id": "kr-raw-and-normalized-merchant",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-raw-and-normalized-merchant.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"merchantRaw\": \"SYNTHETIC COFFEE 001\",\n      \"merchantClean\": \"Team refreshments\"\n    }\n  ]\n}",
+      "sha256": "7576e01c5116d2c6c50b76d6af2d10e4014d8d78ee21c552f18dbe97f27d3632",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "merchantClean": "Team refreshments",
+          "description": "이디야커피 강남점"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-refund",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-refund.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"입금\",\n      \"status\": \"환불완료\"\n    }\n  ]\n}",
+      "sha256": "5b26fe6cb878914edd8724fed0742465d905d6ae856d43e29e16ed7f7b95287d",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-row-account",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-row-account.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"accountName\": \"Synthetic second account\",\n      \"accountNumber\": \"00009999\"\n    }\n  ]\n}",
+      "sha256": "768a46d3d2eed8f44bcf32fb222812a400fe0a099492f944d0fb4e2f8014c972",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00009999",
+          "accountName": "Synthetic second account"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-same-reference-two-currencies",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-same-reference-two-currencies.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"reference\": \"synthetic-shared-ref\",\n      \"currency\": \"KRW\"\n    },\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"reference\": \"synthetic-shared-ref\",\n      \"currency\": \"USD\"\n    }\n  ]\n}",
+      "sha256": "fcc4d9ba8e2a935fc4e60ee6df52870166c8c872cc87846ee3d8e91f1a173402",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        },
+        {
+          "amount": "12500.00",
+          "currency": "USD",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-source-category",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-source-category.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"category\": \"Business\"\n    }\n  ]\n}",
+      "sha256": "a3dc67c74db103cbfa282fc11ab2ce6269751b9b4f4e7a4fa7ba0eef8e22fd8c",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "categoryName": "Business",
+          "categoryConfidence": 100
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-source-low-confidence",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-source-low-confidence.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"confidence\": 0.4\n    }\n  ]\n}",
+      "sha256": "dc6731b24834151c76d6f10c4a4fdd4f1aa5d54781f6678a3e8f30a69a8d5645",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-subcent-money",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-subcent-money.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": 12.345,\n      \"type\": \"출금\"\n    }\n  ]\n}",
+      "sha256": "7614674548161c31ff5ce8d722d5bf3fc13939013d6ec30aed53505a7e5a5465",
+      "expectedError": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-two-references",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-two-references.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"reference\": \"synthetic-001\"\n    },\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"reference\": \"synthetic-002\"\n    }\n  ]\n}",
+      "sha256": "44f0ec80607559e05cfe74372c763c1f730edef527ddd2a18712a6313b6e13df",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        },
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-unknown-direction-review",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-unknown-direction-review.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\"\n    }\n  ]\n}",
+      "sha256": "efd6136a31423248c9ee07981a5831991f57ade6a81d60e8963a9275c8d57955",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-unknown-status",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-unknown-status.json",
+      "input": "{\n  \"currency\": \"KRW\",\n  \"locale\": \"ko-KR\",\n  \"accountName\": \"Synthetic savings\",\n  \"accountNumber\": \"00005678\",\n  \"transactions\": [\n    {\n      \"date\": \"20261001\",\n      \"description\": \"이디야커피 강남점\",\n      \"amount\": \"12,500\",\n      \"type\": \"출금\",\n      \"status\": \"미확인\"\n    }\n  ]\n}",
+      "sha256": "7539618eb8dac5f1494ae2cd109eb04b0f0d9b31fa52b7bc09b51e5efd344e82",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678"
+        }
+      ],
+      "review": true,
+      "family": "kr-flat-json-export"
+    },
+    {
+      "id": "kr-utf-16",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-utf-16.csv",
+      "input": "거래일자\t적요\t출금금액\t입금금액\t거래후잔액\t통화\t계좌번호\t거래번호\r\n20261001\t이디야커피 강남점\t12,500\t0\t-1,000\tKRW\t00005678\tsynthetic-1\r\n20261001\tSynthetic refund\t0\t12,500\t11,500\tKRW\t00005678\tsynthetic-2\r\n",
+      "sha256": "10925a38e176a0ddd3ea414bca8a75d0946952ce8a8de3f7207226ee16ac3c95",
+      "bytesBase64": "//5wrJi3fMeQxwkAAciUxgkAnM0IrgiuYcUJAIXHCK4IrmHFCQBwrJi3xNaUx2HFCQC10VTWCQDErIzIiLw41gkAcKyYt4i8ONYNAAoAMgAwADIANgAxADAAMAAxAAkAdMcUtXzF5M481SAAFayosBDICQAxADIALAA1ADAAMAAJADAACQAtADEALAAwADAAMAAJAEsAUgBXAAkAMAAwADAAMAA1ADYANwA4AAkAcwB5AG4AdABoAGUAdABpAGMALQAxAA0ACgAyADAAMgA2ADEAMAAwADEACQBTAHkAbgB0AGgAZQB0AGkAYwAgAHIAZQBmAHUAbgBkAAkAMAAJADEAMgAsADUAMAAwAAkAMQAxACwANQAwADAACQBLAFIAVwAJADAAMAAwADAANQA2ADcAOAAJAHMAeQBuAHQAaABlAHQAaQBjAC0AMgANAAoA",
+      "encoding": "utf-16",
+      "bytesSha256": "bb12acd19311e98f6d3bdcd502d607676fa2afec1a4b89bef0f62996f5186f0e",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balance": -1000
+          }
+        },
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balanceReconciliation": "matched"
+          }
+        }
+      ],
+      "family": "kr-delimited-ledger"
+    },
+    {
+      "id": "kr-utf-16-be",
+      "country": "KR",
+      "source": "clover-synthetic",
+      "synthetic": true,
+      "fileName": "kr-utf-16-be.csv",
+      "input": "﻿거래일자\t적요\t출금금액\t입금금액\t거래후잔액\t통화\t계좌번호\t거래번호\r\n20261001\t이디야커피 강남점\t12,500\t0\t-1,000\tKRW\t00005678\tsynthetic-1\r\n20261001\tSynthetic refund\t0\t12,500\t11,500\tKRW\t00005678\tsynthetic-2\r\n",
+      "sha256": "67489d87efe48ac0df59a29a7558af76eea309416bbc5add142870bab2380baa",
+      "bytesBase64": "/v+scLeYx3zHkAAJyAHGlAAJzZyuCK4IxWEACceFrgiuCMVhAAmscLeY1sTHlMVhAAnRtdZUAAmsxMiMvIjWOAAJrHC3mLyI1jgADQAKADIAMAAyADYAMQAwADAAMQAJx3S1FMV8zuTVPAAgrBWwqMgQAAkAMQAyACwANQAwADAACQAwAAkALQAxACwAMAAwADAACQBLAFIAVwAJADAAMAAwADAANQA2ADcAOAAJAHMAeQBuAHQAaABlAHQAaQBjAC0AMQANAAoAMgAwADIANgAxADAAMAAxAAkAUwB5AG4AdABoAGUAdABpAGMAIAByAGUAZgB1AG4AZAAJADAACQAxADIALAA1ADAAMAAJADEAMQAsADUAMAAwAAkASwBSAFcACQAwADAAMAAwADUANgA3ADgACQBzAHkAbgB0AGgAZQB0AGkAYwAtADIADQAK",
+      "encoding": "utf-16-be",
+      "bytesSha256": "3d4c812ef3fb43f22adc2acc4d3aa598f01af17c10970366ad80e5684b184e1b",
+      "expectedRows": [
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "expense",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balance": -1000
+          }
+        },
+        {
+          "amount": "12500.00",
+          "currency": "KRW",
+          "date": "2026-10-01",
+          "type": "income",
+          "accountNumber": "00005678",
+          "rawPayload": {
+            "balanceReconciliation": "matched"
+          }
+        }
+      ],
+      "family": "kr-delimited-ledger"
+    }
+  ],
+  "evaluation": "Development regression set, not a held-out benchmark or real bank certification."
+}

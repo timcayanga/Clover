@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-06",
+  "scope": "Native emulator follow-up to device-input-qa.json; isolated fictional sample data only",
+  "fixes": [
+    "Respect the 1440-point content maximum and uncapped font scale when choosing split detail panes.",
+    "Wrap tablet chat history actions at large text sizes.",
+    "Hide covered tab content from touch and assistive navigation while an entry sheet is open; restore on return.",
+    "Remeasure native text after a live Dynamic Type change without remounting inputs or resetting form state."
+  ],
+  "android": {
+    "runtime": "API 35 arm64 Clover_QA_API35, newly compiled native debug development client with clover-window module",
+    "checks": [
+      "Home and dock at 360x640 logical size.",
+      "Software keyboard: focused transaction description stays above keyboard; navigation hidden.",
+      "Hardware Back dismisses keyboard.",
+      "Portrait to landscape retains unsaved transaction description.",
+      "1200x800 tablet window uses centered bounded entry sheet.",
+      "Compressed native accessibility tree excludes covered Home and navigation.",
+      "Font scale 2 Home and Ask Clover remain usable.",
+      "Chat draft preserved across 1200x800 to 540x900 to 1600x1000 window changes.",
+      "1600x1000 at font scale 2 correctly uses single-pane chat.",
+      "Chat draft survives background and foreground without process termination."
+    ],
+    "build": "assembleDebug passed, 642 tasks; arm64-v8a only; no store artifact uploaded"
+  },
+  "ios": {
+    "runtime": "iPad Pro 11-inch M5 simulator, iPadOS 26.5, existing SDK57 development client loading current JavaScript",
+    "checks": [
+      "Centered entry sheet in portrait and landscape.",
+      "Entry sheet accessibility excludes covered Home and dock.",
+      "Typed transaction draft survives rotation.",
+      "Accessibility-large Dynamic Type and increased contrast: form labels and actions readable and scrollable.",
+      "Live Dynamic Type change reproduced clipped text before fix; after fix native labels remeasure without restart.",
+      "Draft remains after live font-size change and return to portrait."
+    ],
+    "keyboard": "Hardware keyboard input tested; iPad software keyboard was not enabled in this Device Hub session."
+  },
+  "limitations": [
+    "No physical devices tested.",
+    "No real hinge/posture events available on the installed Android AVD; geometry tests cover synthetic hinges.",
+    "No claims for OEM camera behavior, actual biometrics, real store purchases or physical-device performance.",
+    "This pass exercises native layout and input with sample data, not end-to-end financial saves or server mutations.",
+    "iOS native binary was not rebuilt in this pass."
+  ],
+  "cleanup": "Android size, density and font settings restored; iPad text size, contrast and orientation restored; both simulators shut down; local Metro stopped."
+}

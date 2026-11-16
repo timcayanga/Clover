@@ -1,0 +1,441 @@
+"use client";
+import {useUser} from "@clerk/nextjs";
+import { SplitItemGrid } from "./split-item-grid";
+import { suggestBillCategory, type SplitItem } from "../../shared/split-bill-experience";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
+import { SplitBillImportModal } from "./split-bill-import-modal";
+import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { AddEntryMethods } from "@/components/add-entry-methods";
+
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { CurrencySelector } from "@/components/currency-selector";
+import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import type { SplitBillSerializedBill } from "@/lib/split-bill";
+import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
+import {
+  getQuickAddItemParticipantIds,
+  type SplitBillQuickAddMode,
+} from "@/lib/split-bill-quick-add";
+
+type SplitBillManualModalProps = {
+  open: boolean;
+  currentUserName: string;
+  people: SplitBillPersonSummary[];
+  groups: SplitBillGroupSummary[];
+  onClose: () => void;
+  onSaved?: (bill: SplitBillSerializedBill) => void;
+};
+
+const todayDate = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`; };
+
+const currencyOptions = getCurrencyCatalogCodes();
+
+const splitModeOptions = (currentUserName: string): Array<{ value: SplitBillQuickAddMode; label: string }> => [
+  { value: "you-paid", label: `${currentUserName} paid, split equally` },
+  { value: "you-owed", label: `${currentUserName} is owed the full amount` },
+  { value: "person-paid", label: "Person paid, split equally" },
+  { value: "person-owed", label: "Person is owed the full amount" },
+];
+
+const createId = () => globalThis.crypto?.randomUUID?.() ?? `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const payload = (await response.json()) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload?.error ?? "Request failed");
+  }
+  return payload;
+}
+
+export function SplitBillManualModal({ open, currentUserName, people, groups, onClose, onSaved }: SplitBillManualModalProps) {
+  const {user}=useUser();
+  const [lineItems,setLineItems]=useState<SplitItem[]>([]);
+  const [entryUpload,setEntryUpload]=useState(false);
+  const [receiptFile,setReceiptFile]=useState<File | null>(null);
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+  const [billDate, setBillDate] = useState(todayDate);
+  const [currency, setCurrency] = useState("PHP");
+  const [splitMode, setSplitMode] = useState<SplitBillQuickAddMode>("you-paid");
+  const [selectedPayer, setSelectedPayer] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const descriptionRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setLineItems([]);
+    setSelectedPeople([]);
+    setSelectedGroupId(null);
+    setQuery("");
+    setDescription("");
+    setAmount("");
+    setCurrency("PHP");
+    setBillDate(todayDate());
+    setSplitMode("you-paid");
+    setSelectedPayer("");
+    setError(null);
+    setIsSaving(false);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    document.body.dataset.splitBillModalOpen = "true";
+
+    return () => {
+      if (document.body.dataset.splitBillModalOpen === "true") {
+        document.body.dataset.splitBillModalOpen = "false";
+      }
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!selectedPayer && selectedPeople.length > 0 && splitMode.startsWith("person")) {
+      setSelectedPayer(selectedPeople[0]);
+    }
+    if (selectedPayer && !selectedPeople.includes(selectedPayer) && splitMode.startsWith("person")) {
+      setSelectedPayer(selectedPeople[0] ?? "");
+    }
+  }, [selectedPeople, selectedPayer, splitMode]);
+
+  useEffect(() => {
+    if (open && window.matchMedia("(min-width: 1101px)").matches) {
+      descriptionRef.current?.focus();
+    }
+  }, [open]);
+
+  const splitOptions = useMemo(() => splitModeOptions(currentUserName), [currentUserName]);
+
+  const selectedGroup = useMemo(() => groups.find((group) => group.id === selectedGroupId) ?? null, [groups, selectedGroupId]);
+
+  const suggestions = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    const matchedPeople = people.filter((person) => {
+      if (!search) return true;
+      return person.name.toLowerCase().includes(search);
+    });
+    const matchedGroups = groups.filter((group) => {
+      if (!search) return true;
+      return group.name.toLowerCase().includes(search) || group.members.some((member) => member.name.toLowerCase().includes(search));
+    });
+
+    return {
+      people: matchedPeople.slice(0, 6),
+      groups: matchedGroups.slice(0, 4),
+    };
+  }, [groups, people, query]);
+
+  const payerOptions = useMemo(() => {
+    return selectedPeople.map((person) => ({ label: person, value: person }));
+  }, [selectedPeople]);
+
+  const addPeopleFromGroup = (group: SplitBillGroupSummary) => {
+    setSelectedGroupId(group.id);
+    setSelectedPeople((current) => Array.from(new Set([...current, ...group.members.map((member) => member.name)])));
+    setQuery("");
+  };
+
+  const addPerson = (name: string) => {
+    const next = name.trim();
+    if (!next) {
+      return;
+    }
+
+    setSelectedPeople((current) => Array.from(new Set([...current, next])));
+    setQuery("");
+  };
+
+  const removePerson = (name: string) => {
+    setSelectedPeople((current) => current.filter((entry) => entry !== name));
+    if (selectedPayer === name) {
+      setSelectedPayer("");
+    }
+  };
+
+  const removeGroup = () => {
+    setSelectedGroupId(null);
+  };
+
+  const closeModal = () => onClose();
+
+  const saveBill = async () => {
+    const trimmedDescription = description.trim();
+    const trimmedAmount = amount.trim();
+
+    if (!trimmedDescription) {
+      setError("Add a description.");
+      return;
+    }
+
+    if (!trimmedAmount || Number.isNaN(Number(trimmedAmount))) {
+      setError("Add a valid amount.");
+      return;
+    }
+
+    if (selectedPeople.length === 0) {
+      setError("Add at least one person.");
+      return;
+    }
+
+    if (splitMode.startsWith("person") && !selectedPayer) {
+      setError("Choose who paid or is owed.");
+      return;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(billDate) || !Number.isFinite(Date.parse(billDate)) || new Date(billDate).toISOString().slice(0,10) !== billDate) { setError("Choose a valid bill date."); return; }
+
+    if (lineItems.length && lineItems.some(item=>!item.description.trim()||!/^\d+(\.\d{1,2})?$/.test(item.amount)||Number(item.amount)<=0||!item.participantIds.length||item.participantIds.some(name=>![currentUserName,...selectedPeople].includes(name)))) { setError("Add a name, positive amount and at least one person for every item.");return; }
+    if (lineItems.length && Math.abs(lineItems.reduce((sum,item)=>sum+Number(item.amount),0)-Number(trimmedAmount))>.005) {setError("Line items must match the bill total.");return;}
+    for(const item of lineItems){
+      if(item.splitMethod && item.splitMethod!=="equal"){
+        const a=item.allocations??[],sum=a.reduce((s,v)=>s+Number(v.value),0);
+        if(a.length!==item.participantIds.length||a.some(v=>!item.participantIds.includes(v.participantId)||!Number.isFinite(Number(v.value))||Number(v.value)<0)||new Set(a.map(v=>v.participantId)).size!==a.length||(item.splitMethod==="percentage"?Math.abs(sum-100)>.001:Math.abs(sum-Number(item.amount))>.005)){setError("Check each person's amount or percentage.");return;}
+      }
+    }
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const payerName = splitMode.startsWith("you") ? currentUserName : selectedPayer;
+      const participantEntries = Array.from(new Set([...selectedPeople, payerName].filter(Boolean)))
+        .filter(Boolean)
+        .map((name) => ({
+          id: createId(),
+          name,
+        }));
+      const payerParticipant = participantEntries.find((participant) => participant.name === payerName) ?? null;
+      const itemParticipantIds = getQuickAddItemParticipantIds(splitMode, participantEntries, payerName);
+
+      if (splitMode.startsWith("person") && !payerParticipant) {
+        throw new Error("Choose who paid or is owed.");
+      }
+
+      const payload = {
+        title: trimmedDescription,
+        billDate,
+        currency,
+        sourceType: "manual" as const,
+        groupId: selectedGroupId,
+        participants: participantEntries,
+        items: lineItems.length ? lineItems.map(item=>({...item,
+          participantIds:item.participantIds.map(name=>participantEntries.find(p=>p.name===name)?.id).filter((id):id is string=>Boolean(id)),
+          allocations:(item.allocations??[]).map(a=>({participantId:participantEntries.find(p=>p.name===a.participantId)?.id??"",value:a.value})),
+        })) : [{id:createId(),description:trimmedDescription,amount:trimmedAmount,participantIds:itemParticipantIds}],
+        payments:
+          splitMode === "you-paid" || splitMode === "person-paid"
+            ? [
+                {
+                  id: createId(),
+                  participantId: payerParticipant?.id ?? "",
+                  amount: trimmedAmount,
+                  note: null,
+                },
+              ]
+            : [],
+        total: trimmedAmount,
+        rawPayload: {
+          splitMode,
+          quickAdd: true,
+        },
+      };
+
+      const response = await fetch("/api/split-bills", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await readJsonResponse<{ bill: SplitBillSerializedBill }>(response);
+      onSaved?.(result.bill);
+      onClose();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Unable to save bill");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!open || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div className="split-bill-modal split-bill-manual-modal-backdrop" role="presentation" onClick={closeModal}>
+      <section className="split-bill-modal__card glass split-bill-manual-modal" role="dialog" aria-modal="true" aria-label="Add manual split bill" onClick={(event) => event.stopPropagation()}>
+        <MobileSheetHandle onClose={closeModal} disabled={isSaving} />
+        <div className="split-bill-manual-modal__head">
+          <div>
+            <p className="eyebrow">Add Expense</p>
+            <h3>Add Split Bill</h3>
+          </div>
+          <button className="split-bill-icon-button split-bill-manual-modal__back" type="button" onClick={closeModal} aria-label="Back to Split Bills">
+            <span className="split-bill-manual-modal__back-mobile" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="m15 18-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="split-bill-manual-modal__back-desktop" aria-hidden="true">
+              ×
+            </span>
+          </button>
+        </div>
+
+        <AddEntryMethods kind="split" workspaceId={readSelectedWorkspaceId() || undefined} disabled={isSaving} formContext={{kind:"split",fields:{title:description,amount,currency,date:billDate,people:selectedPeople.join("\n")}}} onReviewForm={({fields:f})=>{if(f.title!==undefined)setDescription(f.title);if(f.amount!==undefined)setAmount(f.amount);if(f.currency!==undefined)setCurrency(f.currency);if(f.date!==undefined)setBillDate(f.date);if(f.people!==undefined)setSelectedPeople(f.people.split("\n").map(s=>s.trim()).filter(Boolean));}} onUploadFiles={files=>{setReceiptFile(files[0] ?? null);setEntryUpload(true);}}>
+        <label className="settings-field">
+          <span>Description</span>
+          <input
+            ref={descriptionRef}
+            className="settings-input"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Dinner, drinks, ride, groceries"
+          />
+        </label>
+
+        <label className="settings-field"><span>Date</span><input className="settings-input" type="date" value={billDate} onChange={event => setBillDate(event.target.value)} required /></label>
+
+        <div className="split-bill-manual-modal__amount-row">
+          <label className="settings-field">
+            <span>Amount</span>
+            <div className="split-bill-manual-modal__amount-input">
+              <CurrencySelector
+                value={currency}
+                onChange={setCurrency}
+                options={currencyOptions}
+                ariaLabel="Select bill currency"
+                className="transactions-currency-filter split-bill-manual-modal__currency-selector"
+                buttonClassName="transactions-currency-filter__button split-bill-manual-modal__currency-button"
+                menuClassName="transactions-currency-filter__menu split-bill-manual-modal__currency-menu"
+                optionClassName="transactions-currency-filter__option"
+                menuAlignment="start"
+                showGroupedSections
+              />
+              <input
+                className="settings-input"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                inputMode="decimal"
+                placeholder="0.00"
+              />
+            </div>
+          </label>
+        </div>
+
+        <SplitItemGrid people={Array.from(new Set([currentUserName,...selectedPeople])).map(name=>({id:name,name,avatarUrl:name===currentUserName?user?.imageUrl:people.find(p=>p.name===name)?.avatarUrl}))}
+          items={lineItems} currency={currency} onChange={next=>{setLineItems(next);if(next.length)setAmount(next.reduce((sum,item)=>sum+(Number(item.amount)||0),0).toFixed(2));}} />
+        {suggestBillCategory(description,lineItems.map(item=>item.description)) ? <small>Suggested category: {suggestBillCategory(description,lineItems.map(item=>item.description))?.name}</small> : null}
+        <label className="settings-field">
+          <span>Add people or group</span>
+          <input
+            className="settings-input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search saved people or groups"
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              const firstPerson = suggestions.people[0];
+              const firstGroup = suggestions.groups[0];
+              if (firstPerson) addPerson(firstPerson.name);
+              else if (firstGroup) addPeopleFromGroup(firstGroup);
+            }}
+          />
+        </label>
+
+        {(suggestions.people.length > 0 || suggestions.groups.length > 0) && query.trim() ? (
+          <div className="split-bill-manual-modal__suggestions" role="listbox" aria-label="People and groups suggestions">
+            {suggestions.people.length > 0 ? (
+              <div className="split-bill-manual-modal__suggestion-section">
+                <p>People</p>
+                {suggestions.people.map((person) => (
+                  <button key={person.id} type="button" className="split-bill-manual-modal__suggestion" onClick={() => addPerson(person.name)}>
+                    <SplitBillEntityAvatar name={person.name} avatarUrl={person.avatarUrl??null} />
+                    <span>{person.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {suggestions.groups.length > 0 ? (
+              <div className="split-bill-manual-modal__suggestion-section">
+                <p>Groups</p>
+                {suggestions.groups.map((group) => (
+                  <button key={group.id} type="button" className="split-bill-manual-modal__suggestion" onClick={() => addPeopleFromGroup(group)}>
+                    <SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl} />
+                    <span>{group.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="split-bill-manual-modal__chips">
+          {selectedGroup ? (
+            <span className="split-bill-manual-modal__chip">
+              <span>{selectedGroup.name}</span>
+              <button type="button" className="split-bill-table__chip-remove" aria-label={`Remove ${selectedGroup.name}`} onClick={removeGroup}>
+                ×
+              </button>
+            </span>
+          ) : null}
+          {selectedPeople.map((person) => (
+            <span key={person} className="split-bill-manual-modal__chip">
+              <span>{person}</span>
+              <button type="button" className="split-bill-table__chip-remove" aria-label={`Remove ${person}`} onClick={() => removePerson(person)}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+
+        <label className="settings-field">
+          <span>Split as</span>
+          <select className="settings-input" value={splitMode} onChange={(event) => setSplitMode(event.target.value as SplitBillQuickAddMode)}>
+                {splitOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {splitMode.startsWith("person") ? (
+          <label className="settings-field">
+            <span>Payer</span>
+            <select className="settings-input" value={selectedPayer} onChange={(event) => setSelectedPayer(event.target.value)}>
+              <option value="">Choose a person</option>
+              {payerOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {error ? <p className="split-bill-editor__error">{error}</p> : null}
+
+        <div className="split-bill-manual-modal__actions">
+          <button className="button button-primary" type="button" onClick={() => void saveBill()} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save bill"}
+          </button>
+        </div>
+        </AddEntryMethods>
+      </section>
+      <SplitBillImportModal initialFile={receiptFile} open={entryUpload} currentUserName={currentUserName} onClose={()=>setEntryUpload(false)} onSaved={bill=>{setEntryUpload(false);onSaved?.(bill);onClose();}}/>
+    </div>,
+    document.body
+  );
+}

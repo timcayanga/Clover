@@ -1,0 +1,266 @@
+"use client";
+
+import { createPortal } from "react-dom";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
+import { InterfaceIcon } from "@/components/interface-icon";
+
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCloverChrome } from "@/components/clover-shell";
+import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
+import { SplitBillImportModal } from "@/components/split-bill-import-modal";
+import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
+import { SplitBillPersonModal } from "@/components/split-bill-person-modal";
+import type { SplitBillSerializedBill } from "@/lib/split-bill";
+import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
+
+type SplitBillPageActionsProps = {
+  currentUserName: string;
+  people: SplitBillPersonSummary[];
+  groups: SplitBillGroupSummary[];
+  onBillSaved?: (bill: SplitBillSerializedBill) => void;
+  onGroupSaved?: (group: SplitBillGroupSummary, people?: SplitBillPersonSummary[]) => void;
+  onPersonSaved?: (person: SplitBillPersonSummary) => void;
+};
+
+function SplitBillPeoplePicker({
+  people,
+  onPeopleChange,
+}: {
+  people: string[];
+  onPeopleChange: (value: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (isAdding) {
+      inputRef.current?.focus();
+    }
+  }, [isAdding]);
+
+  const addPerson = () => {
+    const next = draft.trim();
+    if (!next) {
+      return;
+    }
+
+    onPeopleChange(Array.from(new Set([...people, next])));
+    setDraft("");
+    setIsAdding(true);
+  };
+
+  const removePerson = (name: string) => {
+    onPeopleChange(people.filter((person) => person !== name));
+  };
+
+  return (
+    <div className="split-bill-people-picker">
+      <div className="split-bill-people-picker__chips">
+        {people.map((person) => (
+          <span key={person} className="split-bill-table__chip split-bill-table__chip--editable">
+            <span>{person}</span>
+            <button className="split-bill-table__chip-remove" type="button" aria-label={`Remove ${person}`} onClick={() => removePerson(person)}>
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="split-bill-manual-modal__people-row">
+        <button className="button button-secondary" type="button" onClick={() => setIsAdding(true)}>
+          +
+        </button>
+        {isAdding ? (
+          <input
+            ref={inputRef}
+            className="settings-input"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Type a name"
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addPerson();
+              }
+            }}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function SplitBillPageActions({ currentUserName, people, groups, onBillSaved, onGroupSaved, onPersonSaved }: SplitBillPageActionsProps) {
+  const { setMobileOverlayChrome } = useCloverChrome();
+  const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [isPersonModalOpen, setIsPersonModalOpen] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupPeople, setGroupPeople] = useState<string[]>([]);
+  const [isSavingGroup, setIsSavingGroup] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const isModalOpen = Boolean(openAddMode || isGroupModalOpen || isPersonModalOpen);
+
+  const closeAddModal = () => {
+    setOpenAddMode(null);
+  };
+
+  const closeGroupModal = () => {
+    setIsGroupModalOpen(false);
+    setEditingGroupId(null);
+    setGroupName("");
+    setGroupPeople([]);
+    setGroupError(null);
+  };
+
+  const closePersonModal = () => {
+    setIsPersonModalOpen(false);
+  };
+
+  useLayoutEffect(() => {
+    document.body.dataset.splitBillModalOpen = isModalOpen ? "true" : "false";
+    return () => {
+      if (document.body.dataset.splitBillModalOpen === "true") {
+        document.body.dataset.splitBillModalOpen = "false";
+      }
+    };
+  }, [isGroupModalOpen, isModalOpen, openAddMode, isPersonModalOpen]);
+
+  useEffect(() => {
+    const handleOpenAdd = (event: Event) => {
+      const detail = event instanceof CustomEvent ? (event.detail as { mode?: "manual" | "import" } | undefined) : undefined;
+      setOpenAddMode(detail?.mode === "import" ? "import" : "manual");
+    };
+
+    const handleOpenGroup = (event: Event) => {
+      const detail = event instanceof CustomEvent ? (event.detail as { groupId?: string } | undefined) : undefined;
+      const group = detail?.groupId ? groups.find((entry) => entry.id === detail.groupId) : null;
+      setEditingGroupId(group?.id ?? null);
+      setGroupName(group?.name ?? "");
+      setGroupPeople(group?.members.map((member) => member.name) ?? []);
+      setIsGroupModalOpen(true);
+    };
+
+    const handleOpenPeople = () => {
+      setIsPersonModalOpen(true);
+    };
+
+    window.addEventListener("clover:open-split-bill-add", handleOpenAdd);
+    window.addEventListener("clover:open-split-bill-group", handleOpenGroup);
+    window.addEventListener("clover:open-split-bill-people", handleOpenPeople);
+    return () => {
+      window.removeEventListener("clover:open-split-bill-add", handleOpenAdd);
+      window.removeEventListener("clover:open-split-bill-group", handleOpenGroup);
+      window.removeEventListener("clover:open-split-bill-people", handleOpenPeople);
+    };
+  }, [groups]);
+
+  useEffect(() => {
+    if (!isGroupModalOpen && !isPersonModalOpen) {
+      setMobileOverlayChrome(null);
+      return;
+    }
+
+    const mobileQuery = window.matchMedia("(max-width: 1100px)");
+    const closeMobilePage = () => {
+      if (isPersonModalOpen) {
+        closePersonModal();
+        return;
+      }
+      closeGroupModal();
+    };
+    const syncMobileChrome = () => {
+      setMobileOverlayChrome(
+        mobileQuery.matches
+          ? {
+              title: isPersonModalOpen ? "Add Person" : editingGroupId ? "Edit Group" : "Add Group",
+              onBack: closeMobilePage,
+            }
+          : null,
+      );
+    };
+
+    syncMobileChrome();
+    mobileQuery.addEventListener("change", syncMobileChrome);
+    return () => {
+      mobileQuery.removeEventListener("change", syncMobileChrome);
+      setMobileOverlayChrome(null);
+    };
+  }, [editingGroupId, isGroupModalOpen, isPersonModalOpen, setMobileOverlayChrome]);
+
+  const saveGroup = async () => {
+    setIsSavingGroup(true);
+    setGroupError(null);
+
+    try {
+      const members = groupPeople.map((name, index) => ({ name, sortOrder: index }));
+
+      const response = await fetch(editingGroupId ? `/api/split-bill-groups/${editingGroupId}` : "/api/split-bill-groups", {
+        method: editingGroupId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: groupName.trim(),
+          members,
+        }),
+      });
+
+      const payload = (await response.json()) as { group?: SplitBillGroupSummary; people?: SplitBillPersonSummary[]; error?: string };
+      if (!response.ok || !payload.group) {
+        throw new Error(payload?.error ?? "Unable to save group");
+      }
+
+      onGroupSaved?.(payload.group, payload.people ?? []);
+      closeGroupModal();
+    } catch (error) {
+      setGroupError(error instanceof Error ? error.message : "Unable to save group");
+    } finally {
+      setIsSavingGroup(false);
+    }
+  };
+  return (
+    <>
+      {!isModalOpen ? (
+        <SplitBillActionButtons onAddBill={() => setOpenAddMode("manual")} />
+      ) : null}
+
+      <SplitBillManualModal open={openAddMode === "manual"} currentUserName={currentUserName} people={people} groups={groups} onClose={closeAddModal} onSaved={onBillSaved} />
+      <SplitBillImportModal open={openAddMode === "import"} currentUserName={currentUserName} onClose={closeAddModal} onSaved={onBillSaved} />
+      <SplitBillPersonModal open={isPersonModalOpen} onClose={closePersonModal} onSaved={onPersonSaved} />
+
+      {isGroupModalOpen ? createPortal(
+        <div className="split-bill-modal split-bill-simple-entry-modal" role="presentation" onClick={closeGroupModal}>
+          <form className="split-bill-modal__card glass split-bill-group-modal" role="dialog" aria-modal="true" aria-label="Add group" onSubmit={(event) => { event.preventDefault(); void saveGroup(); }} onClick={(event) => event.stopPropagation()}>
+            <MobileSheetHandle onClose={closeGroupModal} disabled={isSavingGroup} />
+            <div className="split-bill-manual-modal__head">
+              <div>
+                <p className="eyebrow">{editingGroupId ? "Edit Group" : "Add Group"}</p>
+              </div>
+              <button className="split-bill-icon-button" type="button" onClick={closeGroupModal} aria-label="Close group window"><InterfaceIcon name="close" /></button>
+            </div>
+
+            <label className="settings-field">
+              <span>Group name</span>
+              <input className="settings-input" value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Weekend trip crew" autoFocus />
+            </label>
+
+            <label className="settings-field">
+              <span>People</span>
+              <SplitBillPeoplePicker people={groupPeople} onPeopleChange={setGroupPeople} />
+            </label>
+
+            {groupError ? <p className="split-bill-group-form__error">{groupError}</p> : null}
+
+            <div className="split-bill-manual-modal__actions">
+              <button className="button button-primary" type="submit" disabled={isSavingGroup || !groupName.trim()}>
+                {isSavingGroup ? "Saving..." : editingGroupId ? "Save group" : "Create group"}
+              </button>
+            </div>
+          </form>
+        </div>,
+        document.body,
+      ) : null}
+    </>
+  );
+}

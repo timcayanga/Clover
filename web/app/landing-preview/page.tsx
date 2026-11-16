@@ -1,0 +1,25 @@
+import type { Metadata } from "next";
+import { headers } from "next/headers";
+import Script from "next/script";
+import { LandingJourney } from "./landing-journey";
+
+export const metadata: Metadata = {
+  title: { absolute: "Clover" },
+  description: "Connect supported banks, upload statements, receipts or screenshots, or add details manually. See your finances together with Clover.",
+};
+
+export default async function ScrollableLandingPreviewPage() {
+  const authEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY);
+  const requestHeaders = await headers();
+  const countryCode = requestHeaders.get("x-vercel-ip-country")?.toUpperCase() ?? null;
+  const initialMarket = countryCode === "PH" ? "ph" : "global";
+
+  return (
+    <main id="main-content" tabIndex={-1}>
+      <Script id="scroll-landing-force-light-theme" strategy="beforeInteractive">
+        {`try { if (window.location.pathname === "/" || window.location.pathname === "/landing-preview") { document.documentElement.dataset.theme = "light"; document.documentElement.style.colorScheme = "light"; } } catch (error) {}`}
+      </Script>
+      <LandingJourney authEnabled={authEnabled} initialMarket={initialMarket} countryResolved={countryCode !== null} />
+    </main>
+  );
+}

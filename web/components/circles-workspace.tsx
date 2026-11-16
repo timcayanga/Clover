@@ -1,0 +1,1723 @@
+"use client";
+import { createCircleAvatarDataUrl } from "@/lib/circle-photo";
+import {CircleDetailWorkspace} from "./circle-detail-workspace";
+import { usePullRefresh } from "@/lib/pull-refresh";
+import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
+
+import { CategoryBrandMark } from "@/components/category-brand-mark";
+import Link from "next/link";
+import { CollectionCard } from "@/components/collection-card";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { CircleCreateDialog } from "@/components/circle-create-dialog";
+import { AnimatedTabs } from "@/components/animated-tabs";
+import { InfoTooltip } from "@/components/info-tooltip";
+import {
+  type CircleSummary,
+  type CirclesWorkspaceData,
+  type CircleTypeValue,
+} from "@/lib/circles";
+import { isSplitBillBuiltInAvatarUrl } from "@/lib/split-bill-avatars";
+import { getNavigationIconSrc } from "@/lib/navigation-icons";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
+
+const tabs = [
+  "overview",
+  "expenses",
+  "budget",
+  "goals",
+  "activity",
+  "members",
+] as const;
+type CircleTab = (typeof tabs)[number];
+
+function CircleTabIcon({ tab }: { tab: CircleTab }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+
+  if (tab === "expenses") return <svg viewBox="0 0 24 24" {...common}><path d="M4 7h16v10H4z" /><path d="M8 12h8M12 9v6" /></svg>;
+  if (tab === "budget") return <svg viewBox="0 0 24 24" {...common}><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 7h8M8 11h2m2 0h2m2 0h1M8 15h2m2 0h2m2 0h1" /></svg>;
+  if (tab === "goals") return <svg viewBox="0 0 24 24" {...common}><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /><path d="m15 9 5-5" /></svg>;
+  if (tab === "activity") return <svg viewBox="0 0 24 24" {...common}><path d="M4 18V9m5 9V5m5 13v-6m5 6V8" /></svg>;
+  if (tab === "members") return <svg viewBox="0 0 24 24" {...common}><circle cx="9" cy="9" r="3" /><circle cx="17" cy="10" r="2" /><path d="M4 19c.6-3 2.3-5 5-5s4.4 2 5 5m1-4c2.5 0 4 1.3 4.5 3.5" /></svg>;
+  return <svg viewBox="0 0 24 24" {...common}><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></svg>;
+}
+
+type CirclesWorkspaceProps = {
+  initialData: CirclesWorkspaceData;
+  selectedCircleId: string | null;
+  onSelectedCircleChange: (circleId: string | null) => void;
+  onCirclesChange: (circles: CircleSummary[]) => void;
+  createRequest: number;
+  displayCurrency?: string;
+  circleRename: {
+    circleId: string;
+    name: string;
+    revision: number;
+  } | null;
+};
+
+const emptyStateCircleTypes = [
+  ["🏠", "Household", "household"],
+  ["💞", "Couple", "couple"],
+  ["👨‍👩‍👧", "Family", "family"],
+  ["✈️", "Travel", "travel"],
+  ["🫶", "Barkada", "friends"],
+  ["🎯", "Shared goal", "goal"],
+] as const;
+
+const CIRCLE_MARK_URL = "/clover-mark.svg";
+
+const getCircleAvatarUrl = (circle: Pick<CircleSummary, "avatarUrl" | "type">) =>
+  circle.avatarUrl && !isSplitBillBuiltInAvatarUrl(circle.avatarUrl)
+    ? circle.avatarUrl
+    : circle.type === "household" ? "/assets/circles/household.jpg" : "/assets/circles/social.jpg";
+
+
+const formatMoney = (amount: number, currency: string) =>
+  new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
+
+const formatDate = (value: string | null) =>
+  value
+    ? new Date(value).toLocaleDateString("en-PH", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "No date set";
+
+const getInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return `${parts[0]?.[0] ?? "?"}${parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : ""}`.toUpperCase();
+};
+const MemberPhoto = ({member}: {member: {displayName: string; avatarUrl?: string | null}}) => {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  return member.avatarUrl && member.avatarUrl !== failedUrl
+    ? <img src={member.avatarUrl} alt="" onError={() => setFailedUrl(member.avatarUrl ?? null)} />
+    : <>{getInitials(member.displayName)}</>;
+};
+
+
+export function CirclesWorkspace({
+  initialData,
+  selectedCircleId,
+  onSelectedCircleChange,
+  onCirclesChange,
+  createRequest,
+  circleRename,
+  displayCurrency,
+}: CirclesWorkspaceProps) {
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const workspaceRef = useRef<HTMLElement>(null);
+  const [data, setData] = useState(initialData);
+  const [activeTab, setActiveTab] = useState<CircleTab>("overview");
+  const [showCreate, setShowCreate] = useState(false);
+  const mobileCreation = useMobileCreationRoute(showCreate, setShowCreate, "/circles");
+  const [createInitialType, setCreateInitialType] =
+    useState<CircleTypeValue | null>(null);
+  const [isLoadingCreatedCircle, setIsLoadingCreatedCircle] = useState(false);
+  const [openForm, setOpenForm] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [latestInviteUrl, setLatestInviteUrl] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRetry, setDetailRetry] = useState(0);
+
+  const selectedCircle = useMemo(
+    () =>
+      data.circles.find((circle) => circle.id === selectedCircleId) ??
+      null,
+    [data.circles, selectedCircleId],
+  );
+
+  const needsDetails = selectedCircle?.detailsLoaded === false;
+  useEffect(() => {
+    setDetailError(null);
+    if (!selectedCircleId || !needsDetails) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/circles?circle=${encodeURIComponent(selectedCircleId)}`, { cache: "no-store", signal: controller.signal });
+        const payload = await response.json() as CirclesWorkspaceData & { error?: string };
+        const circle = payload.circles?.find((item) => item.id === selectedCircleId);
+        if (!response.ok || !circle || circle.detailsLoaded === false) throw new Error(payload.error || "Unable to load this Circle.");
+        if (!controller.signal.aborted) setData((current) => ({
+          ...current, personalTransactions: payload.personalTransactions, investmentAccounts: payload.investmentAccounts,
+          circles: current.circles.map((item) => item.id === circle.id ? circle : item),
+        }));
+      } catch (error) {
+        if (!controller.signal.aborted) setDetailError(error instanceof Error ? error.message : "Unable to load this Circle.");
+      }
+    })();
+    return () => controller.abort();
+  }, [selectedCircleId, needsDetails, detailRetry]);
+
+  useEffect(() => {
+    if (createRequest > 0) {
+      setCreateInitialType(null);
+      setShowCreate(true);
+    }
+  }, [createRequest]);
+
+  useEffect(() => {
+    onCirclesChange(data.circles);
+  }, [data.circles, onCirclesChange]);
+
+  useEffect(() => {
+    if (!circleRename) return;
+    setData((current) => ({
+      ...current,
+      circles: current.circles.map((circle) =>
+        circle.id === circleRename.circleId
+          ? { ...circle, name: circleRename.name }
+          : circle,
+      ),
+    }));
+  }, [circleRename]);
+
+  useEffect(() => {
+    setActiveTab("overview");
+    setOpenForm(null);
+    setMessage(null);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      workspaceRef.current?.closest(".content")?.scrollTo({ top: 0, behavior: "instant" });
+    });
+  }, [selectedCircleId]);
+
+  const openCreate = (type: CircleTypeValue | null = null) => {
+    setCreateInitialType(type);
+    setShowCreate(true);
+  };
+
+  const closeCreate = () => {
+    setShowCreate(false);
+    setCreateInitialType(null);
+  };
+
+  const updateCircleAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file || !selectedCircle) return;
+    setIsSaving(true);
+    setMessage("Updating Circle photo...");
+    try {
+      const avatarUrl = await createCircleAvatarDataUrl(file);
+      const response = await fetch(`/api/circles/${selectedCircle.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarUrl }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to update the Circle photo.");
+      }
+      setData((current) => ({
+        ...current,
+        circles: current.circles.map((circle) =>
+          circle.id === selectedCircle.id ? { ...circle, avatarUrl } : circle,
+        ),
+      }));
+      setMessage("Circle photo updated.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to update the Circle photo.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateCardIdentity = async (circle: CircleSummary, name: string, photo?: File | null) => {
+    const avatarUrl = photo === null ? null : photo ? await createCircleAvatarDataUrl(photo) : undefined;
+    const response = await fetch(`/api/circles/${circle.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, ...(avatarUrl !== undefined ? { avatarUrl } : {}) }),
+    });
+    const payload = await response.json() as { error?: string };
+    if (!response.ok) throw new Error(payload.error || "Unable to update this Circle.");
+    setData((current) => ({ ...current, circles: current.circles.map((item) => item.id === circle.id ? { ...item, name, ...(avatarUrl !== undefined ? { avatarUrl } : {}) } : item) }));
+  };
+
+  const selectTab = (tab: CircleTab) => {
+    setActiveTab(tab);
+    setOpenForm(null);
+    setMessage(null);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      workspaceRef.current?.closest(".content")?.scrollTo({ top: 0, behavior: "instant" });
+    });
+  };
+
+  usePullRefresh(async () => {
+    if (openForm || showCreate) return;
+    try { await refresh(); setDetailError(null); } catch (error) { setDetailError(error instanceof Error ? error.message : "Unable to refresh Circles."); }
+  });
+
+  const refresh = async (preferredCircleId?: string | null) => {
+    const nextId = preferredCircleId === undefined ? selectedCircleId : preferredCircleId;
+    const response = await fetch(nextId ? `/api/circles?circle=${encodeURIComponent(nextId)}` : "/api/circles?view=directory", { cache: "no-store" });
+    const payload = (await response.json()) as CirclesWorkspaceData & {
+      error?: string;
+    };
+    if (!response.ok)
+      throw new Error(payload.error || "Unable to refresh Circles.");
+    setData((current) => nextId ? {
+      ...payload,
+      circles: [...current.circles.filter((circle) => !payload.circles.some((item) => item.id === circle.id)), ...payload.circles],
+    } : payload);
+    if (nextId && payload.circles.some((circle) => circle.id === nextId))
+      onSelectedCircleChange(nextId);
+    else onSelectedCircleChange(null);
+  };
+
+  const runResource = async (
+    payload: Record<string, unknown>,
+    successMessage: string,
+  ) => {
+    if (!selectedCircle) return;
+    setIsSaving(true);
+    setMessage("Saving...");
+    try {
+      const response = await fetch(
+        `/api/circles/${selectedCircle.id}/resources`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(result.error || "Unable to save this change.");
+      await refresh(selectedCircle.id);
+      setOpenForm(null);
+      setMessage(successMessage);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Unable to save this change.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const submitBudget = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    void runResource(
+      {
+        action: "create_budget",
+        name: form.get("name"),
+        targetAmount: form.get("targetAmount"),
+        cadence: form.get("cadence"),
+        categoryName: form.get("categoryName") || null,
+        currency: selectedCircle?.currency,
+      },
+      "Shared budget created.",
+    );
+  };
+
+  const submitGoal = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const targetDate = String(form.get("targetDate") || "");
+    void runResource(
+      {
+        action: "create_goal",
+        name: form.get("name"),
+        purpose: form.get("purpose") || null,
+        targetAmount: form.get("targetAmount"),
+        startingAmount: form.get("startingAmount") || 0,
+        targetDate: targetDate
+          ? new Date(`${targetDate}T00:00:00`).toISOString()
+          : null,
+        currency: selectedCircle?.currency,
+      },
+      "Shared goal created.",
+    );
+  };
+
+  const submitContribution = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    void runResource(
+      {
+        action: "add_contribution",
+        amount: form.get("amount"),
+        memberId: form.get("memberId") || null,
+        goalId: form.get("goalId") || null,
+        note: form.get("note") || null,
+        currency: selectedCircle?.currency,
+      },
+      "Contribution recorded.",
+    );
+  };
+
+  const submitCommitment = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const nextDueDate = String(form.get("nextDueDate") || "");
+    void runResource(
+      {
+        action: "create_commitment",
+        title: form.get("title"),
+        amount: form.get("amount") || null,
+        recurrence: form.get("recurrence"),
+        assignedMemberId: form.get("assignedMemberId") || null,
+        nextDueDate: nextDueDate
+          ? new Date(`${nextDueDate}T00:00:00`).toISOString()
+          : null,
+        currency: selectedCircle?.currency,
+      },
+      "Shared commitment created.",
+    );
+  };
+
+  const submitSharedTransaction = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    void runResource(
+      {
+        action: "share_transaction",
+        transactionId: form.get("transactionId"),
+        visibility: form.get("visibility"),
+        sharedAmount: form.get("sharedAmount") || null,
+        sharedTitle: form.get("sharedTitle") || null,
+      },
+      "Transaction shared with the Circle.",
+    );
+  };
+
+  const submitInvestment = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    void runResource(
+      {
+        action: "share_investment",
+        accountId: form.get("accountId"),
+        visibility: form.get("visibility"),
+        includeHoldings: form.get("includeHoldings") === "on",
+      },
+      "Investment summary shared.",
+    );
+  };
+
+  const submitInvite = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedCircle) return;
+    const form = new FormData(event.currentTarget);
+    setIsSaving(true);
+    setMessage("Creating a secure invitation...");
+    try {
+      const response = await fetch(
+        `/api/circles/${selectedCircle.id}/invitations`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName: form.get("displayName") || null,
+            email: form.get("email") || null,
+            role: form.get("role"),
+          }),
+        },
+      );
+      const payload = (await response.json()) as {
+        invitation?: { shareUrl: string; emailSent?: boolean };
+        error?: string;
+      };
+      if (!response.ok || !payload.invitation)
+        throw new Error(payload.error || "Unable to create this invitation.");
+      const absoluteUrl = `${window.location.origin}${payload.invitation.shareUrl}`;
+      setLatestInviteUrl(absoluteUrl);
+      let copied = false;
+      try {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(absoluteUrl);
+          copied = true;
+        }
+      } catch {
+        // The invitation is still valid when browser clipboard permission is denied.
+      }
+      await refresh(selectedCircle.id);
+      setMessage(
+        payload.invitation.emailSent
+          ? copied
+            ? "Invitation emailed and link copied. It expires in 14 days."
+            : "Invitation emailed. The secure link expires in 14 days."
+          : copied
+            ? "Invitation link copied. Email delivery was unavailable, so you can share the link directly."
+            : "Invitation created. Copy the secure link below to share it directly.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to create this invitation.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateMemberRole = (memberId: string, role: string) => {
+    void runResource(
+      {
+        action: "update_member",
+        id: memberId,
+        role,
+      },
+      "Member role updated.",
+    );
+  };
+
+  const removeMember = (memberId: string, displayName: string) => {
+    if (!window.confirm(`Remove ${displayName} from this Circle?`)) return;
+    void runResource(
+      { action: "update_member", id: memberId, status: "removed" },
+      `${displayName} was removed from the Circle.`,
+    );
+  };
+
+  const manageInvitation = async (
+    invitationId: string,
+    action: "resend" | "revoke" | "copy",
+    shareUrl: string,
+  ) => {
+    if (!selectedCircle) return;
+    const absoluteUrl = `${window.location.origin}${shareUrl}`;
+    if (action === "copy") {
+      try {
+        await navigator.clipboard.writeText(absoluteUrl);
+        setMessage("Invitation link copied.");
+      } catch {
+        setLatestInviteUrl(absoluteUrl);
+        setMessage("Copy the invitation link shown below.");
+      }
+      return;
+    }
+    if (
+      action === "revoke" &&
+      !window.confirm("Revoke this invitation? Its link will stop working.")
+    ) {
+      return;
+    }
+    setIsSaving(true);
+    setMessage(action === "resend" ? "Resending invitation..." : "Revoking invitation...");
+    try {
+      const response = await fetch(
+        `/api/circles/${selectedCircle.id}/invitations/${invitationId}`,
+        { method: action === "resend" ? "PATCH" : "DELETE" },
+      );
+      const payload = (await response.json()) as {
+        error?: string;
+        invitation?: { shareUrl: string; emailSent: boolean };
+      };
+      if (!response.ok) {
+        throw new Error(payload.error || `Unable to ${action} this invitation.`);
+      }
+      if (payload.invitation?.shareUrl) {
+        setLatestInviteUrl(
+          `${window.location.origin}${payload.invitation.shareUrl}`,
+        );
+      }
+      await refresh(selectedCircle.id);
+      setMessage(
+        action === "resend"
+          ? payload.invitation?.emailSent
+            ? "Invitation resent with a fresh 14-day link."
+            : "A fresh link was created. Copy it below to share directly."
+          : "Invitation revoked.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : `Unable to ${action} this invitation.`,
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteCircle = async () => {
+    if (
+      !selectedCircle ||
+      !window.confirm(
+        `Delete ${selectedCircle.name}? Circle budgets, goals, commitments, invitations, and activity will be permanently deleted. Existing personal transactions and Split Bills will remain.`,
+      )
+    )
+      return;
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/circles/${selectedCircle.id}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(payload.error || "Unable to delete this Circle.");
+      await refresh(null);
+      setMessage("Circle deleted.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete this Circle.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <section className="circles-page">
+      {!selectedCircle ? (
+        <>
+        {data.circles.length === 0 ? <div className="collection-directory-heading"><p>Split bills, coordinate shared expenses, track commitments, and work toward budgets and goals together—while keeping personal accounts private.</p></div> : null}
+        <div className="collection-card-grid" aria-label="Your Circles">
+          {data.circles.map(circle => <CollectionCard key={circle.id} kind="circle" color={circle.type === "household" ? "#63cdbb" : "#b19be8"} name={circle.name} subtitle="" editable={circle.role === "organizer"} icon={<img className="collection-custom-photo" src={getCircleAvatarUrl(circle)} alt="" width={64} height={64}/>} onOpen={() => onSelectedCircleChange(circle.id)} onSave={(name, _emoji, photo) => updateCardIdentity(circle, name, photo)}>
+            <div className="split-bill-avatars">{circle.members.filter(m => m.status === "active").slice(0,5).map(member => <span key={member.id} className="circles-avatar" title={member.displayName}><MemberPhoto member={member} /></span>)}{circle.memberCount > 5 ? <span>+{circle.memberCount - 5}</span> : null}</div>
+
+          </CollectionCard>)}
+          <button type="button" className="collection-create-card" onClick={() => openCreate()}><span aria-hidden="true">＋</span><strong>Add Circle</strong><small>Start sharing with a new group</small></button>
+        </div>
+        {data.circles.length === 0 ? (
+        <section className="circles-empty panel glass">
+          <img
+            src={getNavigationIconSrc("profiles")}
+            alt=""
+            width={120}
+            height={120}
+          />
+          <p className="eyebrow">Your first Circle</p>
+          <h2>Manage money together, without sharing everything.</h2>
+          <div className="circles-empty__chips" aria-label="Circle ideas">
+            {emptyStateCircleTypes.map(([emoji, label, type]) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => openCreate(type)}
+              >
+                <span aria-hidden="true">{emoji}</span> {label}
+              </button>
+            ))}
+          </div>
+          {isLoadingCreatedCircle ? (
+            <p className="circles-form-message" role="status">
+              Circle created. Opening it now...
+            </p>
+          ) : null}
+          <button
+            className="button button-primary"
+            type="button"
+            onClick={() => openCreate()}
+            disabled={isLoadingCreatedCircle}
+          >
+            Create your first Circle
+          </button>
+        </section>
+        ) : null}
+        </>
+      ) : needsDetails ? (
+        <section className="panel glass" aria-busy={!detailError}>
+          {detailError ? <p role="alert">{detailError} <button type="button" className="button button-secondary button-small" onClick={() => setDetailRetry((value) => value + 1)}>Try again</button></p> : <p role="status">Loading Circle details…</p>}
+        </section>
+      ) : (
+        <div className="circles-layout">
+          {selectedCircle ? (
+            <main ref={workspaceRef} className="circles-workspace">
+              <h2 className="collection-detail-name">{selectedCircle.name}</h2>
+              <CircleDetailWorkspace displayCurrency={displayCurrency} key={selectedCircle.id} circle={selectedCircle} onChanged={()=>refresh(selectedCircle.id)} />
+            </main>
+          ) : null}
+        </div>
+      )}
+
+      <CircleCreateDialog
+        open={showCreate}
+        creationPage={mobileCreation}
+        initialType={createInitialType}
+        onClose={closeCreate}
+        onCreated={(circleId) => {
+          setIsLoadingCreatedCircle(true);
+          setMessage("Circle created. Opening it now...");
+          void refresh(circleId)
+            .then(() => {
+              onSelectedCircleChange(circleId);
+              setActiveTab("overview");
+              setMessage(
+                "Circle created. Your personal finances are still private.",
+              );
+            })
+            .catch((error: unknown) => {
+              setMessage(
+                error instanceof Error
+                  ? error.message
+                  : "Circle created. Refresh the page to open it.",
+              );
+            })
+            .finally(() => setIsLoadingCreatedCircle(false));
+        }}
+      />
+    </section>
+  );
+}
+
+type SharedPanelProps = {
+  circle: CircleSummary;
+  openForm: string | null;
+  setOpenForm: (value: string | null) => void;
+  isSaving: boolean;
+};
+
+function CircleEmptyState({
+  image,
+  title,
+  children,
+  plain = false,
+}: {
+  image: string;
+  title: string;
+  children: ReactNode;
+  plain?: boolean;
+}) {
+  return (
+    <div
+      className={`circles-soft-empty circles-soft-empty--illustrated${
+        plain ? " circles-soft-empty--plain" : ""
+      }`}
+    >
+      <img src="/assets/mascots/velvet-statement.webp" alt="" width={128} height={128} />
+      <strong>{title}</strong>
+      <p>{children}</p>
+    </div>
+  );
+}
+
+function CircleOverview({
+  circle,
+  openForm,
+  setOpenForm,
+  submitCommitment,
+  isSaving,
+}: SharedPanelProps & {
+  submitCommitment: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const upcoming = circle.commitments
+    .filter((entry) => entry.isActive)
+    .slice(0, 4);
+  return (
+    <div className="circles-panel-stack">
+      <div className="circles-metric-grid">
+        <article className="accounts-overview-card summary-aligned-card panel glass">
+          <InfoTooltip
+            className="summary-card-info"
+            label="Total expenses shared with this Circle during the current month."
+          />
+          <p className="eyebrow">Shared Expenses</p>
+          <strong className="accounts-overview-card__amount is-good">
+            {formatMoney(circle.expenseTotalThisMonth, circle.currency)}
+          </strong>
+        </article>
+        <article className="accounts-overview-card summary-aligned-card panel glass">
+          <InfoTooltip
+            className="summary-card-info"
+            label="Total contributions recorded for this Circle during the current month."
+          />
+          <p className="eyebrow">Contributions</p>
+          <strong className="accounts-overview-card__amount is-good">
+            {formatMoney(circle.contributionTotalThisMonth, circle.currency)}
+          </strong>
+        </article>
+        <article className="accounts-overview-card summary-aligned-card panel glass">
+          <InfoTooltip
+            className="summary-card-info"
+            label="Active shared commitments currently surfaced as coming up for this Circle."
+          />
+          <p className="eyebrow">Commitments</p>
+          <strong className="accounts-overview-card__amount is-neutral">{upcoming.length}</strong>
+        </article>
+      </div>
+      <section className="circles-section panel glass">
+        <div className="circles-section__head">
+          <div>
+            <p className="eyebrow">Circle pulse</p>
+            <h3>What needs attention</h3>
+          </div>
+        </div>
+        <div className="circles-insight-grid">
+          {circle.insights.map((insight) => (
+            <article
+              key={insight.id}
+              className={`circles-insight circles-insight--${insight.tone}`}
+            >
+              <strong>{insight.title}</strong>
+              <p>{insight.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="circles-section panel glass">
+        <div className="circles-section__head">
+          <div>
+            <p className="eyebrow">Shared commitments</p>
+            <h3>Upcoming responsibilities</h3>
+          </div>
+          <button
+            className="button button-secondary button-small"
+            type="button"
+            onClick={() =>
+              setOpenForm(openForm === "commitment" ? null : "commitment")
+            }
+          >
+            Add commitment
+          </button>
+        </div>
+        {openForm === "commitment" ? (
+          <form className="circles-inline-form" onSubmit={submitCommitment}>
+            <label>
+              <span>Commitment</span>
+              <input name="title" required placeholder="e.g. Meralco bill" />
+            </label>
+            <label>
+              <span>Amount</span>
+              <input name="amount" type="number" min="0.01" step="0.01" />
+            </label>
+            <label>
+              <span>Repeats</span>
+              <select name="recurrence" defaultValue="monthly">
+                <option value="once">Once</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="annual">Annual</option>
+              </select>
+            </label>
+            <label>
+              <span>Next due date</span>
+              <input name="nextDueDate" type="date" />
+            </label>
+            <label>
+              <span>Assigned to</span>
+              <select name="assignedMemberId">
+                <option value="">Anyone</option>
+                {circle.members
+                  .filter((member) => member.status === "active")
+                  .map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.displayName}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={isSaving}
+            >
+              Save commitment
+            </button>
+          </form>
+        ) : null}
+        <div className="circles-record-list">
+          {upcoming.length ? (
+            upcoming.map((entry) => (
+              <article key={entry.id}>
+                <div>
+                  <strong>{entry.title}</strong>
+                  <span>
+                    {entry.assignedMemberName || "Anyone"} · {entry.recurrence}{" "}
+                    · {formatDate(entry.nextDueDate)}
+                  </span>
+                </div>
+                <strong>
+                  {entry.amount === null
+                    ? "Amount not set"
+                    : formatMoney(entry.amount, entry.currency)}
+                </strong>
+              </article>
+            ))
+          ) : (
+            <CircleEmptyState
+              image={getNavigationIconSrc("recurring")}
+              title="No commitments yet"
+            >
+              Add rent, utilities, tuition, family support, or another recurring
+              responsibility.
+            </CircleEmptyState>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CircleExpenses({
+  circle,
+  transactions,
+  openForm,
+  setOpenForm,
+  submitSharedTransaction,
+  runResource,
+  isSaving,
+}: SharedPanelProps & {
+  transactions: CirclesWorkspaceData["personalTransactions"];
+  submitSharedTransaction: (event: FormEvent<HTMLFormElement>) => void;
+  runResource: (
+    payload: Record<string, unknown>,
+    message: string,
+  ) => Promise<void>;
+}) {
+  return (
+    <section className="circles-section panel glass">
+      <div className="circles-section__head">
+        <p className="eyebrow">Shared expenses</p>
+      </div>
+      {openForm === "share-transaction" ? (
+        <form
+          className="circles-inline-form circles-inline-form--wide"
+          onSubmit={submitSharedTransaction}
+        >
+          <label>
+            <span>Your transaction</span>
+            <select name="transactionId" required defaultValue="">
+              <option value="" disabled>
+                Select a transaction
+              </option>
+              {transactions.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {formatDate(entry.date)} · {entry.title} ·{" "}
+                  {formatMoney(entry.amount, entry.currency)} ·{" "}
+                  {entry.workspaceName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>What members can see</span>
+            <select name="visibility" defaultValue="item">
+              <option value="summary">Amount only</option>
+              <option value="item">Selected transaction details</option>
+            </select>
+          </label>
+          <label>
+            <span>
+              Shared amount <small>Optional</small>
+            </span>
+            <input name="sharedAmount" type="number" min="0.01" step="0.01" />
+          </label>
+          <label>
+            <span>
+              Shared title <small>Optional</small>
+            </span>
+            <input name="sharedTitle" placeholder="e.g. Groceries" />
+          </label>
+          <div className="circles-share-preview">
+            Preview: Clover shares only the amount at “Amount only.” It never
+            exposes the source account or other transactions.
+          </div>
+          <button
+            className="button button-primary"
+            type="submit"
+            disabled={isSaving}
+          >
+            Share with Circle
+          </button>
+        </form>
+      ) : null}
+      <div className="circles-record-list">
+        {circle.expenses.length ? (
+          circle.expenses.map((expense) => (
+            <article key={`${expense.kind}:${expense.id}`}>
+              <div>
+                <strong>{expense.title}</strong>
+                <span>
+                  {formatDate(expense.date)} ·{" "}
+                  {expense.kind === "split_bill"
+                    ? "Split bill"
+                    : expense.visibility === "summary"
+                      ? "Amount-only share"
+                      : "Shared transaction"}
+                </span>
+              </div>
+              <div className="circles-record-list__actions">
+                <strong>{formatMoney(expense.amount, expense.currency)}</strong>
+                {expense.kind === "shared_transaction" ? (
+                  <button
+                    className="button button-ghost button-small"
+                    type="button"
+                    onClick={() =>
+                      void runResource(
+                        { action: "unshare_transaction", id: expense.id },
+                        "Transaction is private again.",
+                      )
+                    }
+                  >
+                    Stop sharing
+                  </button>
+                ) : (
+                  <Link
+                    className="button button-ghost button-small"
+                    href={expense.href}
+                    prefetch={false}
+                  >
+                    Open
+                  </Link>
+                )}
+              </div>
+            </article>
+          ))
+        ) : (
+          <CircleEmptyState
+            image="/assets/mascots/velvet-statement.webp"
+            title="No shared expenses yet"
+            plain
+          >
+            Add a Split Bill or selectively share one of your own transactions.
+          </CircleEmptyState>
+        )}
+      </div>
+      <div className="circles-section__actions circles-section__actions--footer">
+        <button
+          className="button button-secondary button-small"
+          type="button"
+          onClick={() =>
+            setOpenForm(
+              openForm === "share-transaction" ? null : "share-transaction",
+            )
+          }
+        >
+          Share transaction
+        </button>
+        <Link
+          className="button button-primary button-small"
+          href={
+            circle.splitBillGroupId
+              ? `/split-bill?group=${encodeURIComponent(circle.splitBillGroupId)}`
+              : "/split-bill"
+          }
+          prefetch={false}
+        >
+          Open Split Bills
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function CircleBudgets({
+  circle,
+  openForm,
+  setOpenForm,
+  submitBudget,
+  runResource,
+  isSaving,
+}: SharedPanelProps & {
+  submitBudget: (event: FormEvent<HTMLFormElement>) => void;
+  runResource: (
+    payload: Record<string, unknown>,
+    message: string,
+  ) => Promise<void>;
+}) {
+  return (
+    <section className="circles-section panel glass">
+      <div className="circles-section__head">
+        <p className="eyebrow">Shared budgets</p>
+      </div>
+      {openForm === "budget" ? (
+        <form className="circles-inline-form" onSubmit={submitBudget}>
+          <label>
+            <span>Budget name</span>
+            <input name="name" required placeholder="e.g. Household spending" />
+          </label>
+          <label>
+            <span>Target</span>
+            <input
+              name="targetAmount"
+              type="number"
+              min="0.01"
+              step="0.01"
+              required
+            />
+          </label>
+          <label>
+            <span>Cadence</span>
+            <select name="cadence" defaultValue="monthly">
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </label>
+          <label>
+            <span>
+              Category <small>Optional</small>
+            </span>
+            <input name="categoryName" placeholder="Exact category name" />
+          </label>
+          <button
+            className="button button-primary"
+            type="submit"
+            disabled={isSaving}
+          >
+            Save budget
+          </button>
+        </form>
+      ) : null}
+      <div className="circles-card-grid">
+        {circle.budgets.length ? (
+          circle.budgets.map((budget) => (
+            <article key={budget.id} className="circles-progress-card">
+              <div>
+                <strong>{budget.name}</strong>
+                <span>
+                  {budget.cadence}
+                  {budget.categoryName
+                    ? ` · ${budget.categoryName}`
+                    : " · all shared expenses"}
+                </span>
+              </div>
+              <div className="circles-progress-track">
+                <span
+                  style={{ width: `${Math.min(100, budget.progressPercent)}%` }}
+                />
+              </div>
+              <div className="circles-progress-card__numbers">
+                <span>
+                  {formatMoney(budget.spentAmount, budget.currency)} used
+                </span>
+                <strong>
+                  {formatMoney(budget.targetAmount, budget.currency)}
+                </strong>
+              </div>
+              {budget.remainingAmount < 0 ? (
+                <p className="is-attention">
+                  {formatMoney(
+                    Math.abs(budget.remainingAmount),
+                    budget.currency,
+                  )}{" "}
+                  over target
+                </p>
+              ) : (
+                <p>
+                  {formatMoney(budget.remainingAmount, budget.currency)}{" "}
+                  remaining
+                </p>
+              )}
+              <button
+                className="button button-ghost button-small"
+                type="button"
+                onClick={() =>
+                  void runResource(
+                    { action: "update_budget", id: budget.id, isActive: false },
+                    "Budget archived.",
+                  )
+                }
+              >
+                Archive
+              </button>
+            </article>
+          ))
+        ) : (
+          <CircleEmptyState
+            image={getNavigationIconSrc("budgeting")}
+            title="No shared budgets yet"
+            plain
+          >
+            Start with one broad monthly budget and refine it after the group
+            has real shared activity.
+          </CircleEmptyState>
+        )}
+      </div>
+      <div className="circles-section__actions circles-section__actions--footer">
+        <button
+          className="button button-primary button-small"
+          type="button"
+          onClick={() => setOpenForm(openForm === "budget" ? null : "budget")}
+        >
+          Create budget
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function CircleGoals({
+  circle,
+  investmentAccounts,
+  openForm,
+  setOpenForm,
+  submitGoal,
+  submitContribution,
+  submitInvestment,
+  runResource,
+  isSaving,
+}: SharedPanelProps & {
+  investmentAccounts: CirclesWorkspaceData["investmentAccounts"];
+  submitGoal: (event: FormEvent<HTMLFormElement>) => void;
+  submitContribution: (event: FormEvent<HTMLFormElement>) => void;
+  submitInvestment: (event: FormEvent<HTMLFormElement>) => void;
+  runResource: (
+    payload: Record<string, unknown>,
+    message: string,
+  ) => Promise<void>;
+}) {
+  return (
+    <div className="circles-panel-stack">
+      <section className="circles-section panel glass">
+        <div className="circles-section__head">
+          <p className="eyebrow">Goals and life plans</p>
+        </div>
+        {openForm === "goal" ? (
+          <form
+            className="circles-inline-form circles-inline-form--wide"
+            onSubmit={submitGoal}
+          >
+            <label>
+              <span>Plan or goal</span>
+              <select name="name" defaultValue="">
+                <option value="" disabled>
+                  Choose or type below
+                </option>
+                <option>Emergency fund</option>
+                <option>Wedding</option>
+                <option>Moving out</option>
+                <option>Tuition</option>
+                <option>Pregnancy and childbirth</option>
+                <option>Buying a home</option>
+                <option>Vehicle</option>
+                <option>Changing jobs</option>
+                <option>Working abroad</option>
+                <option>Starting freelancing</option>
+                <option>Travel</option>
+                <option>Supporting parents</option>
+                <option>Retirement transition</option>
+              </select>
+            </label>
+            <label>
+              <span>
+                Purpose <small>Optional</small>
+              </span>
+              <input
+                name="purpose"
+                placeholder="What will this make possible?"
+              />
+            </label>
+            <label>
+              <span>Target amount</span>
+              <input
+                name="targetAmount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+              />
+            </label>
+            <label>
+              <span>Already saved</span>
+              <input name="startingAmount" type="number" min="0" step="0.01" />
+            </label>
+            <label>
+              <span>Target date</span>
+              <input name="targetDate" type="date" />
+            </label>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={isSaving}
+            >
+              Create shared goal
+            </button>
+          </form>
+        ) : null}
+        {openForm === "contribution" ? (
+          <form className="circles-inline-form" onSubmit={submitContribution}>
+            <label>
+              <span>Amount</span>
+              <input
+                name="amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+              />
+            </label>
+            <label>
+              <span>Contributed by</span>
+              <select name="memberId" defaultValue="">
+                <option value="">Current member</option>
+                {circle.members
+                  .filter((member) => member.status === "active")
+                  .map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.displayName}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              <span>Apply to goal</span>
+              <select name="goalId">
+                <option value="">General Circle contribution</option>
+                {circle.goals
+                  .filter((goal) => goal.status === "active")
+                  .map((goal) => (
+                    <option key={goal.id} value={goal.id}>
+                      {goal.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              <span>Note</span>
+              <input name="note" placeholder="Optional context" />
+            </label>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={isSaving}
+            >
+              Record contribution
+            </button>
+          </form>
+        ) : null}
+        <div className="circles-card-grid">
+          {circle.goals.length ? (
+            circle.goals.map((goal) => (
+              <article key={goal.id} className="circles-progress-card">
+                <div>
+                  <strong>{goal.name}</strong>
+                  <span>{goal.purpose || formatDate(goal.targetDate)}</span>
+                </div>
+                <div className="circles-progress-track">
+                  <span style={{ width: `${goal.progressPercent}%` }} />
+                </div>
+                <div className="circles-progress-card__numbers">
+                  <span>
+                    {formatMoney(goal.currentAmount, goal.currency)} saved
+                  </span>
+                  <strong>{goal.progressPercent}%</strong>
+                </div>
+                <p>
+                  {formatMoney(goal.remainingAmount, goal.currency)} remaining
+                </p>
+                {goal.estimatedCompletionDate ? (
+                  <p className="circles-estimate">
+                    Estimated completion:{" "}
+                    {formatDate(goal.estimatedCompletionDate)} ·{" "}
+                    {goal.estimateConfidence}% confidence
+                  </p>
+                ) : (
+                  <p className="circles-estimate">
+                    Record at least two contributions for a pace-based estimate.
+                  </p>
+                )}
+                <button
+                  className="button button-ghost button-small"
+                  type="button"
+                  onClick={() =>
+                    void runResource(
+                      {
+                        action: "update_goal",
+                        id: goal.id,
+                        status: "archived",
+                      },
+                      "Goal archived.",
+                    )
+                  }
+                >
+                  Archive
+                </button>
+              </article>
+            ))
+          ) : (
+            <CircleEmptyState
+              image="/assets/mascots/velvet-statement.webp"
+              title="No shared goals yet"
+              plain
+            >
+              Choose a life event or create a straightforward savings target.
+            </CircleEmptyState>
+          )}
+        </div>
+        <div className="circles-section__actions circles-section__actions--footer">
+          <button
+            className="button button-secondary button-small"
+            type="button"
+            onClick={() =>
+              setOpenForm(openForm === "contribution" ? null : "contribution")
+            }
+          >
+            Record contribution
+          </button>
+          <button
+            className="button button-primary button-small"
+            type="button"
+            onClick={() => setOpenForm(openForm === "goal" ? null : "goal")}
+          >
+            Create goal
+          </button>
+        </div>
+      </section>
+      <section className="circles-section panel glass">
+        <div className="circles-section__head">
+          <p className="eyebrow">Shared investment visibility</p>
+        </div>
+        {openForm === "investment" ? (
+          <form className="circles-inline-form" onSubmit={submitInvestment}>
+            <label>
+              <span>Your investment account</span>
+              <select name="accountId" required>
+                {investmentAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {formatAccountOptionLabel(account)} ·{" "}
+                    {account.balance === null
+                      ? "No value"
+                      : formatMoney(account.balance, account.currency)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Visibility</span>
+              <select name="visibility" defaultValue="summary">
+                <option value="summary">Value only</option>
+                <option value="item">Account name and value</option>
+              </select>
+            </label>
+            <label className="circles-checkbox">
+              <input name="includeHoldings" type="checkbox" />
+              <span>Also show holdings when item details are shared</span>
+            </label>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={isSaving}
+            >
+              Share investment summary
+            </button>
+          </form>
+        ) : null}
+        <div className="circles-record-list">
+          {circle.investmentShares.length ? (
+            circle.investmentShares.map((entry) => (
+              <article key={entry.id}>
+                <div>
+                  <strong>{entry.name}</strong>
+                  <span>
+                    {entry.institution ||
+                      (entry.visibility === "summary"
+                        ? "Account identity hidden"
+                        : "Investment account")}
+                  </span>
+                </div>
+                <div className="circles-record-list__actions">
+                  <strong>
+                    {entry.balance === null
+                      ? "No value"
+                      : formatMoney(entry.balance, entry.currency)}
+                  </strong>
+                  <button
+                    className="button button-ghost button-small"
+                    type="button"
+                    onClick={() =>
+                      void runResource(
+                        { action: "unshare_investment", id: entry.id },
+                        "Investment summary is private again.",
+                      )
+                    }
+                  >
+                    Stop sharing
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <CircleEmptyState
+              image="/assets/mascots/velvet-statement.webp"
+              title="No shared investments"
+              plain
+            >
+              No investment information is shared with this Circle.
+            </CircleEmptyState>
+          )}
+        </div>
+        {investmentAccounts.length ? (
+          <div className="circles-section__actions circles-section__actions--footer">
+            <button
+              className="button button-secondary button-small"
+              type="button"
+              onClick={() =>
+                setOpenForm(openForm === "investment" ? null : "investment")
+              }
+            >
+              Share summary
+            </button>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function CircleActivity({ circle }: { circle: CircleSummary }) {
+  return (
+    <section className="circles-section circles-section--activity panel glass">
+      <div className="circles-section__head">
+        <p className="eyebrow">Audit history</p>
+      </div>
+      <div className="circles-timeline">
+        {circle.activities.length ? (
+          circle.activities.map((activity) => (
+            <article key={activity.id}>
+              <span className="circles-timeline__dot" />
+              <div>
+                <strong>{activity.summary}</strong>
+                <span>
+                  {activity.actorName ? `${activity.actorName} · ` : ""}
+                  {formatDate(activity.createdAt)}
+                </span>
+              </div>
+            </article>
+          ))
+        ) : (
+          <CircleEmptyState
+            image="/assets/mascots/velvet-statement.webp"
+            title="No Circle activity yet"
+          >
+            Changes made by Circle members will appear here.
+          </CircleEmptyState>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CircleMembers({
+  circle,
+  latestInviteUrl,
+  submitInvite,
+  updateMemberRole,
+  removeMember,
+  manageInvitation,
+  deleteCircle,
+  onChangeCirclePhoto,
+  isSaving,
+}: {
+  circle: CircleSummary;
+  latestInviteUrl: string | null;
+  submitInvite: (event: FormEvent<HTMLFormElement>) => void;
+  updateMemberRole: (memberId: string, role: string) => void;
+  removeMember: (memberId: string, displayName: string) => void;
+  manageInvitation: (
+    invitationId: string,
+    action: "resend" | "revoke" | "copy",
+    shareUrl: string,
+  ) => Promise<void>;
+  deleteCircle: () => Promise<void>;
+  onChangeCirclePhoto: () => void;
+  isSaving: boolean;
+}) {
+  const [inviteOpen, setInviteOpen] = useState(false);
+
+  return (
+    <div className="circles-panel-stack">
+      <section className="circles-section panel glass">
+        <div className="circles-section__head">
+          <h3 className="eyebrow">People and permissions</h3>
+        </div>
+        <div className="circles-members-photo">
+          {circle.role === "organizer" ? (
+            <button
+              className="circles-members-photo__button"
+              type="button"
+              onClick={onChangeCirclePhoto}
+              disabled={isSaving}
+              aria-label={`Change ${circle.name} Circle photo`}
+            >
+              <span
+                className={`circles-avatar circles-avatar--feature circles-avatar--${circle.color}`}
+              >
+                <img src={getCircleAvatarUrl(circle)} alt="" />
+                <span aria-hidden="true">+</span>
+              </span>
+              <strong>{circle.name}</strong>
+              <small>Change Circle photo</small>
+            </button>
+          ) : (
+            <div className="circles-members-photo__display">
+              <span
+                className={`circles-avatar circles-avatar--feature circles-avatar--${circle.color}`}
+              >
+                <img src={getCircleAvatarUrl(circle)} alt="" />
+              </span>
+              <strong>{circle.name}</strong>
+            </div>
+          )}
+        </div>
+        <div className="circles-member-list">
+          {circle.members
+            .filter(
+              (member) =>
+                member.status !== "removed" && member.status !== "left",
+            )
+            .map((member) => (
+              <article key={member.id}>
+                <span className="circles-avatar circles-member-list__avatar">
+                  <MemberPhoto member={member} />
+                </span>
+                <div className="circles-member-list__name">
+                  <strong>{member.displayName}</strong>
+                </div>
+                <select
+                  className="circles-member-list__role"
+                  value={member.role}
+                  aria-label={`${member.displayName} role`}
+                  onChange={(event) =>
+                    updateMemberRole(member.id, event.currentTarget.value)
+                  }
+                  disabled={
+                    circle.role !== "organizer" ||
+                    member.isOwner ||
+                    isSaving
+                  }
+                >
+                  <option value="organizer">Organizer</option>
+                  <option value="member">Member</option>
+                  <option value="participant">Participant</option>
+                </select>
+                <span className="circles-member-list__email">
+                  {member.email || "No email on file"}
+                </span>
+                {circle.role === "organizer" && !member.isOwner ? (
+                  <button
+                    className="circles-member-remove"
+                    type="button"
+                    aria-label={`Remove ${member.displayName}`}
+                    title={`Remove ${member.displayName}`}
+                    onClick={() => removeMember(member.id, member.displayName)}
+                    disabled={isSaving}
+                  >
+                    ×
+                  </button>
+                ) : (
+                  <span className="circles-member-list__remove-spacer" />
+                )}
+              </article>
+            ))}
+          {circle.role === "organizer" ? (
+            <button
+              className="circles-add-person"
+              type="button"
+              onClick={() => setInviteOpen((current) => !current)}
+              aria-expanded={inviteOpen}
+            >
+              <span aria-hidden="true">+</span> Add person
+            </button>
+          ) : null}
+        </div>
+        {circle.role === "organizer" && inviteOpen ? (
+          <form className="circles-inline-form" onSubmit={submitInvite}>
+            <label>
+              <span>Email</span>
+              <input name="email" type="email" placeholder="ana@example.com" required />
+            </label>
+            <label>
+              <span>
+                Name <small>Optional</small>
+              </span>
+              <input name="displayName" placeholder="e.g. Ana" />
+            </label>
+            <label>
+              <span>Role</span>
+              <select name="role" defaultValue="member">
+                <option value="member">Member · can add shared items</option>
+                <option value="participant">
+                  Participant · view and respond
+                </option>
+                <option value="organizer">
+                  Organizer · can manage the Circle
+                </option>
+              </select>
+            </label>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={isSaving}
+            >
+              Send invitation
+            </button>
+          </form>
+        ) : null}
+        {latestInviteUrl ? (
+            <div className="circles-invite-result">
+              <input
+                readOnly
+                value={latestInviteUrl}
+                aria-label="Latest Circle invitation link"
+              />
+              <button
+                className="button button-secondary button-small"
+                type="button"
+                onClick={() =>
+                  void navigator.clipboard?.writeText(latestInviteUrl)
+                }
+              >
+                Copy
+              </button>
+            </div>
+          ) : null}
+          {circle.invitations.length ? (
+            <div className="circles-pending-invites">
+              {circle.invitations.map((invitation) => (
+                <article key={invitation.id}>
+                  <div>
+                    <strong>
+                      {invitation.displayName || invitation.email || "Invitation"}
+                    </strong>
+                    <span>
+                      {invitation.email} · Pending · expires {formatDate(invitation.expiresAt)}
+                    </span>
+                  </div>
+                  <div className="circles-pending-invites__actions">
+                    <button className="button button-secondary button-small" type="button" disabled={isSaving} onClick={() => void manageInvitation(invitation.id, "copy", invitation.shareUrl)}>Copy link</button>
+                    <button className="button button-secondary button-small" type="button" disabled={isSaving} onClick={() => void manageInvitation(invitation.id, "resend", invitation.shareUrl)}>Resend</button>
+                    <button className="button button-secondary button-small" type="button" disabled={isSaving} onClick={() => void manageInvitation(invitation.id, "revoke", invitation.shareUrl)}>Revoke</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : null}
+      </section>
+      {circle.isOwner ? (
+        <div className="circles-delete-action">
+          <button
+            className="button button-danger button-small"
+            type="button"
+            onClick={() => void deleteCircle()}
+            disabled={isSaving}
+          >
+            Delete Circle
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}

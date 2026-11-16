@@ -1,0 +1,419 @@
+"use client";
+import { requestAiConsent } from "./ai-consent";
+
+import { InterfaceIcon } from "@/components/interface-icon";
+
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
+import { ImportUploadDock } from "@/components/import-upload-dock";
+import {
+  assessReceiptPreviewQuality,
+  mergeSplitBillItemSplitMetadata,
+  mergeSplitBillReceiptSummary,
+  splitBillDraftFromReceiptPreview,
+  type ReceiptPreviewResult,
+  type SplitBillSerializedBill,
+} from "@/lib/split-bill";
+
+type SplitBillImportModalProps = {
+  open: boolean;
+  initialFile?: File | null;
+  currentUserName: string;
+  onClose: () => void;
+  onSaved?: (bill: SplitBillSerializedBill) => void;
+};
+
+const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const RECEIPT_PREVIEW_STORAGE_KEY = "split-bill:receipt-preview";
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const payload = (await response.json()) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload?.error ?? "Request failed");
+  }
+
+  return payload;
+}
+
+const validateFile = (file: File | null) => {
+  if (!file) {
+    return "Choose a receipt file to continue.";
+  }
+
+  if (!ACCEPTED_TYPES.includes(file.type)) {
+    return "Use a PDF, PNG, JPG, or WEBP file.";
+  }
+
+  if (file.size > MAX_FILE_SIZE) {
+    return "Keep the file under 10 MB.";
+  }
+
+  return null;
+};
+
+const createId = () => globalThis.crypto?.randomUUID?.() ?? `receipt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+export function SplitBillImportModal({ open, initialFile, currentUserName, onClose, onSaved }: SplitBillImportModalProps) {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const photoLibraryInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState("Drop a receipt file here or browse from your computer.");
+  const [dragActive, setDragActive] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    document.body.dataset.splitBillModalOpen = "true";
+
+    return () => {
+      if (document.body.dataset.splitBillModalOpen === "true") {
+        document.body.dataset.splitBillModalOpen = "false";
+      }
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setFile(initialFile ?? null);
+    setError(null);
+    setDragActive(false);
+    setIsUploading(false);
+    setMessage("Drop a receipt file here or browse from your computer.");
+  }, [open, initialFile]);
+
+  const closeModal = () => {
+    if (isUploading) {
+      return;
+    }
+
+    onClose();
+  };
+
+  const openFilePicker = () => {
+    if (!fileInputRef.current) {
+      return;
+    }
+
+    fileInputRef.current.value = "";
+    fileInputRef.current.click();
+  };
+
+  const openCamera = () => {
+    if (!cameraInputRef.current) {
+      return;
+    }
+
+    cameraInputRef.current.value = "";
+    cameraInputRef.current.click();
+  };
+
+  const openPhotoLibrary = () => {
+    if (!photoLibraryInputRef.current) {
+      return;
+    }
+
+    photoLibraryInputRef.current.value = "";
+    photoLibraryInputRef.current.click();
+  };
+
+  const saveReceiptBill = async (preview: ReceiptPreviewResult, fileToSave: File, receiptStorageKey: string) => {
+    const draft = splitBillDraftFromReceiptPreview(preview);
+    const participantIdMap = new Map<string, string>();
+    const participants =
+      draft.participants
+        .filter((participant) => participant.name.trim())
+        .map((participant) => {
+          const nextId = createId();
+          if (participant.id) {
+            participantIdMap.set(participant.id, nextId);
+          }
+
+          return {
+            id: nextId,
+            name: participant.name.trim(),
+          };
+        }) || [];
+
+    if (participants.length === 0) {
+      participants.push({
+        id: createId(),
+        name: currentUserName.trim() || "You",
+      });
+    }
+
+    const participantIds = new Set(participants.map((participant) => participant.id));
+    const fallbackParticipantId = participants[0]?.id ?? createId();
+    const items = draft.items
+      .filter((item) => item.description.trim() || item.amount.trim())
+      .map((item) => ({
+        id: createId(),
+        description: item.description.trim(),
+        amount: item.amount,
+        participantIds: item.participantIds
+          .map((participantId) => participantIdMap.get(participantId) ?? participantId)
+          .filter((participantId) => participantIds.has(participantId)),
+        splitMethod: item.splitMethod ?? "equal",
+        allocations:
+          item.allocations?.map((allocation) => ({
+            ...allocation,
+            participantId: participantIdMap.get(allocation.participantId) ?? allocation.participantId,
+          })) ?? [],
+      }));
+    const payments = draft.payments
+      .filter((payment) => payment.amount.trim())
+      .map((payment) => ({
+        id: createId(),
+        participantId: participantIds.has(participantIdMap.get(payment.participantId) ?? "")
+          ? (participantIdMap.get(payment.participantId) as string)
+          : fallbackParticipantId,
+        amount: payment.amount,
+        note: payment.note ?? null,
+      }));
+
+    const payload = {
+      title: draft.title.trim(),
+      note: draft.note?.trim() || null,
+      billDate: draft.billDate,
+      currency: draft.currency,
+      sourceType: "receipt" as const,
+      groupId: draft.groupId || null,
+      merchantName: draft.merchantName?.trim() || null,
+      receiptFileName: fileToSave.name,
+      receiptMimeType: fileToSave.type,
+      receiptStorageKey,
+      receiptText: draft.receiptText?.trim() || null,
+      receiptConfidence: draft.receiptConfidence,
+      subtotal: draft.subtotal?.trim() || null,
+      tax: draft.tax?.trim() || null,
+      tip: draft.tip?.trim() || null,
+      discount: draft.discount?.trim() || null,
+      total: draft.total?.trim() || null,
+      rawPayload: mergeSplitBillItemSplitMetadata(
+        mergeSplitBillReceiptSummary(draft.rawPayload, {
+          subtotal: draft.subtotal?.trim() || null,
+          serviceCharge: draft.serviceCharge?.trim() || null,
+          tax: draft.tax?.trim() || null,
+          tip: draft.tip?.trim() || null,
+          rounding: draft.rounding?.trim() || null,
+          discount: draft.discount?.trim() || null,
+          total: draft.total?.trim() || null,
+        }),
+        items
+      ),
+      participants,
+      items,
+      payments,
+    };
+
+    const response = await fetch("/api/split-bills", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    const result = await readJsonResponse<{ bill: SplitBillSerializedBill }>(response);
+    return result.bill;
+  };
+
+  const openReceiptEditor = (preview: ReceiptPreviewResult, fileToSave: File, receiptStorageKey: string) => {
+    sessionStorage.setItem(
+      RECEIPT_PREVIEW_STORAGE_KEY,
+      JSON.stringify({
+        preview,
+        fileName: fileToSave.name,
+        fileType: fileToSave.type,
+        receiptStorageKey,
+      })
+    );
+    onClose();
+    router.push("/split-bill/new");
+  };
+
+  const handleUpload = async (selectedFile: File) => {
+    await requestAiConsent().catch(() => false);
+    const validationError = validateFile(selectedFile);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setFile(selectedFile);
+    setIsUploading(true);
+    setError(null);
+    setMessage("Reading your receipt...");
+
+    try {
+      const formData = new FormData();
+      formData.set("file", selectedFile);
+
+      const response = await fetch("/api/split-bill-receipts/preview", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await readJsonResponse<{ preview: ReceiptPreviewResult; receiptStorageKey: string }>(response);
+      const quality = assessReceiptPreviewQuality(payload.preview);
+
+      if (!quality.reliableForFastPath) {
+        setMessage("Opening the bill editor so you can review Clover's draft...");
+        openReceiptEditor(payload.preview, selectedFile, payload.receiptStorageKey);
+        return;
+      }
+
+      setMessage("Saving your split bill...");
+      const savedBill = await saveReceiptBill(payload.preview, selectedFile, payload.receiptStorageKey);
+      onSaved?.(savedBill);
+      onClose();
+    } catch (uploadError) {
+      const detail = uploadError instanceof Error ? uploadError.message : "";
+      setError(
+        /string did not match|expected pattern|invalid url/i.test(detail)
+          ? "We couldn't open that receipt. Try the photo or file again."
+          : detail || "We couldn't read that receipt. Try another photo or file.",
+      );
+      setMessage("Drop a receipt file here or browse from your computer.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const chooseFile = (nextFile: File | null) => {
+    const validationError = validateFile(nextFile);
+    setError(validationError);
+    if (!nextFile || validationError) {
+      setFile(nextFile);
+      return;
+    }
+    void handleUpload(nextFile);
+  };
+
+  if (!open) {
+    return null;
+  }
+
+  const portalTarget = typeof document === "undefined" ? null : document.body;
+  if (!portalTarget) {
+    return null;
+  }
+
+  return createPortal(
+    <div className="modal-backdrop modal-backdrop--import-fullscreen" role="presentation" onClick={closeModal}>
+      <section
+        className="modal-card modal-card--wide accounts-import-modal glass split-bill-import-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Import receipt"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="accounts-import-modal__toolbar">
+          <button className="accounts-import-close" type="button" onClick={closeModal} aria-label="Close upload files" disabled={isUploading}><InterfaceIcon name="close" /></button>
+        </div>
+
+        <div
+          className={`accounts-import-dropzone accounts-import-dropzone--hero ${dragActive ? "is-active" : ""}`}
+          role="presentation"
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+            const nextFile = event.dataTransfer.files[0] ?? null;
+            chooseFile(nextFile);
+          }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              openFilePicker();
+            }
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/png,image/jpeg,image/webp"
+            onChange={(event) => {
+              chooseFile(event.target.files?.[0] ?? null);
+            }}
+          />
+          <input
+            ref={cameraInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => {
+              chooseFile(event.target.files?.[0] ?? null);
+            }}
+          />
+          <input
+            ref={photoLibraryInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              chooseFile(event.target.files?.[0] ?? null);
+            }}
+          />
+          <strong>Drop a receipt here</strong>
+          <span>or choose how you want to add it.</span>
+          <div className="split-bill-import-modal__source-actions">
+            <button className="button button-primary button-small" type="button" onClick={openCamera}>
+              Take photo
+            </button>
+            <button className="button button-secondary button-small" type="button" onClick={openPhotoLibrary}>
+              Choose photo
+            </button>
+            <button className="button button-secondary button-small split-bill-choose-file" type="button" onClick={openFilePicker}>
+              Upload file
+            </button>
+          </div>
+        </div>
+
+        {isUploading ? (
+          <ImportUploadDock
+            open
+            fileName={file?.name ?? null}
+            fileIndex={1}
+            fileTotal={1}
+            completedFiles={0}
+            progress={55}
+            detail={message}
+            phaseLabel="Receipt preview"
+          />
+        ) : null}
+
+        <div className="accounts-import-footer-copy">
+          {error ? <p className="accounts-import-footer-copy__warning">{error}</p> : null}
+          {message ? <p className="accounts-import-footer-copy__status">{message}</p> : null}
+          <p>
+            Accepted files: PDF, JPG, JPEG, PNG, and WEBP.
+            <br />
+            Clover reads the receipt automatically and keeps it inside Split Bills.
+          </p>
+        </div>
+      </section>
+    </div>,
+    portalTarget
+  );
+}

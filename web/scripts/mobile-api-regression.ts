@@ -1,0 +1,298 @@
+import { transactionReviewDisplayFields } from "../lib/actionable-transaction-review";
+import assert from "node:assert/strict";
+import { mock } from "node:test";
+import { prisma } from "../lib/prisma";
+import { readFileSync } from "node:fs";
+import {
+  mobileOperation,
+  mobileResponseHeaders,
+  mobileSessionUser,
+} from "../lib/mobile-api-policy";
+import { mobileApiResponse } from "../lib/mobile-api-response";
+import { mobileEditSchema, mobileCreateSchema, mobileAccountCreateSchema } from "../lib/mobile-edit-schema";
+import { mobileGoalInput } from "../lib/mobile-goal-input";
+import { mobileBudgetInput } from "../lib/mobile-budget-input";
+import { mobileCircleInput, mobileSplitBillInput, mobileSplitBillPayload } from "../lib/mobile-together-input";
+import {
+  getMobileRequestContext,
+  withMobileRequestContext,
+} from "../lib/mobile-request-context";
+import { assertTrustedRequestOrigin } from "../lib/request-security";
+import { getSessionContext, isLocalDevHost } from "../lib/auth";
+
+async function main() {
+  assert.deepEqual(mobileApiResponse("split-bills", {pending:{count:1,rawPayload:"private",bills:[{id:"one",title:"Lunch",currency:"PHP",remaining:125,rawPayload:"private",receiptStorageKey:"private"}]}}), {pending:{count:1,bills:[{id:"one",title:"Lunch",currency:"PHP",remaining:125}]}});
+
+  const resume = mobileApiResponse("import-status", {canResume:true, statementSelfHeal:{reason:"stale_statement_image_queue",rawPayload:"private"}, importFile:{status:"failed",processingPhase:"queued_retry",processingMessage:"Waiting to resume"}}) as {canResume:boolean;statementSelfHeal:{reason:string}};
+  assert.equal(resume.canResume,true);
+  const cleanReceipt = { id: "receipt", reviewStatus: "pending_review", merchantRaw: "Cafe", categoryId: "food", categoryName: "Food & Dining", parserConfidence: 98, categoryConfidence: 98, accountMatchConfidence: 98 };
+  const inferred = { ...cleanReceipt, categoryId:null, merchantClean:"Cafe", category:null, type:"expense", importFileId:"receipt-file", rawPayload:{categoryName:"Food & Dining"}, normalizedPayload:{}, account:{institution:null}, reviewReasons:[] };
+  const display = transactionReviewDisplayFields(inferred as Parameters<typeof transactionReviewDisplayFields>[0]);
+  assert.equal(display.categoryName,"Food & Dining");
+  const confirmedDisplay=transactionReviewDisplayFields({...inferred,reviewStatus:"confirmed",merchantClean:"My confirmed label"} as Parameters<typeof transactionReviewDisplayFields>[0]);
+  assert.equal(confirmedDisplay.merchantClean,"My confirmed label");
+  assert.equal(confirmedDisplay.categoryName,undefined,"Confirmed category choices are never reinterpreted from import evidence");
+  const inferredDetail=mobileApiResponse("transaction",{transaction:{...inferred,...display}}) as {transaction:{reviewReasons:string[]}};
+  assert.deepEqual(inferredDetail.transaction.reviewReasons,[],"Details must use the same effective category as Home and the list, rather than inventing an unresolvable warning");
+  for (const operation of ["transactions", "transaction"] as const) {
+    const project = (row: object) => {
+      const result = mobileApiResponse(operation, operation === "transactions" ? { transactions: [row] } : { transaction: row }) as { transaction?: { reviewReasons: string[]; confidenceScore: number }; transactions?: { reviewReasons: string[]; confidenceScore: number }[] };
+      return (result.transaction ?? result.transactions?.[0])!;
+    };
+    assert.deepEqual(project(cleanReceipt).reviewReasons, [], "Pending alone must not mark a clean 98% receipt as a warning.");
+    assert.equal(project(cleanReceipt).confidenceScore, 98);
+    assert.deepEqual(project({ ...cleanReceipt, parserConfidence: 1, categoryConfidence: 95, accountMatchConfidence: 100, duplicateConfidence: 0, rawPayload: { receiptValidation: { issues: [] } } }).reviewReasons, [], "Fractional 100% confidence and an empty receipt validation must not invent a warning.");
+    assert.deepEqual(project({ ...cleanReceipt, warningReason: "Review similar transaction" }).reviewReasons, ["Review similar transaction"], "High extraction confidence must not hide a real duplicate warning.");
+    assert.deepEqual(project({ ...cleanReceipt, accountMatchConfidence: 30 }).reviewReasons, ["Needs account review"]);
+    assert.deepEqual(project({ ...cleanReceipt, reviewStatus: "edited", warningReason: "Review similar transaction" }).reviewReasons, []);
+    assert.deepEqual(project({ ...cleanReceipt, rawPayload: { receiptDetails: { currency_resolution: { source: "user_default", currency: "PHP", requiresReview: true } } } }).reviewReasons, []);
+  }
+  const unsettled = mobileApiResponse("import-status", { importFile: { status: "done" }, visibleImportComplete: true, settledImportComplete: false });
+  assert.equal((unsettled as { settledImportComplete: boolean }).settledImportComplete, false);
+
+  assert.deepEqual(resume.statementSelfHeal,{reason:"stale_statement_image_queue"});
+  assert.ok(!JSON.stringify(resume).includes("private"));
+
+  assert.equal(mobileOperation("GET",["circle-invitations"]),"circle-invitations");
+  assert.equal(mobileOperation("POST",["circle-invitations","token"]),"circle-invitation");
+  assert.equal(mobileOperation("PATCH",["circles","circle","invitations","invite"]),"circle-invite-manage");
+  assert.equal(mobileOperation("POST",["circles","circle","invitations","invite"]),null);
+  assert.equal(mobileOperation("POST",["uploads","id","part"]),"native-upload");
+  assert.equal(mobileOperation("GET",["uploads","id","part"]),null);
+  assert.equal(mobileOperation("POST",["accounts","id","positions"]),"investment-position-save");
+  const assigned=mobileApiResponse("circle",{circles:[{id:"circle",commitments:[{id:"commitment",assignedMemberId:"member",notes:"Water bill"}],contributions:[{id:"contribution",memberId:"member",goalId:"goal"}]}]}) as {circle:{commitments:{assignedMemberId:string;notes:string}[];contributions:{goalId:string}[]}};
+  assert.equal(assigned.circle.commitments[0].assignedMemberId,"member");
+  assert.equal(assigned.circle.commitments[0].notes,"Water bill");
+  assert.equal(assigned.circle.contributions[0].goalId,"goal");
+  const routeSource = readFileSync(new URL("../app/api/mobile/v1/[...path]/route.ts", import.meta.url), "utf8");
+  const localGuard = routeSource.indexOf('getCurrentUserEnvironment() === "local"');
+  assert.ok(localGuard > 0 && localGuard < routeSource.indexOf("const claims = await verifyToken"),
+    "Local fixture guard must run before authentication and account access, not after a return.");
+  assert.equal(
+    mobileSessionUser({ sub: "user", sid: "session", sts: "active" }),
+    "user",
+  );
+  assert.equal(
+    mobileSessionUser({ sub: "user", sid: "session", sts: "pending" }),
+    null,
+  );
+  assert.equal(mobileSessionUser({ sub: "user" }), null);
+  assert.equal(mobileOperation("GET", ["bootstrap"]), "bootstrap");
+  assert.equal(mobileOperation("GET", ["accounts","one","history"]), "account-history");
+  assert.equal(mobileOperation("POST", ["accounts","one","history"]), null);
+  assert.equal(mobileOperation("POST", ["accounts","one","purchases"]), "investment-purchase-create");
+  assert.equal(mobileOperation("DELETE", ["accounts","one","purchases","two"]), "investment-purchase-delete");
+  assert.equal(mobileOperation("PATCH", ["accounts","one","purchases","two"]), null);
+
+  assert.equal(mobileOperation("POST", ["adviser", "chat"]), "adviser-chat");
+  assert.equal(mobileOperation("GET", ["adviser", "chat"]), null);
+  const palette = { colors: ["#312E81", "#4F46E5", "#6D5CFF"], locations: [0, 0.48, 1], foreground: "#f8fafc" };
+  for (const operation of ["accounts", "account"] as const) {
+    const payload = operation === "accounts" ? { accounts: [{ id: "test", brandPalette: palette, rawPayload: "private" }] } : { account: { id: "test", brandPalette: palette, rawPayload: "private" } };
+    const result = mobileApiResponse(operation, payload);
+    assert.ok(JSON.stringify(result).includes(JSON.stringify(palette)), "Native account list and details must retain the desktop palette.");
+    assert.ok(!JSON.stringify(result).includes("private"), "Presentation metadata must not expose raw account data.");
+  }
+  const chat = mobileApiResponse("adviser-chat", { reply: "Example", grounding: { transactionCount: 42, historyThrough: "2026-09-15T00:00:00Z", rawPayload: "private", accountNumber: "private" }, suggestions: [{ id: "follow-up", label: "Compare spending", prompt: "Compare my spending", secret: "private" }] }) as { grounding: unknown; suggestions: unknown };
+  assert.deepEqual(chat.grounding, { transactionCount: 42, historyThrough: "2026-09-15T00:00:00Z" });
+  assert.deepEqual(chat.suggestions, [{ id: "follow-up", label: "Compare spending", prompt: "Compare my spending" }]);
+  assert.equal(mobileOperation("POST", ["adviser", "actions"]), null, "Native suggestions must go through editable manual drafts, never arbitrary Adviser writes");
+  assert.ok(routeSource.indexOf('await assertWorkspaceAccess(userId, workspaceId)') < routeSource.indexOf('if (operation === "adviser-chat")'), "Native chat must check the requested Profile before dispatch");
+  assert.equal(mobileOperation("GET", ["circles"]), "circles");
+  assert.equal(mobileOperation("POST", ["circles"]), "circles");
+  assert.equal(mobileOperation("PATCH", ["circles", "one"]), "circle");
+  assert.equal(mobileOperation("DELETE", ["circles", "one"]), null, "Do not expose permanent Circle deletion where the spec requires archival");
+  assert.equal(mobileOperation("POST", ["circles", "one", "invitations"]), "circle-invite");
+  assert.equal(mobileOperation("GET", ["split-bills"]), "split-bills");
+  assert.equal(mobileOperation("POST", ["split-bills"]), "split-bills");
+  assert.equal(mobileOperation("GET", ["split-bills", "one"]), "split-bill");
+  assert.equal(mobileOperation("PATCH", ["split-bills", "one"]), "split-bill");
+  const circleInput = { name: "Our trip", type: "travel", description: "", color: "teal", currency: "PHP" };
+  assert.equal(mobileCircleInput.safeParse(circleInput).success, true);
+  for (const extra of [{ ownerUserId: "other" }, { role: "organizer" }, { members: [{ email: "unrequested@example.com" }] }, { avatarUrl: "unsafe" }]) assert.equal(mobileCircleInput.safeParse({ ...circleInput, ...extra }).success, false);
+  const splitInput = { title: "Dinner", note: "", billDate: "2026-09-07", currency: "PHP", total: "100.01", participants: [{ name: "Alex" }, { name: "Mia" }], paidByIndex: 0 };
+  assert.equal(mobileSplitBillInput.safeParse(splitInput).success, true);
+  for (const extra of [{ rawPayload: { tampered: true } }, { groupId: "foreign" }, { sourceType: "receipt" }, { paidByIndex: 2 }, { billDate: "2026-02-30" }, { total: "NaN" }, { participants: [{ name: "Alex", id: "foreign" }, { name: "Mia" }] }]) assert.equal(mobileSplitBillInput.safeParse({ ...splitInput, ...extra }).success, false);
+  assert.equal(mobileSplitBillPayload(mobileSplitBillInput.parse({ ...splitInput, transactionId: "owned-transaction" })).transactionId, "owned-transaction");
+  assert.equal(mobileOperation("GET", ["billing", "usage"]), "billing-usage");
+  assert.equal(mobileOperation("POST", ["billing", "usage"]), null);
+  assert.equal(mobileOperation("GET", ["referrals"]), "referrals");
+  assert.equal(mobileOperation("DELETE", ["referrals"]), null);
+  assert.equal(mobileEditSchema.safeParse({ userNote: "Confirmed by user", type: "income", isExcluded: true, receiptLineItems: [{ description: "Item", amount: "12.00", currency: "USD" }] }).success, true);
+  assert.equal(mobileEditSchema.safeParse({ receiptLineItems: [{ description: "Item", rawPayload: {} }] }).success, false);
+  assert.equal(mobileEditSchema.safeParse({ receiptLineItems: Array.from({ length: 101 }, () => ({ description: "Item" })) }).success, false);
+  const splitPayload = mobileSplitBillPayload(mobileSplitBillInput.parse(splitInput));
+  assert.equal(splitPayload.sourceType, "manual");
+  assert.equal(splitPayload.payments[0].participantId, splitPayload.participants[0].id);
+  assert.equal(new Set(splitPayload.participants.map(person => person.id)).size, 2);
+  const circleResponse = mobileApiResponse("circle", { personalTransactions: ["private"], investmentAccounts: ["private"], circles: [{ id: "one", avatarUrl: "https://images.example.test/circle.jpg", members: [{ id: "m", displayName: "Mia", userId: "private", email: "private" }], investmentShares: [{ id: "share", name: "Investment summary", accountId: "private" }], invitations: [{ token: "secret" }] }] });
+  assert.ok(JSON.stringify(circleResponse).includes("https://images.example.test/circle.jpg"), "Native Circle cards retain their shared photo");
+  assert.ok(!JSON.stringify(circleResponse).includes("private"));
+  assert.ok(!JSON.stringify(circleResponse).includes("secret"));
+  const splitResponse = mobileApiResponse("split-bill", { bill: { id: "one", userId: "private", transaction: { account: "private" }, rawPayload: "private", receiptStorageKey: "private", settlement: { participants: [], transfers: [] } } });
+  assert.ok(!JSON.stringify(splitResponse).includes("private"));
+  const sharedWith = mobileApiResponse("split-bills", { bills: [{ id: "bill", group: { id: "group", name: "Weekend", shareToken: "secret", userId: "private" } }] });
+  assert.deepEqual((sharedWith as {bills: {group: unknown}[]}).bills[0].group, {id:"group",name:"Weekend"});
+  assert.ok(!JSON.stringify(sharedWith).includes("secret"));
+  assert.ok(!JSON.stringify(sharedWith).includes("private"));
+  assert.equal(mobileOperation("GET", ["budgets"]), "budgets");
+  assert.equal(mobileOperation("POST", ["budgets"]), "budgets");
+  assert.equal(mobileOperation("GET", ["budgets", "options"]), "budget-options");
+  assert.equal(mobileOperation("PATCH", ["budgets", "options"]), null);
+  assert.equal(mobileOperation("PATCH", ["budgets", "owned"]), "budget");
+  assert.equal(mobileOperation("DELETE", ["budgets", "owned"]), "budget");
+  assert.equal(mobileOperation("POST", ["budget-plans"]), null);
+  const budgetInput = { name: "Groceries", kind: "spend_limit", scope: "global", cadence: "monthly", targetAmount: 5000, currency: "PHP", accountId: null, categoryId: null };
+  assert.equal(mobileBudgetInput.safeParse(budgetInput).success, true);
+  for (const extra of [{ workspaceId: "other" }, { actualAmount: 10 }, { targetAmount: -1 }, { targetAmount: "100" }, { currency: "bad" }, { scope: "account" }, { scope: "category" }, { kind: "savings_target", scope: "category", categoryId: "x" }]) assert.equal(mobileBudgetInput.safeParse({ ...budgetInput, ...extra }).success, false);
+  assert.deepEqual(mobileApiResponse("budgets", { budget: { id: "budget", workspaceId: "private", rawPayload: "secret" }, accounts: [] }), { budget: { id: "budget" } });
+  const budgetContext = readFileSync(new URL("../lib/budgeting-context.ts", import.meta.url), "utf8");
+  assert.ok(budgetContext.indexOf("if (mobile)") < budgetContext.indexOf("await cookies()"));
+  assert.ok(budgetContext.includes("await assertWorkspaceAccess(mobile.userId, workspaceId)"));
+  assert.ok(budgetContext.includes('if (!workspaceId) throw new Error("WORKSPACE_NOT_FOUND")'));
+  assert.ok(routeSource.indexOf('if (operation === "budgets" && request.method === "GET")') > routeSource.indexOf('await assertWorkspaceAccess(userId, workspaceId)'));
+  assert.equal(mobileOperation("GET", ["goals"]), "goals");
+  assert.equal(mobileOperation("POST", ["goals"]), "goals");
+  assert.equal(mobileOperation("DELETE", ["goals"]), "goals");
+  const goalInput = { goal: "save_more", targetAmount: 2000, currency: "PHP", goalPlan: { cadence: "monthly", purpose: "Travel" } };
+  assert.equal(mobileGoalInput.safeParse(goalInput).success, true);
+  for (const extra of [{ workspaceId: "other" }, { userId: "other" }, { targetAmount: -1 }, { goalPlan: { ...goalInput.goalPlan, workspaceId: "other" } }]) assert.equal(mobileGoalInput.safeParse({ ...goalInput, ...extra }).success, false);
+  const goalSource = readFileSync(new URL("../lib/mobile-goals.ts", import.meta.url), "utf8");
+  assert.ok(goalSource.includes("where: { id, workspaceId }"));
+  assert.ok(!goalSource.includes("prisma.user.update"), "Native goal edits must not overwrite the legacy account goal");
+  assert.ok(routeSource.indexOf('if (operation === "goals")') > routeSource.indexOf('await assertWorkspaceAccess(userId, workspaceId)'));
+  assert.equal(
+    mobileOperation("PATCH", ["transactions", "abc"]),
+    "transaction",
+  );
+  assert.equal(mobileOperation("DELETE", ["transactions", "abc"]), "transaction");
+  assert.equal(mobileOperation("POST", ["transactions"]), "transaction-create");
+  assert.equal(mobileOperation("POST", ["accounts"]), "account-create");
+  const newAccount = { name: "Travel", institution: "BPI", type: "bank", currency: "PHP", balance: "100.00" };
+  assert.equal(mobileAccountCreateSchema.safeParse(newAccount).success, true);
+  for (const extra of [{ workspaceId: "other" }, { accountNumber: "change-existing" }, { balance: "NaN" }, { name: "" }, { rawPayload: {} }]) {
+    assert.equal(mobileAccountCreateSchema.safeParse({ ...newAccount, ...extra }).success, false);
+  }
+  const cardHistory = mobileApiResponse("account", {account:{id:"card",accountNumber:"•••• 8745",cardNumberHistory:[{previousLastFour:"3012",newLastFour:"8745",effectiveDate:"2026-11-05",reason:"stolen",confirmedAt:"2026-11-05T00:00:00Z",confirmedBy:"private-principal",requestId:"private-request"}]}}) as {account:{lastFour:string;cardNumberHistory:object[]}};
+  assert.equal(cardHistory.account.lastFour,"8745");
+  assert.deepEqual(cardHistory.account.cardNumberHistory,[{previousLastFour:"3012",newLastFour:"8745",effectiveDate:"2026-11-05",reason:"stolen",confirmedAt:"2026-11-05T00:00:00Z"}]);
+  assert(!JSON.stringify(cardHistory).includes("private"));
+  assert.deepEqual(mobileApiResponse("account-create", { account: { id: "a", name: "Travel", rawPayload: { secret: true } } }), { account: { id: "a", name: "Travel" } });
+  assert.equal(mobileOperation("GET", ["home"]), "home");
+  assert.equal(mobileOperation("GET", ["notifications"]), "notifications");
+  assert.equal(mobileOperation("PATCH", ["notifications"]), "notifications");
+  assert.equal(mobileOperation("DELETE", ["notifications"]), null);
+  assert.ok(routeSource.includes('body.ids.some(id => !allowed.has(id))'));
+  assert.equal(mobileOperation("GET", ["options"]), "options");
+  assert.equal(mobileOperation("DELETE", ["accounts", "abc"]), "account");
+  for (const input of [{rawPayload:{tampered:true}}, {workspaceId:"other"}, {amount:"NaN"}, {date:"2026-02-30"}, {date:"2026-1-1"}, {amount:"1e6"}, {userNote:"x".repeat(2001)}]) assert.equal(mobileEditSchema.safeParse(input).success, false);
+  assert.equal(mobileEditSchema.safeParse({amount:"-123.45",date:"2026-09-07",type:"expense",accountId:"owned",categoryId:null,userNote:"User note",tags:["Work"]}).success,true);
+  assert.equal(mobileCreateSchema.safeParse({accountId:"owned",categoryId:null,merchantRaw:"Sample",date:"2026-09-07",amount:"-20.00",currency:"PHP",type:"expense"}).success,true);
+  assert.ok(routeSource.includes('where: { id: body.accountId, workspaceId'));
+  assert.ok(routeSource.includes('where: { id: body.categoryId, workspaceId'));
+  assert.equal(mobileOperation("POST", ["billing", "checkout"]), null);
+  assert.equal(mobileOperation("GET", ["admin", "users"]), null);
+  assert.equal(mobileOperation("POST", ["imports", "abc", "confirm"]), "import-confirm");
+  assert.equal(mobileOperation("GET", ["imports", "abc", "review"]), "import-review");
+  assert.equal(mobileOperation("DELETE", ["imports", "abc", "confirm"]), null);
+  assert.ok(routeSource.includes('row.workspaceId !== workspaceId'));
+  assert.ok(routeSource.includes('where:{id:payload.accountId,workspaceId}'));
+  assert.ok(routeSource.includes('withMobileRequestContext(userId,forwarded'));
+
+  const request = new Request(
+    "https://staging.clover.ph/api/mobile/v1/transactions/abc",
+    { method: "PATCH" },
+  );
+  assert.throws(() => assertTrustedRequestOrigin(request));
+  const spoofed = new Request(request.url, {
+    headers: { "X-Mobile-User-Id": "victim", Authorization: "Bearer fake" },
+  });
+  assert.throws(() => assertTrustedRequestOrigin(spoofed));
+  // This regression exercises authentication policy, not database connectivity.
+  // Keep the real session guard while isolating its identity lookup from local env files.
+  const originalIdentityLookup = prisma.clerkIdentityDeletion.findUnique;
+  const identityLookup = mock.fn(async ({ where }: { where: { clerkUserId: string } }) => {
+    if (where.clerkUserId === "lookup-error") throw new Error("Identity lookup unavailable");
+    return where.clerkUserId === "deleted" ? { clerkUserId: "deleted" } : null;
+  });
+  prisma.clerkIdentityDeletion.findUnique = identityLookup as typeof originalIdentityLookup;
+  try {
+    await Promise.all(
+      ["first", "second"].map(async (userId) =>
+        withMobileRequestContext(userId, request, async () => {
+          await Promise.resolve();
+          assert.equal(getMobileRequestContext()?.userId, userId);
+          assert.deepEqual(await getSessionContext(), { userId, isGuest: false });
+          assert.equal(await isLocalDevHost(), false);
+          assert.doesNotThrow(() => assertTrustedRequestOrigin(request));
+          assert.throws(() =>
+            assertTrustedRequestOrigin(new Request(request.url)),
+          );
+        }),
+      ),
+    );
+    assert.deepEqual(identityLookup.mock.calls.map(call => call.arguments[0]), [
+      { where: { clerkUserId: "first" }, select: { clerkUserId: true } },
+      { where: { clerkUserId: "second" }, select: { clerkUserId: true } },
+    ]);
+    await withMobileRequestContext("deleted", request, async () => {
+      await assert.rejects(getSessionContext(), /^Error: UNAUTHORIZED$/);
+    });
+    await withMobileRequestContext("lookup-error", request, async () => {
+      await assert.rejects(getSessionContext(), /^Error: Identity lookup unavailable$/);
+    });
+  } finally {
+    prisma.clerkIdentityDeletion.findUnique = originalIdentityLookup;
+  }
+  assert.equal(getMobileRequestContext(), undefined);
+  assert.throws(() => assertTrustedRequestOrigin(request));
+  assert.doesNotThrow(() =>
+    assertTrustedRequestOrigin(
+      new Request("https://clover.ph/api/test", {
+        headers: { Origin: "https://clover.ph" },
+      }),
+    ),
+  );
+  assert.throws(() =>
+    assertTrustedRequestOrigin(
+      new Request("https://clover.ph/api/test", {
+        headers: { Origin: "https://attacker.invalid" },
+      }),
+    ),
+  );
+  assert.match(mobileResponseHeaders["Cache-Control"], /no-store/);
+  const result = mobileApiResponse("transactions", {
+    transactions: [
+      {
+        id: "t",
+        amount: "500.00",
+        rawPayload: { secret: "raw" },
+        normalizedPayload: { secret: "normalized" },
+      },
+    ],
+    page: 1,
+    totalCount: 1,
+  });
+  assert.deepEqual(result, {
+    transactions: [{ id: "t", amount: "500.00", merchantLogoUrl: null, reviewReasons: ["Needs category review", "Could not identify merchant"], confidenceScore: null }],
+    page: 1,
+    totalCount: 1,
+  });
+  assert.deepEqual(
+    mobileApiResponse("imports", {
+      importFiles: [{ id: "i", fileName: "test.pdf", storageKey: "secret" }],
+    }),
+    { importFiles: [{ id: "i", fileName: "test.pdf" }] },
+  );
+  assert.deepEqual(
+    mobileApiResponse("import-process", {
+      error: "Invalid file",
+      rawPayload: "private",
+    }),
+    { error: "Invalid file" },
+  );
+  console.log(
+    "PASS mobile API allowlist, response minimization, exact-request origin exemption, async principal isolation, deleted-identity rejection, fail-closed lookup errors, and browser CSRF preservation",
+  );
+}
+void main();

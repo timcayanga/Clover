@@ -1,0 +1,156 @@
+## Runtime Logs
+
+**Project:** prj_qvFPmzm1ruKq8M1sUQBWxh7M2hgy
+**Time range:** 2026-09-14T05:18:32.142Z → 2026-09-14T05:38:32.142Z
+
+### 05:37:57 GET /onboarding 200 [info/serverless]
+dep=dpl_3m2WcoWM2njsWZDvFygRH9unxWnP branch=staging cache=MISS
+    prisma:error 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+    Error [PrismaClientKnownRequestError]: 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+        at async y (.next/server/chunks/5439.js:1:6759)
+        at async (.next/server/chunks/5439.js:1:7454)
+        at async A (.next/server/chunks/5439.js:1:7402)
+        at async t (.next/server/app/onboarding/page.js:2:33065) {
+      code: 'P2021',
+      meta: [Object],
+      clientVersion: '7.9.1',
+      digest: '784680586'
+    }
+
+### 05:37:56 GET /onboarding 200 [info/serverless]
+dep=dpl_3m2WcoWM2njsWZDvFygRH9unxWnP branch=staging cache=MISS
+    prisma:error 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+    Error [PrismaClientKnownRequestError]: 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+        at async y (.next/server/chunks/5439.js:1:6759)
+        at async (.next/server/chunks/5439.js:1:7454)
+        at async A (.next/server/chunks/5439.js:1:7402)
+        at async t (.next/server/app/onboarding/page.js:2:33065) {
+      code: 'P2021',
+      meta: [Object],
+      clientVersion: '7.9.1',
+      digest: '784680586'
+    }
+
+
+## Runtime Logs
+
+**Project:** prj_qvFPmzm1ruKq8M1sUQBWxh7M2hgy
+**Time range:** 2026-09-14T05:32:47.461Z → 2026-09-14T05:42:47.461Z
+
+### 05:42:30 GET /settings/display 200 [info/edge-middleware]
+dep=dpl_3m2WcoWM2njsWZDvFygRH9unxWnP branch=staging cache=MISS
+    prisma:error 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+    [settings-page] unable to load workspaces Error [PrismaClientKnownRequestError]: 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+        at async y (.next/server/chunks/5439.js:1:6759)
+        at async (.next/server/chunks/5439.js:1:7454)
+        at async A (.next/server/chunks/5439.js:1:7402)
+        at async u (.next/server/chunks/6507.js:1:11742) {
+      code: 'P2021',
+      meta: [Object],
+      clientVersion: '7.9.1'
+    }
+
+### 05:42:28 GET /referrals 200 [error/serverless]
+dep=dpl_3m2WcoWM2njsWZDvFygRH9unxWnP branch=staging cache=MISS
+    Error: Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware(). Please ensure the following:
+    - Your Middleware exists at ./middleware.(ts|js)
+    - clerkMiddleware() is used in your Next.js Middleware.
+    - Your Middleware matcher is configured to match this route or page.
+    - If you are using the src directory, make sure the Middleware file is inside of it.
+    
+    For more details, see https://clerk.com/err/auth-middleware
+    
+        at ah (.next/server/chunks/262.js:4:22485)
+        at <unknown> (.next/server/chunks/9151.js:1:4968)
+        at async H (.next/server/chunks/9151.js:1:4672)
+        at async k (.next/server/app/referrals/page.js:1:1754) {
+      digest: '438008629'
+    }
+
+### 05:42:21 GET /settings/profiles 200 [info/edge-middleware]
+dep=dpl_3m2WcoWM2njsWZDvFygRH9unxWnP branch=staging cache=MISS
+    prisma:error 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+    [settings-page] unable to load workspaces Error [PrismaClientKnownRequestError]: 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+        at async y (.next/server/chunks/5439.js:1:6759)
+        at async (.next/server/chunks/5439.js:1:7454)
+        at async A (.next/server/chunks/5439.js:1:7402)
+        at async u (.next/server/chunks/6507.js:1:11742) {
+      code: 'P2021',
+      meta: [Object],
+      clientVersion: '7.9.1'
+    }
+
+### 05:42:17 GET /settings/categories 200 [info/edge-middleware]
+dep=dpl_3m2WcoWM2njsWZDvFygRH9unxWnP branch=staging cache=MISS
+    prisma:error 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+    [settings-page] unable to load workspaces Error [PrismaClientKnownRequestError]: 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+        at async y (.next/server/chunks/5439.js:1:6759)
+        at async (.next/server/chunks/5439.js:1:7454)
+        at async A (.next/server/chunks/5439.js:1:7402)
+        at async u (.next/server/chunks/6507.js:1:11742) {
+      code: 'P2021',
+      meta: [Object],
+      clientVersion: '7.9.1'
+    }
+
+### 05:42:14 GET /settings/data 200 [info/edge-middleware]
+dep=dpl_3m2WcoWM2njsWZDvFygRH9unxWnP branch=staging cache=MISS
+    prisma:error 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+    [settings-page] unable to load workspaces Error [PrismaClientKnownRequestError]: 
+    Invalid `prisma.workspace.findMany()` invocation:
+    
+    
+    The table `public.BrankasStatementSession` does not exist in the current database.
+        at async y (.next/server/chunks/5439.js:1:6759)
+        at async (.next/server/chunks/5439.js:1:7454)
+        at async A (.next/server/chunks/5439.js:1:7402)
+        at async u (.next/server/chunks/6507.js:1:11742) {
+      code: 'P2021',
+      meta: [Object],
+      clientVersion: '7.9.1'
+    }
+

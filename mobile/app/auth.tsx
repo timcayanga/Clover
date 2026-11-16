@@ -1,0 +1,530 @@
+import { authFailure, needsSignInVerification } from "../../shared/auth-failure";
+import { beginTelemetry } from "../../shared/analytics";
+import { useEffect, useState, useRef } from "react";
+import { ActivityIndicator, Alert, Image, Platform, Pressable, Switch, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router, useLocalSearchParams } from "expo-router";
+import { useSignIn, useSignUp } from "@clerk/expo";
+import { useSignInWithApple } from "@clerk/expo/apple";
+import { Ionicons } from "@expo/vector-icons";
+import { useSSO } from "@clerk/expo/experimental";
+import { AuthVerification } from "../src/auth-verification";
+import { alreadySignedIn } from "../src/session-recovery";
+import { useAccess } from "../src/access";
+import { useSession } from "../src/session";
+import { setRememberSession } from "../src/auth-token-cache";
+import { Body, Button, Card, Field, Heading, Icon, Notice, Screen, useTheme } from "../src/ui";
+import { Text } from "../src/app-text";
+import { GoogleIcon } from "../src/google-icon";
+import * as WebBrowser from "expo-web-browser";
+type Step =
+  | "sign-in"
+  | "sign-up"
+  | "reset"
+  | "reset-code"
+  | "new-password"
+  | "email-verification"
+  | "extra-verification"
+  | "finish-sign-in";
+type AuthStage = Step | "password" | "send_email_code" | "verify_email_code" | "finalize_sign_in" | "google_oauth" | "prepare_password_reset" | "submit_new_password";
+
+export default function Authentication() {
+  const access = useAccess();
+  return access.configured ? (
+    <AuthForm />
+  ) : (
+    <Screen>
+      <Notice>Sign-in is not configured for this build.</Notice>
+      <Button title="Back" onPress={() => router.back()} />
+    </Screen>
+  );
+}
+function AuthForm() {
+  const { active, welcomeAllowed, beginAuthEntry, recoverSession, duringAuthentication } = useAccess();
+  const session = useSession();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ mode?: string; restartSSO?: string }>();
+  useEffect(() => {
+    if (!active) beginAuthEntry(params.mode === "sign-up" ? "sign-up" : "sign-in");
+  }, [active, beginAuthEntry, params.mode]);
+  const { signIn } = useSignIn();
+  const { signUp } = useSignUp();
+  const { startSSOFlow } = useSSO();
+  const { startAppleAuthenticationFlow } = useSignInWithApple();
+  const [step, setStep] = useState<Step>(
+    params.mode === "sign-up" ? "sign-up" : "sign-in",
+  );
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [code, setCode] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [terms, setTerms] = useState(false);
+  const [verificationSignup, setVerificationSignup] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState(
+    params.restartSSO === "1" ? "Sign-in was interrupted. Please try again." : "",
+  );
+  const pending = useRef(false);
+  const preparedResetEmail = useRef<string | null>(null);
+  const check = async (result: Promise<{ error: unknown }>) => {
+    const { error } = await result;
+    if (error) throw error;
+  };
+  const sendResetCode = async (identifier: string, setStage: (stage: AuthStage) => void) => {
+    if (preparedResetEmail.current !== identifier) {
+      setStage("prepare_password_reset");
+      await check(signIn.create({ identifier }));
+      preparedResetEmail.current = identifier;
+    }
+    setStage("send_email_code");
+    await check(signIn.resetPasswordEmailCode.sendCode());
+    setCode("");
+    setStep("reset-code");
+  };
+  const run = async (
+    action: (setStage: (stage: AuthStage) => void) => Promise<void>,
+    method = step === "sign-in" || step === "sign-up" ? "password"
+      : step === "reset" || step === "reset-code" || step === "new-password" ? "password_reset"
+      : "verification",
+    initialStage: AuthStage = step,
+  ) => {
+    if (pending.current || active) return;
+    pending.current = true;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const finish = beginTelemetry("flow", { operation: `auth_${step}`, phase: "authentication_step", method });
+    let stage = initialStage;
+    try {
+      await duringAuthentication(() => action(next => { stage = next; }));
+      finish("completed", { auth_stage: stage });
+    } catch (e) {
+      const failure = authFailure(e);
+      const sessionConflict = failure.reason === "session_exists" || alreadySignedIn(e);
+      if (sessionConflict && await recoverSession()) {
+        finish("completed", { ...failure, auth_stage: stage, recovery: "existing_session" });
+        return;
+      }
+      finish(failure.reason === "user_canceled" ? "canceled" : "failed", {
+        ...failure, auth_stage: stage, reason: sessionConflict ? "session_recovery_failed" : failure.reason,
+      });
+      if (failure.reason === "user_canceled") return;
+      if (step === "sign-in" && method === "password" && failure.reason === "credentials") {
+        setPassword("");
+        setError("Check your email and password, or use Forgot password or Google.");
+      } else if (sessionConflict) {
+        setError("Clover could not resume your sign-in. Check your connection and try again.");
+      } else if (failure.reason === "rate_limited") {
+        setError("Too many attempts. Wait a bit before trying again.");
+      } else if (stage === "password" && failure.reason === "password_reset_required") {
+        preparedResetEmail.current = null;
+        setPassword("");
+        setStep("reset");
+        const identifier = email.trim();
+        setEmail(identifier);
+        if (Platform.OS === "android") {
+          const finishReset = beginTelemetry("flow", {
+            operation: "auth_reset", phase: "authentication_step", method: "password_reset",
+          });
+          let resetStage: AuthStage = "prepare_password_reset";
+          try {
+            await duringAuthentication(() => sendResetCode(identifier, next => { resetStage = next; }));
+            finishReset("completed", { auth_stage: resetStage });
+          } catch (resetError) {
+            const resetFailure = authFailure(resetError);
+            finishReset("failed", { ...resetFailure, auth_stage: resetStage });
+            setError(resetFailure.reason === "rate_limited"
+              ? "Too many attempts. Wait a bit before requesting a new code."
+              : "Clover couldn't send the reset code. Tap Send reset code to try again.");
+          }
+        } else {
+          setError("For your security, choose a new password. Send a reset code to continue.");
+        }
+      } else if (stage === "submit_new_password" && failure.reason === "password_reset_required") {
+        setPassword("");
+        setRepeat("");
+        setError("Choose a different password to continue.");
+      } else if (stage === "send_email_code") {
+        setError(step === "reset" ? "Clover couldn't send the reset code. Tap Send reset code to try again." : "Clover couldn't send the code. Tap Resend code to try again.");
+      } else if (stage === "finalize_sign_in") {
+        setError("Clover couldn't finish signing you in. Tap Finish signing in to try again.");
+      } else if (step === "sign-in" && (failure.status === 422 || failure.reason === "method_unavailable")) {
+        setError(method === "google"
+          ? "Google sign-in couldn't continue. Try again or sign in with email."
+          : "Sign-in couldn't continue. Check your details or try another sign-in method.");
+      } else {
+        const problem = e as { message?: string; errors?: { longMessage?: string; message?: string }[] } | null;
+        setError(problem?.errors?.[0]?.longMessage ?? problem?.errors?.[0]?.message ?? problem?.message ?? "Unable to continue. Please try again.");
+      }
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  };
+  const finishSignIn = async (setStage: (stage: AuthStage) => void) => {
+    if (signIn.status === "complete") {
+      setStep("finish-sign-in");
+      setStage("finalize_sign_in");
+      await check(signIn.finalize());
+    } else if (needsSignInVerification(signIn.status) && signIn.supportedSecondFactors?.some(factor => factor.strategy === "email_code")) {
+      setCode("");
+      setStep("email-verification");
+      setStage("send_email_code");
+      await check(signIn.mfa.sendEmailCode());
+    } else {
+      setStep("extra-verification");
+      setMessage(
+        "Your account needs an additional security check to finish signing in.",
+      );
+    }
+  };
+  const submit = async (setStage: (stage: AuthStage) => void) => {
+    await setRememberSession(remember);
+    if (step === "sign-in") {
+      beginAuthEntry("sign-in");
+      setStage("password");
+      await check(signIn.password({ emailAddress: email.trim(), password }));
+      setPassword("");
+      await finishSignIn(setStage);
+    } else if (step === "finish-sign-in") {
+      setStage("finalize_sign_in");
+      await check(signIn.finalize());
+    } else if (step === "email-verification") {
+      setStage("verify_email_code");
+      await check(signIn.mfa.verifyEmailCode({ code: code.trim() }));
+      setCode("");
+      await finishSignIn(setStage);
+    } else if (step === "sign-up") {
+      await check(
+        signUp.password({
+          emailAddress: email.trim(),
+          password,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          legalAccepted: terms,
+        }),
+      );
+      setPassword("");
+      setRepeat("");
+      if (signUp.status === "complete") {
+        beginAuthEntry("sign-up");
+        await check(signUp.finalize());
+      } else {
+        throw new Error("Clover couldn't finish creating your account. Check your details or continue with Google or Apple.");
+      }
+    } else if (step === "reset") {
+      await sendResetCode(email.trim(), setStage);
+    } else if (step === "reset-code") {
+      await check(
+        signIn.resetPasswordEmailCode.verifyCode({ code: code.trim() }),
+      );
+      setCode("");
+      setStep("new-password");
+    } else if (step === "new-password") {
+      setStage("submit_new_password");
+      await check(
+        signIn.resetPasswordEmailCode.submitPassword({
+          password,
+          signOutOfOtherSessions: true,
+        }),
+      );
+      setPassword("");
+      setRepeat("");
+      await finishSignIn(setStage);
+    }
+  };
+  const confirmSocialTerms = () => step !== "sign-up" || terms ? Promise.resolve(true) : new Promise<boolean>(resolve => {
+    Alert.alert("Create your Clover account", "To continue, agree to Clover's Terms of Service and Privacy Policy. You can read both links on this screen.", [
+      { text: "Not now", style: "cancel", onPress: () => resolve(false) },
+      { text: "I agree", onPress: () => { setTerms(true); resolve(true); } },
+    ], { cancelable: false });
+  });
+  const openLegal = async (page: "terms-of-service" | "privacy-policy") => {
+    try { await WebBrowser.openBrowserAsync(`https://clover.ph/${page}`); }
+    catch { setError("Unable to open this page. Please try again."); }
+  };
+  const initial = step === "sign-in" || step === "sign-up";
+  const passwordStep = initial || step === "new-password";
+  const title = {
+    "sign-in": "Welcome back",
+    "sign-up": "Create your account",
+    reset: "Forgot password?",
+    "reset-code": "Check your email",
+    "new-password": "Reset password",
+    "extra-verification": "Verify your account",
+    "email-verification": "Verify your account",
+    "finish-sign-in": "Finish signing in",
+  }[step];
+  const valid = step === "finish-sign-in" || (
+    step === "extra-verification"
+      ? false
+      : step === "reset-code" || step === "email-verification"
+        ? code.trim().length > 0
+        : step === "reset"
+          ? email.includes("@")
+          : Boolean(
+              password &&
+              (step === "new-password" || email.includes("@")) &&
+              (step !== "new-password" || password === repeat) &&
+              (step !== "sign-up" || (terms && firstName.trim() && lastName.trim())),
+            ));
+  // Authentication has already succeeded. Do not flash an empty sign-in or
+  // sign-up card while the account's onboarding/landing decision loads.
+  if (active) return (
+    <Screen>
+      <View style={{ flex: 1, minHeight: 240, justifyContent: "center", gap: 16 }}>
+        {session.error ? <>
+          <Notice>{session.error}</Notice>
+          {error ? <Notice>{error}</Notice> : null}
+          <Button title="Try again" disabled={busy} onPress={session.refresh} />
+          <Button title="Sign out" secondary disabled={busy} onPress={() => {
+            setBusy(true);
+            void session.signOut().catch(() => setError("Unable to sign out. Please try again.")).finally(() => setBusy(false));
+          }} />
+        </> : <ActivityIndicator color={colors.teal} accessibilityLabel="Opening Clover" />}
+      </View>
+    </Screen>
+  );
+  return (
+    <View style={{ flex: 1 }}>
+    <Screen>
+      <View style={{ paddingVertical: 8, maxWidth: 520, width: "100%", alignSelf: "center" }}>
+        {welcomeAllowed && <Pressable accessibilityRole="button" accessibilityLabel="Back to tutorial" onPress={() => router.back()} style={{ minHeight: 44, alignSelf: "flex-start", justifyContent: "center", marginBottom: 8 }}>
+          <Icon name="arrow-back" size={24} color={colors.teal} />
+        </Pressable>}
+        <Card style={{ borderRadius: 24 }}>
+          <Image
+            source={require("../assets/welcome-clover.png")}
+            accessibilityLabel="Clover"
+            style={{ width: 64, height: 64, alignSelf: "center" }}
+            resizeMode="contain"
+          />
+          <Heading>{title}</Heading>
+          {!active ? <>
+          {initial || step === "reset" ? (
+            <Field
+              label="Email address"
+              value={email}
+              onChangeText={value => { preparedResetEmail.current = null; setEmail(value); }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              editable={!busy}
+            />
+          ) : null}
+          {step === "sign-up" ? (
+            <>
+              <Field label="First name" value={firstName} onChangeText={setFirstName} autoComplete="given-name" autoCapitalize="words" editable={!busy} />
+              <Field label="Last name" value={lastName} onChangeText={setLastName} autoComplete="family-name" autoCapitalize="words" editable={!busy} />
+              <View nativeID="clerk-captcha" />
+            </>
+          ) : null}
+          {passwordStep ? (
+            <>
+              <Field
+                label={step === "new-password" ? "New password" : "Password"}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!visible}
+                trailing={<Pressable accessibilityRole="button" accessibilityLabel={visible ? "Hide password" : "Show password"}
+                  accessibilityState={{ checked: visible }} disabled={busy} onPress={() => setVisible(v => !v)}
+                  style={{ width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}>
+                  <Icon name={visible ? "eye-off-outline" : "eye-outline"} size={22} color={colors.muted} />
+                </Pressable>}
+                autoCapitalize="none"
+                autoComplete={
+                  step === "sign-in" ? "current-password" : "new-password"
+                }
+                editable={!busy}
+              />
+              {step === "new-password" ? (
+                <Field
+                  label="Confirm password"
+                  value={repeat}
+                  onChangeText={setRepeat}
+                  secureTextEntry={!visible}
+                trailing={<Pressable accessibilityRole="button" accessibilityLabel={visible ? "Hide password" : "Show password"}
+                  accessibilityState={{ checked: visible }} disabled={busy} onPress={() => setVisible(v => !v)}
+                  style={{ width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}>
+                  <Icon name={visible ? "eye-off-outline" : "eye-outline"} size={22} color={colors.muted} />
+                </Pressable>}
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  editable={!busy}
+                />
+              ) : null}
+            </>
+          ) : null}
+          {step === "reset-code" || step === "email-verification" ? (
+            <>
+              <Body>Enter the code from your email ({email}).</Body>
+              <Field
+                label="Verification code"
+                value={code}
+                onChangeText={setCode}
+                autoComplete="one-time-code"
+                keyboardType="number-pad"
+                editable={!busy}
+              />
+              <Button
+                title="Resend code"
+                secondary
+                disabled={busy}
+                onPress={() =>
+                  void run(async setStage => {
+                    setStage("send_email_code");
+                    await check(
+                      step === "email-verification"
+                        ? signIn.mfa.sendEmailCode()
+                        : signIn.resetPasswordEmailCode.sendCode(),
+                    );
+                    setMessage("A new code was requested. Check your email.");
+                  })
+                }
+              />
+            </>
+          ) : null}
+          {step === "sign-in" ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Forgot password?"
+              style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center" }}
+              disabled={busy}
+              onPress={() => {
+                preparedResetEmail.current = null;
+                setStep("reset");
+                setPassword("");
+                setError("");
+              }}
+            ><Text style={{ color: colors.teal, fontFamily: "Poppins-Medium", fontSize: 14 }}>Forgot password?</Text></Pressable>
+          ) : null}
+          {initial && Platform.OS !== "web" ? (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              <Switch
+                accessibilityLabel="Stay signed in on this device"
+                value={remember}
+                onValueChange={setRemember}
+                disabled={busy}
+              />
+              <View style={{ flex: 1 }}><Body>Stay signed in on this device</Body></View>
+            </View>
+          ) : null}
+          {step === "sign-up" ? (
+            <>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+              >
+                <Switch
+                  accessibilityLabel="Agree to terms and privacy policy"
+                  value={terms}
+                  onValueChange={setTerms}
+                  disabled={busy}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.ink, fontSize: 14, lineHeight: 22 }}>
+                    I agree to the <Text accessibilityRole="link" style={{ color: colors.teal, textDecorationLine: "underline" }} onPress={() => void openLegal("terms-of-service")}>Terms of Service</Text> and <Text accessibilityRole="link" style={{ color: colors.teal, textDecorationLine: "underline" }} onPress={() => void openLegal("privacy-policy")}>Privacy Policy</Text>.
+                  </Text>
+                </View>
+              </View>
+            </>
+          ) : null}
+          {step !== "extra-verification" ? (
+            <Button
+              fullWidth
+              title={
+                busy
+                  ? "Please wait…"
+                  : step === "sign-in"
+                    ? "Sign In"
+                    : step === "sign-up"
+                      ? "Create account"
+                      : step === "finish-sign-in"
+                        ? "Finish signing in"
+                        : step === "reset" ? "Send reset code"
+                        : step === "new-password" ? "Save new password"
+                          : "Continue"
+              }
+              disabled={busy || !valid}
+              onPress={() => void run(submit)}
+            />
+          ) : (
+            <AuthVerification signup={verificationSignup} />
+          )}
+          {initial ? (
+            <>
+              {Platform.OS === "ios" ? <Button title="Sign in with Apple" fullWidth secondary leading={<Ionicons name="logo-apple" size={20} color={colors.ink} />} disabled={busy} onPress={() => void run(async () => {
+                if (!(await confirmSocialTerms())) throw { code: "ERR_REQUEST_CANCELED" };
+                await setRememberSession(remember);
+                const result = await startAppleAuthenticationFlow();
+                if (result.createdSessionId && result.setActive) await result.setActive({ session: result.createdSessionId });
+                else if (result.signIn?.status === "needs_second_factor" || result.signUp?.status === "missing_requirements") { setVerificationSignup(result.signUp?.status === "missing_requirements"); setStep("extra-verification"); setMessage("Complete your account verification to continue."); }
+              }, "apple")} /> : null}
+              {(["google"] as const).map((provider) => (
+                <Button
+                  key={provider}
+                  title="Continue with Google"
+                  fullWidth
+                  leading={<GoogleIcon />}
+                  secondary
+                  disabled={busy}
+                  onPress={() =>
+                    void run(async () => {
+                      if (!(await confirmSocialTerms())) throw { code: "ERR_REQUEST_CANCELED" };
+                      await setRememberSession(remember);
+                      const result = await startSSOFlow({
+                        strategy: `oauth_${provider}`,
+                      });
+                      if (result.authSessionResult?.type === "cancel" || result.authSessionResult?.type === "dismiss")
+                        throw { code: "ERR_REQUEST_CANCELED" };
+                      if (result.createdSessionId || result.signIn?.existingSession) return;
+                      const signupIncomplete = result.signUp?.status === "missing_requirements";
+                      if (!signupIncomplete && !needsSignInVerification(result.signIn?.status)) {
+                        throw new Error("Google sign-in couldn't continue. Try again or sign in with email.");
+                      }
+                      setVerificationSignup(signupIncomplete);
+                      setStep("extra-verification");
+                      setMessage("Complete your account verification to continue.");
+                    }, "google", "google_oauth")
+                  }
+                />
+              ))}
+              <Pressable accessibilityRole="link" disabled={busy} onPress={() => {
+                beginAuthEntry(step === "sign-in" ? "sign-up" : "sign-in");
+                setStep(step === "sign-in" ? "sign-up" : "sign-in");
+                setPassword(""); setRepeat(""); setCode(""); setError("");
+              }} style={{ minHeight: 44, justifyContent: "center", alignItems: "center" }}>
+                <Text style={{ color: "#0967C8", fontSize: 14, fontFamily: "Poppins-Medium" }}>{step === "sign-in" ? "Create an account" : "Already have an account? Sign in"}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Button
+              title="Back to sign in"
+              secondary
+              disabled={busy}
+              onPress={() => {
+                preparedResetEmail.current = null;
+                setStep("sign-in");
+                setCode("");
+                setPassword("");
+                setRepeat("");
+                setError("");
+              }}
+            />
+          )}
+          </> : null}
+          {error ? <Notice>{error}</Notice> : null}
+          {message ? <Body>{message}</Body> : null}
+        </Card>
+      </View>
+    </Screen>
+    </View>
+  );
+}

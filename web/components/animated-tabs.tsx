@@ -1,0 +1,108 @@
+"use client";
+
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+
+type AnimatedTab = {
+  key: string;
+  label?: string;
+  icon?: ReactNode;
+  badge?: string | null;
+  disabled?: boolean;
+  locked?: boolean;
+  ariaLabel?: string | null;
+};
+
+type AnimatedTabsProps = {
+  className?: string;
+  activeKey: string;
+  onChange: (key: string) => void;
+  tabs: AnimatedTab[];
+};
+
+export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedTabsProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+  const [indicator, setIndicator] = useState({ left: 0, width: 0, opacity: 0 });
+
+  const activeTab = useMemo(() => tabs.find((tab) => tab.key === activeKey) ?? tabs[0] ?? null, [activeKey, tabs]);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const activeButton = activeTab ? tabRefs.current.get(activeTab.key) ?? null : null;
+
+    if (!container || !activeButton) {
+      setIndicator((current) => ({ ...current, opacity: 0 }));
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const buttonRect = activeButton.getBoundingClientRect();
+    setIndicator({
+      left: buttonRect.left - containerRect.left + container.scrollLeft,
+      width: buttonRect.width,
+      opacity: 1,
+    });
+
+    const updateIndicator = () => {
+      const nextContainerRect = container.getBoundingClientRect();
+      const nextButtonRect = activeButton.getBoundingClientRect();
+      setIndicator({
+        left: nextButtonRect.left - nextContainerRect.left + container.scrollLeft,
+        width: nextButtonRect.width,
+        opacity: 1,
+      });
+    };
+    const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateIndicator) : null;
+    resizeObserver?.observe(container);
+    resizeObserver?.observe(activeButton);
+    return () => {
+      resizeObserver?.disconnect();
+    };
+  }, [activeTab, tabs]);
+
+  return (
+    <div ref={containerRef} className={`clover-tabs animated-tabs${tabs.every(tab => Boolean(tab.icon)) ? " compact-product-tabs" : ""}${activeTab?.locked ? " is-locked-active" : ""}${className ? ` ${className}` : ""}`}>
+      <span
+        className="animated-tabs__indicator"
+        style={{
+          transform: `translateX(${indicator.left}px)`,
+          width: indicator.width,
+          opacity: indicator.opacity,
+        }}
+        aria-hidden="true"
+      />
+      {tabs.map((tab) => {
+        const isActive = tab.key === activeKey;
+        const premium = /^(plus|pro)$/i.test(tab.badge ?? "");
+        return (
+          <button
+            key={tab.key}
+            ref={(node) => {
+              if (node) {
+                tabRefs.current.set(tab.key, node);
+              } else {
+                tabRefs.current.delete(tab.key);
+              }
+            }}
+            type="button"
+            className={`animated-tabs__tab${isActive ? " is-active" : ""}${tab.locked ? " is-locked" : ""}${premium ? " is-premium" : ""}`}
+            onClick={() => {
+              if (!tab.disabled) {
+                onChange(tab.key);
+              }
+            }}
+            disabled={tab.disabled}
+            aria-disabled={tab.locked || undefined}
+            aria-pressed={isActive}
+          aria-label={premium ? `${tab.ariaLabel ?? tab.label}, Plus and Pro` : tab.ariaLabel ?? tab.label}
+        >
+          {tab.icon ? <span className="animated-tabs__icon" aria-hidden="true">{tab.icon}</span> : null}
+          {tab.label ? <span className="animated-tabs__label">{tab.label}</span> : null}
+          {tab.badge && !premium ? <span className="animated-tabs__badge">{tab.badge}</span> : null}
+        </button>
+      );
+      })}
+    </div>
+  );
+}

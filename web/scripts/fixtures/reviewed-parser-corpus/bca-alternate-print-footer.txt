@@ -1,0 +1,11 @@
+Transfer Dana
+Transaksi berhasil diotorisasi
+Tanggal Input Jenis Transfer Tanggal Transfer Dari Rekening Ke Rekening / No. BCA Virtual Account Jumlah Biaya Kurs Valas Status Alasan No. Referensi
+10/04/2025 09:12:34 Rekening Bank Lain 10/04/2025 09:12:34
+001-1234567 / EXAMPLE HOLDING P (Rp)
+90012345678 Rp 30.00 Rp 2.00 1.00 Berhasil - 20250410001234
+© 2025 https://vpn.klikbca.com/example dilindungi undang-undang.
+1/1
+BCA_TRANSFER {"inputDate":"10/04/2025","inputTime":"09:12:34","transferDate":"10/04/2025","transferTime":"09:12:34","sourceAccount":"001-1234567","owner":"EXAMPLE HOLDING P","recipient":"90012345678","amount":"Rp 30.00","fee":"Rp 2.00","fx":"1.00","status":"Berhasil","reference":"20250410001234"}
+BCA_NATIVE_PAGES 1
+
