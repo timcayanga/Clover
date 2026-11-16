@@ -12726,8 +12726,14 @@ const processImportFileTextImpl = async (
   if (pdfStatementEvidencePages) {
     // Snapshot markers publish account observations without creating a ledger movement.
     const candidates = effectiveRows.filter(row => !(isRecord(row.rawPayload) && row.rawPayload.kind === "account_snapshot_marker" && Number(row.amount) === 0));
-    const proof = assessPdfStatementRowEvidence(pdfStatementEvidencePages.pages, candidates, resolvedMetadata.accountNumber, pdfStatementEvidencePages.continuations);
-    if (!proof.complete) {
+    // A Grab email PDF has receipt blocks rather than dated ledger rows.
+    // Its native proof still has to match every extracted receipt exactly.
+    const grabSource = pdfStatementEvidencePages.grabReceiptSource;
+    const verifiedGrabReceipt = grabSource !== null && candidates.length === effectiveRows.length &&
+      hasVerifiedGrabReceiptRows(grabSource, candidates);
+    const proof = verifiedGrabReceipt ? null :
+      assessPdfStatementRowEvidence(pdfStatementEvidencePages.pages, candidates, resolvedMetadata.accountNumber, pdfStatementEvidencePages.continuations);
+    if (proof && !proof.complete) {
       const targetedIssue = proof.issues.find(issue => issue.reason === "unverified_account_number")
         ?? proof.issues.find(issue => issue.reason === "unverified_transaction_date");
       const pages = proof.issues.flatMap(issue => issue.page && (!targetedIssue || issue.reason === targetedIssue.reason) ? [issue.page] : []);
@@ -12738,7 +12744,7 @@ const processImportFileTextImpl = async (
       await holdPurchaseDocumentForReview(text, "statement", "pdf_row_evidence_review", 0, message, { issues: proof.issues.slice(0, 50), issueCount: proof.issues.length });
       throw new SourceReviewRequiredError(message);
     }
-    const proofByRow = new Map(candidates.map((row, index) => [row, proof.evidence[index]]));
+    const proofByRow = new Map(candidates.map((row, index) => [row, proof?.evidence[index]]));
     effectiveRows = effectiveRows.map(row => {
       const source = proofByRow.get(row);
       return source ? { ...row, rawPayload: { ...(isRecord(row.rawPayload) ? row.rawPayload : {}), pdfStatementRowEvidence: source } } : row;

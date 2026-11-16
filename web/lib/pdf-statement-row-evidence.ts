@@ -5,7 +5,7 @@ const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const dateToken = /^(?:\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일|\d{4}[-/.]\s*\d{1,2}[-/.]\s*\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}|(?:\d{1,2}[- ]\p{L}{3,12}|\p{L}{3,12}[- ]\d{1,2})(?:[- ,]+\d{4}(?![\d.,]))?)(?=\s|\||$)/iu;
 const disclosure = /\b(?:opening|ending|closing|previous|beginning|brought forward|carried forward)\s+balance\b|\bbalance\s+(?:brought|carried)\s+forward\b|\b(?:balance plug|reconciliation adjustment|balancing entry|saldo awal|saldo akhir)\b/i;
-const accountField = /\b(?:(?:bank\s+)?a\/?c|account|card|rekening|kartu)\s*(?:no\.?|number|nomor|#\s*)?\s*[:#]?\s*((?:[\dXx*•●][ -]?){4,30})(?![\d.,])/gi;
+const accountField = /\b(?:(?:bank\s+)?a\/?c|account|card|(?:no\.?\s+|nomor\s+)?rekening(?:\s+seabank)?|kartu)\s*(?:no\.?|number|nomor|#\s*)?\s*[:#]?\s*((?:[\dXx*•●][ -]?){4,30})(?![\d.,])/gi;
 const number = (value: string) => value.normalize("NFKC").toUpperCase().replace(/[•●X]/g, "*").replace(/[ -]/g, "");
 const words = (value: string) => value.normalize("NFKC").toLowerCase().match(/[\p{L}\p{M}]+/gu) ?? [];
 const generic = /^(?:the|of|and|pos|card|purchase|payment|debit|credit|transaction|transfer|fee|php|usd|idr|myr|sgd|thb|krw)$/;

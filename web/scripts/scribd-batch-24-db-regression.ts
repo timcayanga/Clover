@@ -1,3 +1,4 @@
+import { statementPdf } from "./fixtures/synthetic-statement-pdf";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
@@ -125,18 +126,34 @@ async function main() {
         await processLearningJob(job.id);
       }
     };
-    const importText = async (fileName: string, text: string, importMode: "statement" | "receipt") => {
+    const importText = async (fileName: string, text: string) => {
       const file = await db.importFile.create({ data: {
         workspaceId: workspace.id, fileName, fileType: "application/pdf", storageKey: `qa/${randomUUID()}`,
       } });
-      await processImportFileText(file.id, { text, importMode, actorUserId: user.clerkUserId });
+      const lines = text.split("\n");
+      const firstLedgerPage = lines.findIndex(line => line.startsWith("SEABANK_ID_ROW_COUNT "));
+      const pages: string[][] = firstLedgerPage < 0 ? grabPages.map(page => page.split("\n")) : [];
+      if (firstLedgerPage >= 0) {
+        const header = lines.slice(0, firstLedgerPage).filter(line => !line.startsWith("SEABANK_ID_") && !line.startsWith("halaman "));
+        for (const line of lines.slice(firstLedgerPage)) {
+          if (line.startsWith("SEABANK_ID_ROW_COUNT ")) {
+            pages.push([...header, `halaman ${pages.length + 1} dr 4`]);
+          } else {
+            const [, date, , amount, balance, description] = line.split("|").map(part => part.trim());
+            pages[pages.length - 1].push(`${date} ${description} ${amount} ${balance}`);
+          }
+        }
+      }
+      const sourceBytes = statementPdf(pages[0], 0, pages.slice(1));
+      await processImportFileText(file.id, { text, sourceBytes, importMode: "statement", actorUserId: user.clerkUserId });
       await settle();
-      assert.equal((await db.importFile.findUniqueOrThrow({ where: { id: file.id } })).status, "done");
+      const stored = await db.importFile.findUniqueOrThrow({ where: { id: file.id } });
+      assert.equal(stored.status, "done", `${fileName}: ${stored.processingMessage ?? stored.status}`);
       return file.id;
     };
     const fileIds: string[] = [];
     for (const [index, ledger] of ledgers.entries()) {
-      const importFileId = await importText(`Synthetic SeaBank ${index + 1}.pdf`, ledger.text, "statement");
+      const importFileId = await importText(`Synthetic SeaBank ${index + 1}.pdf`, ledger.text);
       fileIds.push(importFileId);
       const rows = await db.transaction.findMany({ where: { importFileId } });
       assert.equal(rows.length, ledger.movements.length);
@@ -146,7 +163,7 @@ async function main() {
       assert.equal(Number(checkpoint.endingBalance), ledger.closing);
       assert.equal(checkpoint.mismatchReason, null);
     }
-    const grabId = await importText("Synthetic Grab E-Receipt.pdf", grabText, "receipt");
+    const grabId = await importText("Synthetic Grab E-Receipt.pdf", grabText);
     fileIds.push(grabId);
     const storedRides = await db.transaction.findMany({ where: { importFileId: grabId } });
     assert.deepEqual(storedRides.map(row => (row.rawPayload as Record<string, unknown>).referenceNumber).sort(), rides.map(row => row.reference));

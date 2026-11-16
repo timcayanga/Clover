@@ -26,7 +26,7 @@ globalThis.fetch = async (input, init) => {
   else if (path === "/login_identity") body = { login_identity: identity, institution: { institution_name: "QA Bank", institution_id: "qa-bank" } };
   else if (path === "/accounts") body = { accounts: empty ? [] : [{ account_id: providerId, account_name: "Savings", account_currency: "PHP", account_number_full: providerNumber, balance: noFinancialData || missingBalance ? undefined : { currency: "PHP", value: "2000" } }, { account_id: "unselected", account_currency: "PHP", account_name: "Other" }, { account_id: "parent", is_parent: true }] };
   else if (path.startsWith("/account_numbers/")) body = { account_number: { number: providerNumber } };
-  else if (path === "/transactions") { transactionFetches++; body = { transactions: noFinancialData ? [] : [{ transaction_id: "expense-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Synthetic Lunch", amount: { currency: "PHP", value: -100 } }, { transaction_id: "salary-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Salary", amount: { currency: "PHP", value: 1000 } }, { transaction_id: "other-account", account_id: "unselected", posted_date: "2026-11-01", amount: { currency: "PHP", value: -500 } }] }; }
+  else if (path === "/transactions") { transactionFetches++; body = { transactions: noFinancialData ? [] : [{ transaction_id: "expense-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Synthetic Lunch", amount: { currency: "PHP", value: -100 } }, { transaction_id: "salary-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Salary", description: "Reference: QAHR20261101", amount: { currency: "PHP", value: 1000 } }, { transaction_id: "other-account", account_id: "unselected", posted_date: "2026-11-01", amount: { currency: "PHP", value: -500 } }] }; }
   else throw Error(`Unexpected provider path ${path}`);
   return Response.json(body);
 };
@@ -50,7 +50,7 @@ async function main() {
     const { finverseBalances } = await import("../lib/finverse-balances");
     const workspace = await db.workspace.create({ data: { userId: user.id, name: "Disposable bank linking QA" } });
     const account = await db.account.create({ data: { workspaceId: workspace.id, name: "My Savings", institution: "QA Bank", accountNumber: "0012345678", type: "bank", currency: "PHP", balance: 450 } });
-    const confirmed = await db.transaction.create({ data: { workspaceId: workspace.id, accountId: account.id, merchantRaw: "Salary", merchantClean: "Salary", date: new Date("2026-11-01"), amount: 1000, currency: "PHP", type: "income", reviewStatus: "confirmed" } });
+    const confirmed = await db.transaction.create({ data: { workspaceId: workspace.id, accountId: account.id, merchantRaw: "Salary", merchantClean: "Salary", description: "Reference: QAHR20261101", date: new Date("2026-11-01"), amount: 1000, currency: "PHP", type: "income", reviewStatus: "confirmed" } });
     const original = JSON.stringify(confirmed), accountBefore = JSON.stringify(account);
     const request = (path: string, body: object) => new Request(`https://staging.clover.ph/api/integrations/finverse/${path}`, { method: "POST", headers: { origin: "https://staging.clover.ph", "content-type": "application/json" }, body: JSON.stringify(body) });
     tier = "free"; assert.equal((await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" }))).status, 403); tier = "premium";

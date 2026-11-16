@@ -1005,6 +1005,7 @@ type PdfOcrProfile = "standard" | "aggressive";
 
 const pdfOriginalLayoutReads = new WeakMap<Uint8Array, readonly string[]>();
 const pdfStatementContinuations = new WeakMap<Uint8Array, PdfStatementContinuation[]>();
+const pdfNativeGrabReceipts = new WeakMap<Uint8Array, string>();
 const pdfNativePageReads = new WeakMap<Uint8Array, readonly string[]>();
 const pdfOcrPageReads = new WeakMap<Uint8Array, Array<{ page: number; text: string; imageDigest: string }>>();
 
@@ -1046,7 +1047,7 @@ export function readPdfStatementEvidencePages(data: Uint8Array, selectedText: st
     const nativePage = ocrPageNumbers.has(span.page) ? span.continuationPage : span.page;
     pages[nativePage - 1] = pdfOriginalLayoutReads.get(data)?.[nativePage - 1] ?? "";
   }
-  return { pages, continuations };
+  return { pages, continuations, grabReceiptSource: pdfNativeGrabReceipts.get(data) ?? null };
 }
 
 function hybridPdfRecoveryPlan(data: Uint8Array, text: string) {
@@ -2534,7 +2535,10 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
       }
     }
     const grabPages = buildGrabReceiptNativePages(pages, grabPickupFields.flat(), pdf.numPages === 1 ? grabPanelBodies[0] ?? undefined : undefined, visualHeadlines);
-    if (grabPages) return `${extractedText}\n${grabPages}`;
+    if (grabPages) {
+      pdfNativeGrabReceipts.set(data, grabPages);
+      return `${extractedText}\n${grabPages}`;
+    }
     const gcashPages = buildGcashBillsNativePages(pages);
     if (gcashPages) return `${extractedText}\n${gcashPages}`;
     const cimbText = `${extractedText}\nCIMB_NATIVE_PAGES ${pdf.numPages}`;
