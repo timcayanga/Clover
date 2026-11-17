@@ -2547,7 +2547,8 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const settlement = result.receiptType === "wallet_transfer" || result.receiptType === "travel_ticket" || payment
     ? null : settlementEvidence;
   const settled = settlement
-    ? { ...dated, total: settlement.kind === "payable" && dated.total !== null ? settlement.amount.toFixed(2) : null,
+    ? { ...dated, total: settlement.kind === "payable" && dated.total !== null ? settlement.amount.toFixed(2)
+        : settlement.kind === "conflict" ? settlement.observedAmount?.toFixed(2) ?? null : null,
       requiresReview: dated.requiresReview || settlement.kind !== "payable" }
     : dated;
   const tenders = readReceiptTenders(body);

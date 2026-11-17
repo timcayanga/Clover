@@ -28,7 +28,21 @@ assert.deepEqual(readReceiptSettlementEvidence(receipt("Amount payable:", "PHP 2
 assert.deepEqual(readReceiptSettlementEvidence(receipt("Grand total PHP 201.60", "Refund policy: within 7 days")),
   { kind: "payable", amount: 201.6 });
 
+const noisyTotal = receipt("Bill Total     1,668.13           i       :");
+assert.deepEqual(readReceiptSettlementEvidence(noisyTotal), { kind: "payable", amount: 1668.13 });
+assert.equal(parseReceiptText(noisyTotal).receiptText, noisyTotal);
+assert.equal(parseReceiptText(noisyTotal).total, "1668.13");
+const noisyDuplicate = receipt("Amount due /1 L666 1S)", "Bill Total     1,668.13           i       :");
+const noisyEvidence = readReceiptSettlementEvidence(noisyDuplicate);
+assert.deepEqual(noisyEvidence, { kind: "conflict", observedAmount: 1668.13 });
+assert.equal(parseReceiptText(noisyDuplicate).total, "1668.13");
+assert.equal(parseReceiptText(noisyDuplicate).requiresReview, true);
+assert.equal(reconcileReceiptSettlement({ total: 1668.13, parser_evidence: { reason: "" } }, noisyEvidence).total, null);
+
 for (const source of [
+  receipt("Bill Total 1,668.1     i :"),
+  receipt("Bill Total 1,668.13     2.00"),
+  receipt("Bill Total 1,668.13     PENDING"),
   receipt("Subtotal 180.00", "Cash 500.00", "Change 298.40"),
   receipt("Tax summary", "Total VAT 21.60"),
   receipt("Grand Total 201.60", "Amount Paid 301.60"),

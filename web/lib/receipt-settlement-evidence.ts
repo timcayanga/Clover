@@ -104,7 +104,8 @@ export function readReceiptRounding(source: string) {
 type Settlement =
   | { kind: "payable"; amount: number }
   | { kind: "refund"; amount: number | null }
-  | { kind: "conflict" | "missing_payable" };
+  | { kind: "conflict"; observedAmount?: number }
+  | { kind: "missing_payable" };
 
 export function readReceiptSettlementEvidence(source: string): Settlement | null {
   const { body } = splitReceiptPromotionalFooter(joinReceiptColumnSettlement(source.normalize("NFKC")));
@@ -120,6 +121,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
   let isRefund = false;
   let hasOtherTender = false;
   let unreadableFinal = false;
+  let recoveredEdgeNoise = false;
 
   for (const [index, line] of lines.entries()) {
     if (taxHeading.test(line)) {
@@ -146,8 +148,13 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     if (!label) continue;
     const value = line.slice(label.length).trim();
     const amountText = /^[:：=]?$/u.test(value) ? lines[index + 1] ?? "" : value;
-    const amount = readAmount(amountText);
     const final = Boolean(totalLabel && saleLabels.test(totalLabel));
+    // A separated OCR stroke at the right edge can follow a complete printed
+    // total. Keep the full line as evidence and require intact cents.
+    const amountWithEdgeNoise = final && amountText.match(/^(.*\d[.,]\d{2})[ \t]{2,}(?:[iI|:;][ \t]*){1,5}$/u);
+    const cleanAmount = readAmount(amountText);
+    const amount = cleanAmount ?? (amountWithEdgeNoise ? readAmount(amountWithEdgeNoise[1]) : null);
+    recoveredEdgeNoise ||= cleanAmount === null && amount !== null;
     if (amount === null) {
       unreadableFinal ||= final;
       continue;
@@ -171,7 +178,11 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     const amounts = refunds.size ? refunds : new Set(purchaseAmounts.map(Math.abs));
     return { kind: "refund", amount: amounts.size === 1 ? [...amounts][0] / 100 : null };
   }
-  if (unreadableFinal || finalTotals.size > 1) return { kind: "conflict" };
+  if (finalTotals.size > 1) return { kind: "conflict" };
+  if (unreadableFinal) {
+    const observed = recoveredEdgeNoise && finalTotals.size === 1 ? [...finalTotals][0] : null;
+    return observed === null ? { kind: "conflict" } : { kind: "conflict", observedAmount: observed / 100 };
+  }
   const payableCandidates = finalTotals.size ? finalTotals : totals;
   const cashNet = !hasOtherTender && settlementCurrencies.size <= 1 && cash.size === 1 && changes.size === 1
     ? [...cash][0] - [...changes][0] : null;

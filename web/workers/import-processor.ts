@@ -8381,7 +8381,7 @@ const processImportFileTextImpl = async (
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   let skipVisualBackupParser = Boolean(options.skipVisualBackupParser);
-  const importFile = await fetchImportFileCompat(importFileId);
+  const importFile = await measureImportTiming(importFileId, "worker_import_file_lookup", () => fetchImportFileCompat(importFileId));
   const importOwnerPromise = importFile?.workspaceId ? Promise.resolve(prisma.workspace.findUnique({
     where: { id: String(importFile.workspaceId) }, select: { userId: true, user: { select: { regionalPreferences: true } } },
   })) : null;
@@ -8559,7 +8559,7 @@ const processImportFileTextImpl = async (
   // Keep optical input separate from normalized financial fields. Recovery can
   // reuse the original reading without uploading or scanning the photo again.
   const submittedDeviceText = imageImport ? normalizeDeviceTextEvidence(options.deviceText) : null;
-  const [deviceText, receiptCaptureLocation, cameraCapture] = await Promise.all([
+  const [deviceText, receiptCaptureLocation, cameraCapture] = await measureImportTiming(importFileId, "worker_capture_context", () => Promise.all([
     (async () => {
       if (!imageImport) return null;
       if (submittedDeviceText?.pagesRead === 1 && submittedDeviceText.totalPages === 1) {
@@ -8588,7 +8588,7 @@ const processImportFileTextImpl = async (
       where: { workspaceId: String(importFile.workspaceId), entityId: importFileId, action: "import.camera_capture" },
       select: { id: true },
     }).catch(() => null) : null,
-  ]);
+  ]));
   importSource = cameraCapture ? "camera_photo"
     : imageImport ? (/^(?:screenshot|screen[ _-]?shot|screen[ _-]?capture)/i.test(fileName) ? "screenshot" : "image_unknown")
     : (/\.pdf$/i.test(fileName) || /^application\/pdf(?:;|$)/i.test(fileType)) ? "pdf" : "other_file";

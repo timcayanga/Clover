@@ -884,7 +884,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     importMode: params.importMode,
   });
   let receipt = originalProfile === "receipt";
-  let preview = receipt ? await getBoundedImportImagePreview(params.sourceBytes) : null;
+  let preview = receipt ? await measureImportReader("receipt_region_preview", () => getBoundedImportImagePreview(params.sourceBytes)) : null;
   const region = preview ? findImportImageTextRegion(preview) : null;
   const focusedPreview = region
     ? await normalizeImportedImageBytes(params.sourceBytes, params.fileType, params.fileName, params.importMode, "text-region", region)
@@ -942,7 +942,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   }
 
   if (preview && params.importMode === "receipt") {
-    const localText = await readLocalReceiptImage(preview);
+    const localText = await measureImportReader("receipt_local_ocr_fallback", () => readLocalReceiptImage(preview));
     if (localText) return localText;
   }
 
@@ -3448,7 +3448,8 @@ export const readImportedFileTextWithCacheInfo = async (
         return knownStatementImageText;
       }
 
-      const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName, params.importMode);
+      const normalized = await measureImportReader("image_initial_normalization", () =>
+        normalizeImportedImageBytes(bytes, params.fileType, params.fileName, params.importMode));
       return extractTextFromImageBufferWithReceiptAwareFallback({
         normalizedDataUrl: normalized.dataUrl,
         normalizedBuffer: normalized.buffer,
@@ -3539,7 +3540,7 @@ export const readImportedFileTextWithCacheInfo = async (
       hitCount: 0,
       cacheVersion,
     }).catch(() => null);
-    if (options?.awaitFreshCacheWrite) await cacheWrite;
+    if (options?.awaitFreshCacheWrite) await measureImportReader("text_cache_write_wait", () => cacheWrite);
     return {
       fileFingerprint,
       text,
