@@ -38,6 +38,12 @@ assert.deepEqual(noisyEvidence, { kind: "conflict", observedAmount: 1668.13 });
 assert.equal(parseReceiptText(noisyDuplicate).total, "1668.13");
 assert.equal(parseReceiptText(noisyDuplicate).requiresReview, true);
 assert.equal(reconcileReceiptSettlement({ total: 1668.13, parser_evidence: { reason: "" } }, noisyEvidence).total, null);
+const garbledCharge = receipt("Subtotal 1570.00", "SERVICE CHARGE Th F019", "Amount due /1.668 Sie", "Bill Total 1,668.13");
+const garbledPreview = parseReceiptText(garbledCharge);
+assert.equal(garbledPreview.total, "1668.13");
+assert.equal(garbledPreview.serviceCharge, null);
+assert.equal(garbledPreview.requiresReview, true);
+
 
 for (const source of [
   receipt("Bill Total 1,668.1     i :"),

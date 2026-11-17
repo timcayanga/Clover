@@ -122,6 +122,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
   let hasOtherTender = false;
   let unreadableFinal = false;
   let recoveredEdgeNoise = false;
+  let garbledFinalAmount = false;
 
   for (const [index, line] of lines.entries()) {
     if (taxHeading.test(line)) {
@@ -157,6 +158,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     recoveredEdgeNoise ||= cleanAmount === null && amount !== null;
     if (amount === null) {
       unreadableFinal ||= final;
+      garbledFinalAmount ||= final && /^\/\s*\d/u.test(amountText) && /\p{L}/u.test(amountText);
       continue;
     }
 
@@ -180,7 +182,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
   }
   if (finalTotals.size > 1) return { kind: "conflict" };
   if (unreadableFinal) {
-    const observed = recoveredEdgeNoise && finalTotals.size === 1 ? [...finalTotals][0] : null;
+    const observed = (recoveredEdgeNoise || garbledFinalAmount) && finalTotals.size === 1 ? [...finalTotals][0] : null;
     return observed === null ? { kind: "conflict" } : { kind: "conflict", observedAmount: observed / 100 };
   }
   const payableCandidates = finalTotals.size ? finalTotals : totals;

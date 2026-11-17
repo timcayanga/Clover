@@ -4456,12 +4456,12 @@ const main = async () => {
   if (
     serviceChargeRepairPreview.billDate !== "2024-11-22T00:00:00.000Z" ||
     serviceChargeRepairPreview.subtotal !== "1570.00" ||
-    serviceChargeRepairPreview.serviceCharge !== "98.13" ||
+    serviceChargeRepairPreview.serviceCharge !== null ||
     serviceChargeRepairPreview.total !== "1668.13" ||
     serviceChargeRepairQuality.reliableForFastPath
   ) {
     throw new Error(
-      `expected suspicious service-charge OCR to be repaired but kept off fast path, got date=${serviceChargeRepairPreview.billDate ?? "null"} subtotal=${serviceChargeRepairPreview.subtotal ?? "null"} serviceCharge=${serviceChargeRepairPreview.serviceCharge ?? "null"} total=${serviceChargeRepairPreview.total ?? "null"} quality=${JSON.stringify(serviceChargeRepairQuality)}`
+      `expected the printed total to be recovered and unreadable service charge left blank for review, got date=${serviceChargeRepairPreview.billDate ?? "null"} subtotal=${serviceChargeRepairPreview.subtotal ?? "null"} serviceCharge=${serviceChargeRepairPreview.serviceCharge ?? "null"} total=${serviceChargeRepairPreview.total ?? "null"} quality=${JSON.stringify(serviceChargeRepairQuality)}`
     );
   }
 

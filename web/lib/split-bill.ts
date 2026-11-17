@@ -859,7 +859,7 @@ const parseAmountFromLine = (line: string) => {
   return parseReceiptAmountToken(amountToken);
 };
 
-const parseSummaryAmountFromLine = (line: string, options?: { keywordPattern?: RegExp }) => {
+const parseSummaryAmountFromLine = (line: string, options?: { keywordPattern?: RegExp; standaloneAmount?: boolean }) => {
   const normalized = normalizeWhitespace(line);
   if (!normalized) {
     return null;
@@ -867,7 +867,8 @@ const parseSummaryAmountFromLine = (line: string, options?: { keywordPattern?: R
 
   const keywordPattern = options?.keywordPattern ?? null;
   const searchText = keywordPattern ? normalized.replace(keywordPattern, " ") : normalized;
-  const matches = Array.from(searchText.matchAll(/-?\(?[\d,.-]+\)?/g))
+  const amountTokens = options?.standaloneAmount ? /(?<![\p{L}\d.,])-?\(?[\d,.-]+\)?(?![\p{L}\d.,])/gu : /-?\(?[\d,.-]+\)?/g;
+  const matches = Array.from(searchText.matchAll(amountTokens))
     .map((match) => match[0] ?? null)
     .filter((token): token is string => Boolean(token));
   if (matches.length === 0) {
@@ -2651,7 +2652,7 @@ const parseReceiptTextCore = (
         ? inferReceiptSubtotalFromFooter(lines, rawItemTotal)
         : inferReceiptSubtotalFromFooter(lines);
   const serviceCharge = serviceChargeLine
-    ? parseSummaryAmountFromLine(serviceChargeLine, { keywordPattern: /\b(?:service\s*ch[a-z]{2,8}|servicecharge|charge)\b/i })
+    ? parseSummaryAmountFromLine(serviceChargeLine, { keywordPattern: /\b(?:service\s*ch[a-z]{2,8}|servicecharge|charge)\b/i, standaloneAmount: true })
     : null;
   const tax = taxLine ? parseSummaryAmountFromLine(taxLine, { keywordPattern: /^[+\-*•]?\s*(tax|vat|\d{2,3}\s*va[tr])\b/i }) : null;
   const tip = tipLine ? parseSummaryAmountFromLine(tipLine, { keywordPattern: /^[+\-*•]?\s*tip\b/i }) : null;
