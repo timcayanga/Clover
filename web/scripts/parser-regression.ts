@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { getAccountBrand } from "@/lib/account-brand";
@@ -3037,17 +3038,12 @@ const main = async () => {
     "Fries 40.00",
     "Total 170.00",
   ].join("\n"));
-  if (addonReceiptPreview.items.length !== 2) {
-    throw new Error(`expected addon receipt to produce 2 line items, got ${addonReceiptPreview.items.length}`);
-  }
-  if (addonReceiptPreview.items[0]?.amount !== "130.00") {
-    throw new Error(`expected addon line to fold into burger total of 130.00, got ${addonReceiptPreview.items[0]?.amount ?? "null"}`);
-  }
-  if (!addonReceiptPreview.items[0]?.description.toLowerCase().includes("add cheese")) {
-    throw new Error(
-      `expected addon line to be reflected in the first description, got ${addonReceiptPreview.items[0]?.description ?? "null"}`
-    );
-  }
+  assert.deepEqual(addonReceiptPreview.items.map(({ description, amount }) => [description, amount]), [
+    ["Burger", "120.00"],
+    ["Burger (Add cheese)", "10.00"],
+    ["Fries", "40.00"],
+  ], "A separately priced add-on must retain its printed charge");
+  assert.equal(addonReceiptPreview.total, "170.00");
   assertUnresolvedReceiptCurrency(addonReceiptPreview);
 
   const comboReceiptPreview = parseReceiptText([
@@ -3059,20 +3055,13 @@ const main = async () => {
     "- Discount 20.00",
     "Total 150.00",
   ].join("\n"));
-  if (comboReceiptPreview.items.length !== 2) {
-    throw new Error(`expected combo receipt to produce 2 line items, got ${comboReceiptPreview.items.length}`);
-  }
-  if (comboReceiptPreview.items[0]?.amount !== "130.00") {
-    throw new Error(`expected combo add-on to fold into burger total of 130.00, got ${comboReceiptPreview.items[0]?.amount ?? "null"}`);
-  }
-  if (comboReceiptPreview.discount !== "20.00") {
-    throw new Error(`expected combo discount to be captured as a receipt-level discount, got ${comboReceiptPreview.discount ?? "null"}`);
-  }
-  if (!comboReceiptPreview.items[0]?.description.toLowerCase().includes("cheese")) {
-    throw new Error(
-      `expected combo add-on text to be preserved on the first item, got ${comboReceiptPreview.items[0]?.description ?? "null"}`
-    );
-  }
+  assert.deepEqual(comboReceiptPreview.items.map(({ description, amount }) => [description, amount]), [
+    ["Combo Meal Burger", "120.00"],
+    ["Combo Meal Burger (Cheese)", "10.00"],
+    ["Fries", "40.00"],
+  ], "A separately priced combo add-on stays distinct from its parent and discount");
+  assert.equal(comboReceiptPreview.discount, "20.00");
+  assert.equal(comboReceiptPreview.total, "150.00");
   assertUnresolvedReceiptCurrency(comboReceiptPreview);
 
   const summaryReceiptPreview = parseReceiptText([
@@ -3103,18 +3092,18 @@ const main = async () => {
   }
   if (summaryReceiptPreview.confidence < 84 || summaryReceiptPreview.currency !== "PHP") throw new Error("Philippine service-charge receipt contract regressed");
 
-  const tipAndRoundingPreview = parseReceiptText([
+  const tipAndRoundingLines = [
     "THE FAMILY TABLE",
     "Burger 100.00",
     "Fries 50.00",
     "Tip 20.00",
     "Round Off -0.50",
     "Void Water 5.00",
-    "Refund 5.00",
     "Subtotal 150.00",
     "Tax 9.00",
     "Total 178.50",
-  ].join("\n"));
+  ];
+  const tipAndRoundingPreview = parseReceiptText(tipAndRoundingLines.join("\n"));
   if (tipAndRoundingPreview.items.length !== 2) {
     throw new Error(`expected tip/rounding receipt to produce 2 item lines, got ${tipAndRoundingPreview.items.length}`);
   }
@@ -3130,6 +3119,10 @@ const main = async () => {
     throw new Error("expected void/refund lines not to become receipt items");
   }
   assertUnresolvedReceiptCurrency(tipAndRoundingPreview);
+
+  const mixedRefund = parseReceiptText([...tipAndRoundingLines, "Refund 5.00"].join("\n"));
+  assert.equal(mixedRefund.total, null, "A receipt with a separate refund needs review before recording a purchase");
+  assert.equal(mixedRefund.requiresReview, true);
 
   const sectionedReceiptPreview = parseReceiptText([
     "CAFE",

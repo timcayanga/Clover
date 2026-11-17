@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readLocalReceiptOcrText } from "../lib/local-receipt-ocr-envelope";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
@@ -16,6 +17,7 @@ type Label = {
 type Prediction = {
   id: string; route: string; outcome: "extracted" | "review" | "rejected" | "failed" | "unavailable";
   core?: Field<typeof core[number]>;
+  reviewReasons?: Array<"optical_preview_policy" | "missing_merchant" | "missing_date" | "missing_total" | "currency_conflict" | "parser_review">;
   items?: Field<typeof itemFields[number]>[];
 };
 type Count = { exact: number; labeled: number };
@@ -57,11 +59,15 @@ function score(labels: Label[], predictions: Prediction[]) {
     let automaticCoreExact = 0;
     const allCore = { exact: 0, labeled: 0 }, allObservableCore = { exact: 0, labeled: 0 };
     const items = { matchedDescriptions: 0, labeled: 0, extraOnCompletePhotos: 0, completePhotos: 0, allItemsExact: 0 };
+    const reviewReasons: Record<string, number> = {};
     const outcomes = { extracted: 0, review: 0, rejected: 0, failed: 0, unavailable: 0 };
     for (const label of labels) {
       const result = results.get(label.id);
       const outcome = result?.outcome ?? "unavailable";
       outcomes[outcome]++;
+      if (outcome === "review") for (const reason of new Set(result?.reviewReasons)) {
+        reviewReasons[reason] = (reviewReasons[reason] ?? 0) + 1;
+      }
       if (outcome === "unavailable") continue;
       const hasOutput = outcome === "extracted" || outcome === "review";
       const got = hasOutput ? result?.core : undefined;
@@ -133,7 +139,7 @@ function score(labels: Label[], predictions: Prediction[]) {
     }
     const attempted = labels.length - outcomes.unavailable;
     return {
-      route, photos: labels.length, attempted, outcomes, fields, allCore, automaticCoreExact, allObservableCore, itemExactness,
+      route, photos: labels.length, attempted, outcomes, reviewReasons, fields, allCore, automaticCoreExact, allObservableCore, itemExactness,
       items: { ...items, completeness: items.labeled ? items.matchedDescriptions / items.labeled : null },
       reviewRate: attempted ? outcomes.review / attempted : null,
     };
@@ -238,9 +244,16 @@ async function main() {
             continue;
           }
           const parsed = parseReceiptText(text);
+          const reviewReasons: NonNullable<Prediction["reviewReasons"]> = [];
+          if (readLocalReceiptOcrText(text) !== null) reviewReasons.push("optical_preview_policy");
+          else if (parsed.requiresReview) reviewReasons.push("parser_review");
+          if (!parsed.merchantName) reviewReasons.push("missing_merchant");
+          if (!parsed.billDate) reviewReasons.push("missing_date");
+          if (!parsed.total) reviewReasons.push("missing_total");
+          if (parsed.currency === "MIXED") reviewReasons.push("currency_conflict");
           results.push({
-            id: source.id, route,
-            outcome: parsed.requiresReview || !parsed.merchantName || !parsed.billDate || !parsed.total || parsed.currency === "MIXED" ? "review" : "extracted",
+            id: source.id, route, reviewReasons,
+            outcome: reviewReasons.length ? "review" : "extracted",
             core: { merchant: parsed.merchantName, date: parsed.billDate?.slice(0, 10) ?? null, total: parsed.total, currency: parsed.currency === "MIXED" ? null : parsed.currency },
             items: parsed.items.map(item => ({ description: item.description, quantity: item.quantity == null ? null : String(item.quantity), unitPrice: item.unitPrice ?? null, lineAmount: item.amount })),
           });

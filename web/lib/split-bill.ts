@@ -1333,7 +1333,8 @@ const extractReceiptItemFromLine = (line: string, pendingDescription?: string | 
     /^(?<quantity>\d+(?:\.\d+)?)\s+(?<description>.+?)\s+(?<unitPrice>\d[\d,]*\.\d{2})(?:\s+(?<amount>\d[\d,]*\.\d{2}))?$/i,
     /^(?<description>.+?)\s+(?<quantity>\d+(?:\.\d+)?)\s*[x×]\s*(?<unitPrice>\d[\d,]*\.\d{2})(?:\s+(?<amount>\d[\d,]*\.\d{2}))?$/i,
     /^(?<description>.+?)\s+(?<quantity>\d+(?:\.\d+)?)\s+(?<unitPrice>\d[\d,]*\.\d{2})\s+(?<amount>\d[\d,]*\.\d{2})$/i,
-    /^(?<description>.+?)\s+(?<quantity>\d+(?:\.\d+)?)\s+(?<amount>\d[\d,]*\.\d{2})$/i,
+    // Without a multiplier, a decimal price before the line total belongs to the unit-price column.
+    /^(?<description>.+?)\s+(?<quantity>\d+)\s+(?<amount>\d[\d,]*\.\d{2})$/i,
   ];
   for (const pattern of quantityPatterns) {
     const explicitQuantityMatch = combinedText.match(pattern);
@@ -3234,6 +3235,12 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
   const qualityAssessment = assessReceiptPreviewQuality(preview);
   const usableMerchantName = !isSuspiciousReceiptMerchantName(preview.merchantName) ? preview.merchantName : null;
   const cleanPreviewItems = preview.items.filter((item) => !isSuspiciousReceiptItemDescription(item.description));
+  const shouldPreserveWalletTransferHints =
+    preview.receiptType === "wallet_transfer" &&
+    cleanPreviewItems.length === 0 &&
+    Boolean(usableMerchantName) &&
+    qualityAssessment.score >= 2 &&
+    preview.confidence >= 75;
   const shouldResetReviewSummary =
     !qualityAssessment.reliableForFastPath &&
     (qualityAssessment.issues.some((issue) =>
@@ -3241,6 +3248,7 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
         issue
       )
     ) ||
+      (preview.receiptType === "wallet_transfer" && !shouldPreserveWalletTransferHints) ||
       (preview.items.length > 0 && cleanPreviewItems.length === 0));
   const shouldResetReviewItems =
     !qualityAssessment.reliableForFastPath &&
@@ -3251,12 +3259,6 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
     ) ||
       preview.receiptType === "wallet_transfer" ||
       cleanPreviewItems.length !== preview.items.length);
-  const shouldPreserveWalletTransferHints =
-    preview.receiptType === "wallet_transfer" &&
-    cleanPreviewItems.length === 0 &&
-    Boolean(usableMerchantName) &&
-    qualityAssessment.score >= 2 &&
-    preview.confidence >= 75;
   const shouldPreserveAccountHints = qualityAssessment.reliableForFastPath || shouldPreserveWalletTransferHints;
   const merchantNameForDraft =
     qualityAssessment.reliableForFastPath || shouldPreserveWalletTransferHints ? usableMerchantName : null;
