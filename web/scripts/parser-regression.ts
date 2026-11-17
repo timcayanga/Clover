@@ -4198,8 +4198,8 @@ const main = async () => {
     );
   }
   const jarandjamReceiptQuality = assessReceiptPreviewQuality(jarandjamReceiptPreview);
-  if (!jarandjamReceiptQuality.reliableForFastPath) {
-    throw new Error(`expected trained-style receipt to remain eligible for fast path, got ${JSON.stringify(jarandjamReceiptQuality)}`);
+  if (jarandjamReceiptQuality.reliableForFastPath) {
+    throw new Error(`expected unreconciled noisy itemization to stay out of the fast path, got ${JSON.stringify(jarandjamReceiptQuality)}`);
   }
 
   const noisyReceiptPreview = parseReceiptText([

@@ -1380,6 +1380,11 @@ const extractReceiptItemFromLine = (line: string, pendingDescription?: string | 
       } satisfies ReceiptPreviewItem;
     }
   }
+  // A leading quantity cannot stand in for a missing line price.
+  const quantityOnly = combinedText.match(/^\d+(?:[.,]\d+)?\s+\p{L}[^\d]*$/u);
+  if (quantityOnly) {
+    return null;
+  }
   const amount = parseAmountFromLine(combinedText);
   if (amount === null) {
     return null;
