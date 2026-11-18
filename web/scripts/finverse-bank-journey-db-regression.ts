@@ -93,12 +93,12 @@ async function main() {
     assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 1);
     identity = { status: "DATA_RETRIEVAL_COMPLETE", product_status: products("SUCCESS"), session_status: "COMPLETED" };
     empty = true; assert.equal((await send()).status, 422); empty = false;
-    const selection = await send(); const selectionBody=await selection.json();assert.equal(selectionBody.status,"select_accounts");assert.equal(selectionBody.attemptId,connectionId);
-    const acknowledgeList=(attemptId=connectionId)=>journey(request('journey',{workspaceId:workspace.id,connectionId,attemptId,stage:'account_list_displayed',outcome:'succeeded',durationMs:45,requestToVisibleMs:600}));
+    const selection = await send(); const selectionBody=await selection.json();assert(selectionBody.syncAttemptId);assert.equal(selectionBody.status,"select_accounts");assert.equal(selectionBody.attemptId,connectionId);
+    const acknowledgeList=(attemptId=connectionId)=>journey(request('journey',{workspaceId:workspace.id,connectionId,attemptId,syncAttemptId:selectionBody.syncAttemptId,stage:'account_list_displayed',outcome:'succeeded',durationMs:45,requestToVisibleMs:600}));
     assert.equal((await acknowledgeList('stale-attempt')).status,409);
     assert.equal((await acknowledgeList()).status,200);
     assert.equal((await (await send({ selectedAccountIds: [] })).json()).status, "select_accounts", "Empty selection cannot become ready");
-    const complete = await send({ selectedAccountIds: ["primary"],attemptId:connectionId,clientSelectionDurationMs:2200 }); assert.equal(complete.status, 200, await complete.clone().text()); const result = await complete.json(); assert.equal(result.status, "ready"); assert.equal(result.accounts, 1); assert.equal(result.transactions.imported, 1); assert.equal(result.transactions.existing, 1);
+    const complete = await send({syncRunId:'a695c9b3-7d50-442a-8fa7-8f94f69eb33f',syncRequestKind:'start', selectedAccountIds: ["primary"],attemptId:connectionId,clientSelectionDurationMs:2200 }); assert.match(complete.headers.get('x-clover-bank-sync-attempt')??'',/^[0-9a-f-]{36}$/); assert.equal(complete.status, 200, await complete.clone().text()); const result = await complete.json(); assert.equal(result.status, "ready"); assert.equal(result.accounts, 1); assert.equal(result.transactions.imported, 1); assert.equal(result.transactions.existing, 1);
     assert.deepEqual(invalidated, [workspace.id], "Completed bank sync invalidates only its Profile summaries");
     assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 2);
     assert.equal((await finverseBalances(workspace.id)).get(account.id)?.bankBalance, "2000.00", "Saved provider snapshot is visible through the Accounts/Home projection");
@@ -111,9 +111,12 @@ async function main() {
     assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.first_data_displayed" } }), 0);
     assert.equal((await show(connectionId, "balance", "another-profile")).status, 400);
     assert.equal((await displayed(request('displayed',{workspaceId:workspace.id,connectionId,kind:'balance',attemptId:'stale-attempt',durationMs:35}))).status,409);
-    const displays = await Promise.all([displayed(request('displayed',{workspaceId:workspace.id,connectionId,kind:'balance',attemptId:connectionId,durationMs:35,requestToVisibleMs:1500})), show()]);
+    const displays = await Promise.all([displayed(request('displayed',{workspaceId:workspace.id,connectionId,kind:'balance',attemptId:connectionId,syncAttemptId:result.syncAttemptId,durationMs:35,requestToVisibleMs:1500})), show()]);
     assert(displays.every(response => response.ok));
     assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.first_data_displayed" } }), 1);
+    const anotherReady=await send();const anotherBody=await anotherReady.json();assert.notEqual(anotherBody.syncAttemptId,result.syncAttemptId);
+    assert.equal((await displayed(request('displayed',{workspaceId:workspace.id,connectionId,kind:'balance',attemptId:connectionId,syncAttemptId:anotherBody.syncAttemptId,durationMs:20}))).status,200);
+    assert.equal((await displayed(request('displayed',{workspaceId:workspace.id,connectionId,kind:'balance',attemptId:connectionId,syncAttemptId:'fc9f2b1d-aa0e-4692-a213-66f6d9354cdf'}))).status,409,'Cannot acknowledge an invented sync');
     identity = { status: "DATA_RETRIEVAL_PARTIALLY_SUCCESSFUL", product_status: { ...products("SUCCESS"), historical_transactions: { status: "ERROR" } } };
     assert.equal((await (await send()).json()).dataStatus, "partial");
     missingBalance = true;
@@ -167,19 +170,26 @@ async function main() {
     const bad = new FormData(); bad.set("state", state); bad.set("code", "bad-code");
     const failedCallback = await callback(new Request(process.env.FINVERSE_REDIRECT_URI!, { method: "POST", body: bad })); assert(failedCallback.headers.get("location")?.startsWith("clover://accounts")); assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: failedId } })).status, "error");
     assert.equal((await sync(request("sync", { workspaceId: "not-owned", connectionId }))).status, 404);
-    await Promise.all(telemetryJobs.map(job=>job()));
+    for(let i=0;i<telemetryJobs.length;i+=4)await Promise.all(telemetryJobs.slice(i,i+4).map(job=>job()));
     const traces=await db.auditLog.findMany({where:{workspaceId:workspace.id,entity:'BankJourney'},select:{entityId:true,action:true,metadata:true}});
     assert(traces.some(t=>t.entityId===lateId&&t.action==='bank_journey.callback_ignored.failed'),'Known expired callback retains bank attribution without becoming a missing return');
     assert(traces.some(t=>t.entityId===failedCatalog.id&&t.action==='bank_journey.link_request.failed'),'Catalog preparation failure must not disappear from stage diagnostics');
     assert(traces.some(t=>t.action==='bank_journey.transaction_fetch.succeeded'));
     for(const [stage,duration] of [['account_list_displayed',45],['account_selection_submitted',2200],['first_data_displayed',35]] as const){
-     const observed=traces.find(t=>t.entityId===connectionId&&t.action===`bank_journey.${stage}.succeeded`);assert(observed,stage);assert.equal((observed.metadata as {duration_ms?:number}).duration_ms,duration,stage);
+     const observed=traces.find(t=>t.entityId===connectionId&&t.action===`bank_journey.${stage}.succeeded`&&(stage!=='first_data_displayed'||(t.metadata as {sync_attempt_id?:string}).sync_attempt_id===result.syncAttemptId));assert(observed,stage);assert.equal((observed.metadata as {duration_ms?:number}).duration_ms,duration,stage);
     }
     assert(traces.some(t=>t.action==='bank_journey.token_exchange.failed'));
     assert(traces.some(t=>t.action==='bank_journey.first_data_displayed.succeeded'));
     assert(traces.every(t=>!JSON.stringify(t.metadata).includes('fixture-access')));
-    const unique=new Set(traces.map(t=>t.entityId+':'+t.action+':'+(t.metadata as {attempt_id?:string}).attempt_id));
-    assert.equal(unique.size,traces.length,'Repeated sync does not inflate stage counts');
+    assert(traces.filter(t=>t.action==='bank_journey.retrieval.succeeded'&&(t.metadata as {sync_attempt_id?:string}).sync_attempt_id).every(t=>(t.metadata as {duration_ms?:number}).duration_ms===undefined),'Repeated sync must not use the old callback as its retrieval timer');
+    assert.equal(traces.filter(t=>t.action==='bank_journey.first_data_displayed.succeeded'&&(t.metadata as {sync_attempt_id?:string}).sync_attempt_id).length,2,'Repeated visible results retain their exact source sync');
+    const syncStarts=traces.filter(t=>t.action==='bank_journey.sync_started.started'),syncEnds=traces.filter(t=>t.action.startsWith('bank_journey.sync_finished.'));
+    assert(syncStarts.length>10);assert.equal(syncStarts.length,syncEnds.length,'Every owned request has its own final response outcome');
+    assert.equal(new Set(syncEnds.map(t=>(t.metadata as {sync_attempt_id:string}).sync_attempt_id)).size,syncEnds.length);
+    for(const result of ['action_required','retrieving','failed','selection_required','complete','up_to_date','empty'])assert(syncEnds.some(t=>(t.metadata as {sync_result:string}).sync_result===result),result);
+
+    const unique=new Set(traces.map(t=>t.entityId+':'+t.action+':'+((t.metadata as {sync_attempt_id?:string}).sync_attempt_id??(t.metadata as {attempt_id?:string}).attempt_id)));
+    assert.equal(unique.size,traces.length,'Repeated requests retain independent stages while replay within a request remains deduplicated');
     assert.equal(JSON.stringify(await db.transaction.findUnique({where:{id:confirmed.id}})),original);
     process.env.CLOVER_DEPLOYMENT_ENVIRONMENT='staging';
     const {getBankJourneyReport}=await import('../lib/bank-journey-report');

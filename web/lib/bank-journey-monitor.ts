@@ -1,3 +1,4 @@
+import { bankSyncResponse,bankSyncRunId,type BankSyncResult } from '../../shared/bank-sync-outcome';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { after } from 'next/server';
@@ -7,7 +8,7 @@ import { prisma } from './prisma';
 import { capturePostHogServerEvent } from './analytics-server';
 import { bankFailure, bankProviderStage, bankProductEvidence, type BankJourneyStage, type BankJourneyOutcome } from '../../shared/bank-journey-monitor';
 type Connection={id:string;workspaceId:string;userId:string;institutionId?:string|null;institutionName?:string|null;createdAt:Date};
-type Context={requestId:string;started:number;attemptId?:string;attemptStarted?:number;kind:'link'|'sync'|'callback'|'display';connection?:Connection;clerkUserId?:string;platform?:string;appVersion?:string;appBuild?:string;selectedBankId?:string;selectedBankName?:string;lastProviderError?:unknown};
+type Context={requestId:string;started:number;attemptId?:string;attemptStarted?:number;kind:'link'|'sync'|'callback'|'display';connection?:Connection;clerkUserId?:string;platform?:string;appVersion?:string;appBuild?:string;selectedBankId?:string;selectedBankName?:string;lastProviderError?:unknown;syncAttemptId?:string;syncRunId?:string;syncRequestKind?:'start'|'poll'|'legacy_request';syncFailure?:ReturnType<typeof bankFailure>};
 const scope=new AsyncLocalStorage<Context>();
 const persistedStages=new Map<string,number>();
 export function withBankMonitoring<T>(kind:Context['kind'],work:()=>Promise<T>){return scope.run({requestId:randomUUID(),started:Date.now(),kind},work);}
@@ -30,18 +31,43 @@ export async function bindBankMonitoring(connection:Connection,clerkUserId:strin
  }
  }catch{/* Diagnostics cannot fail a bank operation. */}
 }
+export async function beginBankSync(input:{syncRunId?:unknown;syncRequestKind?:unknown}){
+ const c=scope.getStore();if(!c?.connection||c.syncAttemptId)return;
+ c.syncAttemptId=c.requestId;c.syncRunId=bankSyncRunId(input.syncRunId)??c.syncAttemptId;
+ c.syncRequestKind=bankSyncRunId(input.syncRunId)&&(input.syncRequestKind==='start'||input.syncRequestKind==='poll')?input.syncRequestKind:'legacy_request';
+ await bankJourney('sync_started','started',{durable:true});
+}
+export async function monitorBankSync(work:()=>Promise<Response>){return withBankMonitoring('sync',async()=>{
+ try{const response=await work();const c=scope.getStore();if(!c?.syncAttemptId)return response;
+  let payload:unknown;try{payload=await response.clone().json();}catch{/* An unreadable response is unknown, never success. */}
+  const result=bankSyncResponse(response.status,payload);
+  await bankJourney('sync_finished',result.outcome,{durable:true,syncResult:result.result,responseStatus:response.status,durationMs:Date.now()-c.started});
+  response.headers.set('x-clover-bank-sync-attempt',c.syncAttemptId);
+  if(payload&&typeof payload==='object'&&!Array.isArray(payload)){const headers=new Headers(response.headers);headers.delete('content-length');return new Response(JSON.stringify({...payload,syncAttemptId:c.syncAttemptId,syncRunId:c.syncRunId}),{status:response.status,headers});}
+  return response;
+ }catch(error){const c=scope.getStore();if(c?.syncAttemptId)await bankJourney('sync_finished','failed',{durable:true,syncResult:'interrupted',error,durationMs:Date.now()-c.started});throw error;}
+});}
+/** Bind only an owned, server-observed request; client IDs cannot attach to another sync or Profile. */
+export async function bindBankSyncObservation(syncAttemptId:string,stage:'account_list_ready'|'sync_finished'){
+ const c=scope.getStore();if(!c?.connection)return false;
+ const row=await prisma.auditLog.findFirst({where:{workspaceId:c.connection.workspaceId,entity:'BankJourney',entityId:c.connection.id,action:stage==='account_list_ready'?'bank_journey.account_list_ready.succeeded':{startsWith:'bank_journey.sync_finished.'},AND:[{metadata:{path:['sync_attempt_id'],equals:syncAttemptId}},{metadata:{path:['attempt_id'],equals:c.attemptId}}]},select:{metadata:true}});
+ const m=row?.metadata as {sync_result?:string;sync_run_id?:string;sync_request_kind?:'start'|'poll'|'legacy_request'}|null;
+ if(!m||stage==='sync_finished'&&!['complete','up_to_date','partial'].includes(m.sync_result??''))return false;
+ c.syncAttemptId=syncAttemptId;c.syncRunId=bankSyncRunId(m.sync_run_id)??syncAttemptId;c.syncRequestKind=m.sync_request_kind;return true;
+}
 export function bankAttemptId(){return scope.getStore()?.attemptId;}
-export function bankJourney(stage:BankJourneyStage,outcome:BankJourneyOutcome,detail:{durable?:boolean;durationMs?:number;requestToVisibleMs?:number;sessionResult?:'returned'|'closed'|'launch_failed';error?:unknown;accountCount?:number;transactionCount?:number;providerStatus?:string;dataKind?:'balance'|'transaction';repeatable?:boolean;timingBoundary?:'stage_request_to_response'|'clover_processing_intervals'|'clover_browser_launch_request'|'provider_retrieval_observed_wait'|'client_payload_to_visible'|'client_visible_list_to_submit'|'client_auth_session_lifetime'|'legacy_display_ack'}={}){
+export function bankJourney(stage:BankJourneyStage,outcome:BankJourneyOutcome,detail:{syncResult?:BankSyncResult;responseStatus?:number;durable?:boolean;durationMs?:number;requestToVisibleMs?:number;sessionResult?:'returned'|'closed'|'launch_failed';error?:unknown;accountCount?:number;transactionCount?:number;providerStatus?:string;dataKind?:'balance'|'transaction';repeatable?:boolean;timingBoundary?:'stage_request_to_response'|'clover_processing_intervals'|'clover_browser_launch_request'|'provider_retrieval_observed_wait'|'client_payload_to_visible'|'client_visible_list_to_submit'|'client_auth_session_lifetime'|'legacy_display_ack'}={}){
  const live=scope.getStore();if(!live?.connection||!live.clerkUserId)return;
+ if(live.syncAttemptId&&outcome==='failed'&&detail.error)live.syncFailure=bankFailure(detail.error);
  const c={...live}, connection=c.connection!;
- const cacheKey=[connection.id,c.attemptId,stage,outcome,detail.repeatable?c.requestId:''].join(':');
+ const cacheKey=[connection.id,c.syncAttemptId??c.attemptId,stage,outcome,detail.repeatable?c.requestId:''].join(':');
  if((persistedStages.get(cacheKey)??0)>Date.now())return;
  const duration=detail.durationMs??(stage==='link_request'&&outcome==='succeeded'?Date.now()-c.started:undefined);
- const metadata={...(c.platform?{platform:c.platform}:{}),...(c.appVersion?{app_version:c.appVersion}:{}),...(c.appBuild?{app_build:c.appBuild}:{}),...(c.selectedBankId?{selected_bank_id:c.selectedBankId}:{}),...(c.selectedBankName?{selected_bank_name:c.selectedBankName}:{}),schema_version:1,stage,outcome,observed_at:new Date().toISOString(),bank_id:c.selectedBankId??connection.institutionId??'unknown',bank_name:c.selectedBankName??(c.selectedBankId&&c.selectedBankId!==connection.institutionId?undefined:connection.institutionName)??'Unknown bank',resolved_bank_id:connection.institutionId??'unknown',resolved_bank_name:connection.institutionName??'Unknown bank',connection_id:connection.id,attempt_id:c.attemptId??connection.id,operation_id:c.requestId,journey_kind:c.attemptId===connection.id?'link':'refresh',
+ const metadata={...(c.platform?{platform:c.platform}:{}),...(c.appVersion?{app_version:c.appVersion}:{}),...(c.appBuild?{app_build:c.appBuild}:{}),...(c.selectedBankId?{selected_bank_id:c.selectedBankId}:{}),...(c.selectedBankName?{selected_bank_name:c.selectedBankName}:{}),...(c.syncAttemptId?{sync_attempt_id:c.syncAttemptId,sync_run_id:c.syncRunId,sync_request_kind:c.syncRequestKind}:{}),...(detail.syncResult?{sync_result:detail.syncResult}:{}),...(detail.responseStatus?{response_status:detail.responseStatus}:{}),schema_version:2,stage,outcome,observed_at:new Date().toISOString(),bank_id:c.selectedBankId??connection.institutionId??'unknown',bank_name:c.selectedBankName??(c.selectedBankId&&c.selectedBankId!==connection.institutionId?undefined:connection.institutionName)??'Unknown bank',resolved_bank_id:connection.institutionId??'unknown',resolved_bank_name:connection.institutionName??'Unknown bank',connection_id:connection.id,attempt_id:c.attemptId??connection.id,operation_id:c.requestId,journey_kind:c.attemptId===connection.id?'link':'refresh',
   ...(typeof duration==='number'&&Number.isFinite(duration)?{duration_ms:Math.max(0,Math.round(duration)),timing_boundary:detail.timingBoundary??'stage_request_to_response'}:{}),
   ...(detail.requestToVisibleMs!==undefined?{request_to_visible_ms:detail.requestToVisibleMs}:{}),...(detail.sessionResult?{session_result:detail.sessionResult}:{}),
   journey_elapsed_ms:Math.max(0,Date.now()-(c.attemptStarted??+connection.createdAt)),
-  ...(detail.error?bankFailure(detail.error):{}),
+  ...(detail.error?bankFailure(detail.error):stage==='sync_finished'&&outcome!=='succeeded'&&c.syncFailure?c.syncFailure:{}),
   ...(detail.accountCount!==undefined?{account_count:Math.max(0,Math.trunc(detail.accountCount))}:{}),
   ...(detail.transactionCount!==undefined?{transaction_count:Math.max(0,Math.trunc(detail.transactionCount))}:{}),
   ...(detail.providerStatus&&/^[A-Z_]{2,80}$/.test(detail.providerStatus)?{provider_status:detail.providerStatus}:{}),...(detail.dataKind?{data_kind:detail.dataKind}:{})};
@@ -49,9 +75,9 @@ export function bankJourney(stage:BankJourneyStage,outcome:BankJourneyOutcome,de
   const action=`bank_journey.${stage}.${outcome}`;
   const saved=await prisma.$transaction(async tx=>{
    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`bank-journey:${connection.id}`},0))`;
-   const prior=await tx.auditLog.findFirst({where:{workspaceId:connection.workspaceId,entity:'BankJourney',entityId:connection.id,action,metadata:{path:[detail.repeatable?'operation_id':'attempt_id'],equals:detail.repeatable?c.requestId:metadata.attempt_id}},select:{id:true}});
+   const prior=await tx.auditLog.findFirst({where:{workspaceId:connection.workspaceId,entity:'BankJourney',entityId:connection.id,action,metadata:{path:[c.syncAttemptId?'sync_attempt_id':detail.repeatable?'operation_id':'attempt_id'],equals:c.syncAttemptId??(detail.repeatable?c.requestId:metadata.attempt_id)}},select:{id:true}});
    if(prior)return false;
-   if(stage==='retrieval'&&outcome==='succeeded'&&metadata.duration_ms===undefined){
+   if(stage==='retrieval'&&!c.syncAttemptId&&outcome==='succeeded'&&metadata.duration_ms===undefined){
     const start=await tx.auditLog.findFirst({where:{workspaceId:connection.workspaceId,entity:'BankJourney',entityId:connection.id,action:'bank_journey.retrieval.started',metadata:{path:['attempt_id'],equals:metadata.attempt_id}},select:{metadata:true}});
     const observed=(start?.metadata as {observed_at?:string}|null)?.observed_at;
     if(observed&&Number.isFinite(Date.parse(observed))){metadata.duration_ms=Math.max(0,Date.parse(metadata.observed_at)-Date.parse(observed));metadata.timing_boundary='provider_retrieval_observed_wait';}

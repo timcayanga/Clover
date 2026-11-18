@@ -4,9 +4,9 @@ import { assertTrustedRequestOrigin } from '@/lib/request-security';
 import { assertWorkspaceAccess } from '@/lib/workspace-access';
 import { prisma } from '@/lib/prisma';
 import { BANK_MAX_CLIENT_INTERVAL_MS } from '../../../../../../shared/bank-stage-measurements';
-import { withBankMonitoring,bindBankMonitoring,bankJourney,bankAttemptId } from '@/lib/bank-journey-monitor';
+import { withBankMonitoring,bindBankMonitoring,bankJourney,bankAttemptId,bindBankSyncObservation } from '@/lib/bank-journey-monitor';
 const duration=z.number().finite().min(0).max(BANK_MAX_CLIENT_INTERVAL_MS).optional();
-const input=z.object({workspaceId:z.string().min(1).max(240),connectionId:z.string().min(1).max(240),attemptId:z.string().min(1).max(240).optional(),stage:z.enum(['finverse_open','account_list_displayed','hosted_session_ended']).optional(),outcome:z.enum(['started','pending','succeeded','failed']),durationMs:duration,requestToVisibleMs:duration,sessionResult:z.enum(['returned','closed','launch_failed']).optional()}).strict();
+const input=z.object({workspaceId:z.string().min(1).max(240),connectionId:z.string().min(1).max(240),syncAttemptId:z.string().uuid().optional(),attemptId:z.string().min(1).max(240).optional(),stage:z.enum(['finverse_open','account_list_displayed','hosted_session_ended']).optional(),outcome:z.enum(['started','pending','succeeded','failed']),durationMs:duration,requestToVisibleMs:duration,sessionResult:z.enum(['returned','closed','launch_failed']).optional()}).strict();
 export function POST(request:Request){return withBankMonitoring('link',async()=>{
  try{
   assertTrustedRequestOrigin(request);const {userId}=await requireAuth();const b=input.parse(await request.json());
@@ -16,6 +16,7 @@ export function POST(request:Request){return withBankMonitoring('link',async()=>
   const c=await prisma.finverseConnection.findFirst({where:{id:b.connectionId,workspaceId:b.workspaceId,userId:w.userId,status:{not:'disconnected'},disconnectRequestedAt:null},select:{id:true,userId:true,workspaceId:true,institutionId:true,institutionName:true,createdAt:true}});
   if(!c)return Response.json({ok:false},{status:404});await bindBankMonitoring(c,userId);
   if(b.attemptId&&b.attemptId!==bankAttemptId())return Response.json({ok:false},{status:409});
+  if(b.syncAttemptId&&(stage!=='account_list_displayed'||!await bindBankSyncObservation(b.syncAttemptId,'account_list_ready')))return Response.json({ok:false},{status:409});
   if(stage==='account_list_displayed'){
    const ready=await prisma.auditLog.findFirst({where:{workspaceId:w.id??b.workspaceId,entity:'BankJourney',entityId:c.id,action:'bank_journey.account_list_ready.succeeded',metadata:{path:['attempt_id'],equals:b.attemptId}},select:{id:true}});
    if(!ready)return Response.json({ok:false},{status:409});

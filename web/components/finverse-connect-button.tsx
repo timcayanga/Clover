@@ -24,7 +24,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 type SelectAccount = { id: string; name: string; reserved?: boolean; existingAccountName?: string | null; suggestedAccountId?:string|null; candidates?:{id:string;name:string;last4:string|null}[] };
 type SyncResponse = {
-  attemptId?:string;
+  syncAttemptId?:string;attemptId?:string;
   status?: string;
   message?: string;
   linkUrl?: string;
@@ -95,7 +95,7 @@ export function FinverseConnectButton({
   const actionRef = useRef<"connecting" | "syncing" | "unlinking" | null>(null);
   const onSyncedRef = useRef(onSynced);
   const [action, setAction] = useState<"connecting" | "syncing" | "unlinking" | null>(null);
-  const [selection,setSelection] = useState<{connectionId:string;attemptId?:string;receivedAt:number;requestedAt:number;remaining:number;accounts:SelectAccount[]}|null>(null);
+  const [selection,setSelection] = useState<{connectionId:string;syncAttemptId?:string;attemptId?:string;receivedAt:number;requestedAt:number;remaining:number;accounts:SelectAccount[]}|null>(null);
   const [mappings,setMappings]=useState<Record<string,string>>({});
   const [selected,setSelected] = useState<string[]>([]);
   const [unlinkTarget, setUnlinkTarget] = useState<{id:string;name:string;connectionId:string}|null>(null);
@@ -163,31 +163,32 @@ export function FinverseConnectButton({
   const selectionVisible=useRef<{key:string;at:number}|null>(null);
   useEffect(()=>{
     const node=selectionNode.current;if(!selection||!node||!workspaceId||!selection.attemptId)return;
-    const key=`${workspaceId}:${selection.connectionId}:${selection.attemptId}`;
+    const key=`${workspaceId}:${selection.connectionId}:${selection.syncAttemptId??selection.attemptId}`;
     return observeBankVisibility(node,async()=>{
       if(selectionVisible.current?.key!==key)selectionVisible.current={key,at:performance.now()};
       const at=selectionVisible.current.at;
-      const response=await fetch('/api/integrations/finverse/journey',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workspaceId,connectionId:selection.connectionId,attemptId:selection.attemptId,stage:'account_list_displayed',outcome:'succeeded',durationMs:bankElapsed(selection.receivedAt,at),requestToVisibleMs:bankElapsed(selection.requestedAt,at)})});
+      const response=await fetch('/api/integrations/finverse/journey',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workspaceId,connectionId:selection.connectionId,attemptId:selection.attemptId,...(selection.syncAttemptId?{syncAttemptId:selection.syncAttemptId}:{}),stage:'account_list_displayed',outcome:'succeeded',durationMs:bankElapsed(selection.receivedAt,at),requestToVisibleMs:bankElapsed(selection.requestedAt,at)})});
       return response.ok||response.status<500;
     });
   },[selection,workspaceId,action]);
-  const [preview, setPreview] = useState<{ workspaceId: string; connectionId: string; row: BankLinkPreview; attemptId?:string;receivedAt:number;requestedAt:number } | null>(null);
+  const [preview, setPreview] = useState<{ workspaceId: string; connectionId: string; row: BankLinkPreview; syncAttemptId?:string;attemptId?:string;receivedAt:number;requestedAt:number } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const visiblePreview = preview?.workspaceId === workspaceId ? preview : null;
   useEffect(() => {
     const node=previewRef.current;if(!visiblePreview||!node)return;
     let visibleAt:number|undefined;
     return observeBankVisibility(node,async()=>{
-      visibleAt??=performance.now();const {workspaceId,connectionId,row,attemptId,receivedAt,requestedAt}=visiblePreview;
-      const response=await fetch('/api/integrations/finverse/displayed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workspaceId,connectionId,kind:row.kind,...(attemptId?{attemptId,durationMs:bankElapsed(receivedAt,visibleAt),requestToVisibleMs:bankElapsed(requestedAt,visibleAt)}:{})})});
+      visibleAt??=performance.now();const {workspaceId,connectionId,row,attemptId,syncAttemptId,receivedAt,requestedAt}=visiblePreview;
+      const response=await fetch('/api/integrations/finverse/displayed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workspaceId,connectionId,kind:row.kind,...(syncAttemptId?{syncAttemptId}:{}),...(attemptId?{attemptId,durationMs:bankElapsed(receivedAt,visibleAt),requestToVisibleMs:bankElapsed(requestedAt,visibleAt)}:{})})});
       return response.ok||response.status<500;
     });
   },[visiblePreview]);
   const [progressConnection, setProgressConnection] = useState<string>();
   const sync = useCallback(async (requestedConnectionId?: string, selectedAccountIds?: string[], refresh = false) => {
     if (!allowed || !workspaceId || actionRef.current) return;
+    const syncRunId=crypto.randomUUID();
     const requestedAt=performance.now();
-    const visibleKey=selection?.attemptId?`${workspaceId}:${selection.connectionId}:${selection.attemptId}`:undefined;
+    const visibleKey=selection?.attemptId?`${workspaceId}:${selection.connectionId}:${selection.syncAttemptId??selection.attemptId}`:undefined;
     const clientSelectionDurationMs=selectedAccountIds?.length&&selectionVisible.current?.key===visibleKey?bankElapsed(selectionVisible.current?.at,requestedAt):undefined;
     const controller = new AbortController();
     activeSyncRef.current = controller;
@@ -201,7 +202,7 @@ export function FinverseConnectButton({
         const response = await fetch("/api/integrations/finverse/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspaceId, connectionId: requestedConnectionId, selectedAccountIds, accountMappings: Object.fromEntries(Object.entries(mappings).filter(([id,target])=>selectedAccountIds?.includes(id)&&target)), refresh: refresh && attempt === 1,attemptId:selection?.attemptId,clientSelectionDurationMs }),
+          body: JSON.stringify({ workspaceId, connectionId: requestedConnectionId, selectedAccountIds, accountMappings: Object.fromEntries(Object.entries(mappings).filter(([id,target])=>selectedAccountIds?.includes(id)&&target)), refresh: refresh && attempt === 1,syncRunId,syncRequestKind:attempt===1?'start':'poll',attemptId:selection?.attemptId,clientSelectionDurationMs }),
           signal: controller.signal,
           cache: "no-store",
         });
@@ -210,7 +211,7 @@ export function FinverseConnectButton({
         if (controller.signal.aborted) return;
         if (!response.ok) { setReconnect(body.reconnectRequired === true); throw new Error(body.error || "Unable to sync your bank."); }
         if (body.status === "authorize" && body.linkUrl) { if(body.connectionId)void fetch("/api/integrations/finverse/journey",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspaceId,connectionId:body.connectionId,outcome:"started"}),keepalive:true}).catch(()=>{}); window.location.assign(body.linkUrl); return; }
-        if(body.status === "select_accounts" && body.connectionId && body.accounts){setSelection({connectionId:body.connectionId,attemptId:body.attemptId,receivedAt,requestedAt,remaining:body.remaining ?? 0,accounts:body.accounts});setSelected([]);setMappings({});setMessage("");setBankRevision(v=>v+1);window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged();return;}
+        if(body.status === "select_accounts" && body.connectionId && body.accounts){setSelection({connectionId:body.connectionId,syncAttemptId:body.syncAttemptId,attemptId:body.attemptId,receivedAt,requestedAt,remaining:body.remaining ?? 0,accounts:body.accounts});setSelected([]);setMappings({});setMessage("");setBankRevision(v=>v+1);window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged();return;}
         setSelection(null);
         if (body.status === "retrieving") {
           if (attempt === FINVERSE_MAX_POLL_ATTEMPTS) {
@@ -231,7 +232,7 @@ export function FinverseConnectButton({
         setMessage(body.message || (selectedAccountIds?.length ? `${selectedAccountIds.length} account${selectedAccountIds.length===1?"":"s"} linked. ` : "") + (imported > 0 ? `Bank synced — ${imported} new transaction${imported === 1 ? "" : "s"} ready for review.` : "Already up to date."));
         setBankRevision(v=>v+1);
         window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged();
-        if (body.preview && body.connectionId) setPreview({ workspaceId, connectionId: body.connectionId, row: body.preview,attemptId:body.attemptId,receivedAt,requestedAt });
+        if (body.preview && body.connectionId) setPreview({ workspaceId, connectionId: body.connectionId, row: body.preview,syncAttemptId:body.syncAttemptId,attemptId:body.attemptId,receivedAt,requestedAt });
         else if (setup) router.replace(setupReturnPath(requestedConnectionId));
         else if (mode === "connect") router.replace("/accounts", { scroll: false });
         else router.refresh();

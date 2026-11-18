@@ -1,5 +1,5 @@
 import { BANK_MAX_CLIENT_INTERVAL_MS } from '../../../../../../shared/bank-stage-measurements';
-import { withBankMonitoring, bindBankMonitoring, bankJourney, bankAttemptId } from "@/lib/bank-journey-monitor";
+import { withBankMonitoring, bindBankMonitoring, bankJourney, bankAttemptId, bindBankSyncObservation } from "@/lib/bank-journey-monitor";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -13,7 +13,7 @@ async function handlePost(request: Request) {
     assertTrustedRequestOrigin(request);
     const { userId } = await requireAuth();
     const input = z.object({ workspaceId: z.string().min(1).max(240), connectionId: z.string().min(1).max(240),
-      attemptId:z.string().min(1).max(240).optional(),durationMs:z.number().finite().min(0).max(BANK_MAX_CLIENT_INTERVAL_MS).optional(),requestToVisibleMs:z.number().finite().min(0).max(BANK_MAX_CLIENT_INTERVAL_MS).optional(),kind: z.enum(["balance", "transaction"]) }).strict().safeParse(await request.json());
+      syncAttemptId:z.string().uuid().optional(),attemptId:z.string().min(1).max(240).optional(),durationMs:z.number().finite().min(0).max(BANK_MAX_CLIENT_INTERVAL_MS).optional(),requestToVisibleMs:z.number().finite().min(0).max(BANK_MAX_CLIENT_INTERVAL_MS).optional(),kind: z.enum(["balance", "transaction"]) }).strict().safeParse(await request.json());
     if (!input.success) return Response.json({ ok: false }, { status: 400 });
     const { workspaceId, connectionId, kind } = input.data;
     const workspace = await assertWorkspaceAccess(userId, workspaceId);
@@ -28,6 +28,7 @@ async function handlePost(request: Request) {
     if (!active) return Response.json({ ok: false }, { status: 409 });
     await bindBankMonitoring(active,userId);
     if(input.data.attemptId&&input.data.attemptId!==bankAttemptId())return Response.json({ok:false},{status:409});
+    if(input.data.syncAttemptId&&!await bindBankSyncObservation(input.data.syncAttemptId,'sync_finished'))return Response.json({ok:false},{status:409});
     bankJourney("first_data_displayed","succeeded",{dataKind:kind,durationMs:input.data.durationMs,requestToVisibleMs:input.data.requestToVisibleMs,timingBoundary:input.data.durationMs!==undefined?"client_payload_to_visible":"legacy_display_ack"});
     await recordBankLinkStage(connectionId, "first_data_displayed", { dataKind: kind });
     return Response.json({ ok: true });

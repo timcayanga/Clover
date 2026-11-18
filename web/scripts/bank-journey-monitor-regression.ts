@@ -39,6 +39,18 @@ async function main(){
  assert(m.rows.some((r:any)=>r.entityId==='origin'&&r.action==='bank_journey.bank_selected.succeeded'),'Selection saved without running after callbacks');
  await m.withBankMonitoring('sync',async()=>{await m.bindBankMonitoring({id:'origin',userId:'u',workspaceId:'origin',createdAt:new Date(),institutionId:'provider-bank',institutionName:'Provider bank'},'user_u');m.bankJourney('account_selection','pending');});await m.flush();
  const changed=m.rows.find((r:any)=>r.entityId==='origin'&&r.action==='bank_journey.account_selection.pending').metadata;assert.equal(changed.bank_id,'chosen-bank');assert.equal(changed.bank_name,'Chosen bank');assert.equal(changed.resolved_bank_id,'provider-bank');
+
+ const syncConnection={id:'repeated',userId:'u',workspaceId:'repeated',createdAt:new Date(),institutionId:'bank-repeat',institutionName:'Repeat Bank'};
+ const runId='a695c9b3-7d50-442a-8fa7-8f94f69eb33f';
+ const requestSync=async(status:number,payload:object,kind='start')=>m.monitorBankSync(async()=>{await m.bindBankMonitoring(syncConnection,'user_u');await m.beginBankSync({syncRunId:runId,syncRequestKind:kind});m.bankJourney('account_list','succeeded',{durationMs:12});m.bankJourney('account_list','succeeded',{durationMs:12});if(status===502)m.bankJourney('transaction_fetch','failed',{error:{providerCode:'PROVIDER_TIMEOUT',message:'private'}});return Response.json(payload,{status});});
+ const syncResponses=await Promise.all([requestSync(200,{status:'retrieving'}),requestSync(502,{error:'private'},'poll')]);
+ const recovered=await requestSync(200,{status:'ready',dataStatus:'complete'},'poll');await m.flush();
+ const syncRows=m.rows.filter((r:any)=>r.entityId==='repeated');const finishes=syncRows.filter((r:any)=>r.action.startsWith('bank_journey.sync_finished.'));
+ assert.equal(finishes.length,3);assert.equal(new Set(finishes.map((r:any)=>r.metadata.sync_attempt_id)).size,3);assert.equal(new Set(finishes.map((r:any)=>r.metadata.sync_run_id)).size,1);assert.equal(syncRows.filter((r:any)=>r.action==='bank_journey.account_list.succeeded').length,3,'Dedup within each request, never across repeated syncs');
+ assert.equal(finishes.find((r:any)=>r.metadata.sync_result==='failed').metadata.error_code,'PROVIDER_TIMEOUT');
+ assert.equal(new Set([...syncResponses,recovered].map(r=>r.headers.get('x-clover-bank-sync-attempt'))).size,3);
+ const legacy=await m.monitorBankSync(async()=>{await m.bindBankMonitoring(syncConnection,'user_u');await m.beginBankSync({syncRunId:'private@email.test'});return Response.json({reconnectRequired:true},{status:409});});await m.flush();assert(legacy.headers.get('x-clover-bank-sync-attempt'));assert(!JSON.stringify(m.rows).includes('private@email.test'));
+ const unmatched=await m.monitorBankSync(async()=>Response.json({error:'not-owned'},{status:404}));assert.equal(unmatched.headers.get('x-clover-bank-sync-attempt'),null);
  m.broken();await m.withBankMonitoring('link',async()=>{await m.bindBankMonitoring({id:'x',userId:'u',workspaceId:'x',createdAt:new Date()},'user_x');m.bankJourney('link_request','started');});await m.flush();
  console.log('PASS bank journey privacy, product boundaries, historical gaps, recovery ordering, concurrent bank isolation, deduplication, refresh and diagnostics failure isolation');
 }

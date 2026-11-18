@@ -1,5 +1,5 @@
 import { bankClientDuration } from '../../../../../../shared/bank-stage-measurements';
-import { withBankMonitoring, bindBankMonitoring, bankProducts, bankJourney, bankJourneyFailure, bankAttemptId } from "@/lib/bank-journey-monitor";
+import { monitorBankSync, beginBankSync, bindBankMonitoring, bankProducts, bankJourney, bankJourneyFailure, bankAttemptId } from "@/lib/bank-journey-monitor";
 import { cardLastFour, matchesConfirmedCardNumber, readCardReplacements } from "../../../../../../shared/card-replacement";
 import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 import { recordBankLinkStage } from "@/lib/bank-link-journey";
@@ -145,7 +145,7 @@ const importTransaction = async (connectionId: string, workspaceId: string, tran
   });
 };
 
-export function POST(request: Request) { return withBankMonitoring("sync",()=>handlePost(request)); }
+export function POST(request: Request) { return monitorBankSync(()=>handlePost(request)); }
 async function handlePost(request: Request) {
   if (!isFinverseEnabled()) {
     return NextResponse.json({ error: "Bank connections are not available yet." }, { status: 404 });
@@ -154,7 +154,7 @@ async function handlePost(request: Request) {
   let attemptedConnection:string|undefined;
   try {
     const { userId } = await requireAuth();
-    const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string; selectedAccountIds?: string[]; accountMappings?: Record<string,string>; refresh?: boolean; attemptId?:string; clientSelectionDurationMs?:unknown };
+    const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string; selectedAccountIds?: string[]; accountMappings?: Record<string,string>; refresh?: boolean; attemptId?:string; clientSelectionDurationMs?:unknown; syncRunId?:unknown; syncRequestKind?:unknown };
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
     await assertWorkspaceAccess(userId, body.workspaceId);
     const connection = await prisma.finverseConnection.findFirst({
@@ -170,6 +170,7 @@ async function handlePost(request: Request) {
     if (!connection) return NextResponse.json({ error: "No connected bank was found." }, { status: 404 });
 
     await bindBankMonitoring(connection,userId);
+    await beginBankSync(body);
     bankJourney(body.refresh===true?"link_request":"resume","started");
     if (!connection.encryptedRefreshToken) {bankJourney("token_refresh","failed",{error:{providerCode:"AUTHORIZATION_INCOMPLETE"}}); return NextResponse.json({ error: "Bank authorization was not completed. Choose your bank to reconnect securely.", reconnectRequired: true }, { status: 409 });}
 

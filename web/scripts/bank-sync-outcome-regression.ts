@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {bankSyncResponse,bankSyncReport,bankSyncRunId,type BankSyncObservation} from '../../shared/bank-sync-outcome';
+for(const [status,body,result,outcome] of [
+ [200,{status:'ready',dataStatus:'complete'},'complete','succeeded'],[200,{status:'ready',dataStatus:'complete',transactions:{imported:0,existing:3}},'up_to_date','succeeded'],[200,{status:'ready',dataStatus:'partial'},'partial','succeeded'],[200,{status:'ready',dataStatus:'empty'},'empty','succeeded'],
+ [200,{status:'retrieving'},'retrieving','pending'],[200,{status:'select_accounts'},'selection_required','pending'],[200,{status:'authorize'},'authorization_required','pending'],[409,{reconnectRequired:true},'action_required','pending'],[403,{},'blocked','pending'],[429,{},'rate_limited','pending'],[422,{reconnectRequired:true},'failed','failed'],[502,{},'failed','failed'],[200,{status:'ready'},'unknown','pending'],
+] as const)assert.deepEqual(bankSyncResponse(status,body),{result,outcome});
+assert.equal(bankSyncRunId('person@email.com'),undefined);
+const e=(id:string,stage:string,time:number,extra:Partial<BankSyncObservation>={}):BankSyncObservation=>({connectionId:'connection',attemptId:'journey',syncAttemptId:id,syncRunId:'run',syncRequestKind:'poll',stage,outcome:'succeeded',observedAt:new Date(time).toISOString(),...extra});
+const rows=[e('1','sync_started',0),e('1','sync_finished',10,{syncResult:'failed'}),e('2','sync_started',20),e('2','sync_finished',30,{syncResult:'complete'}),e('3','sync_started',40,{syncRunId:'legacy',syncRequestKind:'legacy_request'}),e('other','sync_started',50,{connectionId:'other-bank'})];
+const report=bankSyncReport(rows,1_000_000);assert.equal(report.requests,4);assert.equal(report.clientRuns,2);assert.equal(report.legacyRequests,1);assert.equal(report.incompleteAfter15Minutes,2);assert.equal(report.runs.find(r=>r.connectionId==='connection'&&r.syncRunId==='run')?.recovered,true);assert.equal(report.results.find(r=>r.result==='complete')?.count,1);assert.equal(bankSyncReport([{...rows[0],syncAttemptId:undefined}]).requests,0,'Legacy journey records never become fabricated sync attempts');
+console.log('PASS sync response classification, independent request outcomes, run grouping, recovery, legacy coverage and incomplete attempts');
