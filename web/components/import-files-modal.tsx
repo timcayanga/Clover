@@ -8634,7 +8634,7 @@ export function ImportFilesModal({
             </p>
           ) : null}
           <p>
-            Up to 25 MB
+            Accepted files: PDF, CSV, TSV, XLSX, XLS, XLSM, XLSB, ODS, JPG, JPEG, PNG, WEBP, HEIC, and HEIF.
             <br />
           </p>
           <p className="accounts-import-footer-copy__security">Your files are protected with encrypted connections and restricted access. Clover never sells your data.</p>

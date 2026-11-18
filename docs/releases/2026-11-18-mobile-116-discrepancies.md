@@ -13,7 +13,7 @@ Native source prepared without creating mobile binaries:
 - Upload source limit is 25 MiB. Existing chunk transport and image optimization remain bounded.
 - Recent imports use compact rows with uploaded date, account, saved transaction count and proper-case status. The history query is read-only and limited to 10 source files.
 
-Web/server release applies upload source limits, icons, concise copy, picker filtering and import history metadata. Installed native layouts require a future app update; this deployment does not alter installed 1.1.6 screens.
+Web/server release applies photo source limits, icons, concise copy, picker filtering and import history metadata. Browser files retain the existing transport validation and image optimization; the native 25 MiB copy is not advertised as a new browser document transport capability. Installed native layouts require a future app update; this deployment does not alter installed 1.1.6 screens.
 
 Validation: mobile and web TypeScript checks; rendered subtab states; empty/replied embedded chat keyboard/dock layout; explicit bulk-edit payloads, partial failure and resume; native actual-byte upload validation; transaction filter semantics; 69 offline checks. No personal financial records were modified during verification.
 
