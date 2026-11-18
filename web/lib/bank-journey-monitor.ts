@@ -1,20 +1,29 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { after } from 'next/server';
+import { headers } from 'next/headers';
+import { browserContext } from '../../shared/analytics';
 import { prisma } from './prisma';
 import { capturePostHogServerEvent } from './analytics-server';
 import { bankFailure, bankProviderStage, bankProductEvidence, type BankJourneyStage, type BankJourneyOutcome } from '../../shared/bank-journey-monitor';
 type Connection={id:string;workspaceId:string;userId:string;institutionId?:string|null;institutionName?:string|null;createdAt:Date};
-type Context={requestId:string;started:number;attemptId?:string;attemptStarted?:number;kind:'link'|'sync'|'callback'|'display';connection?:Connection;clerkUserId?:string;lastProviderError?:unknown};
+type Context={requestId:string;started:number;attemptId?:string;attemptStarted?:number;kind:'link'|'sync'|'callback'|'display';connection?:Connection;clerkUserId?:string;platform?:string;appVersion?:string;appBuild?:string;lastProviderError?:unknown};
 const scope=new AsyncLocalStorage<Context>();
 const persistedStages=new Map<string,number>();
 export function withBankMonitoring<T>(kind:Context['kind'],work:()=>Promise<T>){return scope.run({requestId:randomUUID(),started:Date.now(),kind},work);}
 export async function bindBankMonitoring(connection:Connection,clerkUserId:string,newAttempt=false){
  const c=scope.getStore();if(!c)return;
- c.connection=connection;c.clerkUserId=clerkUserId;c.attemptId=connection.id;c.attemptStarted=+connection.createdAt;
+ c.connection=connection;c.clerkUserId=clerkUserId;
+ try{const h=await headers();const native=h.get('x-clover-platform');const ua=h.get('user-agent')??'';c.platform=native==='ios'||native==='android'?native:ua?browserContext(ua).platform:undefined;c.appVersion=h.get('x-clover-app-version')?.slice(0,40)??undefined;c.appBuild=h.get('x-clover-app-build')?.slice(0,40)??undefined;if(c.appVersion&&!/^\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.]{1,16})?$/.test(c.appVersion))c.appVersion=undefined;if(c.appBuild&&!/^\d{1,16}$/.test(c.appBuild))c.appBuild=undefined;}catch{/* Background workers may not have request headers. */}
+ c.attemptId=connection.id;c.attemptStarted=+connection.createdAt;
  try {
- if(newAttempt){c.attemptId=randomUUID();c.attemptStarted=Date.now();await prisma.auditLog.create({data:{workspaceId:connection.workspaceId,actorUserId:connection.userId,entity:'BankJourney',entityId:connection.id,action:'bank_journey.attempt_started',metadata:{attempt_id:c.attemptId,journey_kind:'refresh'}}});}
+ if(newAttempt){c.attemptId=randomUUID();c.attemptStarted=Date.now();await prisma.auditLog.create({data:{workspaceId:connection.workspaceId,actorUserId:connection.userId,entity:'BankJourney',entityId:connection.id,action:'bank_journey.attempt_started',metadata:{attempt_id:c.attemptId,journey_kind:'refresh',...(c.platform?{platform:c.platform}:{}),...(c.appVersion?{app_version:c.appVersion}:{}),...(c.appBuild?{app_build:c.appBuild}:{})}}});}
  else {const previous=await prisma.auditLog.findFirst({where:{workspaceId:connection.workspaceId,entity:'BankJourney',entityId:connection.id,action:'bank_journey.attempt_started'},orderBy:{createdAt:'desc'},select:{metadata:true,createdAt:true}}).catch(()=>null);const m=previous?.metadata as {attempt_id?:string}|null;c.attemptId=m?.attempt_id??connection.id;c.attemptStarted=previous?.createdAt?+previous.createdAt:+connection.createdAt;}
+ if(c.kind==='callback'){
+ const origin=await prisma.auditLog.findFirst({where:{workspaceId:connection.workspaceId,entity:'BankJourney',entityId:connection.id,action:'bank_journey.link_request.started',metadata:{path:['attempt_id'],equals:c.attemptId}},orderBy:{createdAt:'desc'},select:{metadata:true}}).catch(()=>null);
+ const m=origin?.metadata as {platform?:string;app_version?:string;app_build?:string}|null;
+ if(m?.platform&&['ios','android','mobile_web','desktop_web'].includes(m.platform)){c.platform=m.platform;c.appVersion=m.app_version;c.appBuild=m.app_build;}
+ }
  }catch{/* Diagnostics cannot fail a bank operation. */}
 }
 export function bankJourney(stage:BankJourneyStage,outcome:BankJourneyOutcome,detail:{durationMs?:number;error?:unknown;accountCount?:number;transactionCount?:number;providerStatus?:string;dataKind?:'balance'|'transaction';repeatable?:boolean;timingBoundary?:'stage_request_to_response'|'clover_processing_intervals'|'clover_browser_launch_request'|'provider_retrieval_observed_wait'}={}){
@@ -23,7 +32,7 @@ export function bankJourney(stage:BankJourneyStage,outcome:BankJourneyOutcome,de
  const cacheKey=[connection.id,c.attemptId,stage,outcome,detail.repeatable?c.requestId:''].join(':');
  if((persistedStages.get(cacheKey)??0)>Date.now())return;
  const duration=detail.durationMs??(stage==='link_request'&&outcome==='succeeded'?Date.now()-c.started:undefined);
- const metadata={schema_version:1,stage,outcome,observed_at:new Date().toISOString(),bank_id:connection.institutionId??'unknown',bank_name:connection.institutionName??'Unknown bank',connection_id:connection.id,attempt_id:c.attemptId??connection.id,operation_id:c.requestId,journey_kind:c.attemptId===connection.id?'link':'refresh',
+ const metadata={...(c.platform?{platform:c.platform}:{}),...(c.appVersion?{app_version:c.appVersion}:{}),...(c.appBuild?{app_build:c.appBuild}:{}),schema_version:1,stage,outcome,observed_at:new Date().toISOString(),bank_id:connection.institutionId??'unknown',bank_name:connection.institutionName??'Unknown bank',connection_id:connection.id,attempt_id:c.attemptId??connection.id,operation_id:c.requestId,journey_kind:c.attemptId===connection.id?'link':'refresh',
   ...(typeof duration==='number'&&Number.isFinite(duration)?{duration_ms:Math.max(0,Math.round(duration)),timing_boundary:detail.timingBoundary??'stage_request_to_response'}:{}),
   journey_elapsed_ms:Math.max(0,Date.now()-(c.attemptStarted??+connection.createdAt)),
   ...(detail.error?bankFailure(detail.error):{}),

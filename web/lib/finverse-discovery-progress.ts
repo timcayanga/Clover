@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getFinverseLoginIdentity } from "@/lib/finverse";
 
 /** Best-effort post-callback discovery. Never imports accounts or transactions. */
-export function observeFinverseDiscovery(connectionId:string,accessToken:string){return withBankMonitoring("sync",()=>observe(connectionId,accessToken));}
+export function observeFinverseDiscovery(connectionId:string,accessToken:string){return withBankMonitoring("callback",()=>observe(connectionId,accessToken));}
 async function observe(connectionId: string, accessToken: string) {
   const c=await prisma.finverseConnection.findUnique({where:{id:connectionId},select:{id:true,userId:true,workspaceId:true,institutionId:true,institutionName:true,createdAt:true,user:{select:{clerkUserId:true}}}}).catch(()=>null);
   if(c)await bindBankMonitoring(c,c.user.clerkUserId);
