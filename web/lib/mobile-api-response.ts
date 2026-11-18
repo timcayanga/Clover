@@ -177,6 +177,9 @@ export function mobileApiResponse(operation: string, value: unknown) {
               "fileName",
               "status",
               "createdAt",
+              "uploadedAt",
+              "accountName",
+              "transactionCount",
               "processingMessage",
             ]),
           )

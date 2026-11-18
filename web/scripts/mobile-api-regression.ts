@@ -280,9 +280,9 @@ async function main() {
   });
   assert.deepEqual(
     mobileApiResponse("imports", {
-      importFiles: [{ id: "i", fileName: "test.pdf", storageKey: "secret" }],
+      importFiles: [{ id: "i", fileName: "test.pdf", storageKey: "secret", uploadedAt:"2026-11-18T00:00:00.000Z", accountName:"Cash", transactionCount:3 }],
     }),
-    { importFiles: [{ id: "i", fileName: "test.pdf" }] },
+    { importFiles: [{ id: "i", fileName: "test.pdf", uploadedAt:"2026-11-18T00:00:00.000Z", accountName:"Cash", transactionCount:3 }] },
   );
   assert.deepEqual(
     mobileApiResponse("import-process", {
