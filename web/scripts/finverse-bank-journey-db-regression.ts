@@ -65,6 +65,12 @@ async function main() {
     const neverReturned=await link(request('link',{workspaceId:workspace.id,institutionId:'qa-bank'}));assert.equal(neverReturned.status,200);const neverReturnedId=(await neverReturned.json()).connectionId;
     assert.equal(await db.auditLog.count({where:{entityId:neverReturnedId,action:'bank_journey.bank_selected.succeeded'}}),1,'No callback or after hook required');
     verifySelection=undefined;
+    const lateStarted=await link(request('link',{workspaceId:workspace.id,institutionId:'qa-bank'}));const lateId=(await lateStarted.json()).connectionId;
+    await db.finverseConnection.update({where:{id:lateId},data:{stateExpiresAt:new Date(0)}});
+    const lateForm=new FormData();lateForm.set('state',state);lateForm.set('code','must-not-exchange');
+    const lateResponse=await callback(new Request(process.env.FINVERSE_REDIRECT_URI!,{method:'POST',body:lateForm}));assert(lateResponse.headers.get('location')?.includes('invalid_callback'));
+    assert.equal((await db.finverseConnection.findUniqueOrThrow({where:{id:lateId}})).encryptedAccessToken,null,'Expired callbacks must never exchange or save credentials');
+
     // Provider enrichment may change its own identity, but must not regroup the selected-bank cohort.
     await db.finverseConnection.update({where:{id:neverReturnedId},data:{institutionId:'provider-other-bank',institutionName:'Other provider bank'}});
     tier = "free"; assert.equal((await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" }))).status, 403); tier = "premium";
@@ -158,6 +164,7 @@ async function main() {
     assert.equal((await sync(request("sync", { workspaceId: "not-owned", connectionId }))).status, 404);
     await Promise.all(telemetryJobs.map(job=>job()));
     const traces=await db.auditLog.findMany({where:{workspaceId:workspace.id,entity:'BankJourney'},select:{entityId:true,action:true,metadata:true}});
+    assert(traces.some(t=>t.entityId===lateId&&t.action==='bank_journey.callback_ignored.failed'),'Known expired callback retains bank attribution without becoming a missing return');
     assert(traces.some(t=>t.entityId===failedCatalog.id&&t.action==='bank_journey.link_request.failed'),'Catalog preparation failure must not disappear from stage diagnostics');
     assert(traces.some(t=>t.action==='bank_journey.transaction_fetch.succeeded'));
     assert(traces.some(t=>t.action==='bank_journey.token_exchange.failed'));

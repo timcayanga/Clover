@@ -22,7 +22,7 @@ async function main(){
  report=bankJourneyReport([chosen],[e('bank_selected','succeeded',0),e('link_url_created','succeeded',1000)],1_000_000);
  assert.equal(report[0].bankId,'bank-a');assert.equal(report[0].bankName,'Bank A');assert.equal(report[0].measured.urlReadyWithoutLaunch,1);assert.equal(report[0].measured.attemptsWithErrors,0);
  report=bankJourneyReport([c],[e('bank_selected','succeeded',0)],1_000_000);assert.equal(report[0].measured.stoppedBeforeHandoff,1);
- for(const tail of [e('authorization_return','succeeded',2000),e('link_url_created','failed',2000),e('cancelled','cancelled',2000)]){report=bankJourneyReport([c],[e('bank_selected','succeeded',0),tail],1_000_000);assert.equal(report[0].measured.noReturnAfter15Minutes,0);}
+ for(const tail of [e('authorization_return','succeeded',2000),e('callback_ignored','pending',2000),e('link_url_created','failed',2000),e('cancelled','cancelled',2000)]){report=bankJourneyReport([c],[e('bank_selected','succeeded',0),tail],1_000_000);assert.equal(report[0].measured.noReturnAfter15Minutes,0);}
  report=bankJourneyReport([c],[e('bank_selected','succeeded',0)],1000);assert.equal(report[0].measured.noReturnAfter15Minutes,0);
  const fixture=`export const rows=[],events=[],jobs=[];let fail=false;export function broken(){fail=true;}
  let platform='android';export const setPlatform=v=>platform=v;export const headers=async()=>new Headers(platform?{'x-clover-platform':platform,'x-clover-app-version':'1.1.6'}:{'user-agent':'Mozilla/5.0 (iPhone) AppleWebKit Safari/605.1.15'});export const after=job=>jobs.push(job);export const capturePostHogServerEvent=async(...args)=>events.push(args);

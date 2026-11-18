@@ -56,7 +56,13 @@ const handleCallback = async (request: Request) => {
     const { code, state, error } = await callbackValues(request);
     if (!state) return redirectToAccounts("invalid_callback");
     const connection = await prisma.finverseConnection.findUnique({ where: { stateHash: hashFinverseState(state) } });
-    if (!connection || connection.stateExpiresAt.getTime() < Date.now() || connection.status !== "link_pending") {
+    if (!connection) return redirectToAccounts("invalid_callback");
+    if (connection.stateExpiresAt.getTime() < Date.now() || connection.status !== "link_pending") {
+      // The stored hash establishes attribution only. Expiry/replay still rejects authorization.
+      const actor=await prisma.user.findUnique({where:{id:connection.userId},select:{clerkUserId:true}}).catch(()=>null);
+      if(actor)await bindBankMonitoring(connection,actor.clerkUserId);
+      const expired=connection.status==='link_pending'&&connection.stateExpiresAt.getTime()<Date.now();
+      bankJourney('callback_ignored',expired?'failed':'pending',{error:{providerCode:expired?'CLOVER_CALLBACK_EXPIRED':'CLOVER_CALLBACK_ALREADY_HANDLED'}});
       return redirectToAccounts("invalid_callback");
     }
 

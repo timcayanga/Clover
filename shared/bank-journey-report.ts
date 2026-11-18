@@ -9,7 +9,7 @@ export function bankJourneyReport(connections:BankSnapshot[],events:BankObservat
   const success=(a:BankObservation[],stage:string)=>a.some(e=>e.stage===stage&&e.outcome==='succeeded');
   const noReturn=all.filter(a=>{
    const start=a.filter(e=>(e.stage==='bank_selected'&&e.outcome==='succeeded')||(e.stage==='link_request'&&e.outcome==='started')).map(e=>Date.parse(e.observedAt));
-   return start.length>0&&now-Math.min(...start)>900000&&!a.some(e=>e.stage==='authorization_return'||e.stage==='data_available'&&e.outcome==='succeeded'||e.outcome==='failed'||e.outcome==='cancelled');
+   return start.length>0&&now-Math.min(...start)>900000&&!a.some(e=>e.stage==='authorization_return'||e.stage==='callback_ignored'||e.stage==='data_available'&&e.outcome==='succeeded'||e.outcome==='failed'||e.outcome==='cancelled');
   });
   const failures=observed.filter(e=>e.outcome==='failed');
   const errors=new Map<string,BankObservation[]>();for(const e of failures){const key=[e.stage,e.errorCode??'UNCLASSIFIED',e.category??'unknown'].join('|');errors.set(key,[...(errors.get(key)??[]),e]);}
