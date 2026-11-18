@@ -66,6 +66,9 @@ async function main() {
     const neverReturned=await link(request('link',{workspaceId:workspace.id,institutionId:'qa-bank'}));assert.equal(neverReturned.status,200);const neverReturnedId=(await neverReturned.json()).connectionId;
     assert.equal(await db.auditLog.count({where:{entityId:neverReturnedId,action:'bank_journey.bank_selected.succeeded'}}),1,'No callback or after hook required');
     verifySelection=undefined;
+    await db.finverseConnection.update({where:{id:neverReturnedId},data:{createdAt:new Date('2020-01-01'),lastSyncAttemptAt:null}});
+    assert.equal((await sync(request('sync',{workspaceId:workspace.id,connectionId:neverReturnedId}))).status,409);
+    assert((await db.finverseConnection.findUniqueOrThrow({where:{id:neverReturnedId}})).lastSyncAttemptAt,'An older blocked connection remains visible in the current monitoring window');
     const lateStarted=await link(request('link',{workspaceId:workspace.id,institutionId:'qa-bank'}));const lateId=(await lateStarted.json()).connectionId;
     await db.finverseConnection.update({where:{id:lateId},data:{stateExpiresAt:new Date(0)}});
     const lateForm=new FormData();lateForm.set('state',state);lateForm.set('code','must-not-exchange');

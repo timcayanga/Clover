@@ -171,6 +171,8 @@ async function handlePost(request: Request) {
 
     await bindBankMonitoring(connection,userId);
     await beginBankSync(body);
+    // A blocked request is still a sync attempt. Keep old connections visible in the monitor.
+    await prisma.finverseConnection.updateMany({where:{id:connection.id,userId:connection.userId,workspaceId:connection.workspaceId},data:{lastSyncAttemptAt:new Date()}}).catch(()=>{});
     bankJourney(body.refresh===true?"link_request":"resume","started");
     if (!connection.encryptedRefreshToken) {bankJourney("token_refresh","failed",{error:{providerCode:"AUTHORIZATION_INCOMPLETE"}}); return NextResponse.json({ error: "Bank authorization was not completed. Choose your bank to reconnect securely.", reconnectRequired: true }, { status: 409 });}
 
@@ -185,7 +187,6 @@ async function handlePost(request: Request) {
       await bindBankMonitoring(connection,userId,true);
       bankJourney("link_request","started");
     }
-    await prisma.finverseConnection.update({where:{id:connection.id},data:{lastSyncAttemptAt:new Date()}});
     attemptedConnection=connection.id;
     const token = await getActiveFinverseToken(connection);
     const identityResult = await getFinverseLoginIdentity(token);
