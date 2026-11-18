@@ -152,6 +152,13 @@ async function main() {
     const unique=new Set(traces.map(t=>t.entityId+':'+t.action+':'+(t.metadata as {attempt_id?:string}).attempt_id));
     assert.equal(unique.size,traces.length,'Repeated sync does not inflate stage counts');
     assert.equal(JSON.stringify(await db.transaction.findUnique({where:{id:confirmed.id}})),original);
+    process.env.CLOVER_DEPLOYMENT_ENVIRONMENT='staging';
+    const {getBankJourneyReport}=await import('../lib/bank-journey-report');
+    const range={from:new Date(Date.now()-3600000),to:new Date(Date.now()+3600000)};
+    const staffReport=await getBankJourneyReport({...range,includeStaff:true});
+    assert(staffReport.banks.some(b=>b.bankId==='qa-bank'&&b.stages.some(s=>s.stage==='transaction_fetch'&&s.succeeded>0)));
+    const customerReport=await getBankJourneyReport({...range,includeStaff:false});assert.equal(customerReport.banks.length,0,'Synthetic test accounts excluded from customer monitoring');
+    console.log('PASS read-only admin report: actual database projection, stage aggregation and customer/test isolation');
     console.log('PASS real database monitoring: full fetch/display/error traces, deduplication, safe metadata and unchanged confirmed transaction');
     console.log("PASS bank journey: Free refusal, named start, unfinished recovery, POST callback, product readiness, no-data/empty-selection refusal, chosen account and booked transactions, visible balance projection, scoped cache invalidation, reauthorization aliases, repeated sync, native exchange failure and confirmed-data preservation");
   } finally { for (const [path, value] of saved) { if (value) require.cache[path] = value; else delete require.cache[path]; } await db.user.delete({ where: { id: user.id } }); await db.$disconnect(); }
