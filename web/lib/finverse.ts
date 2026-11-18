@@ -325,6 +325,13 @@ export function summarizeFinverseCatalog(data: unknown, mode: "live" | "test") {
 const CATALOG_TTL_MS = 5 * 60_000;
 type Catalog = { institutions: ReturnType<typeof summarizeFinverseCatalog>; mode: "live" | "test" };
 let catalogCache: { key: string; value?: Catalog; expiresAt: number; pending?: Promise<Catalog> } | undefined;
+/** Public cached identity only; never makes a provider request or establishes bank eligibility. */
+export function cachedFinverseBankName(id?:string){
+ if(!id)return undefined;
+ try{const {mode,clientId,clientSecret}=getFinverseConfig();const key=createHash('sha256').update(JSON.stringify([mode,clientId,clientSecret])).digest('hex');
+ return catalogCache?.key===key&&catalogCache.expiresAt>Date.now()?catalogCache.value?.institutions.find(bank=>bank.id===id)?.name:undefined;
+ }catch{return undefined;}
+}
 export async function getFinverseInstitutionCatalog({ fresh = false } = {}) {
   const { mode, clientId, clientSecret } = getFinverseConfig();
   const key = createHash("sha256").update(JSON.stringify([mode, clientId, clientSecret])).digest("hex");

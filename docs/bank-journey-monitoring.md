@@ -36,3 +36,13 @@ The PostHog tables use production customer events by default. Bank, stage, platf
 ## Verification
 
 `npm run qa:bank-monitoring` checks error privacy, product separation, recovery ordering, concurrent request isolation, stage deduplication, refresh attempts, failure isolation, ownership, strict payloads and admin access. `finverse-bank-journey-db-regression.ts --execute` is guarded to a disposable loopback PostgreSQL database; it exercises actual instrumentation, callback errors, selected-account sync, display acknowledgement, replay and preservation of confirmed transactions/account safeguards. Never run it against staging or production financial data.
+
+## Selection attribution, including no return
+
+For eligible authenticated linking requests, Clover saves a `preparing` connection and commits `bank_selected` plus `link_request.started` before fresh catalog or URL-generation requests. The bank ID survives catalog failure, URL failure, a closed page and no provider callback. A current cached public name is reused without a provider call; when unavailable, the ID stays known while the name remains unverified. Successful catalog validation records `bank_selection_validated` and the verified public name. `preparing` records cannot produce actionable linking reminders; only a successfully created URL advances the setup to `link_pending`.
+
+The selected bank remains the attribution key across callback, polling and refresh; later provider identity is retained separately as `resolved_bank_id`/`resolved_bank_name`. The report reads origin records independently of the selected reporting window, and groups by original bank ID. Legacy setups with no selection evidence retain their existing attribution; unknown choices are not fabricated. These writes affect operational setup/audit records only.
+
+After 15 minutes, attempts with a recorded start and no authorization return, data, observed failure or explicit cancellation form an incomplete/no-return cohort. The monitor distinguishes a reported browser launch, URL readiness with launch unobserved (including older app builds), and interruption before URL readiness. URL creation alone never proves that Finverse opened. A missing return is not an authentication failure. These classifications are computed when the report is read; no per-bank polling or timeout job is added.
+
+The durable boundary is receipt of an eligible selection by Clover's server. A tap that never reaches Clover (for example, an entirely offline device) cannot be established by this server-only change. PostHog delivery remains background work; the durable audit and connection retain selection independently of a callback or analytics delivery. No mobile binary is needed for server-accepted selections in existing builds.

@@ -11,7 +11,7 @@ let verified=true;export function setVerified(value){verified=value;}
 let lifecycleCalls=0, discoveryReady=false, discoveryError=false, discoveryWrites=[];
 export function setDiscoveryReady(value){discoveryReady=value;}
 export function setDiscoveryError(value){discoveryError=value;}
-let claimed=false, exchanges=0, created=0, bankCalls=0, refreshCalls=0, updates=[], planTier='pro';
+let linkCalls=0;let claimed=false, exchanges=0, created=0, bankCalls=0, refreshCalls=0, updates=[], planTier='pro';
 export function setPlan(value){planTier=value;}
 export const getAccountBrand=()=>({logoSrc:null,logoSrcs:["/assets/banks/philippines/bpi.png"],fallbackIconSrc:"/assets/account-types/bank.png"});
 export const getAccountWalletBrand=getAccountBrand;
@@ -25,8 +25,8 @@ export const bankLifecycleOverview=async()=>{lifecycleCalls++;return {limit:2,co
 export const hasUnlimitedPlanLimits=()=>false;
 export const getProAccess=async()=>({planTier});
 export const refreshProAccess=async()=>planTier;
-export function reset(){claimed=false;exchanges=0;created=0;bankCalls=0;refreshCalls=0;updates=[];}
-export function stats(){return {discoveryWrites,lifecycleCalls,exchanges,created,bankCalls,refreshCalls,updates};}
+export function reset(){claimed=false;exchanges=0;created=0;linkCalls=0;bankCalls=0;refreshCalls=0;updates=[];}
+export function stats(){return {linkCalls,discoveryWrites,lifecycleCalls,exchanges,created,bankCalls,refreshCalls,updates};}
 export const requireAuth=async()=>({userId:'owner'});
 export const requireAdminAuth=async()=>{if(planTier==='free')throw Error('FORBIDDEN');return {userId:'owner'};};
 export const getFinverseInstitutionCatalog=async()=>({mode:'live',institutions:[{id:'bpi',name:'BPI',countries:['PHL'],status:'BETA',products:['ACCOUNTS'],tags:['real'],shownInClover:false,excludedReasons:['Missing Accounts or Transactions support']}]});
@@ -37,6 +37,7 @@ export const getActiveFinverseToken=async()=>"access";
 export const bankLinkAllowance=async()=>({usedIds:new Set(),remaining:5});
 export const getFinverseAccountNumber=async()=>null;
 export const getMobileRequestContext=()=>({userId:'owner'});
+export const cachedFinverseBankName=id=>id==='bank'?'Test bank':undefined;
 export const isFinverseEnabled=()=>true;
 export const getFinverseConfig=()=>({redirectUri:'https://staging.clover.ph/api/integrations/finverse/callback',encryptionKey:'test'});
 export const getFinverseBanks=async()=>{bankCalls++;return {banks:[{id:'bank',name:'Test bank',countries:['PHL']}],mode:'test'};};
@@ -51,7 +52,7 @@ export const normalizeFinverseTransaction=()=>null;
 export const refreshFinverseToken=async()=>({});
 export const getEffectiveUserLimits=()=>({accountLimit:10});
 export const countNonCashAccounts=()=>0;
-export const createFinverseLink=async()=>({link_url:'https://link.finverse.com/test'});
+export const createFinverseLink=async()=>{linkCalls++;return {link_url:'https://link.finverse.com/test'};};
 export const hashFinverseState=s=>s;
 export const encryptFinverseToken=()=> 'encrypted';
 export const exchangeFinverseCode=async()=>{exchanges++;return {login_identity_id:'identity',access_token:'secret',refresh_token:'secret',expires_in:3600};};
@@ -141,7 +142,8 @@ export const prisma={user:{findUnique:async()=>({clerkUserId:"owner"}),findUniqu
   assert.equal((await link({workspaceId:'profile',institutionId:'unknown'})).status,400);
   assert.equal((await link({workspaceId:'profile',institutionId:'bank',returnUrl:'https://evil.test'})).status,400);
   assert.equal((await link({workspaceId:'other',institutionId:'bank'})).status,404);
-  assert.equal(api.stats().created,0);
+  assert.equal(api.stats().created,1,'Unavailable bank selection is retained as an operational attempt');
+  assert.equal(api.stats().linkCalls,0,'Unknown bank never opens provider authorization');
   assert.equal((await link({workspaceId:'profile',institutionId:'bank'})).status,200);
   const sync=(body:object)=>api.sync(new Request('https://clover.test/sync',{method:'POST',body:JSON.stringify(body)}));
   api.reset();api.setPlan('free');

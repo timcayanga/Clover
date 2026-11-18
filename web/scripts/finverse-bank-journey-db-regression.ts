@@ -13,11 +13,15 @@ const stub = (id: string, exports: unknown) => { const path = require.resolve(id
 let identity: Record<string, unknown> = { status: "DATA_AVAILABLE", product_status: { accounts: { status: "SUCCESS" }, online_transactions: { status: "IN_PROGRESS" } } };
 const invalidated: string[] = [];
 let providerNumber = "0012345678", providerId = "primary";
+let failCatalog=false,failLink=false;let verifySelection:(()=>Promise<void>)|undefined;
 let state = "", empty = false, badExchange = false, native = false, tier = "premium", transactionFetches = 0, noFinancialData = false, missingBalance = false;
 const products = (status: string) => ({ accounts: { status: "SUCCESS" }, online_transactions: { status } });
 globalThis.fetch = async (input, init) => {
   const path = new URL(String(input)).pathname;
   if (new URL(String(input)).hostname !== "api.prod.finverse.net") throw Error("External services prohibited in bank QA");
+  if(verifySelection&&(path==='/institutions'||path==='/link/token'))await verifySelection();
+  if(path==='/institutions'&&failCatalog)return Response.json({error_code:'SERVICE_UNAVAILABLE'},{status:503});
+  if(path==='/link/token'&&failLink)return Response.json({error_code:'LINK_CREATION_FAILED'},{status:503});
   let body: unknown;
   if (path === "/auth/customer/token") body = { access_token: "customer-token", expires_in: 3600 };
   else if (path === "/institutions") body = [{ institution_id: "qa-bank", institution_name: "QA Bank", countries: ["PHL"], products_supported: ["ACCOUNTS", "TRANSACTIONS"], tags: ["test"], status: "SUPPORTED" }];
@@ -54,6 +58,15 @@ async function main() {
     const confirmed = await db.transaction.create({ data: { workspaceId: workspace.id, accountId: account.id, merchantRaw: "Salary", merchantClean: "Salary", description: "Reference: QAHR20261101", date: new Date("2026-11-01"), amount: 1000, currency: "PHP", type: "income", reviewStatus: "confirmed" } });
     const original = JSON.stringify(confirmed), accountBefore = JSON.stringify(account);
     const request = (path: string, body: object) => new Request(`https://staging.clover.ph/api/integrations/finverse/${path}`, { method: "POST", headers: { origin: "https://staging.clover.ph", "content-type": "application/json" }, body: JSON.stringify(body) });
+    verifySelection=async()=>{const preparing=await db.finverseConnection.findFirstOrThrow({where:{workspaceId:workspace.id,status:'preparing'},orderBy:{createdAt:'desc'}});assert.equal(preparing.institutionId,'qa-bank');assert.equal(await db.auditLog.count({where:{entityId:preparing.id,action:'bank_journey.bank_selected.succeeded'}}),1,'Selection must be committed before provider work');};
+    failCatalog=true;assert.equal((await link(request('link',{workspaceId:workspace.id,institutionId:'qa-bank'}))).status,502);failCatalog=false;
+    const failedCatalog=await db.finverseConnection.findFirstOrThrow({where:{workspaceId:workspace.id,status:'error'},orderBy:{createdAt:'desc'}});assert.equal(failedCatalog.institutionId,'qa-bank');
+    failLink=true;assert.equal((await link(request('link',{workspaceId:workspace.id,institutionId:'qa-bank'}))).status,502);failLink=false;
+    const neverReturned=await link(request('link',{workspaceId:workspace.id,institutionId:'qa-bank'}));assert.equal(neverReturned.status,200);const neverReturnedId=(await neverReturned.json()).connectionId;
+    assert.equal(await db.auditLog.count({where:{entityId:neverReturnedId,action:'bank_journey.bank_selected.succeeded'}}),1,'No callback or after hook required');
+    verifySelection=undefined;
+    // Provider enrichment may change its own identity, but must not regroup the selected-bank cohort.
+    await db.finverseConnection.update({where:{id:neverReturnedId},data:{institutionId:'provider-other-bank',institutionName:'Other provider bank'}});
     tier = "free"; assert.equal((await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" }))).status, 403); tier = "premium";
     const started = await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" })); assert.equal(started.status, 200, await started.clone().text()); const connectionId = (await started.json()).connectionId;
     assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: connectionId } })).institutionName, "QA Bank");
@@ -145,6 +158,7 @@ async function main() {
     assert.equal((await sync(request("sync", { workspaceId: "not-owned", connectionId }))).status, 404);
     await Promise.all(telemetryJobs.map(job=>job()));
     const traces=await db.auditLog.findMany({where:{workspaceId:workspace.id,entity:'BankJourney'},select:{entityId:true,action:true,metadata:true}});
+    assert(traces.some(t=>t.entityId===failedCatalog.id&&t.action==='bank_journey.link_request.failed'),'Catalog preparation failure must not disappear from stage diagnostics');
     assert(traces.some(t=>t.action==='bank_journey.transaction_fetch.succeeded'));
     assert(traces.some(t=>t.action==='bank_journey.token_exchange.failed'));
     assert(traces.some(t=>t.action==='bank_journey.first_data_displayed.succeeded'));
@@ -156,6 +170,7 @@ async function main() {
     const {getBankJourneyReport}=await import('../lib/bank-journey-report');
     const range={from:new Date(Date.now()-3600000),to:new Date(Date.now()+3600000)};
     const staffReport=await getBankJourneyReport({...range,includeStaff:true});
+    assert(!staffReport.banks.some(b=>b.bankId==='provider-other-bank'),'Historical grouping retains selected bank without a callback');
     assert(staffReport.banks.some(b=>b.bankId==='qa-bank'&&b.stages.some(s=>s.stage==='transaction_fetch'&&s.succeeded>0)));
     const customerReport=await getBankJourneyReport({...range,includeStaff:false});assert.equal(customerReport.banks.length,0,'Synthetic test accounts excluded from customer monitoring');
     console.log('PASS read-only admin report: actual database projection, stage aggregation and customer/test isolation');
