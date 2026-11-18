@@ -6,7 +6,7 @@ const requireFixture = createRequire(resolve("package.json"));
 async function main() {
   const fixture = `
 export const recordBankLinkStage=async()=>{};
-export const withBankMonitoring=(_kind,fn)=>fn();export const bindBankMonitoring=async()=>{};export const bankJourney=()=>{};export const bankProducts=()=>{};export const bankJourneyFailure=()=>{};
+export const bankAttemptId=()=> 'connection';export const withBankMonitoring=(_kind,fn)=>fn();export const bindBankMonitoring=async()=>{};export const bankJourney=()=>{};export const bankProducts=()=>{};export const bankJourneyFailure=()=>{};
 let verified=true;export function setVerified(value){verified=value;}
 let lifecycleCalls=0, discoveryReady=false, discoveryError=false, discoveryWrites=[];
 export function setDiscoveryReady(value){discoveryReady=value;}

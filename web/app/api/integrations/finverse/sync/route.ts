@@ -1,4 +1,5 @@
-import { withBankMonitoring, bindBankMonitoring, bankProducts, bankJourney, bankJourneyFailure } from "@/lib/bank-journey-monitor";
+import { bankClientDuration } from '../../../../../../shared/bank-stage-measurements';
+import { withBankMonitoring, bindBankMonitoring, bankProducts, bankJourney, bankJourneyFailure, bankAttemptId } from "@/lib/bank-journey-monitor";
 import { cardLastFour, matchesConfirmedCardNumber, readCardReplacements } from "../../../../../../shared/card-replacement";
 import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 import { recordBankLinkStage } from "@/lib/bank-link-journey";
@@ -153,7 +154,7 @@ async function handlePost(request: Request) {
   let attemptedConnection:string|undefined;
   try {
     const { userId } = await requireAuth();
-    const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string; selectedAccountIds?: string[]; accountMappings?: Record<string,string>; refresh?: boolean };
+    const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string; selectedAccountIds?: string[]; accountMappings?: Record<string,string>; refresh?: boolean; attemptId?:string; clientSelectionDurationMs?:unknown };
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
     await assertWorkspaceAccess(userId, body.workspaceId);
     const connection = await prisma.finverseConnection.findFirst({
@@ -204,7 +205,7 @@ async function handlePost(request: Request) {
       await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null }, data: {
         stateHash: hashFinverseState(state), stateExpiresAt: new Date(Date.now() + 15 * 60_000), status: "link_pending",
       } });
-      return NextResponse.json({ status: "authorize", connectionId: connection.id, linkUrl: result.link_url });
+      return NextResponse.json({ status: "authorize", connectionId: connection.id, attemptId:bankAttemptId(), linkUrl: result.link_url });
     }
 
     const updatedState = await prisma.finverseConnection.updateMany({
@@ -259,6 +260,7 @@ async function handlePost(request: Request) {
     const newAccounts = providerAccounts.filter(a => !linkedIds.has(a.account_id));
     if (body.selectedAccountIds !== undefined && (!Array.isArray(body.selectedAccountIds) || body.selectedAccountIds.some(id => typeof id !== "string" || !providerAccounts.some(a => a.account_id === id)))) return NextResponse.json({ error: "Choose valid bank accounts." }, { status: 400 });
     if(body.accountMappings && (typeof body.accountMappings !== 'object' || Array.isArray(body.accountMappings) || Object.entries(body.accountMappings).some(([id,target])=>!body.selectedAccountIds?.includes(id)||typeof target!=='string'))) return NextResponse.json({error:"Invalid account mapping."},{status:400});
+    if(body.selectedAccountIds?.length)bankJourney('account_selection_submitted','succeeded',{accountCount:body.selectedAccountIds.length,durationMs:body.attemptId===bankAttemptId()?bankClientDuration(body.clientSelectionDurationMs):undefined,timingBoundary:'client_visible_list_to_submit'});
     const selectedIds = body.selectedAccountIds ? new Set(body.selectedAccountIds) : null;
     const chosen = newAccounts.filter(a => selectedIds?.has(a.account_id));
     const cloverAccounts = await prisma.account.findMany({ where: { workspaceId: connection.workspaceId }, include: { finverseAccountLink: true } });
@@ -271,9 +273,10 @@ async function handlePost(request: Request) {
     }).map(a => a.account_id));
     if (((!selectedIds || selectedIds.size === 0) && linkedIds.size === 0 && newAccounts.length > 0) || chosen.filter(a => !reservedIds.has(a.account_id)).length > allowance.remaining) {
       await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null }, data: { status: "awaiting_selection" } });
+      await bankJourney("account_list_ready","succeeded",{accountCount:newAccounts.length,durable:true});
       bankJourney("account_selection","pending",{accountCount:providerAccounts.length});
       await recordBankLinkStage(connection.id, "selection_required");
-      return NextResponse.json({ status: "select_accounts", connectionId: connection.id, remaining: allowance.remaining, resetsAt: allowance.periodEnd, accounts: newAccounts.map(a => {
+      return NextResponse.json({ status: "select_accounts", connectionId: connection.id, attemptId:bankAttemptId(), remaining: allowance.remaining, resetsAt: allowance.periodEnd, accounts: newAccounts.map(a => {
         const normalized = normalizeFinverseAccount(a, resolvedInstitutionName);
         const matches = matchingBankAccounts(cloverAccounts, normalized);
         return { id: a.account_id, name: `${normalized.name}${normalized.accountNumber ? ` •••• ${normalized.accountNumber.slice(-4)}` : ""}`, reserved: reservedIds.has(a.account_id), existingAccountName: matches.length === 1 ? matches[0].name : null, suggestedAccountId:matches.length===1?matches[0].id:null, candidates:cloverAccounts.filter(c=>c.currency===normalized.currency&&c.type===normalized.type&&bankInstitutionsMatch(c.institution||c.name,normalized.institution)).map(c=>({id:c.id,name:c.name,last4:c.accountNumber?.slice(-4)||null})) };
@@ -341,6 +344,7 @@ async function handlePost(request: Request) {
     });
     return NextResponse.json({
       status: "ready",
+      attemptId:bankAttemptId(),
       connectionId: connection.id,
       accounts: usableLinks.length,
       preview,

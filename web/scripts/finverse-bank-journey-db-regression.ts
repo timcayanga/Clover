@@ -50,6 +50,7 @@ async function main() {
     const { POST: link } = await import("../app/api/integrations/finverse/link/route");
     const { POST: callback } = await import("../app/api/integrations/finverse/callback/route");
     const { POST: sync } = await import("../app/api/integrations/finverse/sync/route");
+    const { POST: journey } = await import("../app/api/integrations/finverse/journey/route");
     const { POST: displayed } = await import("../app/api/integrations/finverse/displayed/route");
     const { GET: connections } = await import("../app/api/integrations/finverse/connections/route");
     const { finverseBalances } = await import("../lib/finverse-balances");
@@ -92,9 +93,12 @@ async function main() {
     assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 1);
     identity = { status: "DATA_RETRIEVAL_COMPLETE", product_status: products("SUCCESS"), session_status: "COMPLETED" };
     empty = true; assert.equal((await send()).status, 422); empty = false;
-    const selection = await send(); assert.equal((await selection.json()).status, "select_accounts");
+    const selection = await send(); const selectionBody=await selection.json();assert.equal(selectionBody.status,"select_accounts");assert.equal(selectionBody.attemptId,connectionId);
+    const acknowledgeList=(attemptId=connectionId)=>journey(request('journey',{workspaceId:workspace.id,connectionId,attemptId,stage:'account_list_displayed',outcome:'succeeded',durationMs:45,requestToVisibleMs:600}));
+    assert.equal((await acknowledgeList('stale-attempt')).status,409);
+    assert.equal((await acknowledgeList()).status,200);
     assert.equal((await (await send({ selectedAccountIds: [] })).json()).status, "select_accounts", "Empty selection cannot become ready");
-    const complete = await send({ selectedAccountIds: ["primary"] }); assert.equal(complete.status, 200, await complete.clone().text()); const result = await complete.json(); assert.equal(result.status, "ready"); assert.equal(result.accounts, 1); assert.equal(result.transactions.imported, 1); assert.equal(result.transactions.existing, 1);
+    const complete = await send({ selectedAccountIds: ["primary"],attemptId:connectionId,clientSelectionDurationMs:2200 }); assert.equal(complete.status, 200, await complete.clone().text()); const result = await complete.json(); assert.equal(result.status, "ready"); assert.equal(result.accounts, 1); assert.equal(result.transactions.imported, 1); assert.equal(result.transactions.existing, 1);
     assert.deepEqual(invalidated, [workspace.id], "Completed bank sync invalidates only its Profile summaries");
     assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 2);
     assert.equal((await finverseBalances(workspace.id)).get(account.id)?.bankBalance, "2000.00", "Saved provider snapshot is visible through the Accounts/Home projection");
@@ -106,7 +110,8 @@ async function main() {
     assert.equal(Number(result.preview.amount), 2000);
     assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.first_data_displayed" } }), 0);
     assert.equal((await show(connectionId, "balance", "another-profile")).status, 400);
-    const displays = await Promise.all([show(), show()]);
+    assert.equal((await displayed(request('displayed',{workspaceId:workspace.id,connectionId,kind:'balance',attemptId:'stale-attempt',durationMs:35}))).status,409);
+    const displays = await Promise.all([displayed(request('displayed',{workspaceId:workspace.id,connectionId,kind:'balance',attemptId:connectionId,durationMs:35,requestToVisibleMs:1500})), show()]);
     assert(displays.every(response => response.ok));
     assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.first_data_displayed" } }), 1);
     identity = { status: "DATA_RETRIEVAL_PARTIALLY_SUCCESSFUL", product_status: { ...products("SUCCESS"), historical_transactions: { status: "ERROR" } } };
@@ -167,6 +172,9 @@ async function main() {
     assert(traces.some(t=>t.entityId===lateId&&t.action==='bank_journey.callback_ignored.failed'),'Known expired callback retains bank attribution without becoming a missing return');
     assert(traces.some(t=>t.entityId===failedCatalog.id&&t.action==='bank_journey.link_request.failed'),'Catalog preparation failure must not disappear from stage diagnostics');
     assert(traces.some(t=>t.action==='bank_journey.transaction_fetch.succeeded'));
+    for(const [stage,duration] of [['account_list_displayed',45],['account_selection_submitted',2200],['first_data_displayed',35]] as const){
+     const observed=traces.find(t=>t.entityId===connectionId&&t.action===`bank_journey.${stage}.succeeded`);assert(observed,stage);assert.equal((observed.metadata as {duration_ms?:number}).duration_ms,duration,stage);
+    }
     assert(traces.some(t=>t.action==='bank_journey.token_exchange.failed'));
     assert(traces.some(t=>t.action==='bank_journey.first_data_displayed.succeeded'));
     assert(traces.every(t=>!JSON.stringify(t.metadata).includes('fixture-access')));

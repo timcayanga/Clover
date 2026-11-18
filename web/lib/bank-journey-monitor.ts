@@ -30,7 +30,8 @@ export async function bindBankMonitoring(connection:Connection,clerkUserId:strin
  }
  }catch{/* Diagnostics cannot fail a bank operation. */}
 }
-export function bankJourney(stage:BankJourneyStage,outcome:BankJourneyOutcome,detail:{durable?:boolean;durationMs?:number;error?:unknown;accountCount?:number;transactionCount?:number;providerStatus?:string;dataKind?:'balance'|'transaction';repeatable?:boolean;timingBoundary?:'stage_request_to_response'|'clover_processing_intervals'|'clover_browser_launch_request'|'provider_retrieval_observed_wait'}={}){
+export function bankAttemptId(){return scope.getStore()?.attemptId;}
+export function bankJourney(stage:BankJourneyStage,outcome:BankJourneyOutcome,detail:{durable?:boolean;durationMs?:number;requestToVisibleMs?:number;sessionResult?:'returned'|'closed'|'launch_failed';error?:unknown;accountCount?:number;transactionCount?:number;providerStatus?:string;dataKind?:'balance'|'transaction';repeatable?:boolean;timingBoundary?:'stage_request_to_response'|'clover_processing_intervals'|'clover_browser_launch_request'|'provider_retrieval_observed_wait'|'client_payload_to_visible'|'client_visible_list_to_submit'|'client_auth_session_lifetime'|'legacy_display_ack'}={}){
  const live=scope.getStore();if(!live?.connection||!live.clerkUserId)return;
  const c={...live}, connection=c.connection!;
  const cacheKey=[connection.id,c.attemptId,stage,outcome,detail.repeatable?c.requestId:''].join(':');
@@ -38,6 +39,7 @@ export function bankJourney(stage:BankJourneyStage,outcome:BankJourneyOutcome,de
  const duration=detail.durationMs??(stage==='link_request'&&outcome==='succeeded'?Date.now()-c.started:undefined);
  const metadata={...(c.platform?{platform:c.platform}:{}),...(c.appVersion?{app_version:c.appVersion}:{}),...(c.appBuild?{app_build:c.appBuild}:{}),...(c.selectedBankId?{selected_bank_id:c.selectedBankId}:{}),...(c.selectedBankName?{selected_bank_name:c.selectedBankName}:{}),schema_version:1,stage,outcome,observed_at:new Date().toISOString(),bank_id:c.selectedBankId??connection.institutionId??'unknown',bank_name:c.selectedBankName??(c.selectedBankId&&c.selectedBankId!==connection.institutionId?undefined:connection.institutionName)??'Unknown bank',resolved_bank_id:connection.institutionId??'unknown',resolved_bank_name:connection.institutionName??'Unknown bank',connection_id:connection.id,attempt_id:c.attemptId??connection.id,operation_id:c.requestId,journey_kind:c.attemptId===connection.id?'link':'refresh',
   ...(typeof duration==='number'&&Number.isFinite(duration)?{duration_ms:Math.max(0,Math.round(duration)),timing_boundary:detail.timingBoundary??'stage_request_to_response'}:{}),
+  ...(detail.requestToVisibleMs!==undefined?{request_to_visible_ms:detail.requestToVisibleMs}:{}),...(detail.sessionResult?{session_result:detail.sessionResult}:{}),
   journey_elapsed_ms:Math.max(0,Date.now()-(c.attemptStarted??+connection.createdAt)),
   ...(detail.error?bankFailure(detail.error):{}),
   ...(detail.accountCount!==undefined?{account_count:Math.max(0,Math.trunc(detail.accountCount))}:{}),

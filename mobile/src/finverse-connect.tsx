@@ -1,3 +1,6 @@
+import { runBankHostedSession } from '../../shared/bank-hosted-session';
+import { bankElapsed } from '../../shared/bank-stage-measurements';
+import { useBankVisibleStage } from './use-bank-visible-stage';
 import { LinearGradient } from "expo-linear-gradient";
 import { bankLinkPresentation, bankSyncDate, type BankLinkCard } from "../../shared/bank-link-presentation";
 import { accountCardPalette } from "../../shared/visual-identity";
@@ -10,7 +13,7 @@ import type { FinverseBankOption } from "../../shared/finverse-bank-options";
 import { FinversePendingChip } from "./finverse-pending-chip";
 import type { PendingBankConnection } from "../../shared/finverse-pending";
 import { BankLogo, FinverseBankPicker } from "./finverse-bank-picker";
-import { AppState, useWindowDimensions, ActivityIndicator, Alert, Platform, Pressable, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, View } from "react-native";
 import { router, useIsFocused } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { Text } from "./app-text";
@@ -19,13 +22,13 @@ import { ApiError } from "./api";
 import { useSession } from "./session";
 
 type Bank = { id: string; name: string; reserved?: boolean; existingAccountName?: string | null; suggestedAccountId?:string|null; candidates?:{id:string;name:string;last4:string|null}[] };
-type SyncResult = { status: string; message?: string; linkUrl?: string; connectionId?: string; remaining?: number; accounts?: Bank[]; transactions?: { imported: number }; preview?: BankLinkPreview | null; error?: string };
+type SyncResult = { attemptId?:string; status: string; message?: string; linkUrl?: string; connectionId?: string; remaining?: number; accounts?: Bank[]; transactions?: { imported: number }; preview?: BankLinkPreview | null; error?: string };
 export function FinverseConnect({ onSynced, callbackConnection, mode = "connect", accountId }: { onSynced: () => void; callbackConnection?: string; mode?: "connect" | "sync"; accountId?: string }) {
   const session = useSession();
   const isFocused = useIsFocused();
-  const { width, height } = useWindowDimensions();
   const previewNode = useRef<ComponentRef<typeof View>>(null);
-  const reportedConnection = useRef<string | null>(null);
+  const selectionNode=useRef<ComponentRef<typeof View>>(null);
+  const selectionVisible=useRef<{key:string;at:number}|null>(null);
   const { colors } = useTheme();
   const [access, setAccess] = useState<{ profileId: string; upgradeRequired: boolean } | null>(null);
   const allowed = access?.profileId === session.profileId && !access.upgradeRequired;
@@ -34,7 +37,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const [linked,setLinked] = useState<BankLinkCard[]>([]);
   const [pending,setPending] = useState<PendingBankConnection[]>([]);
   const [reconnectRequired,setReconnectRequired] = useState(false);
-  const [preview, setPreview] = useState<{ profileId: string; connectionId: string; row: BankLinkPreview } | null>(null);
+  const [preview, setPreview] = useState<{ profileId: string; connectionId: string; row: BankLinkPreview;attemptId?:string;receivedAt:number;requestedAt:number } | null>(null);
   const [progressOpen,setProgressOpen] = useState(false);
   const [connectionsLoaded,setConnectionsLoaded] = useState(false);
   const [connectionsError,setConnectionsError] = useState("");
@@ -45,7 +48,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const [retrySync, setRetrySync] = useState<{ id?: string; accountIds?: string[]; refresh?:boolean } | null>(null);
   const [connection, setConnection] = useState(callbackConnection);
   const [cancelling, setCancelling] = useState(false);
-  const [selection, setSelection] = useState<{ accounts: Bank[]; remaining: number; connectionId: string } | null>(null);
+  const [selection, setSelection] = useState<{ accounts: Bank[]; remaining: number; connectionId: string;attemptId?:string;receivedAt:number;requestedAt:number } | null>(null);
   const [mappings,setMappings]=useState<Record<string,string>>({});
   const [selected, setSelected] = useState<string[]>([]);
   const active = useRef(true);
@@ -78,14 +81,19 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
     setConnection(id);
     setPreview(null);
     action.current = true; setBusy(true); setProgressOpen(true); setRetrySync(null); setReconnectRequired(false); setMessage(refresh ? "Syncing your bank transactions…" : accountIds?.length ? "Linking selected accounts and syncing transactions…" : "Bank authorized. Retrieving your accounts…");
+    const requestedAt=performance.now();const visibleKey=selection?.attemptId?`${session.profileId}:${selection.connectionId}:${selection.attemptId}`:undefined;
+    const clientSelectionDurationMs=accountIds?.length&&selectionVisible.current?.key===visibleKey?bankElapsed(selectionVisible.current?.at,requestedAt):undefined;
     const controller = new AbortController(); abortRef.current = controller;
     try {
       for (let attempt = 0; attempt < 30; attempt++) {
-        const data = await requestRef.current<SyncResult>("finverse/sync", { method: "POST", signal: controller.signal, body: JSON.stringify({ workspaceId: session.profileId, connectionId: id, selectedAccountIds: accountIds, accountMappings:Object.fromEntries(Object.entries(mappings).filter(([id,target])=>accountIds?.includes(id)&&target)), refresh: refresh && attempt === 0 }) });
+        const data = await requestRef.current<SyncResult>("finverse/sync", { method: "POST", signal: controller.signal, body: JSON.stringify({ workspaceId: session.profileId, connectionId: id, selectedAccountIds: accountIds, accountMappings:Object.fromEntries(Object.entries(mappings).filter(([id,target])=>accountIds?.includes(id)&&target)), refresh: refresh && attempt === 0,attemptId:selection?.attemptId,clientSelectionDurationMs }) });
+        const receivedAt=performance.now();
         if (!active.current || controller.signal.aborted) return;
         if (data.status === "authorize" && data.linkUrl) {
-          void requestRef.current("finverse/journey",{method:"POST",body:JSON.stringify({workspaceId:session.profileId,connectionId:data.connectionId??id,outcome:"started"})}).catch(()=>{});
-      const result = await WebBrowser.openAuthSessionAsync(data.linkUrl, "clover://accounts");
+          const result = await runBankHostedSession(()=>WebBrowser.openAuthSessionAsync(data.linkUrl!, "clover://accounts"),signal=>{
+            if(!data.attemptId&&signal.stage!=='finverse_open')return Promise.resolve();
+            return requestRef.current('finverse/journey',{method:'POST',body:JSON.stringify({workspaceId:session.profileId,connectionId:data.connectionId??id,...(data.attemptId?{attemptId:data.attemptId,...signal}:{outcome:'started'})})});
+          });
           if (!active.current || controller.signal.aborted) return;
           if (result.type !== "success") { setMessage("Bank sync cancelled."); return; }
           const url = new URL(result.url);
@@ -93,7 +101,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
           continue;
         }
         if (data.status === "select_accounts" && data.accounts && data.connectionId) {
-          setConnection(data.connectionId); setSelection({ accounts: data.accounts, remaining: data.remaining ?? 0, connectionId: data.connectionId }); setSelected([]); setMessage(""); setRevision(v=>v+1); return;
+          setConnection(data.connectionId); setSelection({ accounts: data.accounts, remaining: data.remaining ?? 0, connectionId: data.connectionId,attemptId:data.attemptId,receivedAt,requestedAt }); setSelected([]); setMessage(""); setRevision(v=>v+1); return;
         }
         if (data.status === "retrieving") {
           await new Promise<void>(resolve => { const done = () => { clearTimeout(timer); controller.signal.removeEventListener("abort", done); resolve(); }; const timer = setTimeout(done, 3000); controller.signal.addEventListener("abort", done, { once: true }); });
@@ -101,7 +109,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
           continue;
         }
         if (data.status !== "ready") throw new Error("Bank sync has not completed. Please retry from Finish linking.");
-        if (data.preview && data.connectionId) setPreview({ profileId: session.profileId, connectionId: data.connectionId, row: data.preview });
+        if (data.preview && data.connectionId) setPreview({ profileId: session.profileId, connectionId: data.connectionId, row: data.preview,attemptId:data.attemptId,receivedAt,requestedAt });
         setSelection(null); setPending(p=>p.filter(c=>c.id!==id)); setMessage(data.message || `${accountIds?.length ? `${accountIds.length} account${accountIds.length===1?"":"s"} linked. ` : ""}${data.transactions?.imported ? `${data.transactions.imported} new transactions added.` : "Already up to date."}`); setRevision(v=>v+1); refreshRef.current(); syncedRef.current(); return;
       }
       setMessage("Finverse is still retrieving your accounts. Return through Finish linking or Notifications to check progress.");
@@ -113,7 +121,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
         if (active.current) setBusy(false);
       }
     }
-  }, [mappings, allowed, session.profileId]);
+  }, [selection, mappings, allowed, session.profileId]);
   const callbackHandled = useRef("");
   useEffect(() => { if (allowed && session.offlineStatus.online && callbackConnection && callbackHandled.current !== callbackConnection) { callbackHandled.current = callbackConnection; router.setParams({ finverse: undefined, finverseConnection: undefined, finverseWorkspace: undefined }); setConnection(callbackConnection); void sync(callbackConnection); } }, [allowed, session.offlineStatus.online, callbackConnection, sync]);
   function backToBanks() {
@@ -151,12 +159,14 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
     action.current = true; setBusy(true); setMessage(`Opening ${bank.name} with Finverse…`);
     let linkCreated = false;
     try {
-      const data = await requestRef.current<{ connectionId: string; linkUrl: string }>("finverse/link", { method: "POST", body: JSON.stringify({ workspaceId: session.profileId, institutionId: bank.id }) });
+      const data = await requestRef.current<{ connectionId: string; linkUrl: string;attemptId?:string }>("finverse/link", { method: "POST", body: JSON.stringify({ workspaceId: session.profileId, institutionId: bank.id }) });
       if (!active.current) return;
       setConnection(data.connectionId);
       linkCreated = true;
-      void requestRef.current("finverse/journey",{method:"POST",body:JSON.stringify({workspaceId:session.profileId,connectionId:data.connectionId,outcome:"started"})}).catch(()=>{});
-      const result = await WebBrowser.openAuthSessionAsync(data.linkUrl, "clover://accounts");
+      const result = await runBankHostedSession(()=>WebBrowser.openAuthSessionAsync(data.linkUrl,"clover://accounts"),signal=>{
+        if(!data.attemptId&&signal.stage!=='finverse_open')return Promise.resolve();
+        return requestRef.current('finverse/journey',{method:'POST',body:JSON.stringify({workspaceId:session.profileId,connectionId:data.connectionId,...(data.attemptId?{attemptId:data.attemptId,...signal}:{outcome:'started'})})});
+      });
       if (!active.current) return;
       if (result.type === "success") {
         const url = new URL(result.url);
@@ -179,29 +189,21 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
     {id ? <Button secondary title="Cancel Linking" disabled={cancelling} onPress={() => void cancelSetup(id)} /> : null}
   </View>;
   const visiblePreview = preview?.profileId === session.profileId ? preview : null;
-  const reportPreview = useCallback(() => {
-    if (!visiblePreview || !isFocused || AppState.currentState !== "active" || !active.current) return;
-    const { profileId, connectionId, row } = visiblePreview;
-    const node = previewNode.current;
-    node?.measureInWindow((x, y, w, h) => {
-      if (!active.current || AppState.currentState !== "active" || previewNode.current !== node ||
-          reportedConnection.current === connectionId || w <= 0 || h <= 0 ||
-          x >= width || x + w <= 0 || Math.min(y + h, height) - Math.max(y, 0) < h / 2) return;
-      reportedConnection.current = connectionId;
-      void requestRef.current("finverse/displayed", {
-        method: "POST", body: JSON.stringify({ workspaceId: profileId, connectionId, kind: row.kind }),
-      }).catch(() => { if (reportedConnection.current === connectionId) reportedConnection.current = null; });
-    });
-  }, [visiblePreview, isFocused, width, height]);
-  useEffect(() => {
-    if (!visiblePreview) return;
-    const frame = requestAnimationFrame(reportPreview);
-    const subscription = AppState.addEventListener("change", reportPreview);
-    return () => { cancelAnimationFrame(frame); subscription.remove(); };
-  }, [reportPreview, visiblePreview]);
-  const selectionPanel = selection ? <View style={{ gap: 12 }}><Heading>{progressBank ? `Select ${progressBank.name} accounts` : "Select bank accounts"}</Heading><Body>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</Body>{selection.accounts.map(account => {
+  const previewKey=visiblePreview?`${visiblePreview.profileId}:${visiblePreview.connectionId}:${visiblePreview.attemptId??'legacy'}`:null;
+  const reportPreview=useBankVisibleStage(previewNode,previewKey,isFocused&&session.offlineStatus.online&&Boolean(visiblePreview),async at=>{
+    if(!visiblePreview)return true;const {profileId,connectionId,row,attemptId,receivedAt,requestedAt}=visiblePreview;
+    try{await requestRef.current('finverse/displayed',{method:'POST',body:JSON.stringify({workspaceId:profileId,connectionId,kind:row.kind,...(attemptId?{attemptId,durationMs:bankElapsed(receivedAt,at),requestToVisibleMs:bankElapsed(requestedAt,at)}:{})})});return true;}
+    catch(error){return error instanceof ApiError&&error.status<500;}
+  });
+  const selectionKey=selection?.attemptId?`${session.profileId}:${selection.connectionId}:${selection.attemptId}`:null;
+  const reportSelection=useBankVisibleStage(selectionNode,selectionKey,isFocused&&session.offlineStatus.online&&!busy&&Boolean(selection),async at=>{
+    if(!selection||!selectionKey)return true;selectionVisible.current={key:selectionKey,at};
+    try{await requestRef.current('finverse/journey',{method:'POST',body:JSON.stringify({workspaceId:session.profileId,connectionId:selection.connectionId,attemptId:selection.attemptId,stage:'account_list_displayed',outcome:'succeeded',durationMs:bankElapsed(selection.receivedAt,at),requestToVisibleMs:bankElapsed(selection.requestedAt,at)})});return true;}
+    catch(error){return error instanceof ApiError&&error.status<500;}
+  });
+  const selectionPanel = selection ? <View style={{ gap: 12 }}><Heading>{progressBank ? `Select ${progressBank.name} accounts` : "Select bank accounts"}</Heading><Body>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</Body>{selection.accounts.map((account,index) => {
       const checked = selected.includes(account.id), disabled = busy || (!checked && !account.reserved && selection.accounts.filter(a => selected.includes(a.id) && !a.reserved).length >= selection.remaining);
-      return <View key={account.id} style={{gap:6}}><Pressable accessibilityRole="checkbox" accessibilityState={{ checked, disabled }} disabled={disabled} onPress={() => setSelected(current => checked ? current.filter(id => id !== account.id) : [...current, account.id])} style={{ padding: 14, borderWidth: 1, borderColor: checked ? colors.teal : colors.line, borderRadius: 12 }}><Text style={{ color: colors.ink }}>{checked ? "✓ " : "○ "}{account.name}{account.existingAccountName ? ` · Reuse ${account.existingAccountName}; keep all history` : ""}{account.reserved ? " · Already included this period" : ""}</Text></Pressable>{checked?<View style={{gap:6}}><Body>Link to an existing account:</Body><Button secondary title={account.suggestedAccountId?'Use matching account':'Create a new account card'} onPress={()=>setMappings(m=>({...m,[account.id]:''}))}/>{account.candidates?.map(c=><Button key={c.id} secondary title={`${mappings[account.id]===c.id?'✓ ':''}${c.name}${c.last4?` •••• ${c.last4}`:''}`} onPress={()=>setMappings(m=>({...m,[account.id]:c.id}))}/>)}</View>:null}</View>;
+      return <View key={account.id} style={{gap:6}}><Pressable ref={index===0?selectionNode:undefined} onLayout={index===0?reportSelection:undefined} accessibilityRole="checkbox" accessibilityState={{ checked, disabled }} disabled={disabled} onPress={() => setSelected(current => checked ? current.filter(id => id !== account.id) : [...current, account.id])} style={{ padding: 14, borderWidth: 1, borderColor: checked ? colors.teal : colors.line, borderRadius: 12 }}><Text style={{ color: colors.ink }}>{checked ? "✓ " : "○ "}{account.name}{account.existingAccountName ? ` · Reuse ${account.existingAccountName}; keep all history` : ""}{account.reserved ? " · Already included this period" : ""}</Text></Pressable>{checked?<View style={{gap:6}}><Body>Link to an existing account:</Body><Button secondary title={account.suggestedAccountId?'Use matching account':'Create a new account card'} onPress={()=>setMappings(m=>({...m,[account.id]:''}))}/>{account.candidates?.map(c=><Button key={c.id} secondary title={`${mappings[account.id]===c.id?'✓ ':''}${c.name}${c.last4?` •••• ${c.last4}`:''}`} onPress={()=>setMappings(m=>({...m,[account.id]:c.id}))}/>)}</View>:null}</View>;
     })}<Button title="Link selected accounts" disabled={busy || !selected.length} onPress={() => void sync(selection.connectionId, selected)} />{setupActions(selection.connectionId)}{message?<Notice>{message}</Notice>:null}</View> : null;
   if (progressOpen || (callbackConnection && callbackHandled.current !== callbackConnection && !access && !connectionsError)) return <View style={{gap:16,padding:20}} accessibilityLabel="Bank connection progress">
     {(!busy && !retrySync && selectionPanel) || <>

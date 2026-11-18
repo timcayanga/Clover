@@ -1,4 +1,4 @@
-import { withBankMonitoring, bindBankMonitoring, bankJourney, bankJourneyFailure } from "@/lib/bank-journey-monitor";
+import { withBankMonitoring, bindBankMonitoring, bankJourney, bankJourneyFailure, bankAttemptId } from "@/lib/bank-journey-monitor";
 import { recordBankLinkStage } from "@/lib/bank-link-journey";
 import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { getMobileRequestContext } from "@/lib/mobile-request-context";
@@ -69,7 +69,7 @@ async function handlePost(request: Request) {
     await prisma.finverseConnection.update({where:{id:connection.id},data:{status:'link_pending'}});
     bankJourney('link_request','succeeded');
     await recordBankLinkStage(connection.id, "started");
-    return NextResponse.json({ connectionId: connection.id, linkUrl: link.link_url });
+    return NextResponse.json({ connectionId: connection.id, attemptId:bankAttemptId(), linkUrl: link.link_url });
   } catch (error) {
     if(preparedConnectionId){
       bankJourneyFailure(error,'link_request');

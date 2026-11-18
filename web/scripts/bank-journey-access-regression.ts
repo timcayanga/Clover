@@ -5,10 +5,10 @@ async function main(){
  export const requireAdminAuth=async()=>{if(!admin)throw Error('FORBIDDEN');};
  export const assertWorkspaceAccess=async(_user,id)=>{if(id!=='owned')throw Error('WORKSPACE_NOT_FOUND');return {userId:'owner'};};
  export const getMobileRequestContext=()=>null;
- export const prisma={finverseConnection:{findFirst:async({where})=>where.id==='mine'?{id:'mine',userId:'owner',workspaceId:'owned',createdAt:new Date()}:null}};
- export const withBankMonitoring=(_kind,f)=>f();export const bindBankMonitoring=async()=>{};export const bankJourney=()=>{};
+ let ready=false;export const setReady=v=>ready=v;export const prisma={auditLog:{findFirst:async()=>ready?{id:'ready'}:null},finverseConnection:{findFirst:async({where})=>where.id==='mine'?{id:'mine',userId:'owner',workspaceId:'owned',createdAt:new Date()}:null}};
+ export const bankAttemptId=()=> 'attempt';export const withBankMonitoring=(_kind,f)=>f();export const bindBankMonitoring=async()=>{};export const bankJourney=()=>{};
  export const bankMonitorRange=()=>({from:new Date(),to:new Date()});export const getBankJourneyReport=async()=>({banks:[]});`;
- const built=await build({stdin:{contents:`export {POST as journey} from './app/api/integrations/finverse/journey/route';export {GET as report} from './app/api/admin/finverse/journeys/route';export {setSigned,setAdmin} from 'fixture';`,resolveDir:process.cwd()},bundle:true,platform:'node',format:'cjs',write:false,packages:'external',plugins:[{name:'fixture',setup(b){b.onResolve({filter:/^(fixture|@\/lib\/(auth|admin|prisma|workspace-access|bank-journey-monitor|bank-journey-report|mobile-request-context))$/},()=>({path:'fixture',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:fixture,loader:'ts'}));}}]});
+ const built=await build({stdin:{contents:`export {POST as journey} from './app/api/integrations/finverse/journey/route';export {GET as report} from './app/api/admin/finverse/journeys/route';export {setSigned,setAdmin,setReady} from 'fixture';`,resolveDir:process.cwd()},bundle:true,platform:'node',format:'cjs',write:false,packages:'external',plugins:[{name:'fixture',setup(b){b.onResolve({filter:/^(fixture|@\/lib\/(auth|admin|prisma|workspace-access|bank-journey-monitor|bank-journey-report|mobile-request-context))$/},()=>({path:'fixture',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:fixture,loader:'ts'}));}}]});
  const mod={exports:{}};new Function('require','module','exports',built.outputFiles[0].text)(createRequire(resolve('package.json')),mod,mod.exports);const api=mod.exports as any;
  const req=(body:object,origin='https://clover.ph')=>new Request('https://clover.ph/api/integrations/finverse/journey',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)});
  assert.equal((await api.journey(req({workspaceId:'owned',connectionId:'mine',outcome:'started'}))).status,200);
@@ -16,6 +16,14 @@ async function main(){
  assert.equal((await api.journey(req({workspaceId:'foreign',connectionId:'mine',outcome:'started'}))).status,404);
  assert.equal((await api.journey(req({workspaceId:'owned',connectionId:'other',outcome:'started'}))).status,404);
  assert.equal((await api.journey(req({workspaceId:'owned',connectionId:'mine',outcome:'started',credentials:'forbidden'}))).status,400);
+ const displayed={workspaceId:'owned',connectionId:'mine',attemptId:'attempt',stage:'account_list_displayed',outcome:'succeeded',durationMs:25,requestToVisibleMs:800};
+ assert.equal((await api.journey(req(displayed))).status,409,'List display needs a server-ready milestone');api.setReady(true);
+ assert.equal((await api.journey(req(displayed))).status,200);
+ assert.equal((await api.journey(req({...displayed,attemptId:'stale'}))).status,409);
+ assert.equal((await api.journey(req({...displayed,durationMs:-1}))).status,400);
+ assert.equal((await api.journey(req({...displayed,durationMs:Infinity}))).status,400);
+ assert.equal((await api.journey(req({...displayed,stage:'authentication'}))).status,400,'Clients cannot invent hosted authentication evidence');
+ assert.equal((await api.journey(req({...displayed,stage:'hosted_session_ended',outcome:'pending',sessionResult:'closed'}))).status,200);
  api.setSigned(false);assert.equal((await api.journey(req({workspaceId:'owned',connectionId:'mine',outcome:'started'}))).status,401);
  assert.equal((await api.report(new Request('https://clover.ph/api/admin/finverse/journeys'))).status,403);
  api.setAdmin(true);assert.equal((await api.report(new Request('https://clover.ph/api/admin/finverse/journeys'))).status,200);
