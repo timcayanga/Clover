@@ -147,7 +147,7 @@ export function AdviserInputTools({
             flexDirection: "row",
             alignItems: "center",
             gap: 4,
-            minHeight: expanded ? 96 : 56,
+            minHeight: expanded ? 104 : 80,
             padding: 6,
             borderRadius: 28,
             borderWidth: 1,

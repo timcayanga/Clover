@@ -131,7 +131,8 @@ export function PlanTabs({
   const { colors, dark } = useTheme();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled"
+      style={{ flexGrow: 0, flexShrink: 0, height: 44, maxHeight: 44 }}
+      contentContainerStyle={{ flexGrow: 1, height: 44, alignItems: "center" }} keyboardShouldPersistTaps="handled"
       accessibilityRole="tablist">
       {items.map((item, index) => {
         const label = item.replace(" · Plus", "");
@@ -144,7 +145,7 @@ export function PlanTabs({
             onPress={() => onChange(item)}
             style={{
               flexGrow: 1, flexShrink: 0, minWidth: 44,
-              minHeight: 44, paddingVertical: 8, paddingHorizontal: selected ? 10 : 6,
+              height: 44, maxHeight: 44, paddingVertical: 8, paddingHorizontal: selected ? 10 : 6,
               flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4,
               borderWidth: 1, borderColor: selected ? colors.line : "transparent",
               borderBottomColor: selected ? colors.white : colors.line,

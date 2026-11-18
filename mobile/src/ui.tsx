@@ -234,6 +234,7 @@ export function Screen({
   children,
   gap = 16,
   sheet = false,
+  embedded = false,
   scrollKey,
   onDismiss,
   layout = "reading",
@@ -244,6 +245,7 @@ export function Screen({
   children: ReactNode;
   gap?: number;
   sheet?: boolean;
+  embedded?: boolean;
   scrollKey?: string;
   layout?: "reading" | "dashboard" | "form";
   keyboardInsets?: boolean;
@@ -275,13 +277,13 @@ export function Screen({
   const [refreshing, setRefreshing] = useState(false);
   const refreshBusy = useRef(false);
   const preventScrollBounce = path === "/settings";
-  const refreshable = !sheet && ["/", "/accounts", "/recurring", "/reports", "/investments", "/budgeting", "/goals", "/circles", "/split-bills"].includes(path);
+  const refreshable = !sheet && !embedded && ["/", "/accounts", "/recurring", "/reports", "/investments", "/budgeting", "/goals", "/circles", "/split-bills"].includes(path);
   const onRefresh = async () => {
     if (refreshBusy.current) return;
     refreshBusy.current = true; setRefreshing(true);
     try { await refreshScreen(path); } finally { refreshBusy.current = false; setRefreshing(false); }
   };
-  const detailNavigation = !sheet && (path.startsWith("/transaction/") || path.startsWith("/import/") || ["/accounts", "/recurring", "/offline", "/settings", "/notifications", "/budgeting", "/goals", "/investments", "/circles", "/split-bills", "/reports"].includes(path));
+  const detailNavigation = !sheet && !embedded && (path.startsWith("/transaction/") || path.startsWith("/import/") || ["/accounts", "/recurring", "/offline", "/settings", "/notifications", "/budgeting", "/goals", "/investments", "/circles", "/split-bills", "/reports"].includes(path));
   const content = Children.toArray(children);
   const headerIndex = content.findIndex(child => isValidElement(child) && Boolean((child.type as { screenHeader?: boolean }).screenHeader));
   const header = headerIndex >= 0 ? content.splice(headerIndex, 1)[0] : null;
@@ -304,7 +306,7 @@ export function Screen({
       style={{ flex: 1, backgroundColor: colors.bg }}
       contentContainerStyle={[
         styles.content,
-        { gap, paddingHorizontal: adaptive.gutter, maxWidth: sheet || layout === "form" ? adaptive.formMaxWidth : layout === "dashboard" ? adaptive.pageMaxWidth : adaptive.readingMaxWidth, paddingBottom: (sheet ? 24 : adaptive.dockHeight + 28) + insets.bottom },
+        { gap, paddingHorizontal: adaptive.gutter, maxWidth: sheet || layout === "form" ? adaptive.formMaxWidth : layout === "dashboard" ? adaptive.pageMaxWidth : adaptive.readingMaxWidth, paddingBottom: (embedded ? 16 : sheet ? 24 : adaptive.dockHeight + 28) + (embedded ? 0 : insets.bottom) },
       ]}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets={keyboardInsets}

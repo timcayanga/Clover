@@ -97,7 +97,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   const [historyRevision, setHistoryRevision] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState<
-    { id: string; fileName: string; status: string }[]
+    { id: string; fileName: string; status: string; createdAt?: string; uploadedAt?: string; accountName?: string; account?: {name: string} | null; transactionCount?: number; importedCount?: number }[]
   >([]);
   useFocusEffect(
     useCallback(() => {
@@ -368,14 +368,14 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
                 style={{ minHeight: 44, justifyContent: "center" }}>
                 <Text style={{ color: colors.teal, fontWeight: "500" }}>{locationBusy ? "Finding country…" : locationFix ? `Next photo: ${receiptLocationCountryLabel(locationFix.countryCode)} · Clear` : "Use location for next receipt photo"}</Text>
               </Pressable>
-              <Body>Optional. Only the country is saved with your next photo to help suggest its currency. No background tracking.</Body>
+
               {locationNotice ? <Body>{locationNotice}</Body> : null}
             </View>
             {error ? <Notice>{error}</Notice> : null}
             <Body>
               {session.demo
                 ? "Sample mode shows a completed sample import. It never opens or uploads your files."
-                : "Photos up to 10 MB. Documents up to 25 MB. Review imported details before confirming."}
+                : "Up to 25 MB"}
             </Body>
             <Body>
               Your files are protected with encrypted connections and restricted
@@ -387,17 +387,10 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
               <Card>
                 <Body>Recent imports</Body>
                 {history.map((item) => (
-                  <Button
-                    key={item.id}
-                    title={`${item.fileName} · ${item.status}`}
-                    secondary
-                    onPress={() =>
-                      router.push({
-                        pathname: "/import/[id]",
-                        params: { id: item.id },
-                      })
-                    }
-                  />
+                  <Pressable key={item.id} accessibilityRole="button" onPress={() => router.push({pathname: "/import/[id]", params: {id: item.id}})} style={{paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line, gap: 4}}>
+                    <Text numberOfLines={1} style={{color: colors.ink, fontSize: 13}}>{item.fileName}</Text>
+                    <Text style={{color: colors.muted, fontSize: 11}}>{[item.createdAt || item.uploadedAt ? new Date(item.createdAt || item.uploadedAt!).toLocaleDateString() : null, item.accountName || item.account?.name || "Account not assigned", `${item.transactionCount ?? item.importedCount ?? 0} transactions`, item.status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())].filter(Boolean).join(" · ")}</Text>
+                  </Pressable>
                 ))}
               </Card>
             )}

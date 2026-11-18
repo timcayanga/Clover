@@ -22,6 +22,7 @@ const { resolveSelectedFile, fileProblem } = load('../src/upload.ts', {
   'expo-file-system': { File: class { get size() { return diskSize; } } },
 });
 const queueModule = load('../src/offline/file-queue.ts', {
+  '../../../shared/import-commit-timing': load('../../shared/import-commit-timing.ts', {}),
   '../../../shared/native-upload': limits,
   '../../../shared/analytics': { telemetry() {} },
   '../../../shared/receipt-first-attempt': {},
@@ -39,6 +40,7 @@ const sourceBytes = Buffer.concat([
 const reads = [], writes = [];
 const { selectedUploadPartReader, withUploadCopy } = load('../src/offline/file-storage.ts', {
   'react-native': { Platform: { OS: 'android' } },
+  '../../../shared/import-commit-timing': load('../../shared/import-commit-timing.ts', {}),
   '../../../shared/native-upload': limits,
   './file-queue': queueModule,
   'expo-file-system/legacy': {

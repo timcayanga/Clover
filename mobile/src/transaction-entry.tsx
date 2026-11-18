@@ -17,7 +17,7 @@ import { ApiError } from "./api";
 import * as Crypto from "expo-crypto";
 import type { EntryAccount, EntryDraft, EntryFormContext } from "./adviser-entry-types";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Platform, Pressable, View } from "react-native";
+import { Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useSession } from "./session";
 import { Body, Button, Card, Field, Notice, Icon, CategoryMark, useTheme } from "./ui";
 
@@ -541,6 +541,7 @@ export function TransactionChat({
   onReviewForm?: (draft: AddFormDraft) => void;
   active?: boolean;
 }) {
+  const { height: windowHeight } = useWindowDimensions();
   const [preparedForm, setPreparedForm] = useState<AddFormDraft | null>(null);
   const [prepared, setPrepared] = useState<EntryDraft | null>(null);
   const { colors, styles, dark } = useTheme();
@@ -688,20 +689,7 @@ export function TransactionChat({
     }
   };
   return (
-    <View style={{ gap: 16 }}>
-      <AdviserInputTools
-        active={active}
-        expanded
-        placeholder={entryExample(context?.kind || page)}
-        value={input}
-        onChangeText={setInput}
-        onSend={() => void send()}
-        disabled={busy || attaching}
-        onText={(text) =>
-          setInput((current) => `${current}${current ? " " : ""}${text}`)
-        }
-        onPhoto={() => void takePhoto()}
-      />
+    <View style={{ gap: 16, flexGrow: 1, minHeight: Math.max(280, windowHeight - 330) }}>
       {attachments.map((item) => (
         <Button
           key={item.id}
@@ -715,11 +703,6 @@ export function TransactionChat({
         />
       ))}
       {attaching ? <Body>Reading photo…</Body> : null}
-      <Body muted={false}>Tell Clover what to add</Body>
-      <Body>
-        {intro ||
-          "For example: Lunch ₱250 with cash, groceries ₱1,200 from BPI. Review each draft before saving."}
-      </Body>
       {messages.map((message, index) => (
         <Card
           key={index}
@@ -771,6 +754,22 @@ export function TransactionChat({
       ))}
       {error ? <Notice>{error}</Notice> : null}
       {busy ? <Body>Clover is preparing your draft…</Body> : null}
+      <View style={{marginTop: "auto", paddingTop: 16}}>
+      <AdviserInputTools
+        active={active}
+        expanded
+        placeholder={entryExample(context?.kind || page)}
+        value={input}
+        onChangeText={setInput}
+        onSend={() => void send()}
+        disabled={busy || attaching}
+        onText={(text) =>
+          setInput((current) => `${current}${current ? " " : ""}${text}`)
+        }
+        onPhoto={() => void takePhoto()}
+      />
+
+      </View>
     </View>
   );
 }

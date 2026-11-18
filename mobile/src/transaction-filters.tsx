@@ -2,8 +2,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from "react-native";
 import { Text } from "./app-text";
-import { Button, Field, Icon, Notice, useTheme } from "./ui";
+import { Button, CategoryMark, Field, Icon, Notice, useTheme } from "./ui";
 
+import { AccountBrandLogo } from "./account-brand-logo";
 import { emptyTransactionFilters, type TransactionFilters, type FilterOptions } from "./transaction-filter-query";
 export function FilterRow({ label, summary, children }: { label: string; summary: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -36,18 +37,18 @@ export function TransactionFilterPanel({ value, options, optionError, onApply, o
   const [draft, setDraft] = useState(value);
   const { colors } = useTheme();
   const set = <K extends keyof TransactionFilters>(key: K, value: TransactionFilters[K]) => setDraft(current => ({ ...current, [key]: value }));
-  const menu = (label: string, key: keyof TransactionFilters, choices: {value:string;label:string}[], multiple = false) => {
-    const selected = (v: string) => multiple ? (draft[key] as string[]).includes(v) : draft[key] === v;
+  const menu = (label: string, key: keyof TransactionFilters, choices: {value:string;label:string; account?: FilterOptions["accounts"][number]; values?: string[]}[], multiple = false) => {
+    const selected = (v: string) => { const values=choices.find(choice=>choice.value===v)?.values; return values ? values.every(id=>(draft[key] as string[]).includes(id)) : multiple ? (draft[key] as string[]).includes(v) : draft[key] === v; };
     const summary = choices.filter(c => selected(c.value)).map(c => c.label).join(", ") || "All";
     return <FilterRow label={label} summary={summary}>
       <View style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 12, overflow: "hidden" }}>
         {(multiple ? [{value:"",label:"All"},...choices] : choices).map(choice => {
           const active = choice.value === "" && multiple ? (draft[key] as string[]).length === 0 : selected(choice.value);
           return <Pressable key={choice.value} accessibilityRole={multiple ? "checkbox" : "radio"} accessibilityState={{ checked: active }} onPress={() => {
-            if (multiple) { const previous = draft[key] as string[]; set(key, !choice.value ? [] : previous.includes(choice.value) ? previous.filter(v => v !== choice.value) : [...previous,choice.value]); }
+            if (multiple) { const previous = draft[key] as string[]; const values=choice.values ?? [choice.value]; set(key, !choice.value ? [] : selected(choice.value) ? previous.filter(v => !values.includes(v)) : [...new Set([...previous,...values])]); }
             else set(key,choice.value);
           }} style={{ minHeight: 44, padding: 10, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: active ? colors.pale : colors.white, borderBottomWidth: 1, borderBottomColor: colors.line }}>
-            <Text style={{ flex: 1, color: colors.ink, fontSize: 13 }}>{choice.label}</Text>{active ? <Icon line name="checkmark" size={16}/> : null}
+            {choice.value && label === "Category" ? <CategoryMark name={choice.label} size={24}/> : choice.account ? <AccountBrandLogo size={24} account={{...choice.account, type: choice.account.type ?? "bank", institution: choice.account.institution ?? null, brandLogoUrl: choice.account.brandLogoUrl ?? null}}/> : choice.value && label === "Type" ? <Icon line name={choice.value === "credit" ? "arrow-down-outline" : choice.value === "debit" ? "arrow-up-outline" : "swap-horizontal-outline"} size={22}/> : null}<Text style={{ flex: 1, color: colors.ink, fontSize: 13 }}>{choice.label}</Text>{active ? <Icon line name="checkmark" size={16}/> : null}
           </Pressable>;
         })}
       </View>
@@ -72,7 +73,7 @@ export function TransactionFilterPanel({ value, options, optionError, onApply, o
               {menu("Dates","dateFilterMode",[{value:"ltd",label:"Lifetime"},{value:"day",label:"Today"},{value:"week",label:"This week"},{value:"month",label:"This month"},{value:"quarter",label:"This quarter"},{value:"year",label:"This year"},{value:"custom",label:"Custom range"}])}
               {draft.dateFilterMode==="custom" ? <View style={{gap:8,paddingVertical:8}}><Field accessibilityLabel="From date" placeholder="From: YYYY-MM-DD" value={draft.customStart} onChangeText={v=>set("customStart",v)}/><Field accessibilityLabel="To date" placeholder="To: YYYY-MM-DD" value={draft.customEnd} onChangeText={v=>set("customEnd",v)}/></View> : null}
               {menu("Type","types",[{value:"debit",label:"Expense"},{value:"credit",label:"Income"},{value:"transfer",label:"Transfer"}],true)}
-              {menu("Account","accounts",named(options.accounts),true)}
+              {menu("Account","accounts",[...Array.from(new Set(options.accounts.filter(a=>a.type!=="investment").map(a=>a.institution).filter((v):v is string=>Boolean(v)))).map(institution=>({value:`institution:${institution}`,label:`${institution} · All accounts`,account:{id:institution,name:institution,currency:"",type:"bank",institution,brandLogoUrl:options.accounts.find(a=>a.institution===institution)?.brandLogoUrl},values:options.accounts.filter(a=>a.type!=="investment"&&a.institution===institution).map(a=>a.id)})),...options.accounts.filter(a=>a.type!=="investment").map(account=>({value:account.id,label:account.name,account}))],true)}
               {menu("Category","categories",named(options.categories),true)}
               <FilterRow label="Amount" summary={draft.amountMin||draft.amountMax?`${draft.amountMin||"0"} – ${draft.amountMax||"Any"}`:"Any amount"}>
                 <View style={{flexDirection:"row",gap:8}}><View style={{flex:1}}><Field accessibilityLabel="Minimum amount" placeholder="Minimum" keyboardType="decimal-pad" value={draft.amountMin} onChangeText={v=>set("amountMin",v)}/></View><View style={{flex:1}}><Field accessibilityLabel="Maximum amount" placeholder="Maximum" keyboardType="decimal-pad" value={draft.amountMax} onChangeText={v=>set("amountMax",v)}/></View></View>

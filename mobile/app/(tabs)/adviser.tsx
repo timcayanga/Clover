@@ -282,9 +282,9 @@ export function AdviserConversation({ pageContext, embedded = false, onClose }: 
       keyboardVerticalOffset={embedded ? 0 : insets.top + 70}
     >
       <View style={{ flex: 1, flexDirection: wide ? "row" : "column", minHeight: 0, width: "100%", maxWidth: 1440, alignSelf: "center" }}>
-      <View style={{ width: wide ? 300 : "100%", maxHeight: wide ? "100%" : "40%", display: !useLocal && (wide || historyOpen) ? "flex" : "none" }}><Screen keyboardInsets={false} sheet={embedded} onDismiss={onClose}>{historyPanel}</Screen></View>
+      <View style={{ width: wide ? 300 : "100%", maxHeight: wide ? "100%" : "40%", display: !useLocal && (wide || historyOpen) ? "flex" : "none" }}><Screen keyboardInsets={false} embedded={embedded}>{historyPanel}</Screen></View>
       <View style={{ flex: 1, minWidth: 0 }}>
-      <Screen keyboardInsets={false} sheet={embedded} onDismiss={onClose}>
+      <Screen keyboardInsets={false} embedded={embedded}>
         {!useLocal && !session.demo && !wide ? (
           <PlanAction
             title="Your chats"
@@ -376,22 +376,7 @@ export function AdviserConversation({ pageContext, embedded = false, onClose }: 
                 : ""}
               {embedded ? "How can I help with this page?" : "Ask Clover anything about your finances."}
             </Text>
-            {composer}
-            <View style={{ gap: 8 }}>
-              {(pageContext ? askPagePrompts(pageContext) : [
-                "🍽️ Why is food spending up?",
-                "📅 What’s due before payday?",
-                "🎯 How are my goals doing?",
-              ]).map((prompt) => (
-                <PlanAction
-                  fullWidth
-                  key={prompt}
-                  title={prompt}
-                  disabled={busy}
-                  onPress={() => void send(prompt)}
-                />
-              ))}
-            </View>
+
           </View>
         ) : null}
         {messages.map((message, index) => (
@@ -473,18 +458,34 @@ export function AdviserConversation({ pageContext, embedded = false, onClose }: 
         ) : null}
         {error ? <Notice>{error}</Notice> : null}
       </Screen>
-      {messages.length ? (
-        <View
+      <View
           style={{
+            gap: 8,
             padding: 16,
             paddingBottom: keyboardOpen ? 16 : (embedded ? 0 : adaptive.dockHeight) + insets.bottom + 16,
             borderTopWidth: 1,
             borderTopColor: colors.line,
           }}
         >
+          {!messages.length ? (
+            <View style={{ gap: 8 }}>
+              {(pageContext ? askPagePrompts(pageContext) : [
+                "🍽️ Why is food spending up?",
+                "📅 What’s due before payday?",
+                "🎯 How are my goals doing?",
+              ]).map((prompt) => (
+                <PlanAction
+                  fullWidth
+                  key={prompt}
+                  title={/^[\p{Extended_Pictographic}]/u.test(prompt) ? prompt : `💡 ${prompt}`}
+                  disabled={busy}
+                  onPress={() => void send(prompt)}
+                />
+              ))}
+            </View>
+          ) : null}
           {composer}
         </View>
-      ) : null}
       </View></View>
     </KeyboardAvoidingView>
   );

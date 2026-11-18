@@ -12,7 +12,7 @@ export const emptyTransactionFilters: TransactionFilters = {
   dateFilterMode: "ltd", customStart: "", customEnd: "", sourceFilter: "", confidenceFilter: "", reviewFilter: "",
 };
 export type FilterOptions = {
-  accounts: { id: string; name: string; currency: string }[];
+  accounts: { id: string; name: string; currency: string; type?: string; institution?: string | null; brandLogoUrl?: string | null }[];
   categories: { id: string; name: string }[]; tags: { id: string; name: string }[];
 };
 export function transactionFilterQuery(filters: TransactionFilters) {

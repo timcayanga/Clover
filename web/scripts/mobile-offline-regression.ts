@@ -364,10 +364,10 @@ const file: QueuedFile = {
   createdAt: version,
   state: "draft",
 };
-test("photo limits accept 10 MB, reject larger photos, and preserve document limits", () => {
+test("photo limits accept 25 MB, reject larger photos, and preserve document limits", () => {
   for (const [name, mime] of [["receipt.HEIC", "application/octet-stream"], ["camera", "image/jpeg"], ["receipt.png", "image/png"]]) {
     assert.equal(uploadSizeProblem(name, mime, IMPORT_PHOTO_MAX_SIZE), null);
-    assert.match(uploadSizeProblem(name, mime, IMPORT_PHOTO_MAX_SIZE + 1)!, /10 MB/);
+    assert.match(uploadSizeProblem(name, mime, IMPORT_PHOTO_MAX_SIZE + 1)!, /25 MB/);
   }
   assert.equal(uploadSizeProblem("statement.pdf", "application/pdf", NATIVE_UPLOAD_MAX_SIZE), null);
   assert.match(uploadSizeProblem("statement.pdf", "application/pdf", NATIVE_UPLOAD_MAX_SIZE + 1)!, /25 MB/);

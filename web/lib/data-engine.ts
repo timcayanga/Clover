@@ -2984,8 +2984,15 @@ export const listImportFileSummariesCompat = async (workspaceId: string) => {
     .filter(field => columns.includes(field));
   if (!fields.includes("id")) return [];
   const order = columns.includes("uploadedAt") ? "uploadedAt" : columns.includes("createdAt") ? "createdAt" : "id";
-  return prisma.$queryRawUnsafe<any[]>(
-    `SELECT ${fields.map(field => `"${field}"`).join(", ")} FROM "ImportFile" WHERE "workspaceId" = $1 ORDER BY "${order}" DESC, "id" DESC LIMIT 10`, workspaceId);
+  // Limit source files before counting; this never scans an entire Profile's history.
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT ${fields.map(field => `"${field}"`).join(", ")}${columns.includes("accountId") ? ', "accountId"' : ''} FROM "ImportFile" WHERE "workspaceId" = $1 ORDER BY "${order}" DESC, "id" DESC LIMIT 10`, workspaceId);
+  if (!rows.length) return rows;
+  const counts = await prisma.transaction.groupBy({by:["importFileId", "accountId"], where:{workspaceId, importFileId:{in:rows.map(row=>row.id)}, deletedAt:null}, _count:{_all:true}});
+  const ids = [...new Set([...rows.map(row=>row.accountId), ...counts.map(row=>row.accountId)].filter((id): id is string=>Boolean(id)))];
+  const accounts = ids.length ? await prisma.account.findMany({where:{workspaceId,id:{in:ids}},select:{id:true,name:true}}) : [];
+  return rows.map(row=>{const groups=counts.filter(count=>count.importFileId===row.id); const accountIds=[...new Set([row.accountId,...groups.map(group=>group.accountId)].filter(Boolean))]; return {...row, transactionCount:groups.reduce((n,group)=>n+group._count._all,0), accountName:accounts.filter(account=>accountIds.includes(account.id)).map(account=>account.name).join(", ") || null};});
+
 };
 
 export const listAllImportFilesCompat = async (limit?: number): Promise<any[]> => {

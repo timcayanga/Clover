@@ -4,11 +4,11 @@ import vm from 'node:vm';
 import ts from 'typescript';
 const source = fs.readFileSync(new URL('../app/(tabs)/adviser.tsx', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-function render(wide, keyboardOpen, embedded = false) {
+function render(wide, keyboardOpen, embedded = false, empty = false) {
   let arrayCount = 0;
   const exports = {};
   const dependencies = {
-    react: { useEffect() {}, useRef: value => ({ current: value }), useState: value => [Array.isArray(value) && arrayCount++ === 0 ? [{ role: 'user', content: 'How much did I spend?' }, { role: 'assistant', content: 'Here is your summary.' }] : value, () => {}] },
+    react: { useEffect() {}, useRef: value => ({ current: value }), useState: value => [Array.isArray(value) && arrayCount++ === 0 && !empty ? [{ role: 'user', content: 'How much did I spend?' }, { role: 'assistant', content: 'Here is your summary.' }] : value, () => {}] },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     'react-native': { View: 'View', KeyboardAvoidingView: 'KeyboardAvoidingView', Platform: { OS: 'ios' }, Pressable: 'Pressable' },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 44, bottom: 34 }) },
@@ -19,6 +19,7 @@ function render(wide, keyboardOpen, embedded = false) {
     '../../src/session': { useSession: () => ({ offlineStatus: { online: true }, profileId: 'fixture', demo: false, data: {} }) },
     '../../src/ui': { useTheme: () => ({ colors: {} }), Body: 'Body', Card: 'Card', Icon: 'Icon', Notice: 'Notice', Screen: 'Screen' },
     '../../../shared/use-adviser-history': { createAdviserHistoryHook: () => () => ({ conversations: [], busy: false }) },
+    '../../../shared/ask-clover-page': {askPagePrompts: () => ['How much did I spend?']},
     '../../src/adviser-input-tools': { AdviserInputTools: 'AdviserInputTools' },
   };
   vm.runInNewContext(code, { exports, require: name => dependencies[name] ?? new Proxy({}, { get: (_, key) => String(key) }) });
@@ -43,6 +44,15 @@ for (const keyboard of [false, true]) {
  const composer = find(tree, node => node.type === 'AdviserInputTools');
  assert.equal(composer.length, 1);
  assert.equal(composer[0].parent.props.style.paddingBottom, keyboard ? 16 : 50, 'Sheet composer clears safe area without reserving the covered dock');
- assert(find(tree, node => node.type === 'Screen').every(({node}) => node.props.sheet === true), 'Embedded chat never mounts another bottom navigation');
+ assert(find(tree, node => node.type === 'Screen').every(({node}) => node.props.embedded === true && !node.props.sheet), 'Embedded chat never mounts another bottom navigation');
 }
 console.log('PASS contextual chat sheet: keyboard and safe-area padding, no nested navigation');
+
+for (const keyboard of [false, true]) {
+ const tree=render(false,keyboard,true,true);
+ const composers=find(tree,n=>n.type==='AdviserInputTools');
+ assert.equal(composers.length,1,'A new conversation has exactly one composer');
+ assert.equal(composers[0].parent.props.style.paddingBottom, keyboard ? 16 : 50);
+ assert.equal(composers[0].parent.props.children.at(-1).type,'AdviserInputTools','Suggestions precede the bottom composer');
+}
+console.log('PASS empty contextual chat keeps suggestions above the single bottom composer');

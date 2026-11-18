@@ -39,7 +39,7 @@ export function UploadSourceButtons({
           }}
         >
           <img
-            src={`/assets/organize/upload-${key}.svg?v=20261007`}
+            src={`/assets/organize/upload-${key}.svg?v=20261118`}
             alt=""
             width="56"
             height="56"

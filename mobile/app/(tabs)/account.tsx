@@ -1,3 +1,5 @@
+import * as Application from "expo-application";
+import Constants from "expo-constants";
 import { Text } from "../../src/app-text";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
@@ -42,5 +44,6 @@ function AccountMenu({ onClose, user }: AccountMenuProps & { user: ReturnType<ty
     </View>
     <View style={{ paddingHorizontal: 24 }}>{rows.map(row => <Pressable key={row.label} accessibilityRole="button" accessibilityLabel={row.label} disabled={busy} onPress={() => { if (row.label !== "Log Out") onClose?.(); row.act(); }} style={{ minHeight: 56, flexDirection: "row", alignItems: "center", gap: 16, borderBottomWidth: 1, borderBottomColor: colors.line }}><Icon name={row.icon} size={28}/><Text style={{ color: colors.ink, fontSize: 14, flex: 1 }}>{row.label}</Text><Icon name="chevron-forward" size={16} line /></Pressable>)}</View>
     {error ? <Notice>{error}</Notice> : null}
+    <Text accessibilityLabel="App version" style={{ textAlign: "center", color: colors.muted, fontSize: 11, marginTop: 24 }}>Version {Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? "—"}</Text>
   </ScrollView>;
 }

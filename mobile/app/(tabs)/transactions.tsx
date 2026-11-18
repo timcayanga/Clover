@@ -1,3 +1,4 @@
+import { TransactionBulkEdit } from "../../src/transaction-bulk-edit";
 import { TransactionBulkDestination } from "../../src/transaction-bulk-destination";
 import { mergeCommittedReceiptRows } from "../../src/committed-receipt-rows";
 import { beginTelemetry } from "../../../shared/analytics";
@@ -43,6 +44,7 @@ export default function Transactions() {
   const [selection, setSelection] = useState<string[]>([]);
   const [action, setAction] = useState<{ids:string[]; kind:"review"|"delete"}|null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkNotice, setBulkNotice] = useState("");
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -312,6 +314,7 @@ export default function Transactions() {
             >
               <Icon line name={allSelected ? "checkbox-outline" : "remove-circle-outline"} size={24} color={colors.teal} />
             </Pressable>
+            <Button title="Edit" secondary disabled={demo} onPress={()=>setBulkEditOpen(true)}/>
             <Button title="Add To" disabled={demo} onPress={() => { setBulkNotice(""); setBulkOpen(true); }} />
             <Button danger title="Delete" disabled={demo} onPress={() => { setActionError(""); setAction({ ids: selection, kind: "delete" }); }} />
           </View>
@@ -340,6 +343,7 @@ export default function Transactions() {
         ) : null}
       </View>
       {bulkNotice ? <Notice>{bulkNotice}</Notice> : null}
+      {bulkEditOpen && selection.length ? <TransactionBulkEdit ids={selection} options={filterOptions} onClose={()=>setBulkEditOpen(false)} onSaved={ids=>{setBulkEditOpen(false);setSelection(current=>current.filter(id=>!ids.includes(id)));setBulkNotice(`${ids.length} transactions updated.`);void load(1,true);}}/> : null}
       {bulkOpen && selection.length ? <TransactionBulkDestination
         key={profileId} rows={rows.filter(row => selection.includes(row.id))} count={selection.length} profileId={profileId}
         onClose={() => setBulkOpen(false)}

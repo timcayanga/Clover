@@ -8620,7 +8620,7 @@ export function ImportFilesModal({
             onClick={() => { if (locationFix) { setLocationFix(null); setLocationNotice(""); } else void enableReceiptLocation(); }}>
             {locationBusy ? "Finding country…" : locationFix ? `Next photo: ${receiptLocationCountryLabel(locationFix.countryCode)} · Clear` : "Use location for next receipt photo"}
           </button>
-          <p>Optional. Only the country is saved with your next photo to help suggest its currency. No background tracking.</p>
+
           {locationNotice ? <p role="status">{locationNotice}</p> : null}
         </div>
 
@@ -8634,7 +8634,7 @@ export function ImportFilesModal({
             </p>
           ) : null}
           <p>
-            Accepted files: PDF, CSV, TSV, XLSX, XLS, XLSM, XLSB, ODS, JPG, JPEG, PNG, WEBP, HEIC, and HEIF.
+            Up to 25 MB
             <br />
           </p>
           <p className="accounts-import-footer-copy__security">Your files are protected with encrypted connections and restricted access. Clover never sells your data.</p>

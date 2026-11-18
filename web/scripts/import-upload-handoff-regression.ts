@@ -20,7 +20,7 @@ const section = (source: string, start: string, end: string) => {
 
 const main = async () => {
   assert.equal(withCompletedNativeUpload(() => validateServerImportFile({fileName:"receipt.jpg", contentType:"image/jpeg", fileSize:IMPORT_PHOTO_MAX_SIZE})), null);
-  assert.match(withCompletedNativeUpload(() => validateServerImportFile({fileName:"receipt.jpg", contentType:"image/jpeg", fileSize:IMPORT_PHOTO_MAX_SIZE+1}))!, /10 MB/);
+  assert.match(withCompletedNativeUpload(() => validateServerImportFile({fileName:"receipt.jpg", contentType:"image/jpeg", fileSize:IMPORT_PHOTO_MAX_SIZE+1}))!, /25 MB/);
   assert.match(validateServerImportFile({fileName:"receipt.jpg", contentType:"image/jpeg", fileSize:IMPORT_PHOTO_MAX_SIZE})!, /4 MB/, "Large original photos require chunk assembly or browser optimization, never an oversized multipart request.");
   const [modalSource, passwordModalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, accountsPageSource, pageDropSource, globalImportActivitySource, vercelConfigSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
@@ -78,7 +78,7 @@ const main = async () => {
   assert.match(
     imageCompressionSource,
     /MAX_IMPORT_IMAGE_SOURCE_SIZE = IMPORT_PHOTO_MAX_SIZE/,
-    "Mobile photos use the shared 10 MB source limit before optimization."
+    "Mobile photos use the shared 25 MB source limit before optimization."
   );
   assert.match(
     imageCompressionSource,

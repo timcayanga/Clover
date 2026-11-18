@@ -58,7 +58,7 @@ export const optimizeImportImage = async (
   }
 
   if (file.size > MAX_IMPORT_IMAGE_SOURCE_SIZE) {
-    throw new Error("This photo is larger than 10 MB. Please choose a smaller photo.");
+    throw new Error("This photo is larger than 25 MB. Please choose a smaller photo.");
   }
 
   let output = await runBrowserImportWork({ kind: "image", file, receipt: isReceiptProfile, targetBytes: targetUploadBytes });
