@@ -204,7 +204,7 @@ export function FinverseConnectButton({
         const body = await response.json() as SyncResponse;
         if (controller.signal.aborted) return;
         if (!response.ok) { setReconnect(body.reconnectRequired === true); throw new Error(body.error || "Unable to sync your bank."); }
-        if (body.status === "authorize" && body.linkUrl) { window.location.assign(body.linkUrl); return; }
+        if (body.status === "authorize" && body.linkUrl) { if(body.connectionId)void fetch("/api/integrations/finverse/journey",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspaceId,connectionId:body.connectionId,outcome:"started"}),keepalive:true}).catch(()=>{}); window.location.assign(body.linkUrl); return; }
         if(body.status === "select_accounts" && body.connectionId && body.accounts){setSelection({connectionId:body.connectionId,remaining:body.remaining ?? 0,accounts:body.accounts});setSelected([]);setMappings({});setMessage("");setBankRevision(v=>v+1);window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged();return;}
         setSelection(null);
         if (body.status === "retrieving") {
@@ -306,6 +306,7 @@ export function FinverseConnectButton({
         }
         catch { /* Return to Accounts when storage is unavailable. */ }
       }
+      if(body.connectionId)void fetch("/api/integrations/finverse/journey",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspaceId,connectionId:body.connectionId,outcome:"started"}),keepalive:true}).catch(()=>{});
       window.location.assign(body.linkUrl);
     } catch (error) {
       capturePostHogClientEvent("bank_link_stage", { stage: "link_request_failed", status: requestStatus, surface: "bank_picker" });
@@ -322,6 +323,7 @@ export function FinverseConnectButton({
   const leaveSetup = () => router.replace(setupReturnPath(progressId));
   const awaitingSignIn = setup && (callbackStatus === "signin" || progressBank?.status === "link_pending");
   const openSignIn = () => {
+    if(progressId)void fetch("/api/integrations/finverse/journey",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspaceId,connectionId:progressId,outcome:"started"}),keepalive:true}).catch(()=>{});
     try {
       const url = sessionStorage.getItem(`finverse-sign-in:${progressId}`);
       if (url) { window.location.assign(url); return; }

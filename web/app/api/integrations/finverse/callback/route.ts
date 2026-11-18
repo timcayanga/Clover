@@ -1,3 +1,4 @@
+import { withBankMonitoring, bindBankMonitoring, bankJourney, bankJourneyFailure } from "@/lib/bank-journey-monitor";
 import { recordBankLinkStage } from "@/lib/bank-link-journey";
 import { observeFinverseDiscovery } from "@/lib/finverse-discovery-progress";
 import { after, NextResponse } from "next/server";
@@ -60,6 +61,9 @@ const handleCallback = async (request: Request) => {
     }
 
     failedConnection = connection;
+    const actor=await prisma.user.findUnique({where:{id:connection.userId},select:{clerkUserId:true}}).catch(()=>null);
+    if(actor)await bindBankMonitoring(connection,actor.clerkUserId);
+    bankJourney("authorization_return",error?"failed":code?"succeeded":"cancelled",{...(error?{error:{providerCode:/^[A-Z][A-Z0-9_]{1,63}$/.test(error)?error:undefined}}:{})});
     native = state.startsWith("native.");
     setup = state.startsWith("setup.");
     if (state.startsWith("refresh.") || state.startsWith("native.refresh.")) {
@@ -90,17 +94,19 @@ const handleCallback = async (request: Request) => {
       },
     });
     await recordBankLinkStage(connection.id, "authorized");
+    bankJourney("retrieval","started");
     // Continue discovering accounts after redirect, even if the user closes the sheet.
     try { after(async () => { await observeFinverseDiscovery(connection.id, token.access_token).catch(() => {}); }); } catch { /* Outside a request lifecycle, the UI can still resume discovery. */ }
     return redirectToAccounts("connected", connection.id, native, connection.workspaceId, setup);
   } catch (error) {
     if (failedConnection) await prisma.finverseConnection.updateMany({ where: { id: failedConnection.id, status: "authorizing", disconnectRequestedAt: null }, data: { status: "error", syncError: "Bank authorization could not be completed. Please reconnect securely." } }).catch(() => {});
     if (failedConnection) await recordBankLinkStage(failedConnection.id, "failed");
+    bankJourneyFailure(error,"authorization_return");
     console.error("Finverse callback failed", error);
     return redirectToAccounts("error", failedConnection?.id, native, failedConnection?.workspaceId, setup);
   }
 };
 
-export const GET = handleCallback;
-export const POST = handleCallback;
+export const GET = (request:Request)=>withBankMonitoring("callback",()=>handleCallback(request));
+export const POST = GET;
 export const OPTIONS = () => new NextResponse(null, { status: 204, headers: corsHeaders });

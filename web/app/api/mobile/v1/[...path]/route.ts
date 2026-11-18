@@ -119,7 +119,7 @@ async function handle(
       return splitBillFailure(
         "Please finish setting up your Clover account on the website first.", 409, "split_bills_setup_required",
       );
-    if (["finverse-connections", "finverse-institutions", "finverse-link", "finverse-sync", "finverse-unlink", "finverse-displayed"].includes(operation)) {
+    if (["finverse-connections", "finverse-institutions", "finverse-link", "finverse-sync", "finverse-unlink", "finverse-displayed", "finverse-journey"].includes(operation)) {
       return await withMobileRequestContext(userId, request, async () => {
         const result = operation === "finverse-connections"
           ? await (await import("@/app/api/integrations/finverse/connections/route"))[request.method === "POST" ? "POST" : "GET"](request)
@@ -129,6 +129,8 @@ async function handle(
             ? await (await import("@/app/api/integrations/finverse/link/route")).POST(request)
             : operation === "finverse-unlink"
               ? await (await import("@/app/api/integrations/finverse/unlink/route")).POST(request)
+              : operation === "finverse-journey"
+              ? await (await import("@/app/api/integrations/finverse/journey/route")).POST(request)
               : operation === "finverse-displayed"
                 ? await (await import("@/app/api/integrations/finverse/displayed/route")).POST(request)
                 : await (await import("@/app/api/integrations/finverse/sync/route")).POST(request);

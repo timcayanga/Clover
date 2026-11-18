@@ -1,3 +1,4 @@
+import { withBankMonitoring, bindBankMonitoring, bankJourney } from "@/lib/bank-journey-monitor";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -5,7 +6,8 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { recordBankLinkStage } from "@/lib/bank-link-journey";
 import { prisma } from "@/lib/prisma";
 
-export async function POST(request: Request) {
+export function POST(request: Request) { return withBankMonitoring("display",()=>handlePost(request)); }
+async function handlePost(request: Request) {
   try {
     assertTrustedRequestOrigin(request);
     const { userId } = await requireAuth();
@@ -20,9 +22,11 @@ export async function POST(request: Request) {
     });
     const active = available && await prisma.finverseConnection.findFirst({
       where: { id: connectionId, workspaceId, userId: workspace.userId, status: "ready", disconnectRequestedAt: null },
-      select: { id: true },
+      select: { id: true, userId:true,workspaceId:true,createdAt:true,institutionId:true,institutionName:true },
     });
     if (!active) return Response.json({ ok: false }, { status: 409 });
+    await bindBankMonitoring(active,userId);
+    bankJourney("first_data_displayed","succeeded",{dataKind:kind});
     await recordBankLinkStage(connectionId, "first_data_displayed", { dataKind: kind });
     return Response.json({ ok: true });
   } catch (error) {

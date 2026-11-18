@@ -40,7 +40,8 @@ async function main() {
   stub("../lib/finverse-enrichment", { enrichFinverseTransactions: async () => new Map(), canRefreshFinverseCategory: () => false });
   stub("../lib/workspace-summary-cache", { invalidateWorkspaceSummaryCache: (workspaceId: string) => invalidated.push(workspaceId) });
   stub("../lib/analytics-server", { capturePostHogServerEvent: async () => {} });
-  const next = require("next/server"); stub("next/server", { ...next, after: () => {} });
+  const telemetryJobs:(()=>Promise<void>)[]=[];
+  const next = require("next/server"); stub("next/server", { ...next, after: (job:()=>Promise<void>) => {if(job.name==="persist")telemetryJobs.push(job);} });
   try {
     const { POST: link } = await import("../app/api/integrations/finverse/link/route");
     const { POST: callback } = await import("../app/api/integrations/finverse/callback/route");
@@ -142,6 +143,16 @@ async function main() {
     const bad = new FormData(); bad.set("state", state); bad.set("code", "bad-code");
     const failedCallback = await callback(new Request(process.env.FINVERSE_REDIRECT_URI!, { method: "POST", body: bad })); assert(failedCallback.headers.get("location")?.startsWith("clover://accounts")); assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: failedId } })).status, "error");
     assert.equal((await sync(request("sync", { workspaceId: "not-owned", connectionId }))).status, 404);
+    await Promise.all(telemetryJobs.map(job=>job()));
+    const traces=await db.auditLog.findMany({where:{workspaceId:workspace.id,entity:'BankJourney'},select:{entityId:true,action:true,metadata:true}});
+    assert(traces.some(t=>t.action==='bank_journey.transaction_fetch.succeeded'));
+    assert(traces.some(t=>t.action==='bank_journey.token_exchange.failed'));
+    assert(traces.some(t=>t.action==='bank_journey.first_data_displayed.succeeded'));
+    assert(traces.every(t=>!JSON.stringify(t.metadata).includes('fixture-access')));
+    const unique=new Set(traces.map(t=>t.entityId+':'+t.action+':'+(t.metadata as {attempt_id?:string}).attempt_id));
+    assert.equal(unique.size,traces.length,'Repeated sync does not inflate stage counts');
+    assert.equal(JSON.stringify(await db.transaction.findUnique({where:{id:confirmed.id}})),original);
+    console.log('PASS real database monitoring: full fetch/display/error traces, deduplication, safe metadata and unchanged confirmed transaction');
     console.log("PASS bank journey: Free refusal, named start, unfinished recovery, POST callback, product readiness, no-data/empty-selection refusal, chosen account and booked transactions, visible balance projection, scoped cache invalidation, reauthorization aliases, repeated sync, native exchange failure and confirmed-data preservation");
   } finally { for (const [path, value] of saved) { if (value) require.cache[path] = value; else delete require.cache[path]; } await db.user.delete({ where: { id: user.id } }); await db.$disconnect(); }
 }

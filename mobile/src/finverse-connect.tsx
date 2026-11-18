@@ -84,7 +84,8 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
         const data = await requestRef.current<SyncResult>("finverse/sync", { method: "POST", signal: controller.signal, body: JSON.stringify({ workspaceId: session.profileId, connectionId: id, selectedAccountIds: accountIds, accountMappings:Object.fromEntries(Object.entries(mappings).filter(([id,target])=>accountIds?.includes(id)&&target)), refresh: refresh && attempt === 0 }) });
         if (!active.current || controller.signal.aborted) return;
         if (data.status === "authorize" && data.linkUrl) {
-          const result = await WebBrowser.openAuthSessionAsync(data.linkUrl, "clover://accounts");
+          void requestRef.current("finverse/journey",{method:"POST",body:JSON.stringify({workspaceId:session.profileId,connectionId:data.connectionId??id,outcome:"started"})}).catch(()=>{});
+      const result = await WebBrowser.openAuthSessionAsync(data.linkUrl, "clover://accounts");
           if (!active.current || controller.signal.aborted) return;
           if (result.type !== "success") { setMessage("Bank sync cancelled."); return; }
           const url = new URL(result.url);
@@ -154,6 +155,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
       if (!active.current) return;
       setConnection(data.connectionId);
       linkCreated = true;
+      void requestRef.current("finverse/journey",{method:"POST",body:JSON.stringify({workspaceId:session.profileId,connectionId:data.connectionId,outcome:"started"})}).catch(()=>{});
       const result = await WebBrowser.openAuthSessionAsync(data.linkUrl, "clover://accounts");
       if (!active.current) return;
       if (result.type === "success") {

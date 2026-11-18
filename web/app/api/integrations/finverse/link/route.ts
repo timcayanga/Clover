@@ -1,3 +1,4 @@
+import { withBankMonitoring, bindBankMonitoring, bankJourney } from "@/lib/bank-journey-monitor";
 import { recordBankLinkStage } from "@/lib/bank-link-journey";
 import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { getMobileRequestContext } from "@/lib/mobile-request-context";
@@ -13,7 +14,8 @@ import { getProAccess } from "@/lib/pro-access";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export function POST(request: Request) { return withBankMonitoring("link",()=>handlePost(request)); }
+async function handlePost(request: Request) {
   if (!isFinverseEnabled()) {
     return NextResponse.json({ error: "Bank connections are not available yet." }, { status: 404 });
   }
@@ -33,9 +35,6 @@ export async function POST(request: Request) {
     const selectedBank = body.institutionId ? (await getFinverseBanks({ fresh: true })).banks.find(bank => bank.id === body.institutionId) : undefined;
     if (body.institutionId && !selectedBank) return NextResponse.json({ error: "This bank is no longer available. Refresh the bank list." }, { status: 400 });
     const state = (getMobileRequestContext() ? "native." : body.setup ? "setup." : "") + randomBytes(32).toString("base64url");
-    const link = await createFinverseLink(workspace.userId, state, body.institutionId);
-    if (!link.link_url) throw new Error("FINVERSE_LINK_URL_MISSING");
-
     const connection = await prisma.finverseConnection.create({
       data: {
         userId: workspace.userId,
@@ -45,9 +44,15 @@ export async function POST(request: Request) {
         stateHash: hashFinverseState(state),
         stateExpiresAt: new Date(Date.now() + 15 * 60_000),
       },
-      select: { id: true },
+      select: { id: true, workspaceId: true, userId: true, institutionId: true, institutionName: true, createdAt: true },
     });
 
+    await bindBankMonitoring(connection,userId);
+    bankJourney('link_request','started');
+    let link;
+    try {link=await createFinverseLink(workspace.userId,state,body.institutionId);if(!link.link_url)throw new Error('FINVERSE_LINK_URL_MISSING');}
+    catch(error){bankJourney('link_request','failed',{error});await prisma.finverseConnection.update({where:{id:connection.id},data:{status:'error',syncError:'The secure bank setup could not open.'}});throw error;}
+    bankJourney('link_request','succeeded');
     if (selectedBank) await recordBankLinkStage(connection.id, "institution_selected");
     await recordBankLinkStage(connection.id, "started");
     return NextResponse.json({ connectionId: connection.id, linkUrl: link.link_url });

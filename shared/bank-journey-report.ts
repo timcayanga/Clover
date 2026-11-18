@@ -1,0 +1,20 @@
+import { BANK_JOURNEY_STAGES, bankFix, percentile } from './bank-journey-monitor';
+export type BankSnapshot={id:string;bankId:string|null;bankName:string|null;status:string;createdAt:string;lastSyncedAt:string|null;mappedAccounts:number;providerRecords:number;products?:{product:string;status:string;code?:string}[]};
+export type BankObservation={connectionId:string;observedAt:string;stage:string;outcome:string;attemptId:string;durationMs?:number;errorCode?:string;category?:string};
+export function bankJourneyReport(connections:BankSnapshot[],events:BankObservation[],now=Date.now()){
+ const groups=new Map<string,BankSnapshot[]>();for(const c of connections){const key=c.bankId??c.bankName??'unknown';groups.set(key,[...(groups.get(key)??[]),c]);}
+ return [...groups.entries()].map(([bankId,rows])=>{
+  const ids=new Set(rows.map(c=>c.id)), observed=events.filter(e=>ids.has(e.connectionId));const attempts=new Map<string,BankObservation[]>();for(const e of observed)attempts.set(e.attemptId,[...(attempts.get(e.attemptId)??[]),e]);
+  const all=[...attempts.values()],starts=all.filter(a=>a.some(e=>e.stage==='link_request'&&e.outcome==='started'));
+  const success=(a:BankObservation[],stage:string)=>a.some(e=>e.stage===stage&&e.outcome==='succeeded');
+  const failures=observed.filter(e=>e.outcome==='failed');
+  const errors=new Map<string,BankObservation[]>();for(const e of failures){const key=[e.stage,e.errorCode??'UNCLASSIFIED',e.category??'unknown'].join('|');errors.set(key,[...(errors.get(key)??[]),e]);}
+  return {bankId,bankName:rows.find(c=>c.bankName)?.bankName??'Unknown bank',connections:rows.length,
+   historical:{untracedConnections:rows.filter(c=>!observed.some(e=>e.connectionId===c.id)).length,reportedErrorConnections:rows.filter(c=>c.status==='error').length,mappedAccounts:rows.reduce((n,c)=>n+c.mappedAccounts,0),providerRecords:rows.reduce((n,c)=>n+c.providerRecords,0),lastSuccessfulSync:rows.map(c=>c.lastSyncedAt).filter((v):v is string=>!!v).sort().at(-1)??null,productStatuses:rows.flatMap(c=>(c.products??[]).map(p=>({connectionId:c.id,...p})))},
+   measured:{observedAttempts:all.length,startedAttempts:starts.length,availableAttempts:all.filter(a=>success(a,'data_available')).length,displayedAttempts:all.filter(a=>success(a,'first_data_displayed')).length,attemptsWithErrors:all.filter(a=>a.some(e=>e.outcome==='failed'&&!e.stage.startsWith('product_'))).length,recoveredAttempts:all.filter(a=>a.some(e=>e.outcome==='failed'&&!e.stage.startsWith('product_')&&a.some(later=>later.stage==='data_available'&&later.outcome==='succeeded'&&Date.parse(later.observedAt)>Date.parse(e.observedAt)))).length,cancelledAttempts:all.filter(a=>a.some(e=>e.outcome==='cancelled')).length,unfinishedAfter15Minutes:all.filter(a=>!success(a,'data_available')&&!a.some(e=>e.outcome==='cancelled')&&now-Date.parse(a.map(e=>e.observedAt).sort().at(-1)!)>900000).length},
+   stages:BANK_JOURNEY_STAGES.map(stage=>{const es=observed.filter(e=>e.stage===stage),ok=es.filter(e=>e.outcome==='succeeded'),failed=es.filter(e=>e.outcome==='failed');const durations=ok.map(e=>e.durationMs).filter((n):n is number=>n!==undefined&&Number.isFinite(n));return {stage,observedAttempts:new Set(es.map(e=>e.attemptId)).size,succeeded:new Set(ok.map(e=>e.attemptId)).size,failed:new Set(failed.map(e=>e.attemptId)).size,timedSuccessSamples:durations.length,p50Ms:percentile(durations,.5),p90Ms:percentile(durations,.9)};}),
+   journeys:[...attempts.entries()].map(([attemptId,steps])=>({attemptId,connectionId:steps[0].connectionId,steps:[...steps].sort((a,b)=>a.observedAt.localeCompare(b.observedAt))})).slice(-100),
+   errors:[...errors.values()].map(es=>({stage:es[0].stage,code:es[0].errorCode??'UNCLASSIFIED',category:es[0].category??'unknown',attempts:new Set(es.map(e=>e.attemptId)).size,lastObserved:es.map(e=>e.observedAt).sort().at(-1),...bankFix(es[0].category??'unknown')})),
+  };
+ }).sort((a,b)=>b.measured.attemptsWithErrors-a.measured.attemptsWithErrors||a.bankName.localeCompare(b.bankName));
+}

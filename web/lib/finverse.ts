@@ -1,3 +1,5 @@
+import { bankJourney, bankProviderResult } from "./bank-journey-monitor";
+import { safeProviderCode } from "../../shared/bank-journey-monitor";
 import { connectBankCountries } from "../../shared/finverse-countries";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
@@ -85,8 +87,8 @@ export const decryptFinverseToken = (encrypted: string, configuredKey: string) =
 export const hashFinverseState = (state: string) => createHash("sha256").update(state).digest("hex");
 export const isFinverseDataReady = (status: string | undefined) => Boolean(status && READY_STATUSES.has(status));
 
-class FinverseApiError extends Error {
-  constructor(public readonly status: number, message: string) {
+export class FinverseApiError extends Error {
+  constructor(public readonly status: number, message: string, public readonly providerCode?: string) {
     super(message);
   }
 }
@@ -96,6 +98,8 @@ const requestFinverse = async <T>(
   init: RequestInit,
   bearerToken?: string,
 ): Promise<T> => {
+  const started=Date.now();
+  try {
   const response = await fetch(`${FINVERSE_API_BASE}${path}`, {
     ...init,
     signal: init.signal ?? AbortSignal.timeout(20_000),
@@ -109,9 +113,11 @@ const requestFinverse = async <T>(
   const body = (await response.json().catch(() => ({}))) as JsonRecord;
   if (!response.ok) {
     const detail = typeof body.message === "string" ? body.message : `Finverse request failed (${response.status})`;
-    throw new FinverseApiError(response.status, detail);
+    throw new FinverseApiError(response.status, detail, safeProviderCode(body));
   }
+  bankProviderResult(path,started);
   return body as T;
+  }catch(error){bankProviderResult(path,started,error);throw error;}
 };
 
 let cachedCustomerToken: { key: string; token: string; expiresAt: number } | null = null;
@@ -229,7 +235,9 @@ export const unlinkFinverseIdentity = async (accessToken: string) => {
 };
 
 export const getAllFinverseTransactions = async (accessToken: string) => {
+  const started = Date.now();
   const transactions: FinverseTransaction[] = [];
+  try {
   const limit = 500;
   for (let offset = 0; offset < 100_000; offset += limit) {
     const page = await requestFinverse<{ transactions?: FinverseTransaction[]; total_transactions?: number }>(
@@ -241,7 +249,9 @@ export const getAllFinverseTransactions = async (accessToken: string) => {
     transactions.push(...items);
     if (items.length < limit || (typeof page.total_transactions === "number" && transactions.length >= page.total_transactions)) break;
   }
+  bankJourney("transaction_fetch", "succeeded", {durationMs:Date.now()-started,transactionCount:transactions.length});
   return transactions;
+  } catch(error) { bankJourney("transaction_fetch", "failed", {durationMs:Date.now()-started,error}); throw error; }
 };
 
 export const normalizeFinverseAccount = (account: FinverseAccount, institutionName?: string) => {
