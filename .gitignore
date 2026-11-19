@@ -10,3 +10,7 @@ dist/
 .env.*
 !.env.example
 mobile/release-source.json
+
+# Generated public asset copies and OCR engine downloads.
+web/public/assets/
+web/*.traineddata

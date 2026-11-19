@@ -18738,7 +18738,10 @@ const parseUnionBankImportText = (text: string) => {
 
   for (const line of ledgerLines) {
     if (metadata.accountType === "credit_card") {
-      const dateMatches = [...line.matchAll(new RegExp(unionbankDateTokenPattern.source, "gi"))];
+      // Merchant digits followed by PHP (for example OFFICE 365 PHP 349.00)
+      // can resemble a compact date. Only real date tokens may split a row.
+      const dateMatches = [...line.matchAll(new RegExp(unionbankDateTokenPattern.source, "gi"))]
+        .filter((match) => parseUnionBankDateToken(match[0]) !== null);
       if (dateMatches.length === 0) {
         if (current.length > 0) {
           current.push(line);

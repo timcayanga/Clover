@@ -33,8 +33,8 @@ For CLI web deployments set `CLOVER_BUILD_SOURCE_SHA` to the actual full commit,
 
 ## Required before saying everything is covered
 
-- Commit the reconciled source, build/verify a staging candidate, then verify the matching production deployment. Current live staging and production remain the earlier fdf611ff6 release.
-- Freeze a native version/build after checking the next available store numbers. Build both packages from that one source. No replacement binaries were made during this audit while the user's release-scope choice is pending.
+- Commit the reconciled source, build/verify a staging candidate, then verify the matching production deployment. Staging has an initial reconciliation candidate; production remains fdf611ff6 until the complete required gates pass.
+- Freeze a native version/build after checking the next available store numbers. Build both packages from that one source. The user explicitly chose ‘Audit and fix; hold new binaries’. No replacement binaries are authorized in this audit.
 - Run representative populated-profile tests on iOS and Android: cold sign-in, warm resume, Accounts/Recurring from both entry points; loading/loaded tabs; filters and bulk-edit; Add/Ask keyboard; manual line items; receipts/PDF first-visible rows; bank resume/usable data; checkout preparation/recovery. Avoid financial writes to personal Profiles.
 - Verify public store version/build against the actual uploaded artifacts; do not treat an upload or review submission as availability. Apple public lookup on 19 November still reports 1.1.6. Google current public status has not been reverified here.
 - Reconcile Figma against the frozen release candidate. Current Figma capture work uses installed1.1.6, so it must not serve as proof that later source-only corrections shipped.
@@ -64,3 +64,5 @@ Read-only `git ls-remote` on 19 November confirmed GitHub `main` at `9396824a4bd
 Further independent regressions found that the photo-total guard, field-evidence checker and invoice classifier did not share the parser's verified column reading order. They could discard a correctly reconstructed total or payment evidence; an expiry date could also appear as a priced item. The correction reuses the existing conservative column reconstruction, preserves raw evidence and suggested-currency status, and excludes dated permit-expiry lines from itemization. Conflicting cash/total columns and clipped cents remain unresolved. The real worker test retains byte-identical confirmed-record snapshots and adds pending/incomplete/unpaid counterexamples.
 
 The local broad test run also hit a resource-related Adviser timeout while other source checks were running. The Adviser case passed in isolation; release checks are being run sequentially on the supported Node24 toolchain. A timed-out run is not counted as a pass.
+
+Independent two-page original review also corrected the UnionBank sample expectation from 11 to 13 printed purchases. The parser had retained 12: `365 PHP 349` resembled a compact date and split the final Office 365 row. Only validated date candidates may now divide rows. A portable regression retains duplicate same-day purchases and the trailing digit-bearing merchant; private replay uses the unchanged original PDF.

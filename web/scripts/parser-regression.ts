@@ -324,8 +324,8 @@ const fixtures: Fixture[] = [
     accountName: "Alyssa Jane Gabriel Rezada",
     accountNumber: "1056827763912",
     accountType: "credit_card",
-    minRows: 11,
-    exactRows: 11,
+    minRows: 13,
+    exactRows: 13,
     expectedEndDate: "2024-08-31",
     minConfidence: 90,
   },
@@ -986,6 +986,21 @@ const main = async () => {
     total?: string;
     rawPayload?: Record<string, unknown> | null;
   };
+
+  // Digit-bearing merchant names must not become extra date boundaries.
+  const unionBankDigitMerchantRows = parser.parseImportText([
+    "UNIONBANK", "Rewards Platinum Visa Credit Card", "Statement Date: August 2024",
+    "Transactions", "DATE DESCRIPTION AMOUNT",
+    "August 07, 2024 MLBB 1000DI PHP 1,070.00",
+    "August 07, 2024 MLBB 1000DI PHP 1,070.00",
+    "August 29, 2024 OFFICE 365 PHP 349.00",
+  ].join("\n"), "unionbank-digit-merchants.pdf", "application/pdf", { institution: "UnionBank" });
+  if (unionBankDigitMerchantRows.length !== 3 ||
+      unionBankDigitMerchantRows.filter(row => row.date === "2024-08-07" && row.amount === "1070.00").length !== 2 ||
+      !unionBankDigitMerchantRows.some(row => row.date === "2024-08-29" && row.amount === "349.00" && /OFFICE 365/i.test(row.description ?? ""))) {
+    throw new Error("UnionBank must retain repeated purchases and trailing digit-bearing merchant rows");
+  }
+  console.log("[PASS] UnionBank date boundaries preserve repeated purchases and OFFICE 365");
 
   const failures: string[] = [];
   const caseFilter = process.env.CLOVER_PARSER_CASE?.trim().toLowerCase() ?? "";

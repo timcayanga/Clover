@@ -83,3 +83,9 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 - External UnionBank transfer-like rows can keep the `Transfers` category, but their transaction type should stay `income` or `expense` unless Clover can match both sides to user-owned accounts.
 - UnionBank credit cards should import as a merchant stream with reliable card-payment handling.
 - Known image-only sample PDFs (`Philippines Unionbank excel`, `Philippines Unionbank word`, and `Union_Bank_of_the_Philippines_business_statement_Word_and_PDF_template`) need deterministic filename fallback rows because embedded PDF text extraction returns no statement text.
+
+## Original-source coverage review (2026-11-19)
+
+- The retained August 2024 sample `771487697-SOA-Union-Bank.pdf` (SHA-256 `4b7cacbe8bf23e4b060454783f97721551443e44a5f6415d1b50b348e5131e0a`) visibly contains 13 purchase rows across two pages. The historical 11-row expectation was incomplete. Independent rendered-page review establishes the corrected expectation; parser output alone does not.
+- Preserve both same-day MLBB 1,070.00 purchase pairs and the final August 29 Office 365 purchase for PHP 349.00. A numeric merchant name followed by `PHP` is not a date: validate date candidates before splitting physical rows.
+- The sample's total amount due is blank. Summary credits and minimum due are not additional transactions or independently printed closing balances.
