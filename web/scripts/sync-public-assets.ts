@@ -1,6 +1,6 @@
 import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { gzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 import sharp from "sharp";
 import path from "node:path";
 import { ADDITIONAL_BANK_LOGOS } from "../lib/bank-logo-catalog";
@@ -36,8 +36,15 @@ const main = async () => {
   }
 
   const catalog = await readFile(new URL("../lib/generated/logo-identity-catalog.json", import.meta.url));
-  const packedCatalog = gzipSync(catalog).toString("base64");
-  await writeFile(new URL("../lib/generated/logo-identity-catalog-runtime.json", import.meta.url), JSON.stringify(packedCatalog) + "\n");
+  const runtimeCatalog = new URL("../lib/generated/logo-identity-catalog-runtime.json", import.meta.url);
+  let sameCatalog = false;
+  try {
+    const packed = JSON.parse(await readFile(runtimeCatalog, "utf8"));
+    sameCatalog = typeof packed === "string" && gunzipSync(Buffer.from(packed, "base64")).equals(catalog);
+  } catch { /* Missing or invalid generated data must be rebuilt. */ }
+  // zlib versions can encode the same catalog differently. Preserve validated
+  // bytes so a build cannot dirty an otherwise frozen source checkout.
+  if (!sameCatalog) await writeFile(runtimeCatalog, JSON.stringify(gzipSync(catalog).toString("base64")) + "\n");
 
   // public/assets is a disposable build artifact. Recreate it to avoid stale files.
   await rm(destinationRoot, { recursive: true, force: true });
