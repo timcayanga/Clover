@@ -44,6 +44,17 @@ async function main() {
     assert.ok(!sql.includes('"storageKey"'));assert.ok(!sql.includes('SELECT *'));
     return [{id,fileName:row.fileName,status:"failed"}];
   });
+  stub(prisma.user, "findUnique", async () => null); // No analytics identity lookup may reach a real database.
+  stub(prisma.transaction, "groupBy", async query => {
+    assert.deepEqual(query.where, {workspaceId, importFileId:{in:[id]}, deletedAt:null});
+    assert.deepEqual(query.by, ["importFileId", "accountId"]);
+    return [{importFileId:id, accountId:"qa-payment-account", _count:{_all:3}}];
+  });
+  stub(prisma.account, "findMany", async query => {
+    assert.deepEqual(query.where, {workspaceId, id:{in:["qa-payment-account"]}});
+    assert.deepEqual(query.select, {id:true,name:true});
+    return [{id:"qa-payment-account",name:"QA Savings"}];
+  });
   const processor = async (request: Request) => {
     calls++;
     const source = getVerifiedNativeSource(id);
@@ -84,7 +95,9 @@ async function main() {
     row.state="finalizing";row.leaseUntil=new Date(Date.now()-1000);
     assert.equal((await complete(expectedPassword)).status,200);assert.equal(calls,6,"An interrupted password retry must reuse its acknowledged original after the lease expires");
     assert.ok(!JSON.stringify(row.response).includes(expectedPassword),"Passwords must never enter persisted response metadata");
-    await listImportFileSummariesCompat(workspaceId);
+    const summaries = await listImportFileSummariesCompat(workspaceId);
+    assert.equal(summaries[0].transactionCount, 3);
+    assert.equal(summaries[0].accountName, "QA Savings");
     // A separate fictional image proves OCR survives the actual native multipart
     // handoff, not only the client transport mock above.
     const imageBytes=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKRAAAAAASUVORK5CYII=","base64");

@@ -47,8 +47,18 @@ export function receiptReconciliationIssues(summary: ReceiptSummary, items: read
   if (items.length && readable(summary.subtotal) && itemCurrencies.size <= 1 &&
       (!summary.currency || !itemCurrencies.size || itemCurrencies.has(summary.currency)) &&
       items.every(item => readable(item.amount) || item.complimentary === true)) {
-    const gap = cents(summary.subtotal) - items.reduce((sum, item) => sum + cents(item.amount ?? 0), 0);
-    if (gap) issues.push(`Receipt line items differ from the subtotal by ${formatDifference(gap, summary.currency)}.`);
+    const itemTotal = items.reduce((sum, item) => sum + cents(item.amount ?? 0), 0);
+    const netGap = cents(summary.subtotal) - itemTotal;
+    const adjustments = cents(summary.service_charge ?? 0) + cents(summary.tip ?? 0) +
+      cents(summary.rounding ?? 0) - Math.abs(cents(summary.discount ?? 0));
+    // Net tax bases and tax-inclusive item prices can coexist on a receipt.
+    // Accept that basis only when the printed tax explains the entire gap and
+    // subtotal + tax + adjustments equals the printed total exactly. An
+    // informational tax already included in subtotal cannot be added twice.
+    const grossItemsReconcile = readable(summary.tax) && summary.tax > 0 && readable(summary.total) &&
+      cents(summary.total) === cents(summary.subtotal) + cents(summary.tax) + adjustments &&
+      itemTotal === cents(summary.subtotal) + cents(summary.tax);
+    if (netGap && !grossItemsReconcile) issues.push(`Receipt line items differ from the subtotal by ${formatDifference(netGap, summary.currency)}.`);
   }
   return issues;
 }

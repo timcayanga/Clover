@@ -8,6 +8,8 @@ const compile = file => ts.transpileModule(fs.readFileSync(new URL(file, import.
 }).outputText;
 const pagination = {};
 vm.runInNewContext(compile("../src/transaction-pagination.ts"), { exports: pagination });
+const committed = {};
+vm.runInNewContext(compile("../src/committed-receipt-rows.ts"), { exports: committed });
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const row = id => ({ id, merchantRaw: "Fixture", merchantClean: null, amount: "120", currency: "PHP", date: "2026-10-30", workspaceId: "profile-a" });
 const firstPage = { transactions: [row("first")], hasMore: true, totalCount: 31, page: 1 };
@@ -50,6 +52,7 @@ vm.runInNewContext(compile("../app/(tabs)/transactions.tsx"), {
     if (name.endsWith("/screen-refresh")) return { registerScreenRefresh: () => () => {} };
     if (name.endsWith("/transaction-review")) return { transactionReviewReasons: () => [] };
     if (name.endsWith("/transaction-pagination")) return pagination;
+    if (name.endsWith("/committed-receipt-rows")) return committed;
     if (name.endsWith("/transaction-filter-query")) return { emptyTransactionFilters: {}, hasTransactionFilters: () => false, transactionFilterQuery: () => "" };
     if (name.endsWith("/analytics")) return { beginTelemetry: (_kind, props) => {
       const start = now;
@@ -106,6 +109,8 @@ now = 1000;
 blur = focus();
 now = 1016;
 list = render();
+assert.equal(events.at(-1).row_source, "request", "Cached render alone is not visibility");
+visible(list);
 assert.equal(events.at(-1).row_source, "cache");
 assert.equal(events.at(-1).duration_ms, 16, "Same-scope visible cached rows complete before the fresh response");
 const previousRequest = pending.shift();

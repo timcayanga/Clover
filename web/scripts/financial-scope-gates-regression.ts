@@ -262,9 +262,10 @@ assert.ok(earlyRuleCheck >= 0 && earlyRuleCheck < importWorkerSource.indexOf("co
 assert.match(importWorkerSource, /action: "import.scope_rejected"/);
 const imageReader = fs.readFileSync(path.join(process.cwd(), "lib/import-file-text.server.ts"), "utf8");
 const firstOpticalPass = imageReader.indexOf("let firstPassText = await extractTextFromImageBufferWithOcr");
-assert.ok(firstOpticalPass >= 0 &&
-  imageReader.indexOf("if (rejection) throw rejection;", firstOpticalPass) <
-  imageReader.indexOf("const localText = await readLocalReceiptImage", firstOpticalPass));
+const firstOpticalRefusal = imageReader.indexOf("if (rejection) throw rejection;", firstOpticalPass);
+const localReceiptFallback = imageReader.indexOf("readLocalReceiptImage(preview)", firstOpticalPass);
+assert.ok(firstOpticalPass >= 0 && firstOpticalRefusal > firstOpticalPass && localReceiptFallback > firstOpticalRefusal,
+  "A decisive full-frame first OCR rejection stops before local receipt fallback, including a timed fallback wrapper");
 assert.equal(getClearLocalPhotoRejection({ text: "", fileName: "coupon.jpg" }), null);
 assert.equal(getClearLocalPhotoRejection({ text: "CLOVER CAFE\nOfficial Receipt\nTotal unreadable\nRedeem next visit", fileName: "image.jpg" }), null);
 assert.equal(getClearLocalPhotoRejection({ text: "Kupon Diskon hingga Rp25.000 berlaku 31/12/2026", fileName: "image.jpg" })?.ruleId,

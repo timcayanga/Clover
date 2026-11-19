@@ -5,7 +5,7 @@ async function scenario(status){
  const states=[],calls=[];let index=0;const exports={};
  const signIn={create:async()=>({status,supportedSecondFactors:[{strategy:'email_code',emailAddressId:'verified-email-id'}]}),prepareSecondFactor:async p=>calls.push(['prepare',p]),attemptSecondFactor:async p=>{calls.push(['verify',p]);return {status:'complete',createdSessionId:'verified-session'}}};
  vm.runInNewContext(code,{exports,window:{},navigator:{userAgent:''},require:name=>{
-  if(name==='react')return {useState:initial=>{const i=index++;if(!(i in states))states[i]=initial;return [states[i],v=>states[i]=v]},useMemo:f=>f(),useEffect(){}};
+  if(name==='react')return {useState:initial=>{const i=index++;if(!(i in states))states[i]=initial;return [states[i],v=>states[i]=v]},useRef:initial=>{const i=index++;if(!(i in states))states[i]={current:initial};return states[i]},useMemo:f=>f(),useEffect(){}};
   if(name==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
   if(name==='next/navigation')return {useRouter:()=>({replace:p=>calls.push(['route',p])})};
   if(name==='@clerk/nextjs')return {useAuth:()=>({isLoaded:true,isSignedIn:false}),useSignIn:()=>({isLoaded:true,signIn,setActive:async p=>calls.push(['active',p])}),useSignUp:()=>({isLoaded:true,signUp:{}})};

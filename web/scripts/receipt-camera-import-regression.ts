@@ -796,8 +796,8 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /normalizedTotalRows <= 25 \? 0 : 1_000/,
-  "small-import enrichment should begin immediately and large imports should not wait five seconds"
+  /confirmationResult\.imported <= 25 \? 0 : 1_000/,
+  "Durable enrichment begins after visible commit, immediately for small imports and within one second for large imports"
 );
 
 const dataEngineSource = readFileSync(join(root, "lib/data-engine.ts"), "utf8");

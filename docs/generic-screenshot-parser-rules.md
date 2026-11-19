@@ -134,3 +134,7 @@ Printed Philippine BIR accreditation labels include Accr., Accred., and Accredit
 A single Transaction Details screen may be a merchant purchase rather than an account history. Require one Payment to merchant, one Amount heading with exactly one signed negative monetary value, one valid full purchase date/time and a labeled reference number. A following merchant code is not a funding-account suffix. Keep the source debit intact and normalize its magnitude to one pending-review expense; do not invent itemization, subtotal, issuer or payment method. Unknown currency uses the established editable receipt suggestion, with its provenance retained.
 
 Use existing institution aliases to keep bank/credit/wallet payments out of this purchase path. Transfers, incoming/refunded/failed/pending payments, account histories, additional charges, malformed dates/amounts and explicit funding-account fields remain outside the narrow rule. Generic parsing and review remain available for those sources; the rule must never relabel a transfer as spending or overwrite confirmed finance.
+
+## Printed statement balance boundaries
+
+Keep source line breaks when reading opening and closing balance labels, including comma-decimal amounts. A flattened document can attach its final amount to an earlier opening label. Preserve independent printed values and unknowns; do not infer or rewrite existing confirmed balances from this correction.

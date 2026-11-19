@@ -57,7 +57,7 @@ void readFile(new URL("../components/global-import-activity.tsx", import.meta.ur
   return readFile(new URL("../workers/import-processor.ts", import.meta.url), "utf8");
 }).then((workerSource) => {
   assert.match(workerSource, /resolvedMetadata\.accountType === "credit_card"/);
-  assert.match(workerSource, /validateParsedImportRows\(\{ rows: rawRows, metadata: validationMetadata \}\)/);
+  assert.match(workerSource, /validateParsedImportRows\(\{ rows: rowsForValidation, metadata: validationMetadata \}\)/);
   console.log("BPI credit-card safety regression passed.");
 });
 

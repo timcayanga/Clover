@@ -32,7 +32,7 @@ async function main() {
  const fixture=`
 let accounts=[],links=[],records=[],transactions=[],used=new Set(),creates=0,tail=Promise.resolve();
 export function reset(){accounts=[{id:'existing',workspaceId:'w',name:'My Metrobank',institution:'Metrobank',accountNumber:'0012345678901',currency:'PHP',type:'bank',source:'manual',balance:'73000',finverseAccountLink:null}];links=[];records=[];transactions=[];used=new Set();creates=0;}
-export function seed(){transactions.push({id:'t'+transactions.length,accountId:'existing',workspaceId:'w',createdAt:new Date(0),currency:'PHP',type:'expense',amount:100,date:new Date('2026-09-24'),merchantRaw:'Coffee store',reviewStatus:'confirmed',categoryId:'user-category'});}
+export function seed(){transactions.push({id:'t'+transactions.length,accountId:'existing',workspaceId:'w',createdAt:new Date(0),currency:'PHP',type:'expense',amount:100,date:new Date('2026-09-24'),merchantRaw:'Coffee store',description:'Coffee store Ref ABC12345'+(transactions.length+1),reviewStatus:'confirmed',categoryId:'user-category'});}
 export function state(){return {accounts,links,records,transactions,used:[...used],creates};}
 export function reserve(){used.add('bank-b');} export function disconnect(){links.forEach(l=>l.unlinkedAt=new Date());}
 export function remove(){transactions=[];records.forEach(r=>r.transactionId=null);}
@@ -60,27 +60,32 @@ export const prisma={...tx,$transaction:fn=>{const result=tail.then(()=>fn(tx));
  const bank={account_id:'bank-a',account_name:'Savings',account_number_full:'0012345678901',account_currency:'PHP',balance:{value:45000}};
  api.reset();assert.equal(await api.importAccount('c1','w',bank,'Metrobank',true),'existing');assert.equal(api.state().creates,0);assert.equal(api.state().accounts[0].balance,'73000');assert.equal(api.state().links[0].normalizedPayload.balance,45000);
  api.reserve();api.disconnect();assert.equal(await api.importAccount('c1','w',bank,'Metrobank'),null);assert.equal(await api.importAccount('c2','w',bank,'Metrobank',true),'existing');await assert.rejects(api.importAccount('c2','w',{...bank,account_id:'bank-c',account_number_full:'9992345678901'},'Metrobank',true),/allowance is full/);
- api.seed();const before=JSON.stringify(api.state().transactions[0]);const payment={transaction_id:'p1',account_id:'bank-a',amount:{value:-100,currency:'PHP'},posted_date:'2026-09-24',description:'Coffee store'};
+ api.seed();const before=JSON.stringify(api.state().transactions[0]);const payment={transaction_id:'p1',account_id:'bank-a',amount:{value:-100,currency:'PHP'},posted_date:'2026-09-24',description:'Coffee store Ref ABC123451'};
  assert.equal(await api.importTransaction('c2','w',payment),'existing');assert.equal(JSON.stringify(api.state().transactions[0]),before);assert.equal(await api.importTransaction('c2','w',payment),'existing');
  const next={...payment,transaction_id:'p2',amount:{value:-200,currency:'PHP'}};assert.deepEqual(await Promise.all([api.importTransaction('c2','w',next),api.importTransaction('c2','w',next)]),['created','existing']);
  assert.equal(await api.importTransaction('c2','w',{...payment,transaction_id:'pending',is_pending:true}),'skipped');api.remove();assert.equal(await api.importTransaction('c2','w',payment),'existing');
- api.reset();api.seed();api.seed();await api.importAccount('c1','w',bank,'Metrobank',true);assert.equal(await api.importTransaction('c1','w',payment),'existing');assert.equal(await api.importTransaction('c1','w',{...payment,transaction_id:'p2'}),'existing');assert.equal(await api.importTransaction('c1','w',{...payment,transaction_id:'p3'}),'created');
+ api.reset();api.seed();api.seed();await api.importAccount('c1','w',bank,'Metrobank',true);assert.equal(await api.importTransaction('c1','w',payment),'existing');assert.equal(await api.importTransaction('c1','w',{...payment,transaction_id:'p2',description:'Coffee store Ref ABC123452'}),'existing');assert.equal(await api.importTransaction('c1','w',{...payment,transaction_id:'p3',description:'Coffee store Ref ABC123453'}),'created');
  api.reset();api.seed();await api.importAccount('c1','w',bank,'Metrobank',true);assert.equal(await api.importTransaction('c1','w',{...payment,description:'Different bank text'}),'created');assert.equal(api.state().transactions[1].isExcluded,false,'uncertain overlap remains included until the user deletes or ignores it');
+ api.reset();api.seed();api.state().transactions[0].description='Coffee store';await api.importAccount('c1','w',bank,'Metrobank',true);
+ const noReferenceBefore=JSON.stringify(api.state().transactions[0]);
+ assert.equal(await api.importTransaction('c1','w',{...payment,description:'Coffee store'}),'created','Same merchant/day/amount without a shared reference cannot authorize a merge');
+ assert.equal(JSON.stringify(api.state().transactions[0]),noReferenceBefore);
+ assert.equal(api.state().transactions[1].reviewStatus,'pending_review');assert(api.state().transactions[1].reviewReasons.includes('finverse_possible_duplicate'));assert.equal(api.state().transactions[1].isExcluded,false);
  api.reset();api.seed();api.seed();await api.importAccount('c1','w',bank,'Metrobank',true);
- await api.importTransaction('c1','w',payment);await api.importTransaction('c1','w',{...payment,transaction_id:'p2'});
+ await api.importTransaction('c1','w',payment);await api.importTransaction('c1','w',{...payment,transaction_id:'p2',description:'Coffee store Ref ABC123452'});
  const confirmedHistory=JSON.stringify(api.state().transactions);const originalRecords=JSON.stringify(api.state().records);
  api.reserve();api.disconnect();const rotated={...bank,account_id:'rotated-bank-a'};
  assert.equal(await api.importAccount('c3','w',rotated,'Metrobank',true),'existing');
  assert.deepEqual(api.state().used,['bank-a','bank-b'],'reconnecting a rotated ID must not consume a new slot');
  assert.equal(api.state().links.length,1);assert.equal(api.state().links[0].normalizedPayload.quotaIdentity,'bank-a');
  const claimed=new Set<string>();
- for(const id of ['rotated-p1','rotated-p2']) assert.equal(await api.importTransaction('c3','w',{...payment,account_id:rotated.account_id,transaction_id:id},claimed),'existing');
+ for(const id of ['rotated-p1','rotated-p2']) assert.equal(await api.importTransaction('c3','w',{...payment,account_id:rotated.account_id,transaction_id:id,description:id.endsWith('p2')?'Coffee store Ref ABC123452':payment.description},claimed),'existing');
  assert.equal(JSON.stringify(api.state().transactions),confirmedHistory,'confirmed ledger rows remain unchanged');
  assert.equal(JSON.stringify(api.state().records.slice(0,2)),originalRecords,'original provider audit records remain intact');
  assert.equal(api.state().records[2].normalizedPayload.reconciledTransactionId,'t0');
  assert.equal(api.state().records[3].normalizedPayload.reconciledTransactionId,'t1');
  const replay=new Set<string>();
- for(const id of ['rotated-p1','rotated-p2']) assert.equal(await api.importTransaction('c3','w',{...payment,account_id:rotated.account_id,transaction_id:id},replay),'existing');
+ for(const id of ['rotated-p1','rotated-p2']) assert.equal(await api.importTransaction('c3','w',{...payment,account_id:rotated.account_id,transaction_id:id,description:id.endsWith('p2')?'Coffee store Ref ABC123452':payment.description},replay),'existing');
  assert.equal(replay.size,2);assert.equal(api.state().transactions.length,2);
  api.reset();await assert.rejects(api.importAccount('c1','w',{...bank,account_number_full:'0099999999999'},'Metrobank',true,'foreign-account'),/Choose an existing account/);
  assert.equal(api.state().creates,0);assert.equal(api.state().links.length,0);

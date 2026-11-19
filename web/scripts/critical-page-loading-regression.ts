@@ -1,5 +1,7 @@
 import { getHomePeriodChange } from "@/lib/home-period-change";
 import assert from "node:assert/strict";
+import vm from "node:vm";
+import ts from "typescript";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -367,7 +369,29 @@ const landingSource = readSource("app/page.tsx");
 const landingCtaSource = readSource("components/landing-cta-actions.tsx");
 assert.match(featuresSource, /permanentRedirect\("\/"\)/);
 assert.doesNotMatch(featureDetailSource, /resolvePublicAccountState/);
-assert.match(featureDetailSource, /title: page\.navLabel/);
+// Exercise metadata rather than requiring the pre-SEO source spelling.
+const metadataExports: {generateMetadata?: (value: unknown) => Promise<Record<string,any>>} = {};
+const metadataPages = new Map(FEATURE_PAGE_MAP);
+metadataPages.set("future-feature", {navLabel:"Future Feature", overview:"Future overview"} as any);
+const metadataCode = ts.transpileModule(featureDetailSource, {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+vm.runInNewContext(metadataCode, {exports:metadataExports, require:(name:string)=>
+  name === "@/lib/public-site" ? {FEATURE_PAGE_MAP:metadataPages,resolveFeatureSlug} :
+  name === "@/lib/feature-stories" ? {FEATURE_STORY_MAP:new Map(FEATURE_STORIES.map(story=>[story.slug,story]))} : {}});
+async function verifyFeatureSearchMetadata() {
+  for (const [slug,title] of Object.entries({
+    "manage-money":"Bank Statement Import & Expense Tracking", "understand-your-money":"Spending Reports & Insights",
+    "plan-ahead":"Budget Planner & Savings Goals", "manage-money-together":"Split Bills & Track Shared Expenses",
+    security:"Personal Finance Data Security", pro:"Pro Personal Finance Features", "future-feature":"Future Feature",
+  })) {
+    const metadata=await metadataExports.generateMetadata!({params:Promise.resolve({slug})});
+    assert.equal(metadata.title,title);
+    assert.equal(metadata.alternates.canonical,`https://clover.ph/features/${slug}`);
+  }
+  const alias=await metadataExports.generateMetadata!({params:Promise.resolve({slug:"split-bills"})});
+  assert.equal(alias.alternates.canonical,"https://clover.ph/features/manage-money-together");
+  assert.equal((await metadataExports.generateMetadata!({params:Promise.resolve({slug:"unknown-feature"})})).title,"Features");
+}
+verifyFeatureSearchMetadata().catch(error=>{console.error(error);process.exitCode=1;});
 assert.doesNotMatch(featureDetailSource, /page\.navLabel\} \| Clover/);
 assert.match(helpSource, /title: "Help Center"/);
 assert.doesNotMatch(helpSource, /title: "Help Center \| Clover"/);

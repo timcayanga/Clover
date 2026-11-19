@@ -6,8 +6,8 @@ export const shouldRefineReceiptCore = (input: {
   imageCount: number;
   itemCount: number;
   allocationCount: number;
-}) => input.importMode === "receipt" && (input.coreOnly || input.localItemsDeferred) && input.hasDocument &&
-  input.imageCount > 0 && (input.itemCount === 0 || input.localItemsDeferred) && input.allocationCount === 0;
+}) => Boolean(input.importMode === "receipt" && (input.coreOnly || input.localItemsDeferred) && input.hasDocument &&
+  input.imageCount > 0 && (input.itemCount === 0 || input.localItemsDeferred) && input.allocationCount === 0);
 
 
 export function hasIndependentReceiptCore(evidence: {

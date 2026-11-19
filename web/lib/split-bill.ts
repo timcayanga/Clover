@@ -2546,7 +2546,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const dateRole = result.receiptType === "wallet_transfer" || result.receiptType === "travel_ticket" || payment
     ? null : resolveReceiptPurchaseDateRoles(settlementText);
   const dated = dateRole
-    ? { ...result, billDate: dateRole.date ? `${dateRole.date}T00:00:00.000Z` : null,
+    ? { ...result, billDate: dateRole.date ? (result.billDate?.slice(0, 10) === dateRole.date ? result.billDate : `${dateRole.date}T00:00:00.000Z`) : null,
       requiresReview: result.requiresReview || !dateRole.date }
     : result;
   const settlement = result.receiptType === "wallet_transfer" || result.receiptType === "travel_ticket" || payment

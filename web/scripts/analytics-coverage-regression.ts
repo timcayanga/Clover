@@ -23,6 +23,7 @@ assert.equal(events[0].properties.operation_id, events[1].properties.operation_i
 assert.equal(safeRoute("/api/imports/a/status?password=secret&name=private.pdf"), "/api/imports/:id/status");
 assert.equal(safeRoute("/split-bill/request/short-token"), "/split-bill/request/:id");
 assert.equal(safeRoute("/(tabs)/accounts/123"), "/accounts/:id");
+assert.equal(safeRoute("/admin/banks/private-connection?token=secret"), "/admin/banks/:id");
 assert.equal(requestTelemetry("imports/private/status"), null);
 assert.equal(requestTelemetry("uploads/private/part", "POST"), null);
 assert.equal(requestTelemetry("/api/transactions", "POST")?.resource, "transactions");

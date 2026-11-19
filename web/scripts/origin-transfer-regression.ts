@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,17 +14,24 @@ const main = async () => {
     readFile(join(webRoot, "app/api/transactions/route.ts"), "utf8"),
   ]);
 
-  const fullSummaryRequests = transactionsPage.match(/summaryMode:\s*"full"/g) ?? [];
-  assert.equal(fullSummaryRequests.length, 1, "Only explicit expanded summary may request full aggregation.");
-  assert.match(transactionsPage, /if \(summaryOpen && selectedWorkspaceId\) \{\s*void loadTransactionsPage\(selectedWorkspaceId, \{ background: true, summaryMode: "full" \}\)/);
-  assert.match(transactionsPage, /searchParams.set\("summaryMode", options\?\.includeAll \|\| summaryOpen \? "full" : options\?\.summaryOnly \? "light" : "rows"\)/, "Visible pages use bounded rows; totals load separately with the light summary.");
+  const modeSelection=transactionsPage.split("\n").find(line=>line.includes('searchParams.set("summaryMode",'));
+  assert(modeSelection);
+  for (const [options,summaryOpen,expected] of [
+    [undefined,false,"rows"],[undefined,true,"rows"],
+    [{summaryOnly:true},false,"light"],[{summaryOnly:true},true,"full"],
+    [{summaryOnly:true,summaryMode:"light"},true,"light"],[{includeAll:true},false,"full"],
+  ] as const) {
+    const searchParams=new URLSearchParams();vm.runInNewContext(modeSelection,{searchParams,options,summaryOpen});
+    assert.equal(searchParams.get("summaryMode"),expected,"Visible rows stay bounded; only summary/export requests aggregate");
+  }
+  assert.match(transactionsPage, /summaryOnly: true/);
   assert.match(transactionsPage, /summaryMode:\s*"light"/);
   const rowStart = transactionsRoute.indexOf('if (searchParams.get("summaryMode") === "rows"');
   const rowPath = transactionsRoute.slice(rowStart, transactionsRoute.indexOf('const [currencyCodes, totalCount]', rowStart));
   assert(rowStart >= 0);
   assert.match(rowPath, /Math.min\(requestedPageSize \?\? 30, 200\)/, "Visible requests are bounded, including 200-row desktop pages.");
   assert.match(rowPath, /const skip = \(requestedPage - 1\) \* take;[\s\S]*?\bskip,/, "A preview retains the selected page's full offset.");
-  assert.match(rowPath, /take: lookAhead \? take \+ 1 : previewTake/);
+  assert.match(rowPath, /readTransactionPage\(scope, orderBy, skip, lookAhead \? take \+ 1 : previewTake/);
   assert.match(rowPath, /actionableReviewIds\(visibleWhere\)/, "Review pages use the same actionable scope as Home.");
   assert.match(
     transactionsRoute,

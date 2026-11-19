@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -9,14 +9,27 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(join(root, "package.json"));
 const { parse } = require("@expo/plist").default;
-const project = mkdtempSync(join(tmpdir(), "clover-ios-scene-check-"));
+const fixtureRoot = mkdtempSync(join(tmpdir(), "clover-ios-scene-check-"));
+const project = join(fixtureRoot, "mobile");
+mkdirSync(project);
 
 try {
   // Exercise every configured plugin against the installed SDK's real template.
   // Do not touch the developer's generated native project or copy credentials.
-  for (const name of ["package.json", "package-lock.json", "app.config.ts", "assets", "plugins", "modules"]) {
+  for (const name of ["package.json", "package-lock.json", "app.config.ts", "assets", "plugins", "modules", "scripts/release-provenance.cjs"]) {
     cpSync(join(root, name), join(project, name), { recursive: true });
   }
+  // This config-only fixture is not a distributable package or release stamp.
+  // Exercise the real store guard without borrowing a developer's release file.
+  const provenance = require(join(project, "scripts/release-provenance.cjs"));
+  const inventory = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const file = join(directory, entry.name);
+    return entry.isDirectory() ? inventory(file) : [file.slice(fixtureRoot.length + 1)];
+  });
+  const files = provenance.digestFiles(inventory(project).sort());
+  writeFileSync(join(project, "release-source.json"), JSON.stringify({ schema: 1,
+    sourceCommit: "0".repeat(40), sourceFingerprint: provenance.fingerprint(files),
+    version: "0.0.0", build: 1, apiUrl: "https://staging.clover.ph", files }));
   symlinkSync(join(root, "node_modules"), join(project, "node_modules"), "dir");
   execFileSync(process.execPath, [
     require.resolve("expo/bin/cli"), "prebuild", "--platform", "ios", "--no-install",
@@ -24,7 +37,7 @@ try {
     "--skip-dependency-update", "react,react-native",
   ], {
     cwd: project,
-    env: { ...process.env, CI: "1", CLOVER_APP_NAME: "Clover", CLOVER_IOS_BUNDLE_ID: "ph.clover.app", CLOVER_APP_SCHEME: "clover" },
+    env: { ...process.env, CI: "1", EXPO_PUBLIC_API_URL: "https://staging.clover.ph", CLOVER_APP_NAME: "Clover", CLOVER_IOS_BUNDLE_ID: "ph.clover.app", CLOVER_APP_SCHEME: "clover" },
     stdio: "pipe",
     timeout: 120_000,
   });
@@ -84,5 +97,5 @@ try {
   }
   console.log("iOS scene lifecycle: clean prebuild, factory wiring, deep links, permission purposes, Apple sign-in and embedded WidgetKit target passed.");
 } finally {
-  rmSync(project, { recursive: true, force: true });
+  rmSync(fixtureRoot, { recursive: true, force: true });
 }

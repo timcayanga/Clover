@@ -113,3 +113,9 @@ Unreadable labeled totals remain evidence rather than being discarded when anoth
 ## Server image OCR follow-up
 
 See [local receipt OCR](local-receipt-ocr.md) for the bounded PP-OCRv5 receipt reader, raw optical evidence envelope, mandatory review, model provenance and original-image benchmark. Native device OCR and direct cloud vision remain separate paths.
+
+## Tax-inclusive item prices with a net tax base
+
+Keep printed item amounts, net subtotal, VAT and total unchanged. Item prices may include VAT while the summary exposes a net tax base. Accept that arithmetic only when item amounts equal subtotal + printed tax exactly and subtotal + tax + printed adjustments equals the printed total exactly. Informational VAT already included in subtotal cannot be added again. Unexplained cents, conflicting summaries and quantity × unit-price mismatches still require review. This does not infer tax or repair confirmed records.
+
+Keep the existing Korean labeled purchase-date/clock validation when shared receipt date roles run later. A coupon expiry or print date cannot erase a readable purchase date. Conflicting transaction/approval dates, impossible times, and unreadable purchase dates remain unresolved. A bare coupon heading and amount without redemption terms is uncertain; explicit titled redemption offers may be non-financial only when no contrary purchase evidence is present.

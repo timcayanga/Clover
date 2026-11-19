@@ -17601,7 +17601,7 @@ export const confirmImportFile = async (
     const jobId = learningJobId;
     schedulePostVisibleImportWork(`confirmation-learning:${importFileId}`, async () => {
       await processLearningJob(jobId, { maxItems: 5000, deadlineMs: 45_000 });
-    });
+    }, confirmationResult.imported <= 25 ? 0 : 1_000);
   }
   schedulePostVisibleImportWork(`finalize:${importFileId}`, async () => {
     await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {

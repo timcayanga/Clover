@@ -21978,7 +21978,9 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     .filter((date): date is Date => Boolean(date));
   const lineStartDate = datedLines[0] ?? null;
   const lineEndDate = datedLines.at(-1) ?? null;
-  const { openingBalance: rawOpeningBalance, endingBalance: rawEndingBalance } = detectBalanceFromText(normalized, false);
+  // Keep each printed balance attached to its own line. Flattening the full
+  // document lets an opening label consume the final closing amount.
+  const { openingBalance: rawOpeningBalance, endingBalance: rawEndingBalance } = detectBalanceFromText(genericText, false);
   const { openingBalance: signalOpeningBalance, endingBalance: signalEndingBalance } = detectBalanceFromText(signalText, false);
   const transactionBalanceCandidates = ledgerLines
     .filter(

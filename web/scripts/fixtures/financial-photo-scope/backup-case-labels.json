@@ -1,0 +1,14 @@
+{
+  "menu-priced-items": {"language":"en","documentType":"menu","imageQuality":"clear"},
+  "coupon-with-price": {"language":"en","documentType":"coupon","imageQuality":"clear"},
+  "cart-with-total": {"language":"en","documentType":"checkout_cart","imageQuality":"clear"},
+  "resume": {"language":"en","documentType":"resume","imageQuality":"clear"},
+  "wallet-home": {"language":"en","documentType":"wallet_home","imageQuality":"clear"},
+  "success-banner": {"language":"en","documentType":"wallet_banner","imageQuality":"clear"},
+  "receipt-menu-merchant": {"language":"en","documentType":"receipt","imageQuality":"clear"},
+  "receipt-voucher-footer": {"language":"en","documentType":"receipt","imageQuality":"clear"},
+  "receipt-resume-merchant": {"language":"en","documentType":"receipt","imageQuality":"clear"},
+  "receipt-faded": {"language":"en","documentType":"receipt","imageQuality":"faded"},
+  "receipt-indonesian": {"language":"id","documentType":"receipt","imageQuality":"clear"},
+  "illegible-partial-heading": {"language":"en","documentType":"unknown_fragment","imageQuality":"unreadable"}
+}

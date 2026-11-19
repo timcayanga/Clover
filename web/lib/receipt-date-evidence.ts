@@ -1,3 +1,4 @@
+import { koreanReceiptDate } from "./korean-receipt";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 type ReceiptDateDetails = {
   transaction_date: string | null;
@@ -71,6 +72,12 @@ const dateLabels = new RegExp(
 
 export function resolveReceiptPurchaseDateRoles(source: string): { date: string | null } | null {
   const { body, footer } = splitReceiptPromotionalFooter(source.normalize("NFKC"));
+  // Reuse the locale parser's labeled-date and clock validation. Do not let a
+  // later print/expiry date replace a Korean purchase date during role repair.
+  const koreanLines = body.split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
+  if (koreanLines.some(line => /^(?:(?:거래|결제|승인|구매)일(?:자|시)?|날짜)\s*(?:[:：]|\s|$)/u.test(line))) {
+    return { date: koreanReceiptDate(koreanLines) };
+  }
   const primary = new Set<string>();
   const ordinary = new Set<string>();
   const invoiceDates = new Set<string>();

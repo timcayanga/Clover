@@ -3,11 +3,15 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 const code = ts.transpileModule(fs.readFileSync(new URL('../src/import-activity.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+const photoRetake = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../../shared/import-photo-retake.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: photoRetake });
+const launcherActions = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../src/launcher-actions.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: launcherActions });
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function harness() {
   const slots = [], timers = new Map(), acknowledged = [], refreshes = [];
   let index = 0, dirty = false, effects = [], now = 0, nextTimer = 0, path = '/transactions', finishRefresh;
-  const session = { profileId: 'p', queuedFiles: [], offlineStatus: { online: true }, refresh() {}, fileQueue: { acknowledgeProgress: async id => acknowledged.push(id) } };
+  const session = { profileId: 'p', queuedFiles: [], offlineStatus: { online: true }, refresh() {}, refreshImportProfile() {}, fileQueue: { acknowledgeProgress: async id => acknowledged.push(id) } };
   const exports = {};
   vm.runInNewContext(code, { exports, console, setTimeout: (fn, ms) => { const id = ++nextTimer; timers.set(id, { fn, at: now + ms }); return id; }, clearTimeout: id => timers.delete(id), require: name => {
     if (name === 'react') return {
@@ -25,6 +29,8 @@ function harness() {
     if (name === './app-text') return { Text: 'Text' };
     if (name === './plan-ui') return { Progress: 'Progress' };
     if (name === './offline/upload-progress') return { uploadProgress: file => file.state === 'done' ? 100 : 45 };
+    if (name === './launcher-actions') return launcherActions;
+    if (name.endsWith('/import-photo-retake')) return photoRetake;
     if (name.endsWith('/import-stage')) return { getImportStageLabel: () => 'Reading file' };
     if (name === './screen-refresh') return { refreshScreen: p => { refreshes.push(p); return new Promise(resolve => { finishRefresh = resolve; }); } };
     throw Error(`Unexpected import ${name}`);

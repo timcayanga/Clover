@@ -33,6 +33,13 @@ async function main() {
   stub(prisma.transactionTag, "findMany", async () => []);
   stub(prisma.importFile, "findMany", async () => fixtures.map(r => ({ id: r.importFileId, fileName: "receipt.jpg" })));
   stub(prisma, "$queryRaw", async () => [{ currency: "PHP" }]);
+  let snapshotReads = 0;
+  stub(prisma, "$transaction", async (read: (db: typeof prisma) => Promise<unknown>, options: {isolationLevel: string}) => {
+    assert.equal(options.isolationLevel, "RepeatableRead", "Page IDs and hydration use the same snapshot");
+    snapshotReads++;
+    return read(prisma);
+  });
+  stub(prisma, "$executeRaw", async () => { throw new Error("Receipt ordering must remain read-only"); });
   stub(prisma.transaction, "count", async () => fixtures.length);
   stub(prisma.transaction, "findFirst", async () => null);
   stub(prisma.transaction, "groupBy", async (query: Record<string, any>) => {
@@ -42,6 +49,16 @@ async function main() {
     return [{ type: "expense", isTransfer: false, categoryId: "food", accountId: account.id, currency: "PHP", _sum: { amount: 303 } }];
   });
   stub(prisma.transaction, "findMany", async (query: Record<string, any>) => {
+    if (query.where?.id?.in) {
+      assert(query.where.id.in.every((id:string)=>fixtures.some(row=>row.id===id)));
+      // Hydration may arrive in another database order; the route must restore
+      // the order of the narrow, authorized ID page.
+      return fixtures.filter(row=>query.where.id.in.includes(row.id)).reverse();
+    }
+    if (query.select?.id && query.orderBy && Object.keys(query.select).length===1) {
+      assert(JSON.stringify(query.where).includes('"workspaceId":"qa"'), "Narrow page selection retains Profile scope");
+      assert.deepEqual(query.select, {id:true}, "Pagination does not sort wide receipt payloads");
+    }
     // Summary adjustment/counterpart reads have no matching synthetic rows.
     if (!query.orderBy && !query.select?.createdAt) return [];
     let rows = [...fixtures];
@@ -58,7 +75,7 @@ async function main() {
     return rows.slice(query.skip ?? 0, query.take === undefined ? undefined : (query.skip ?? 0) + query.take);
   });
   try {
-    for (const summaryMode of ["light", "full"]) for (const pageSize of [1, 2, 25]) for (const direction of ["desc", "asc"]) {
+    for (const summaryMode of ["rows", "light", "full"]) for (const pageSize of [1, 2, 25]) for (const direction of ["desc", "asc"]) {
       const ids: string[] = [];
       for (let page = 1; page <= Math.ceil(fixtures.length / pageSize); page++) {
         // Deliberately unfiltered: this is where recent imports used to jump.
@@ -69,13 +86,14 @@ async function main() {
         const data = await response.json();
         assert.equal(data.totalCount, 3);
         assert.equal(data.transactions.length, Math.min(pageSize, 3 - (page - 1) * pageSize));
-        assert.equal(data.summary.spending, 303);
+        if (summaryMode !== "rows") assert.equal(data.summary.spending, 303);
         const native = mobileApiResponse("transactions", data) as { transactions: { id: string }[] };
         assert.deepEqual(native.transactions.map(r => r.id), data.transactions.map((r: { id: string }) => r.id));
         ids.push(...native.transactions.map(r => r.id));
       }
       assert.deepEqual(ids, direction === "desc" ? ["receipt-1", "receipt-2", "receipt-0"] : ["receipt-0", "receipt-2", "receipt-1"], `${summaryMode}, page size ${pageSize}, ${direction}`);
     }
+    assert.equal(snapshotReads, 24);
     const row = { ...fixtures[0], amount: String(fixtures[0].amount), date: fixtures[0].date.toISOString(),
       createdAt: fixtures[0].createdAt.toISOString(), accountName: "Cash", categoryName: "Food & Dining",
       accountNumber: "12345678", rawPayload: { privateEvidence: "never sent" } };
@@ -93,7 +111,7 @@ async function main() {
     const newer = { ...committed, id: "newer", date: "2027-01-01T00:00:00.000Z" };
     assert.deepEqual(mergeCommittedReceiptRows([newer], [committed]), [newer, committed]);
     assert.deepEqual(mergeCommittedReceiptRows([newer, refreshed], [committed]), [newer, refreshed]);
-    console.log("PASS receipt chronological order: newest upload is oldest receipt; light/full API, native projection, both directions, stable pages and unchanged totals");
+    console.log("PASS receipt chronological order: newest upload is oldest receipt; rows/light/full API, native projection, both directions, stable pages and unchanged totals");
   } finally { restores.reverse().forEach(restore => restore()); await prisma.$disconnect(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

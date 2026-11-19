@@ -35,3 +35,11 @@ assert.deepEqual(receiptReconciliationIssues(includedTax, []), []);
 assert.deepEqual(receiptReconciliationIssues({ ...includedTax, subtotal: 1, total: 1, tax: null, service_charge: null, rounding: null, discount: null },
   [{ quantity: 0.333, unit_price: 3, amount: 1 }]), []);
 console.log("Receipt reconciliation passed for printed extensions, discrepancies, included tax, signed adjustments, and review display.");
+
+const grossPriced = {subtotal:21818,total:24000,tax:2182,service_charge:null,tip:null,discount:null,currency:"KRW"};
+assert.deepEqual(receiptReconciliationIssues(grossPriced,[{quantity:2,amount:24000}]),[]);
+assert.deepEqual(receiptReconciliationIssues({...grossPriced,service_charge:1000,total:25000},[{amount:24000}]),[]);
+assert(receiptReconciliationIssues(grossPriced,[{amount:24000.01}]).some(issue=>issue.includes("line items differ")),"An unexplained cent remains reviewable");
+assert(receiptReconciliationIssues({...grossPriced,total:24001},[{amount:24000}]).some(issue=>issue.includes("total differs")));
+assert(receiptReconciliationIssues({...grossPriced,subtotal:24000,total:24000},[{amount:26182}]).some(issue=>issue.includes("line items differ")),"Informational tax cannot be added twice");
+assert(receiptReconciliationIssues(grossPriced,[{quantity:2,unit_price:11000,amount:24000}]).some(issue=>issue.includes("quantity × unit price")),"Tax basis cannot hide a printed extension mismatch");

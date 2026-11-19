@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import * as XLSX from "xlsx";
+import * as importCommitTiming from "../../shared/import-commit-timing";
+import * as receiptFirstAttempt from "../../shared/receipt-first-attempt";
 import { PUBLIC_IMPORT_ACCEPT, PUBLIC_IMPORT_EXTENSIONS } from "@/lib/import-format-policies";
 import { validateImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
 import { validateServerImportFile, withCompletedNativeUpload } from "@/lib/native-upload-validation";
@@ -36,6 +38,8 @@ export async function runUploadFormatCoverageRegression() {
   });
   const { FileQueue } = loadNative("../mobile/src/offline/file-queue.ts", {
     "../../../shared/native-upload": limits,
+    "../../../shared/import-commit-timing": importCommitTiming,
+    "../../../shared/receipt-first-attempt": receiptFirstAttempt,
     "../../../shared/analytics": { telemetry() {} },
   });
   for (const extension of PUBLIC_IMPORT_EXTENSIONS) {

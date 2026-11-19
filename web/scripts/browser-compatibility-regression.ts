@@ -1,11 +1,13 @@
 import { cloverPhoneScreens, connectPlatformDesigns } from "../lib/connect-platform-designs";
 import assert from "node:assert/strict";
+import vm from "node:vm";
+import ts from "typescript";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { getVerifiedSpendingMerchantName } from "../lib/transaction-display";
 import { PLAN_COMPARISON_KEYS, PLAN_COMPARISON_ROWS, plannedProPrices } from "../lib/public-plan-comparison";
-import { SOCIAL_LINKS } from "../lib/public-site";
+import { FEATURE_LINKS, SOCIAL_LINKS } from "../lib/public-site";
 
 const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
@@ -20,7 +22,13 @@ async function main() {
   assert.match(footer, /aria-label=\{link.label\}/, "Icon-only social links need accessible names.");
   assert.match(footer, /Money looks better from here<\/p>/);
   assert.match(footer, /Help &amp; Support/);
-  assert.match(footer, /Other Resources[\s\S]*?>Pro<[\s\S]*?>Security<[\s\S]*?Privacy Policy[\s\S]*?Terms and Conditions/);
+  assert.match(footer, /aria-label="Features"[\s\S]*?FEATURE_LINKS\.map/);
+  for (const [label,href] of [["Pro","/features/pro"],["Security","/features/security"]])
+    assert(FEATURE_LINKS.some(link=>link.label===label&&link.href===href), `${label} belongs in Features`);
+  const resourceLinks=footer.match(/aria-label="Other Resources">([\s\S]*?)<\/nav>/)?.[1];
+  assert(resourceLinks);
+  assert.match(resourceLinks,/Privacy Policy[\s\S]*?Terms and Conditions/);
+  assert.doesNotMatch(resourceLinks,/features\/(?:pro|security)/);
   assert.doesNotMatch(footer, />Home<|Explore Clover|Here to help/);
   assert.match(await readSource("components/marketing-footer.tsx"), /PublicFooter as MarketingFooter/, "Every public layout must use the same footer.");
   const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
@@ -43,7 +51,15 @@ async function main() {
   assert.match(await readSource("components/public-footer.tsx"), /Pricing[\s\S]*?Privacy Policy[\s\S]*?Terms and Conditions/, "Pricing and legal links must remain available in the footer.");
   assert.match(mainLandingPageSource, /import \{ Showcase \} from "\.\/landing-showcase\/showcase"/, "The homepage must reuse the approved showcase implementation.");
   assert.match(mainLandingPageSource, /homeHref="\/" featureBasePath="\/features"/, "The released homepage must link to existing production feature pages.");
-  assert.match(mainLandingPageSource, /robots: \{ index: true, follow: true \}/, "The production homepage must remain indexable.");
+  const landingCode=ts.transpileModule(mainLandingPageSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+  for (const environment of ["production","preview"]) {
+    const exports: {metadata?:any}={};
+    vm.runInNewContext(landingCode,{exports,process:{env:{VERCEL_ENV:environment}},require:()=>({})});
+    const metadata=JSON.parse(JSON.stringify(exports.metadata));
+    assert.deepEqual(metadata.robots,{index:environment!=="preview",follow:environment!=="preview"});
+    assert.equal(metadata.alternates.canonical,"https://clover.ph/");
+    assert.equal(metadata.title.absolute,"Clover: Personal Finance | Budget & Expense Tracker");
+  }
   assert.match(await readSource("app/landing-showcase/features/[slug]/page.tsx"), /process\.env\.VERCEL_ENV === "production"\) notFound\(\)/, "Experimental feature pages must remain unavailable in production.");
   assert.match(landingPreviewPageSource, /window.location.pathname === "\/" \|\| window.location.pathname === "\/landing-preview"/, "Both public landing routes must retain their light appearance regardless of the saved app theme.");
   assert.match(landingJourneyStyles, /\.journey \.chapter\[data-active=false\]\{overflow:hidden\}/, "Inactive mobile chapters must not leak nested scrollbars over the current scene.");
@@ -120,7 +136,7 @@ async function main() {
   assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");
   assert.doesNotMatch(landingJourneySource, /chapterMotion[\s\S]{0,500}filter:/, "Landing copy must not blur during chapter transitions.");
   assert.match(landingJourneySource, /Organize my finances for free[\s\S]*?→[\s\S]*?href="\/sign-in"/, "The landing actions must lead with the arrow-led organization CTA before Log in.");
-  assert.match(landingJourneySource, /FEATURE_LINKS\.map[\s\S]*?href="\/pricing"/, "The public header must expose Features and Pricing.");
+  assert.match(landingJourneySource, /FEATURE_LINKS\.map[\s\S]*?href="\/pricing(?:\?plan_source=[^"\s]+)?"/, "The public header must expose Features and Pricing.");
   const publicHeaderSource = landingJourneySource.split("export function JourneyHeader(")[1]?.split("export function LandingJourney")[0];
   assert.ok(publicHeaderSource, "The shared public header must exist, including when it accepts preview destinations.");
   assert.doesNotMatch(publicHeaderSource, /href="\/(privacy-policy|terms-of-service)"/, "Legal links belong in the footer, not the journey header.");

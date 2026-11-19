@@ -105,7 +105,10 @@ assert.equal(parseReceiptText(receipt + "\n승인취소").total, null, "Cancella
 assert.equal(parseReceiptText(receipt.replace("통화: KRW", "통화: USD").replace("24,000원", "24,000")).currency, "USD");
 assert.equal(parseReceiptText(receipt.replace("통화: KRW", "").replace("24,000원", "24,000")).currency, "MIXED");
 assert.equal(assessFinancialUploadScope({ text: receipt, fileName: "IMG_1234.jpg" }).decision, "financial");
-assert.equal(assessFinancialUploadScope({ text: "할인 쿠폰 12,000원 2026년 9월 30일", fileName: "IMG_2.jpg" }).decision, "non_financial");
+assert.equal(assessFinancialUploadScope({ text: "할인 쿠폰 12,000원 2026년 9월 30일", fileName: "IMG_2.jpg" }).decision, "ambiguous", "A coupon word, price and bare date do not establish redemption terms");
+const koreanPromotion="할인 쿠폰\n12,000원\n사용 기한: 2026년 9월 30일";
+assert.equal(assessFinancialUploadScope({text:koreanPromotion,fileName:"IMG_2.jpg"}).decision,"non_financial");
+assert.equal(assessFinancialUploadScope({text:receipt+"\n"+koreanPromotion,fileName:"IMG_3.jpg"}).decision,"financial","A Korean offer footer cannot reject a completed receipt");
 assert.equal(resolveTransactionContext({ merchantRaw: "유니클로", currency: "KRW" }).countryCode, "KR");
 assert.equal(resolveTransactionContext({ institution: "신한은행" }).countryCode, "KR");
 console.log("Korean import regression passed: amounts, dates, currency, receipts, ledgers, workbook routing, legacy encoding, evidence and safe review.");

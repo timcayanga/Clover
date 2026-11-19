@@ -61,7 +61,7 @@ function parseItems(lines: string[], total: number | null) {
   return { items, complete: !incomplete && !pendingName };
 }
 
-function receiptDate(lines: string[]) {
+export function koreanReceiptDate(lines: string[]) {
   const primary: Array<string | null> = [], other: Array<string | null> = [];
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]!;
@@ -133,7 +133,7 @@ export function parseKoreanReceiptText(source: string): ReceiptPreviewResult | n
   const currencyConflict = currencyEvidence.ambiguous || (currency !== "KRW" && currency !== "MIXED" && /₩|￦|\d[\d,]*\s*원/.test(source));
   const currencyWarning = currencyConflict ? "Multiple currencies: confirm the amount and settlement currency."
     : !currencyEvidence.currency ? (hasDomesticEvidence ? "KRW inferred from Korean receipt details. Confirm the currency." : "Currency is not shown. Select the receipt currency.") : null;
-  const billDate = receiptDate(lines);
+  const billDate = koreanReceiptDate(lines);
   const documentNumbers = [...new Set(lines.flatMap((line, index) => {
     const label = line.match(/^(?:영수증|전표)\s*번호\s*(?:[:：]\s*|\s+|$)/);
     if (!label) return [];

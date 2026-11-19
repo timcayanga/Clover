@@ -104,8 +104,8 @@ const countMatches = (value: string, pattern: RegExp) => new Set(value.match(pat
 
 // These patterns identify a document's purpose. A lone word, a generic
 // filename, or the absence of readable financial fields cannot prove it.
-const PHOTO_PROMOTION_TITLE = /^(?:[^.!?\n]{0,55}\b)?(?:coupon|(?:gift\s+)?voucher|discount code|special offer|advertisement|kupon|kode promo)\b/i;
-const PHOTO_PROMOTION_TERMS = /\b(?:redeem(?:able)?|valid until|expires?|terms apply|offer ends|promo code|next (?:order|purchase|visit)|hanya berlaku|berlaku hingga|berlaku(?=\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}))\b/i;
+const PHOTO_PROMOTION_TITLE = /^(?:(?:[^.!?\n]{0,55}\b)?(?:coupon|(?:gift\s+)?voucher|discount code|special offer|advertisement|kupon|kode promo)\b|(?:할인\s*)?쿠폰(?:\s|[:：]|$))/i;
+const PHOTO_PROMOTION_TERMS = /\b(?:redeem(?:able)?|valid until|expires?|terms apply|offer ends|promo code|next (?:order|purchase|visit)|hanya berlaku|berlaku hingga|berlaku(?=\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}))\b|사용\s*기한|유효\s*기간|다음\s*(?:구매|방문)/i;
 const PHOTO_RESUME_TITLE = /^(?:curriculum vitae|résumé|resume)\b/i;
 const PHOTO_RESUME_SECTION = /\b(?:professional experience|employment history|work experience|education and qualifications|career objective)\b/i;
 const PHOTO_MEETING_TITLE = /^(?:meeting agenda|meeting minutes)\b/i;
