@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import * as importCommitTiming from "../../shared/import-commit-timing";
 import { prisma } from "../lib/prisma";
 import { fetchImportFileStatusCompat } from "../lib/data-engine";
 
@@ -8,7 +9,7 @@ async function main() {
   // Exercise the real compatibility query with an isolated database boundary.
   const originalColumns = prisma.$queryRaw;
   const originalRead = prisma.$queryRawUnsafe;
-  const fields = ["id", "workspaceId", "status", "processingPhase", "processingMessage", "processingAttempt", "processingTargetScore", "processingCurrentScore", "parsedRowsCount", "confirmedTransactionsCount", "accountId", "updatedAt"];
+  const fields = ["id", "workspaceId", "status", "processingPhase", "processingMessage", "processingAttempt", "processingTargetScore", "processingCurrentScore", "parsedRowsCount", "confirmedTransactionsCount", "accountId", "updatedAt", "confirmedAt"];
   const snapshot = Object.fromEntries(fields.map(field => [field, field]));
   let query = "";
   prisma.$queryRaw = (async () => [...fields, "fileName", "storageKey", "sourceFingerprint"].map(column_name => ({ column_name }))) as typeof originalColumns;
@@ -23,8 +24,9 @@ async function main() {
   // Execute the real route with isolated auth and database dependencies.
   const routeSource = readFileSync(new URL("../app/api/imports/[importId]/progress/route.ts", import.meta.url), "utf8");
   let local = false, missing = false, denied = false, accessChecks = 0;
-  const record = { ...snapshot, id: "test-import", workspaceId: "profile", parsedRowsCount: 12, confirmedTransactionsCount: 10 };
+  const record = { ...snapshot, id: "test-import", workspaceId: "profile", parsedRowsCount: 12, confirmedTransactionsCount: 10, confirmedAt: new Date(Date.now() - 1_000).toISOString() };
   const deps: Record<string, unknown> = {
+    "../../../../../../shared/import-commit-timing": importCommitTiming,
     "next/server": { NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) } },
     "@/lib/auth": { isLocalDevHost: async () => local, requireAuth: async () => ({ userId: "owner" }) },
     "@/lib/data-engine": { fetchImportFileStatusCompat: async () => missing ? null : record },
@@ -37,6 +39,7 @@ async function main() {
   const body = await response.json();
   assert.equal(body.parsedRowsCount, 12); assert.equal(body.confirmedTransactionsCount, 10); assert.equal(body.visibleImportComplete, true);
   assert.equal(body.importFile.processingMessage, record.processingMessage); assert.equal(body.importFile.updatedAt, record.updatedAt);
+  assert.ok(body.commitAgeMs >= 1_000 && body.commitAgeMs < 60_000, "Progress exposes a server-clock commit age without loading broader financial data");
   assert.equal(accessChecks, 1);
   denied = true; await assert.rejects(get(), /FORBIDDEN/); denied = false;
   missing = true; assert.equal((await get()).status, 404); missing = false;

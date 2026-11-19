@@ -121,16 +121,16 @@ const main = async () => {
     /startedImportMonitorKeys\.delete\(`\$\{importModalInstanceIdRef\.current\}:\$\{workspaceId\}:\$\{currentItem\.importFileId \?\? ""\}`\)/,
     "Unlocking a password-protected file must start a fresh status monitor."
   );
-  assert.match(
-    modalSource,
-    /progress: IMPORT_PROGRESS\.uploading,[\s\S]{0,300}detail: passwordAccepted \? "Password verified\. Clover is opening the statement\."/,
-    "A password retry must replace any stale completion activity with an active upload stage."
-  );
-  assert.match(
-    modalSource,
-    /const password = submittedPassword\?\.trim\(\) \?\? item\.password\.trim\(\);[\s\S]{0,700}const passwordAccepted = await validatePdfPassword\(item\.file, password\);[\s\S]{0,600}if \(passwordAccepted === false\)/,
-    "A protected PDF must validate its password before it re-enters the upload pipeline."
-  );
+  const passwordRetrySource = section(modalSource, "const handleRetry =", "const handleResumeImport =");
+  assert.match(passwordRetrySource, /status: "pending"/);
+  assert.match(passwordRetrySource, /status: "active",[\s\S]{0,600}progress: IMPORT_PROGRESS\.uploading,[\s\S]{0,100}detail: "Clover is verifying the password\."/,
+    "A password retry must replace stale completion with active verification, without claiming it already succeeded.");
+  assert.match(passwordRetrySource, /const password = submittedPassword \?\? item\.password;/,
+    "Keep exact password bytes, including significant spaces, for authoritative server verification.");
+  assert.doesNotMatch(passwordRetrySource, /password\.trim\(|validatePdfPassword|Password verified/,
+    "Do not trim credentials or repeat local PDF decoding before saved-source verification.");
+  assert.match(passwordRetrySource, /autoStartRef\.current = true;[\s\S]{0,100}scheduleQueuedImport\(\);/,
+    "Password correction must resume the import queue rather than remain stuck in the dialog.");
   assert.match(
     passwordModalSource,
     /value=\{passwordDraft\}[\s\S]{0,150}onChange=\{\(event\) => setPasswordDraft\(event\.target\.value\)\}[\s\S]{0,900}disabled=\{validating \|\| !passwordDraft\.trim\(\)\}[\s\S]{0,100}\{validating \? "Checking password\.\.\." : "Unlock file"\}/,
@@ -374,11 +374,12 @@ const main = async () => {
     /<ImportUploadDock[\s\S]{0,1000}progress=\{visibleOverallProgress\}/,
     "The visible upload dock must receive real foreground progress, not a reset 0% display value."
   );
-  assert.match(
-    modalSource,
-    /detail=\{[\s\S]{0,500}\(activeProgressItem[\s\S]{0,250}friendlyImportProgressLabel\([\s\S]{0,250}activitySnapshotForDisplay\?\.detail/,
-    "Foreground progress copy must prefer the active file phase so polling snapshots cannot make the modal flicker."
-  );
+  const dockDetailSource = section(modalSource, "        detail={", "        errorCode={");
+  assert.match(dockDetailSource, /currentErrorItem/,
+    "An actionable current failure must remain visible ahead of generic progress.");
+  assert.ok(dockDetailSource.indexOf("(activeProgressItem") < dockDetailSource.indexOf("activitySnapshotForDisplay?.detail") &&
+    dockDetailSource.includes("friendlyImportProgressLabel("),
+    "Foreground progress copy must precede polling snapshots without a fragile character-distance limit.");
   assert.match(
     modalSource,
     /await monitorQueuedImportAndConfirm\(itemId, importFileId, null,[\s\S]{0,10000}backgroundOnly: false/,
@@ -539,11 +540,12 @@ const main = async () => {
     /accountName: account\.name,[\s\S]{0,250}institution: account\.institution,[\s\S]{0,250}accountType: account\.type,[\s\S]{0,700}publishedAccountSummaries/,
     "Import finalization must write the confirmed account identity back to its checkpoint metadata."
   );
-  assert.match(
-    importProcessorSource,
-    /groupIsSnapshotOnly[\s\S]{0,500}groupEndingBalance === null[\s\S]{0,450}data: \{ balance: "0" \}/,
-    "A newly detected snapshot account without a visible balance must settle at zero instead of remaining indeterminate."
-  );
+  assert.match(importProcessorSource,
+    /groupIsSnapshotOnly &&\s*groupEndingBalance === null &&\s*groupAccount\.source === "upload" &&\s*snapshotBalanceToString\(groupAccount\.balance\) === null\s*\) \{\s*snapshotAccountsNeedingZeroBalance\.add\(groupAccount\.id\);/,
+    "Only the existing unvalued uploaded-snapshot fallback may be queued for settlement.");
+  assert.match(importProcessorSource,
+    /if \(snapshotAccountsNeedingZeroBalance\.size\) \{\s*await tx\.account\.updateMany\(\{\s*where: \{ workspaceId: String\(importFile\.workspaceId\), id: \{ in: \[\.\.\.snapshotAccountsNeedingZeroBalance\] \}, balance: null \},\s*data: \{ balance: "0" \}/,
+    "Snapshot fallback settlement stays transactional, Profile-scoped and null-only; existing balances must not be replaced.");
   assert.match(
     importProcessorSource,
     /isDeterministicPdaxPortfolioSnapshot[\s\S]{0,6000}replaceInvestmentHoldingsCompat/,
@@ -727,7 +729,7 @@ const main = async () => {
   );
   assert.match(
     processRouteSource,
-    /Promise\.all\(\[uploadStatePromise, file\.arrayBuffer\(\)\]\)/,
+    /Promise\.all\(\[uploadStatePromise, nativeSource\?\.bytes \?\?[\s\S]{0,400}measureImportTiming\(importId, "multipart_file_materialization",[\s\S]{0,250}\(uploadedFile as File\)\.arrayBuffer\(\)/,
     "multipart byte preparation should overlap the upload progress write"
   );
   assert.match(
@@ -778,7 +780,7 @@ const main = async () => {
   );
   assert.match(
     staleStatementImageQueueSource,
-    /processingPhase: "queued_retry"[\s\S]{0,1400}statementSelfHeal/,
+    /queueStaleEmptyImportRecovery\(importId, new Date\(snapshot\.importFile\.updatedAt\), \{\s*expectedStatus: "processing",\s*\}\)[\s\S]*?statementSelfHeal/,
     "A stranded screenshot must persist a resumable queue checkpoint for the global activity controller."
   );
   assert.match(
@@ -830,7 +832,7 @@ const main = async () => {
     "A late scheduled error must not blindly resurrect terminal imports.");
   assert.doesNotMatch(statusRouteSource, /processImportFileText|parsedRowsCount: 0|confirmedTransactionsCount: 0/,
     "Progress reads must not start OCR/AI or clear saved-row counters after a late failure.");
-  assert.match(statusRouteSource, /queueStaleEmptyImportRecovery\(importId, new Date\(snapshot\.importFile\.updatedAt\)\)/,
+  assert.match(statusRouteSource, /queueStaleEmptyImportRecovery\(importId, new Date\(snapshot\.importFile\.updatedAt\), \{\s*expectedStatus: "processing",\s*\}\)/,
     "Empty completion recovery must claim only an unchanged, unsaved source.");
   assert.match(statusRouteSource, /queueStaleEmptyImportRecovery\(importId, snapshotTime, \{ expectedStatus: "processing", nextAttempt \}\)/,
     "Receipt retries must use the same atomic durable queue and bounded attempt count.");
@@ -1011,12 +1013,12 @@ const main = async () => {
   );
   assert.match(
     importProcessorSource,
-    /const shouldMaterializeAccountBeforeConfirmation =\s*effectiveImportMode === "portfolio" \|\| effectiveImportMode === "account_detail"/,
+    /const shouldMaterializeAccountBeforeConfirmation =\s*canEnrichImport && \(effectiveImportMode === "portfolio" \|\| effectiveImportMode === "account_detail"\)/,
     "Only account-document imports should materialize accounts before confirmation; statements should not pay for account matching twice."
   );
   const templateLearningSource = section(
     importProcessorSource,
-    "const templateLearningJob = await enqueueLearningJob",
+    "const templateLearningJob = canEnrichImport ? await enqueueLearningJob",
     'if (await hasCompatibleTable("AccountStatementCheckpoint"))'
   );
   assert.match(
@@ -1097,11 +1099,11 @@ const main = async () => {
     /const appliedUpdates = await applyImportEnrichmentTransactionUpdates\(transactionUpdates\);[\s\S]{0,180}skippedRows \+= transactionUpdates\.length - appliedUpdates/,
     "Enrichment metrics should count rows protected by the write-time review-status guard."
   );
-  assert.match(
-    importProcessorSource,
-    /const \[parsedRows, statementFingerprints\] = await Promise\.all\(\[[\s\S]{0,300}fetchParsedTransactionRows\(job\.importFileId\)[\s\S]{0,200}listImportStatementFingerprints\(job\.importFileId\)/,
-    "Enrichment should load parsed rows and the reusable import scope concurrently."
-  );
+  assert.match(importProcessorSource,
+    /const parsedRows = await fetchParsedTransactionRows\(job\.importFileId\);[\s\S]{0,500}const importTransactionScope: ImportTransactionScope = \{\s*workspaceId: String\(importFile\.workspaceId\),\s*\};/,
+    "Enrichment reuses the authorized Profile scope without an extra fingerprint lookup.");
+  assert.doesNotMatch(importProcessorSource, /listImportStatementFingerprints\(job\.importFileId\)/,
+    "Do not restore the redundant per-job fingerprint scan.");
   assert.match(
     importProcessorSource,
     /const \[statementCheckpoint, transactions, existingCategories, trainingContext\] = await Promise\.all\(\[[\s\S]{0,1800}loadImportEnrichmentTrainingContext/,
@@ -1131,7 +1133,7 @@ const main = async () => {
   );
   assert.match(
     importProcessorSource,
-    /const lockedImportFile = await tx\.importFile\.findUnique\([\s\S]{0,900}savedTransactionsCount >= lockedConfirmedTransactions/,
+    /confirmationLockAcquiredAt = Date\.now\(\);[\s\S]{0,800}const lockedImportFile = await tx\.importFile\.findUnique\([\s\S]{0,350}if \(lockedImportFile\?\.confirmedAt\) \{[\s\S]{0,300}tx\.transaction\.count\(\{ where: \{ importFileId, deletedAt: null \} \}\)[\s\S]{0,250}duplicate: true[\s\S]{0,150}confirmedTransactionsCount: count/,
     "A competing confirmation request must return the first committed result after it acquires the statement lock."
   );
   assert.doesNotMatch(importProcessorSource, /SELECT pg_try_advisory_xact_lock/);
@@ -1150,7 +1152,7 @@ const main = async () => {
   );
   assert.match(
     importProcessorSource,
-    /const rawFileReady = options\.rawFileReady \?\? null;[\s\S]*if \(rawFileReady\) \{\s*await rawFileReady;\s*\}[\s\S]*hasCompatibleTable\("ParsedTransaction"\)/,
+    /const rawFileReady = options\.rawFileReady \?\? null;[\s\S]*if \(rawFileReady\) \{\s*await rawFileReady;\s*\}[\s\S]{0,600}await requireImportMayContinue\(importFileId, String\(importFile\.workspaceId\)\);[\s\S]{0,200}await replaceImportCandidates\(importFileId, String\(importFile\.workspaceId\), parsedTransactionData\)/,
     "Parsing may overlap storage, but normalized import writes must wait for the durable raw-file copy."
   );
   assert.match(
