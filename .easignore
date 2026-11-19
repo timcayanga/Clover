@@ -28,3 +28,6 @@ credentials.json
 *.mobileprovision
 /mobile/ios/
 /mobile/android/
+
+# Freeze stamp is deliberately uploaded, although excluded from Git.
+!/mobile/release-source.json

@@ -1,6 +1,6 @@
 {
   "cli": {
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -11,7 +11,7 @@
     "store-test": {
       "distribution": "store",
       "environment": "preview",
-      "autoIncrement": true,
+      "autoIncrement": false,
       "env": {
         "CLOVER_APP_NAME": "Clover",
         "CLOVER_APP_SCHEME": "clover",
@@ -29,7 +29,7 @@
     "production": {
       "distribution": "store",
       "environment": "production",
-      "autoIncrement": true,
+      "autoIncrement": false,
       "env": {
         "CLOVER_APP_NAME": "Clover",
         "CLOVER_APP_SCHEME": "clover",

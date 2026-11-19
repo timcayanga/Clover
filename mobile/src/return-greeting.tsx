@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, AppState, Easing, Pressable, StyleSheet, useWindowDimensions } from "react-native";
+import { Animated, AppState, Easing, Pressable, StyleSheet } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "./app-text";
@@ -13,7 +13,6 @@ export function ReturnGreeting({ firstName }: { firstName: string | null }) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const exiting = useRef(false);
   const { reduceMotion } = useAccessibilityPreferences();
-  const { width } = useWindowDimensions();
   const motionPreference = useRef(reduceMotion);
   motionPreference.current = reduceMotion;
   const insets = useSafeAreaInsets();
@@ -35,7 +34,6 @@ export function ReturnGreeting({ firstName }: { firstName: string | null }) {
   }, [animation]);
 
   useEffect(() => {
-    let backgroundAt: number | null = null;
     const show = () => {
       clearTimeout(timer.current);
       exiting.current = false;
@@ -47,18 +45,14 @@ export function ReturnGreeting({ firstName }: { firstName: string | null }) {
           toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: true,
         }).start();
       }
-      timer.current = setTimeout(dismiss, 750);
+      timer.current = setTimeout(dismiss, 1600);
     };
     show();
     const listener = AppState.addEventListener("change", state => {
       if (state === "background") {
-        backgroundAt = Date.now();
         clearTimeout(timer.current);
         animation.stopAnimation();
         setVisible(false);
-      } else if (state === "active" && backgroundAt !== null) {
-        if (Date.now() - backgroundAt >= 30000) show();
-        backgroundAt = null;
       }
     });
     return () => {
@@ -74,8 +68,7 @@ export function ReturnGreeting({ firstName }: { firstName: string | null }) {
     <Animated.View accessibilityViewIsModal style={[StyleSheet.absoluteFill, {
       top: -insets.top, left: -insets.left, right: -insets.right, zIndex: 300,
       backgroundColor: "#00AABD",
-      opacity: animation.interpolate({ inputRange: [0, 1, 2], outputRange: [0, 1, 1] }),
-      transform: [{ translateX: animation.interpolate({ inputRange: [0, 1, 2], outputRange: [0, 0, -width] }) }],
+      opacity: animation.interpolate({ inputRange: [0, 1, 2], outputRange: [0, 1, 0] }),
     }]}>
       <StatusBar style="light" />
       <Pressable accessibilityRole="button" accessibilityLabel={`${greeting} Continue to Clover`} onPress={dismiss}

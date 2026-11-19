@@ -74,3 +74,7 @@ The admin report separates request results, client-grouped runs and older-client
 New display acknowledgements carry the exact source sync attempt. The server checks owned audit evidence and the current linking attempt before attaching an account-list or first-data display event. An empty or failed result cannot use a previous successful sync's data milestone to claim first-visible data. Older acknowledgements still work with legacy coverage. Repeated-ready checks cannot acquire a bogus retrieval latency by subtracting the original connection/callback timestamp.
 
 The operational `lastSyncAttemptAt` is updated when an owned request begins, including blocked requests, so older connections remain in the current admin monitoring window. Refresh limits continue to use their existing `bank.refresh_attempt` audit records; this timestamp does not consume or reset quota.
+
+## Statement-based validation
+
+Keep operational success separate from independent correctness. Use [bank-statement-completeness.md](bank-statement-completeness.md) and the read-only snapshot/verifier commands to compare original statement occurrences, provider rows and their linked ledger counterparts. Without independently confirmed labels, source/page integrity, matching account/period, provider coverage and retrieval completion evidence, status stays unverified. Do not turn product success, saved counts or the limited historical owner overlap into a bank-data accuracy percentage.

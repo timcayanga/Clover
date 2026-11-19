@@ -95,6 +95,21 @@ const optionsSample = {
     brandPalette?:AccountCardPalette;
   }[],
 };
+function BillPeople({ demo, ...props }: {demo: boolean; participants: {id: string; name: string}[]; people: {id: string; name: string; avatarUrl?: string | null}[]}) {
+  return demo ? <BillAvatars {...props}/> : <SignedInBillAvatars {...props}/>;
+}
+function SignedInBillAvatars(props: {participants: {id: string; name: string}[]; people: {id: string; name: string; avatarUrl?: string | null}[]}) {
+  const { user } = useUser();
+  return <BillAvatars {...props} ownName={user?.firstName ?? user?.fullName ?? undefined} ownPhoto={user?.imageUrl}/>;
+}
+function BillAvatars({participants, people, ownName, ownPhoto}: {participants: {id:string; name:string}[]; people: {id:string; name:string; avatarUrl?:string|null}[]; ownName?:string; ownPhoto?:string}) {
+  return <View accessibilityLabel={participants.map(p => /^(you|me)$/i.test(p.name) ? ownName ?? p.name : p.name).join(", ")} style={{flexDirection:"row"}}>
+    {participants.slice(0,5).map((person,index) => <View key={person.id} style={{marginLeft:index ? -7 : 0, borderWidth:2, borderColor:"white",borderRadius:14}}>
+      <PersonAvatar name={/^(you|me)$/i.test(person.name) ? ownName ?? person.name : person.name}
+        imageUrl={/^(you|me)$/i.test(person.name) ? ownPhoto : people.find(p=>p.id===person.id || p.name===person.name)?.avatarUrl} size={22}/>
+    </View>)}
+  </View>;
+}
 export default function SplitBills() {
   const params = useLocalSearchParams<{ billId?: string; transactionId?: string }>();
   const session = useSession();
@@ -378,6 +393,7 @@ export default function SplitBills() {
                       <Field
                         accessibilityLabel="Search bills"
                         placeholder="Search bills"
+                        style={{ height: 44, minHeight: 44, borderRadius: 22, paddingVertical: 0 }}
                         value={search}
                         onChangeText={setSearch}
                       />
@@ -426,6 +442,7 @@ export default function SplitBills() {
                             flexDirection: "row",
                             gap: 12,
                             alignItems: "center",
+                            backgroundColor: colors.white, borderRadius: 12, paddingHorizontal: 12, marginBottom: 8,
                             paddingVertical: 14,
                             borderBottomWidth: 1,
                             borderColor: colors.line,
@@ -433,61 +450,17 @@ export default function SplitBills() {
                         >
                           <CategoryMark name={bill.categoryName || suggestBillCategory(bill.title)?.name} />
                           <View style={{ flex: 1 }}>
-                            <Body muted={false}>{bill.title}</Body>
-                            <Body>{bill.billDate.slice(0, 10)}</Body>
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                gap: 6,
-                                marginTop: 6,
-                              }}
-                            >
-                              {bill.group ? (
-                                <Image
-                                  source={
-                                    options.data?.groups.find(
-                                      (g) => g.id === bill.group?.id,
-                                    )?.avatarUrl
-                                      ? {
-                                          uri: options.data.groups.find(
-                                            (g) => g.id === bill.group?.id,
-                                          )!.avatarUrl!,
-                                        }
-                                      : require("../assets/split-bills/group-default.jpg")
-                                  }
-                                  style={{
-                                    width: 24,
-                                    height: 24,
-                                    borderRadius: 8,
-                                  }}
-                                />
-                              ) : (
-                                <PersonAvatar
-                                  name={bill.participants?.[0]?.name || "?"}
-                                  size={24}
-                                />
-                              )}
-                              <View style={{ flex: 1 }}>
-                                <Body>
-                                  {bill.group?.name ||
-                                    bill.participants
-                                      ?.map((p) => p.name)
-                                      .join(", ") ||
-                                    "No participants"}
-                                </Body>
-                              </View>
+                            <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 14 }}>{bill.title}</Text>
+                            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+                              <Text style={{ color: colors.muted, fontSize: 12 }}>{bill.billDate.slice(0,10)}</Text>
+                              <BillPeople participants={bill.participants ?? []} people={options.data?.people ?? []} demo={session.demo}/>
                             </View>
                           </View>
                           <View style={{ alignItems: "flex-end" }}>
                             <Body muted={false}>
                               {money(bill.total, bill.currency)}
                             </Body>
-                            <Body>
-                              {bill.resolved
-                                ? "Resolved"
-                                : bill.settlementStatus}
-                            </Body>
+                            {bill.resolved || bill.settlementStatus !== "open" ? <Body>{bill.resolved ? "Resolved" : bill.settlementStatus}</Body> : null}
                           </View>
                           <Text
                             style={{ fontSize: 26, color: colors.ink }}

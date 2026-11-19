@@ -5,6 +5,7 @@ import { createScreenDataLoader, registerScreenRefresh } from "../src/screen-ref
 import { InlineDetailRow } from "../src/inline-detail-row";
 import { PlanHeader } from "../src/plan-ui";
 import { EntryOverlay } from "../src/entry-overlay";
+import { recurringDueLabel } from "../src/recurring-due-label";
 import { recurringSummaryAmounts } from "../src/recurring-summary";
 import { PlanTabs } from "../src/plan-ui";
 import { Text } from "../src/app-text";
@@ -342,14 +343,7 @@ function Recurring() {
         <Body>Loading recurring…</Body>
       ) : (
         <>
-          <AdaptiveGrid minItemWidth={100} maxColumns={3} gap={8}>
-            {(data.summaries?.[({ planned_payment: "planned", debt: "debt", receivable: "owed", reminder: "installments" } as Record<string, string>)[kind] ?? "overview"]?.slice(0, kind ? 3 : 1) ?? [["Due this month", dueLabel]]).map(([label, value]) => (
-              <Card key={label} style={{ flex: 1, backgroundColor: colors.pale, alignItems: "center", padding: kind ? 10 : 16 }}>
-                <Text style={[styles.sectionTitle, { fontSize: kind ? 11 : 16, textAlign: "center" }]}>{label}</Text>
-                <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: kind ? 16 : 18, textAlign: "center" }}>{value}</Text>
-              </Card>
-            ))}
-          </AdaptiveGrid>
+
           <Card>
             <Text
               style={{
@@ -524,6 +518,14 @@ function Recurring() {
               </View>
             ) : null}
           </Card>
+          <AdaptiveGrid minItemWidth={kind ? 100 : 10000} maxColumns={kind ? 3 : 1} gap={8}>
+            {(data.summaries?.[({ planned_payment: "planned", debt: "debt", receivable: "owed", reminder: "installments" } as Record<string, string>)[kind] ?? "overview"]?.slice(0, kind ? 3 : 1) ?? [["Due this month", dueLabel]]).map(([label, value]) => (
+              <Card key={label} style={{ flex: 1, backgroundColor: colors.pale, alignItems: "center", padding: kind ? 10 : 16 }}>
+                <Text style={[styles.sectionTitle, { fontSize: kind ? 11 : 16, textAlign: "center" }]}>{label}</Text>
+                <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: kind ? 16 : 18, textAlign: "center" }}>{value}</Text>
+              </Card>
+            ))}
+          </AdaptiveGrid>
           {data.suggestions?.length ? (
             <Card>
               <Text
@@ -581,7 +583,7 @@ function Recurring() {
                   <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                     <Text style={{ color: colors.ink, fontFamily: "Poppins-Medium", fontSize: 14 }}>{item.title}</Text>
                     <Text style={{ color: colors.teal, fontSize: 12 }}>{kinds.find(option => option.value === item.kind)?.label ?? "Recurring"}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12 }}>{[item.accountName, item.status[0].toUpperCase() + item.status.slice(1)].filter(Boolean).join(" · ")}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12 }}>{[item.accountName, recurringDueLabel(item, data.occurrences)].filter(Boolean).join(" · ")}</Text>
                   </View>
                   <Text style={{ color: colors.ink, fontSize: 13, maxWidth: "40%", textAlign: "right" }}>{amount(item)}</Text>
                   <Icon line name="chevron-forward" size={14} />

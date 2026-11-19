@@ -78,7 +78,9 @@
     "check:recurring-summary": "node --experimental-strip-types scripts/recurring-summary-check.mjs",
     "check:android-release": "node scripts/android-release-check.mjs",
     "check:ios-release": "node scripts/ios-scene-check.mjs",
-    "check:layout": "node scripts/adaptive-layout-check.mjs && node scripts/adviser-layout-check.mjs && node scripts/route-accessibility-check.mjs && node scripts/dynamic-type-check.mjs"
+    "check:layout": "node scripts/adaptive-layout-check.mjs && node scripts/adviser-layout-check.mjs && node scripts/route-accessibility-check.mjs && node scripts/dynamic-type-check.mjs",
+    "release:prepare": "node scripts/release-provenance.cjs",
+    "qa:release-coverage": "node scripts/release-provenance-check.mjs && node scripts/release-coverage-check.mjs"
   },
   "private": true,
   "overrides": {

@@ -1,3 +1,4 @@
+import { AppVersion } from "../src/app-version";
 import { authFailure, needsSignInVerification } from "../../shared/auth-failure";
 import { beginTelemetry } from "../../shared/analytics";
 import { useEffect, useState, useRef } from "react";
@@ -523,6 +524,7 @@ function AuthForm() {
           {error ? <Notice>{error}</Notice> : null}
           {message ? <Body>{message}</Body> : null}
         </Card>
+        <AppVersion />
       </View>
     </Screen>
     </View>

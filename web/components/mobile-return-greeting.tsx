@@ -24,12 +24,12 @@ export function MobileReturnGreeting() {
 
   useEffect(() => {
     setPhase("hidden");
-    if (!userId || !window.matchMedia("(max-width: 767px)").matches) return;
-    let background: number | null = null;
+    if (!userId) { greeted.clear(); return; }
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
     const show = () => {
       clearTimeout(timer.current);
       setPhase("entering");
-      timer.current = setTimeout(dismiss, 750);
+      timer.current = setTimeout(dismiss, 1600);
     };
     if (!greeted.has(userId)) {
       greeted.add(userId);
@@ -37,12 +37,8 @@ export function MobileReturnGreeting() {
     }
     const change = () => {
       if (document.visibilityState === "hidden") {
-        background = Date.now();
         clearTimeout(timer.current);
         setPhase("hidden");
-      } else if (background !== null) {
-        if (Date.now() - background >= 30000) show();
-        background = null;
       }
     };
     document.addEventListener("visibilitychange", change);

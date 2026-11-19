@@ -2,11 +2,15 @@ import type { ExpoConfig } from "expo/config";
 
 const iosBundleIdentifier = process.env.CLOVER_IOS_BUNDLE_ID || "ph.clover.preview";
 
+// Store packages must be built from the same explicit, immutable release source.
+const storeBuild = iosBundleIdentifier === "ph.clover.app" || process.env.CLOVER_ANDROID_PACKAGE_ID === "ph.clover.app";
+const release = storeBuild ? require("./scripts/release-provenance.cjs").read(process.env.EXPO_PUBLIC_API_URL) : null;
 const config: ExpoConfig = {
   name: process.env.CLOVER_APP_NAME || "Clover Preview",
   slug: "clover-mobile",
   owner: "clover-innovations",
   extra: {
+    ...(release ? { release } : {}),
     eas: {
       projectId: "742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff",
       build: { experimental: { ios: { appExtensions: [{
@@ -17,14 +21,14 @@ const config: ExpoConfig = {
     },
   },
   scheme: process.env.CLOVER_APP_SCHEME || "clover-preview",
-  version: "1.1.3",
+  version: release?.version ?? "1.1.3",
   icon: "./assets/clover-liquid-glass-icon.png",
   userInterfaceStyle: "automatic",
   orientation: "default",
   ios: {
     bundleIdentifier: iosBundleIdentifier,
     appleTeamId: "6XX38GYURG",
-    buildNumber: "56",
+    buildNumber: release ? String(release.build) : "56",
     supportsTablet: true,
     usesAppleSignIn: true,
     associatedDomains: ["applinks:clover.ph", "applinks:staging.clover.ph"],
@@ -32,7 +36,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: process.env.CLOVER_ANDROID_PACKAGE_ID || "ph.clover.preview",
-    versionCode: 56,
+    versionCode: release?.build ?? 56,
     allowBackup: false,
     // Country-only receipt suggestions never need precise/background location.
     // Remove these even when a dependency contributes them during manifest merge.

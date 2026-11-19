@@ -1,0 +1,7 @@
+# Generated from a clean committed release checkout.
+/release-source.json
+/node_modules/
+/.expo/
+/dist/
+/ios/
+/android/

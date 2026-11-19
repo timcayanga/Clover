@@ -138,6 +138,7 @@ export function ReportsWorkspaceView({
     [saving, setSaving] = useState(false),
     [saveError, setSaveError] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [exportType, setExportType] = useState<"csv" | "pdf">("csv");
   const sequence = useRef(0);
   async function download(format: "csv" | "pdf") {
     setExporting(true);
@@ -282,7 +283,7 @@ export function ReportsWorkspaceView({
         </>
       }
     >
-      <div className="report-v2" data-ask-page-context={JSON.stringify({reportParams:reportViewParams(data.view).toString(),currency:data.view.currency,from:data.period.from,to:data.period.to})}>
+      <div className="report-v2" data-report-section={view.section} data-ask-page-context={JSON.stringify({reportParams:reportViewParams(data.view).toString(),currency:data.view.currency,from:data.period.from,to:data.period.to})}>
         <div className="report-v2-toolbar">
           <p>
             {data.period.from} to {data.period.to} · {data.timeZone}
@@ -428,6 +429,10 @@ export function ReportsWorkspaceView({
               income or expenses.
             </p>
             <div className="report-v2-actions">
+              <div className="report-mobile-export">
+                <label>Export<select aria-label="Export type" value={exportType} onChange={event => setExportType(event.target.value as "csv" | "pdf")}><option value="csv">CSV</option><option value="pdf">PDF</option></select></label>
+                <button type="button" className="button button-secondary" disabled={busy || exporting} onClick={() => void download(exportType)}>{exporting ? "Preparing…" : "Download"}</button>
+              </div>
               <button
                 className="button button-secondary"
                 onClick={() =>

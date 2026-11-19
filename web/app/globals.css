@@ -67425,3 +67425,22 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
   }
   #investment-header-filter .portfolio-filter-menu__label-text { display: none; }
 }
+
+/* Release reconciliation: keep mobile Reports focused and greet once per session. */
+.report-mobile-export { display: none; }
+@keyframes clover-greeting-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes clover-greeting-out { from { opacity: 1; } to { opacity: 0; } }
+@media (max-width: 767px) {
+  .mobile-return-greeting[data-phase="entering"] { animation: clover-greeting-in 240ms ease-out both; }
+  .mobile-return-greeting[data-phase="leaving"] { animation: clover-greeting-out 330ms ease-out both; }
+  .report-v2[data-report-section="overview"] .report-v2-toolbar button,
+  .report-v2[data-report-section="overview"] .report-v2-search,
+  .report-v2[data-report-section="overview"] .report-v2-coverage { display: none; }
+  .report-mobile-export { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; }
+  .report-mobile-export label { display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 8px; }
+  .report-mobile-export select { width: auto; min-height: 44px; }
+  .report-v2-filter { gap: 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-return-greeting[data-phase] { animation: none; }
+}

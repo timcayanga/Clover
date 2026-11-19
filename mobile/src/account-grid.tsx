@@ -17,14 +17,18 @@ export function AccountGridCard({ name, identifier, amount, logo, palette, onOpe
 }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${name} details. ${identifier}. ${amount}`} onPress={onOpen} style={{ flex: 1 }}>
     <LinearGradient colors={palette.colors} locations={palette.locations} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-      style={{ flex: 1, minHeight: 210, borderRadius: 16, padding: 14, gap: 6, borderWidth: 1, borderColor: "#ffffff2e" }}>
-      <View style={{ width: 32, height: 32, marginBottom: 2 }}>{logo}</View>
+      style={{ flex: 1, minHeight: 164, borderRadius: 16, padding: 14, gap: 6, borderWidth: 1, borderColor: "#ffffff2e" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <View style={{ width: 32, height: 32 }}>{logo}</View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${name} details`} onPress={onOpen} hitSlop={8}
+          style={{ width: 32, height: 32, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: palette.foreground, fontSize: 22, letterSpacing: 1 }}>•••</Text>
+        </Pressable>
+      </View>
       <Text style={{ color: palette.foreground, fontFamily: "Poppins-SemiBold", fontSize: 13, lineHeight: 20 }}>{name}</Text>
       <Text style={{ color: palette.foreground, fontSize: 11, lineHeight: 17 }}>{identifier}</Text>
       <Text style={{ color: palette.foreground, fontFamily: "Poppins-SemiBold", fontSize: 18, lineHeight: 27, marginTop: "auto" }}>{amount}</Text>
-      <View accessible={false} style={{ alignSelf: "flex-end", width: 44, height: 44, borderRadius: 22, backgroundColor: "#ffffff29", borderWidth: 1, borderColor: "#ffffff33", alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ color: palette.foreground, fontSize: 25, lineHeight: 32 }}>›</Text>
-      </View>
+
     </LinearGradient>
   </Pressable>;
 }

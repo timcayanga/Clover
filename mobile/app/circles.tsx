@@ -255,7 +255,7 @@ export default function Circles() {
       {entryOverlay}
       <PlanHeader
         title={selected ? selected.name : "Circles"}
-        trailing={selected ? <Pressable accessibilityRole="button" accessibilityLabel={`Circle display currency: ${displayCurrency}`} onPress={()=>setCurrencyOpen(true)} style={{minHeight:44,minWidth:58,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:4}}><Text style={{color:colors.teal,fontFamily:'Poppins-Medium',fontSize:13}}>{displayCurrency}</Text><Icon line name="chevron-down" size={14}/></Pressable> : undefined}
+        trailing={selected ? <Pressable accessibilityRole="button" accessibilityLabel={`Circle display currency: ${displayCurrency}`} onPress={()=>setCurrencyOpen(true)} style={{minHeight:44,minWidth:58,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:4}}><Text style={{color:colors.teal,fontFamily:'Poppins-Medium',fontSize:13}}>{displayCurrency}</Text></Pressable> : undefined}
         back={selected ? () => setSelected(null) : undefined}
         add={() => setEditor({ circle: null })}
       />

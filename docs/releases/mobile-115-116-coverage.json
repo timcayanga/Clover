@@ -1,0 +1,553 @@
+[
+  {
+    "id": "navigation",
+    "requirement": "Quick Access and main menu open Accounts and Recurring; centered headers",
+    "sourcePaths": [
+      "mobile/app/_layout.tsx",
+      "mobile/src/ui.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "home",
+    "requirement": "Compact Quick Access, insights before reminders, upcoming dates and pending Split Bills",
+    "sourcePaths": [
+      "mobile/app/(tabs)/index.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "subtabs",
+    "requirement": "Fixed 44px loading/loaded tabs, selected icon and one-line label",
+    "sourcePaths": [
+      "mobile/src/plan-ui.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "greeting",
+    "requirement": "Cold launch/sign-in greeting: teal, readable duration, fade out; skip warm resume",
+    "sourcePaths": [
+      "mobile/src/return-greeting.tsx",
+      "web/components/mobile-return-greeting.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "reconciled-in-branch",
+    "staging": "pending-new-candidate",
+    "production": "pending-new-candidate",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "accounts",
+    "requirement": "Two-column compact cards; top-right bare ellipsis opens details",
+    "sourcePaths": [
+      "mobile/src/account-grid.tsx",
+      "web/components/financial-account-card.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "reconciled-in-branch",
+    "staging": "pending-new-candidate",
+    "production": "pending-new-candidate",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "version",
+    "requirement": "Installed version at Account and auth footers",
+    "sourcePaths": [
+      "mobile/src/app-version.tsx",
+      "mobile/app/auth.tsx",
+      "mobile/app/(tabs)/account.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "reconciled-in-branch",
+    "staging": "pending-new-candidate",
+    "production": "pending-new-candidate",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "recurring",
+    "requirement": "Summary below calendar, full width; due dates without Active label",
+    "sourcePaths": [
+      "mobile/app/recurring.tsx",
+      "mobile/src/recurring-due-label.ts"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "reconciled-in-branch",
+    "staging": "pending-new-candidate",
+    "production": "pending-new-candidate",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "reports",
+    "requirement": "Mobile overview starts with summary; export in compact filters",
+    "sourcePaths": [
+      "mobile/src/reports-workspace.tsx",
+      "web/components/reports-workspace.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "reconciled-in-branch",
+    "staging": "pending-new-candidate",
+    "production": "pending-new-candidate",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "split-list",
+    "requirement": "Pill search, consistent rows, date/avatar stacks including own photo, no Open label",
+    "sourcePaths": [
+      "mobile/app/split-bills.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "reconciled-in-branch",
+    "staging": "pending-new-candidate",
+    "production": "pending-new-candidate",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "circle-currency",
+    "requirement": "Remove down chevron beside Circle currency",
+    "sourcePaths": [
+      "mobile/app/circles.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "reconciled-in-branch",
+    "staging": "pending-new-candidate",
+    "production": "pending-new-candidate",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "filter-options",
+    "requirement": "Category/type/account icons; institution groups; exclude investment holdings",
+    "sourcePaths": [
+      "mobile/src/transaction-filters.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "selection",
+    "requirement": "Select all, Edit/Add To/Delete toolbar replacing search; safe explicit mass edit",
+    "sourcePaths": [
+      "mobile/src/transaction-bulk-edit.tsx",
+      "mobile/app/(tabs)/transactions.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "destinations",
+    "requirement": "Income eligible for Recurring; expenses only for Circles/Split Bills; dismissible sheet",
+    "sourcePaths": [
+      "mobile/src/transaction-bulk-destination.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "manual-items",
+    "requirement": "Manual entry More Details exposes line items",
+    "sourcePaths": [
+      "mobile/src/transaction-entry.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "context-chat",
+    "requirement": "One bottom composer, emoji chips above; page context; no nested draggable sheet",
+    "sourcePaths": [
+      "mobile/app/(tabs)/adviser.tsx",
+      "mobile/src/ui.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "add-methods",
+    "requirement": "White selected icons; consistent manual/upload source artwork",
+    "sourcePaths": [
+      "mobile/src/add-entry-methods.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "upload-history",
+    "requirement": "25MiB accepted-source limit; compact date/account/count/status import history",
+    "sourcePaths": [
+      "mobile/src/upload.ts",
+      "mobile/app/(tabs)/add.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "transactions-cache",
+    "requirement": "Profile-scoped cached rows and visible-result measurement",
+    "sourcePaths": [
+      "mobile/app/(tabs)/transactions.tsx",
+      "mobile/src/offline/engine.ts"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "bank-logos",
+    "requirement": "Bank logos including Public Bank Malaysia; account branding",
+    "sourcePaths": [
+      "shared/bank-logo-catalog.json",
+      "mobile/src/finverse-connect.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "bank-journey",
+    "requirement": "Selection attribution, hosted handoff, MFA visibility limits, selection and usable-data milestones",
+    "sourcePaths": [
+      "shared/bank-journey-monitor.ts",
+      "mobile/src/use-bank-visible-stage.ts"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "bank-sync",
+    "requirement": "Every sync has own attempt/outcome; backwards-compatible API",
+    "sourcePaths": [
+      "shared/bank-sync-outcome.ts"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "bank-validation",
+    "requirement": "Statement completeness verification remains read-only; no accuracy claim without coverage",
+    "sourcePaths": [
+      "shared/bank-statement-validation.ts"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "reconciled-in-branch",
+    "staging": "pending-new-candidate",
+    "production": "pending-new-candidate",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "offline"
+    ]
+  },
+  {
+    "id": "receipt-pipeline",
+    "requirement": "Production parser accuracy/speed/recovery and first-visible outcome instrumentation",
+    "sourcePaths": [
+      "web/workers/import-processor.ts",
+      "mobile/src/offline/file-queue.ts"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "corrections",
+    "requirement": "This-only/future corrections, service-specific matching; confirmed records protected",
+    "sourcePaths": [
+      "shared/category-correction.ts"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "paid-bill",
+    "requirement": "Fixed bill specific due-date payment evidence, possible matches and missing-data disclosure",
+    "sourcePaths": [
+      "web/lib/recurring-payment-evidence.ts"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "checkout",
+    "requirement": "Plan/selection/start/preparation outcomes and verified billing attribution",
+    "sourcePaths": [
+      "shared/billing-funnel.ts"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "auth-recovery",
+    "requirement": "Compromised password direct reset, rate limit recovery and callback handling",
+    "sourcePaths": [
+      "mobile/app/auth.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "activation",
+    "requirement": "Activation when client displays first real transaction",
+    "sourcePaths": [
+      "mobile/src/first-use-activation.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "icon-widgets",
+    "requirement": "Liquid glass icon and working native widgets/shortcuts require package verification",
+    "sourcePaths": [
+      "mobile/app.config.ts",
+      "mobile/plugins/with-clover-launcher.cjs"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "marketing",
+    "requirement": "Refreshed marketing images, SEO and attributed sign-up flows",
+    "sourcePaths": [
+      "web/app/page.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "web"
+    ]
+  }
+]

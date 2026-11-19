@@ -1,6 +1,6 @@
 import { usePageAskScope, usePageAskClover } from "./page-ask-context";
 import { ContextualUpgrade } from "./contextual-upgrade";
-import { ReportNavigation, ReportDirectory, ReportJumpTarget, ReportCurrencyScope } from "./report-navigation";
+import { ReportNavigation, ReportJumpTarget, ReportCurrencyScope } from "./report-navigation";
 import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
 import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
@@ -55,12 +55,14 @@ const names = ["Overview", "Spending", "Trends", "Insights · Plus"];
 function ReportCard({
   title,
   children,
+  compact = false,
 }: {
   title: string;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <ReportJumpTarget title={title}><Card>
+    <ReportJumpTarget title={title}><Card style={compact ? { padding: 12, gap: 4 } : undefined}>
       <SectionTitle>{title}</SectionTitle>
       {children}
     </Card></ReportJumpTarget>
@@ -93,6 +95,7 @@ function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportVie
     sampleReportsWorkspace,
   );
   usePageAskScope({page:"reports",title:"Reports",currency:data?.view.currency,from:data?.period.from,to:data?.period.to,reportParams:data ? reportViewParams(data.view).toString() : undefined});
+  const [exportType, setExportType] = useState<"csv" | "pdf">("csv");
   const [savedOpen, setSavedOpen] = useState(false),
     [saved, setSaved] = useState<SavedReport[]>([]),
     [selected, setSelected] = useState<SavedReport | null>(null),
@@ -295,31 +298,9 @@ function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportVie
           setView((v) => ({ ...v, section: sections[names.indexOf(name)] }))
         }
       />
-      <ReportDirectory />
-      {data ? (
-        <>
-          <Body>
-            {data.period.from} to {data.period.to} · {data.timeZone}
-          </Body>
-          <PlanAction
-            title="Saved reports"
-            onPress={() => setSavedOpen(!savedOpen)}
-          />
-          <PlanAction
-            title={exporting ? "Preparing export…" : "Export CSV"}
-            disabled={exporting}
-            onPress={() => void download("csv")}
-          />
-          <PlanAction
-            title="Export PDF"
-            disabled={exporting}
-            onPress={() => void download("pdf")}
-          />
-          {exportError ? <Notice>{exportError}</Notice> : null}
-        </>
-      ) : null}
+      {data ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
       {filters && data ? (
-        <ReportCard title="Filter reports">
+        <ReportCard title="Filter reports" compact>
           <DropdownFilter
             label="Period"
             value={draft.range}
@@ -406,6 +387,14 @@ function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportVie
               }))
             }
           />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ flex: 1 }}><DropdownFilter label="Export" value={exportType}
+              options={[{value:"csv",label:"CSV"},{value:"pdf",label:"PDF"}]}
+              onChange={value => setExportType(value as "csv" | "pdf")} /></View>
+            <PlanAction title={exporting ? "Preparing…" : "Download"} disabled={exporting} onPress={() => void download(exportType)} />
+          </View>
+          {exportError ? <Notice>{exportError}</Notice> : null}
+          <PlanAction title="Saved reports" onPress={() => setSavedOpen(!savedOpen)} />
           <Body>
             Category and review filters apply to transactions. Balance charts
             retain all account movements. Transfers never count as income or
@@ -633,10 +622,10 @@ function NativeReportPanels({
   return (
     <View style={{ gap: 20 }}>
       {w.view.currency === "ALL" ? <SectionTitle>{c}</SectionTitle> : null}
-      <ReportCoverageDetails
+      {view.section !== "overview" ? <ReportCoverageDetails
         report={r}
         onReview={() => open({ reviewFilter: "pending" })}
-      />
+      /> : null}
       {view.transfers !== "exclude" ? (
         <ReportCard title="Transfer activity">
           <Body>
