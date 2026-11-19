@@ -18,6 +18,7 @@ dist/
 *.tsbuildinfo
 .env
 .env.*
+!.env.example
 credentials.json
 *.p12
 *.p8
