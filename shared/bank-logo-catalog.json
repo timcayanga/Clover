@@ -271,7 +271,10 @@
     "file": "malaysia/public bank berhad.jpeg",
     "region": "malaysia",
     "label": "Public Bank Berhad",
-    "aliases": ["Public Bank Malaysia"],
+    "aliases": [
+      "Public Bank",
+      "Public Bank Malaysia"
+    ],
     "src": "/assets/banks/optimized/malaysia/public-bank-berhad-6f72f1008f.webp"
   },
   {

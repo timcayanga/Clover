@@ -152,6 +152,11 @@ for (const [input, expected, country] of [["OFBank Personal", "Overseas Filipino
 assert(finverseBankPresentation({name:"Citibank",countries:["SGP"]}).logoUrl.includes("singapore"));
 assert(finverseBankPresentation({name:"HSBC",countries:["HKG"]}).logoUrl.includes("hong kong"));
 assert.match(finverseBankPresentation({ name: "Public Bank Personal", countries: ["MYS"] }).logoUrl, /malaysia\/public-bank-berhad\.webp/);
+// Connected-account cards and resume notifications do not always carry country codes.
+for(const name of ['Public Bank','Public Bank Personal','Public Bank (PBe)','Public Bank Berhad']) {
+  assert.match(finverseBankPresentation({name,countries:[]}).logoUrl,/malaysia\/public-bank-berhad\.webp/);
+  assert.match(finverseBankPresentation({name,countries:['MYS']}).logoUrl,/malaysia\/public-bank-berhad\.webp/);
+}
 console.log("Connect flags, full country names, short bank names and regional logos passed.");
 
 import { summarizeFinverseCatalog } from "../lib/finverse";
