@@ -1,0 +1,12 @@
+# Local dependencies, build products and private environment overrides.
+node_modules/
+.next/
+.expo/
+dist/
+.vercel/
+.worktrees/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+mobile/release-source.json
