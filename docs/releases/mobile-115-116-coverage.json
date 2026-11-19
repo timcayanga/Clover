@@ -116,7 +116,9 @@
     "requirement": "Summary below calendar, full width; due dates without Active label",
     "sourcePaths": [
       "mobile/app/recurring.tsx",
-      "mobile/src/recurring-due-label.ts"
+      "mobile/src/recurring-due-label.ts",
+      "web/components/recurring-dashboard.tsx",
+      "web/app/globals.css"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "reconciled-in-branch",
@@ -153,7 +155,9 @@
     "id": "split-list",
     "requirement": "Pill search, consistent rows, date/avatar stacks including own photo, no Open label",
     "sourcePaths": [
-      "mobile/app/split-bills.tsx"
+      "mobile/app/split-bills.tsx",
+      "web/components/split-bill-home.tsx",
+      "web/app/globals.css"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "reconciled-in-branch",
@@ -171,7 +175,8 @@
     "id": "circle-currency",
     "requirement": "Remove down chevron beside Circle currency",
     "sourcePaths": [
-      "mobile/app/circles.tsx"
+      "mobile/app/circles.tsx",
+      "web/components/circles-page-client.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "reconciled-in-branch",

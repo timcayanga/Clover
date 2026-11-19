@@ -286,12 +286,18 @@ export function SplitBillHome({
     : peopleWithBalances.slice(0, 6);
   const hasHiddenPeople = peopleWithBalances.length > 6;
   const currentUserAvatarUrl = user?.imageUrl ?? cachedProfileImage;
-  const personPhoto = (name: string) => isSamePersonName(name, currentUserName)
+  // These aliases affect avatars only, never recorded participants or balances.
+  const isSelfAvatar = (name: string) => /^(?:you|me)$/i.test(name.trim()) || isSamePersonName(name, currentUserName);
+  const avatarName = (name: string) => isSelfAvatar(name) ? user?.fullName || user?.firstName || currentUserName : name;
+  const personPhoto = (name: string) => isSelfAvatar(name)
     ? currentUserAvatarUrl
     : people.find((person) => person.name.trim().toLowerCase() === name.trim().toLowerCase())?.avatarUrl ?? null;
-  const sharedWith = (bill: SplitBillSerializedBill) => {
+  const sharedWith = (bill: SplitBillSerializedBill, mobile = false) => {
     const group = groups.find((entry) => entry.id === bill.groupId);
     const names = bill.participants.map((person) => person.name);
+    if (mobile) return <span className="split-bill-avatar-stack" role="img" aria-label={`Shared with ${names.map(avatarName).join(", ")}`}>
+      {names.slice(0, 5).map((name, index) => <SplitBillEntityAvatar key={`${name}-${index}`} name={avatarName(name)} avatarUrl={personPhoto(name)} />)}
+    </span>;
     return <span className="split-bill-shared-with">
       {bill.group ? <SplitBillEntityAvatar name={bill.group.name} avatarUrl={group?.avatarUrl || "/assets/split-bills/group-default.jpg"} /> :
         <span className="split-bill-avatar-stack">{names.slice(0, 3).map((name, index) => <SplitBillEntityAvatar key={`${name}-${index}`} name={name} avatarUrl={personPhoto(name)} />)}</span>}
@@ -408,9 +414,9 @@ export function SplitBillHome({
                 {recentBills.map(bill => {
                   const balance = bill.settlement.transfers.reduce((sum, t) => sum + (isSamePersonName(t.toParticipantName, currentUserName) ? t.amount : 0) - (isSamePersonName(t.fromParticipantName, currentUserName) ? t.amount : 0), 0);
                   return <MobileSwipeDelete key={bill.id} deleteLabel={`Delete ${bill.title}`} confirmationMessage={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`} onDelete={() => onDeleteBill(bill.id)}>
-                  <button type="button" className="split-bill-swipe-row" onClick={() => onOpenBill(bill.id)}>
+                  <button type="button" className="split-bill-swipe-row" aria-label={`${bill.title}. Your balance: ${formatSplitBillAmount(balance, bill.currency)}`} onClick={() => onOpenBill(bill.id)}>
                     <CategoryBrandMark categoryName={bill.transaction?.category?.name ?? suggestBillCategory(bill.title,bill.items.map(item=>item.description))?.name ?? "Uncategorized"} size={32} />
-                    <span><strong>{bill.title}</strong><small>{formatDate(bill.billDate)} · {bill.resolved ? "Resolved" : formatSplitBillSettlementStatus(bill.settlementStatus)}</small>{sharedWith(bill)}<small>Your balance: {formatSplitBillAmount(balance, bill.currency)}</small></span>
+                    <span className="split-bill-swipe-row__copy"><strong>{bill.title}</strong><span className="split-bill-mobile-context"><small>{formatDate(bill.billDate)}</small>{sharedWith(bill, true)}</span>{bill.resolved || bill.settlementStatus !== "open" ? <small>{bill.resolved ? "Resolved" : formatSplitBillSettlementStatus(bill.settlementStatus)}</small> : null}</span>
                     <strong>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "—"}</strong><span aria-hidden="true">›</span>
                   </button>
                 </MobileSwipeDelete>; })}
@@ -457,7 +463,7 @@ export function SplitBillHome({
                             <CategoryBrandMark categoryName={bill.transaction?.category?.name ?? suggestBillCategory(bill.title,bill.items.map(item=>item.description))?.name ?? "Uncategorized"} size={32} />
                             <span>{bill.title}</span>
                           </button>
-                          <div className="split-bill-mobile-context"><small>{formatDate(bill.billDate)}</small>{sharedWith(bill)}</div>
+                          <div className="split-bill-mobile-context"><small>{formatDate(bill.billDate)}</small>{sharedWith(bill, true)}</div>
                         </td>
                         <td className="desktop-column">
                           {formatDate(bill.billDate)}

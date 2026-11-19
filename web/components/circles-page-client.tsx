@@ -277,6 +277,7 @@ export function CirclesPageClient({
       value={displayCurrency}
       options={getCurrencyCatalogCodes()}
       ariaLabel="Circle display currency"
+      showChevron={false}
       onChange={(currency) =>
         setDisplayCurrencies((current) => ({
           ...current,
