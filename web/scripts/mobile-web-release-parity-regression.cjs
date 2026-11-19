@@ -104,6 +104,8 @@ function declarations(selector, width) {
 const summary = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-summary';
 const calendar = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-calendar';
 for (const width of [320,393,820,1100]) {
+  assert.equal(declarations('.transactions-bulk-grid.form-grid',width)['grid-template-columns'], 'minmax(0, 1fr)');
+  assert.equal(declarations('.transactions-bulk-grid.form-grid > label',width)['grid-template-columns'], '76px minmax(0, 1fr)');
   const entryRoot = 'body.transactions-manual-open .modal-backdrop.modal-backdrop--centered-mobile > .transactions-entry--figma[data-entry-method="ask"]';
   assert.equal(declarations(entryRoot,width).height, 'calc(var(--ask-visible-height, 100dvh) - 88px - clamp(0px, calc(84px - var(--ask-keyboard-inset, 0px)), 84px))');
   assert.equal(declarations('body.transactions-manual-open .modal-backdrop.modal-backdrop--centered-mobile:has(> .transactions-entry--figma[data-entry-method="ask"])',width).inset, '64px 0 var(--ask-keyboard-inset, 0px)');

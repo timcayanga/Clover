@@ -67565,3 +67565,10 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
   .split-bill-mobile-context { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 8px; }
   .split-bill-mobile-context .split-bill-person-avatar { width: 20px; height: 20px; font-size: 9px; }
 }
+
+@media (max-width: 1100px) {
+  .transactions-bulk-grid.form-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .transactions-bulk-grid.form-grid > label { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--stroke); }
+  .transactions-bulk-grid.form-grid > label > select { min-width: 0; width: 100%; }
+  .transactions-bulk-tags { min-width: 0; padding-top: 10px; }
+}

@@ -18,6 +18,6 @@
     "qa:release:live": "npm --prefix web run qa:release:live",
     "qa:offline": "npm --prefix web run qa:offline",
     "qa:ci": "node web/scripts/ci-postgres-regression.mjs && node web/scripts/ci-workflow-regression.mjs",
-    "qa:release-coverage": "npm --prefix mobile run qa:release-coverage && node tools/release/verify-coverage-check.mjs && node web/scripts/mobile-greeting-regression.mjs && python3 tools/release/inspect-package-check.py && node web/scripts/mobile-web-release-parity-regression.cjs && node web/scripts/contextual-ask-viewport-regression.cjs && node web/scripts/recent-import-history-regression.cjs"
+    "qa:release-coverage": "npm --prefix mobile run qa:release-coverage && node tools/release/verify-coverage-check.mjs && node web/scripts/mobile-greeting-regression.mjs && python3 tools/release/inspect-package-check.py && node web/scripts/mobile-web-release-parity-regression.cjs && node web/scripts/contextual-ask-viewport-regression.cjs && node web/scripts/recent-import-history-regression.cjs && node web/scripts/transaction-bulk-edit-parity-regression.cjs"
   }
 }

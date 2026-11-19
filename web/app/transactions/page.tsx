@@ -531,6 +531,8 @@ type ManualTransactionForm = {
 };
 
 type BulkEditForm = {
+  tags: string[];
+  tagAction: "" | "add" | "remove";
   accountId: string;
   categoryId: string;
   type: "" | "debit" | "credit" | "transfer";
@@ -1112,6 +1114,8 @@ const getDateFilterLabel = (mode: DateFilterMode, anchor: string, customStart: s
 };
 
 const createEmptyBulkEditForm = (): BulkEditForm => ({
+  tags: [],
+  tagAction: "",
   accountId: "",
   categoryId: "",
   type: "",
@@ -6770,6 +6774,10 @@ function TransactionsPageContent() {
       return;
     }
 
+    if (bulkEditForm.tagAction && !bulkEditForm.tags.length) {
+      setMessage("Choose at least one tag, or leave tags unchanged.");
+      return;
+    }
     const count = selectedTransactionIds.length;
     const selected = selectedTransactionIds
       .map((transactionId) => transactions.find((entry) => entry.id === transactionId)
@@ -6791,10 +6799,13 @@ function TransactionsPageContent() {
         accountId?: string;
         categoryId?: string;
         type?: "income" | "expense" | "transfer";
+        tags?: string[];
+        tagAction?: "add" | "remove";
       };
     }> = selected.map((transaction) => ({
       transaction,
       payload: {
+        ...(bulkEditForm.tagAction ? { tags: bulkEditForm.tags, tagAction: bulkEditForm.tagAction } : {}),
         accountId: bulkEditForm.accountId || undefined,
         categoryId: bulkEditForm.categoryId || undefined,
         type:
@@ -8746,7 +8757,7 @@ function TransactionsPageContent() {
             aria-labelledby="bulk-edit-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <MobileSheetHandle onClose={() => setManualOpen(false)} disabled={isSaving || tableLocked} />
+            <MobileSheetHandle onClose={() => setBulkEditOpen(false)} disabled={isSaving || tableLocked} />
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Transactions</p>
@@ -8786,11 +8797,22 @@ function TransactionsPageContent() {
                   Type
                   <select aria-label="Type" value={bulkEditForm.type} onChange={(event) => setBulkEditForm((current) => ({ ...current, type: event.target.value as BulkEditForm["type"] }))}>
                     <option value="">Leave unchanged</option>
-                    <option value="debit">Debit</option>
-                    <option value="credit">Credit</option>
+                    <option value="debit">Expense</option>
+                    <option value="credit">Income</option>
                     <option value="transfer">Transfer</option>
                   </select>
                 </label>
+                <label>
+                  Tags
+                  <select aria-label="Tag action" value={bulkEditForm.tagAction} onChange={(event) => setBulkEditForm((current) => ({ ...current, tagAction: event.target.value as BulkEditForm["tagAction"] }))}>
+                    <option value="">Leave unchanged</option>
+                    <option value="add">Add tags</option>
+                    <option value="remove">Remove tags</option>
+                  </select>
+                </label>
+                {bulkEditForm.tagAction ? <div className="transactions-bulk-tags">
+                  <TransactionTagsEditor tags={bulkEditForm.tags} onChange={(tags) => setBulkEditForm((current) => ({ ...current, tags }))} placeholder="Find or create a tag" />
+                </div> : null}
               </div>
 
               <div className="form-actions">
