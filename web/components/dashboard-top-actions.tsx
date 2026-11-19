@@ -158,7 +158,7 @@ export function DashboardManualTransactionModal({
   useEffect(() => { if (!form.merchantRaw && !form.amount) setManualCategoryTouched(false); }, [form.merchantRaw, form.amount]);
   const rootRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (entryTab === "ask" && rootRef.current) return bindAskCloverViewport(rootRef.current);
+    if (entryTab === "ask" && rootRef.current) return bindAskCloverViewport(rootRef.current.parentElement ?? rootRef.current);
   }, [entryTab]);
   const categoryButtonRef = useRef<HTMLButtonElement | null>(null);
   const manualModalStyle = useMemo<CSSProperties>(

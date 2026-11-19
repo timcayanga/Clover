@@ -287,7 +287,10 @@
       "mobile/app/(tabs)/adviser.tsx",
       "mobile/src/ui.tsx",
       "web/components/dashboard-top-actions.tsx",
-      "web/app/transactions/page.tsx"
+      "web/app/transactions/page.tsx",
+      "web/app/layout.tsx",
+      "web/app/mobile-refinement.css",
+      "web/components/ask-clover-entry.css"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "reconciled-in-branch",

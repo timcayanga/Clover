@@ -67445,11 +67445,14 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 .recent-import-history li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .recent-import-history small { color: var(--muted); font-size: 11px; }
 @media (max-width: 1100px) {
-  body.mobile-creation-page .modal-backdrop > .transactions-entry--figma[data-entry-method="ask"],
-  .modal-backdrop--centered-mobile > .transactions-entry--figma[data-entry-method="ask"] {
+  body.transactions-manual-open .modal-backdrop.modal-backdrop--centered-mobile:has(> .transactions-entry--figma[data-entry-method="ask"]) {
+    inset: 64px 0 var(--ask-keyboard-inset, 0px) !important;
+    padding: 24px 0 clamp(0px, calc(84px - var(--ask-keyboard-inset, 0px)), 84px) !important;
+  }
+  body.transactions-manual-open .modal-backdrop.modal-backdrop--centered-mobile > .transactions-entry--figma[data-entry-method="ask"] {
     display: flex;
     flex-direction: column;
-    height: calc(var(--ask-visible-height, 100dvh) - 80px - clamp(0px, calc(92px - var(--ask-keyboard-inset, 0px)), 92px)) !important;
+    height: calc(var(--ask-visible-height, 100dvh) - 88px - clamp(0px, calc(84px - var(--ask-keyboard-inset, 0px)), 84px)) !important;
     min-height: 0 !important;
     max-height: calc(100dvh - 24px) !important;
     padding: 16px 16px 12px !important;

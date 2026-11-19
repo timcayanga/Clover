@@ -81,7 +81,9 @@ assert.match(rowHtml, /Nov 19, 2026/);
 row.props.onClick(); assert.equal(opened, 'bill');
 assert.equal(JSON.stringify(bill), before, 'Presentation never rewrites participants, money or source records');
 
-const css = postcss.parse(fs.readFileSync(path.join(root, 'app/globals.css'), 'utf8'));
+const styleImports = [...fs.readFileSync(path.join(root, 'app/layout.tsx'),'utf8').matchAll(/import ["'](\.\/[^"']+\.css)["'];/g)].map(match => path.join(root,'app',match[1]));
+assert(styleImports.some(file => file.endsWith('mobile-refinement.css')));
+const css = postcss.parse(styleImports.map(file => fs.readFileSync(file,'utf8')).join('\n'));
 css.walkRules(rule => {
   if (!rule.selector.includes('.clover-tabs.clover-tabs:is(.recurring-tabs--mobile, .investments-tabs--mobile)') && !rule.selector.includes('.clover-tabs.clover-tabs.recurring-tabs--mobile .recurring-tab-label')) return;
   rule.walkDecls(decl => assert(!['row wrap','auto','normal'].includes(decl.value) || !['flex-flow','height','white-space'].includes(decl.prop), 'Do not restore higher-specificity wrapping/auto-height mobile tab overrides'));
@@ -102,6 +104,9 @@ function declarations(selector, width) {
 const summary = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-summary';
 const calendar = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-calendar';
 for (const width of [320,393,820,1100]) {
+  const entryRoot = 'body.transactions-manual-open .modal-backdrop.modal-backdrop--centered-mobile > .transactions-entry--figma[data-entry-method="ask"]';
+  assert.equal(declarations(entryRoot,width).height, 'calc(var(--ask-visible-height, 100dvh) - 88px - clamp(0px, calc(84px - var(--ask-keyboard-inset, 0px)), 84px))');
+  assert.equal(declarations('body.transactions-manual-open .modal-backdrop.modal-backdrop--centered-mobile:has(> .transactions-entry--figma[data-entry-method="ask"])',width).inset, '64px 0 var(--ask-keyboard-inset, 0px)');
   assert.equal(declarations('.transactions-entry--figma[data-entry-method="ask"] .adviser-chat__composer',width)['margin-top'], 'auto');
   for (const selector of ['.transactions-entry--figma[data-entry-method="ask"] > .transaction-creation-panel:not([hidden])', '.transactions-entry--figma[data-entry-method="ask"] .adviser-experience--entry', '.transactions-entry--figma[data-entry-method="ask"] .adviser-experience__main', '.transactions-entry--figma[data-entry-method="ask"] .adviser-chat']) {
     assert.equal(declarations(selector,width).flex,'1');

@@ -4143,7 +4143,7 @@ function TransactionsPageContent() {
   }, [manualOpen, mobileCreation]);
 
   useEffect(() => {
-    if (manualOpen && creationTab === "ask" && manualDialogRef.current) return bindAskCloverViewport(manualDialogRef.current);
+    if (manualOpen && creationTab === "ask" && manualDialogRef.current) return bindAskCloverViewport(manualDialogRef.current.parentElement ?? manualDialogRef.current);
   }, [manualOpen, creationTab]);
 
   useEffect(() => {
