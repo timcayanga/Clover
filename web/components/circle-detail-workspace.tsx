@@ -1,4 +1,5 @@
 "use client";
+import { SplitBillEntry } from "./split-bill-entry";
 import { circleExpensePayerTotals } from "../../shared/circle-expense-payers";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
@@ -91,6 +92,8 @@ export function CircleDetailWorkspace({
     [customExpense, setCustomExpense] = useState<string | null>(null),
     [photo, setPhoto] = useState<string | null | undefined>(),
     [photoBusy, setPhotoBusy] = useState(false);
+  const [addingBill,setAddingBill]=useState(false),[billSearch,setBillSearch]=useState("");
+  useEffect(()=>{const open=()=>{if(circle.role!=="participant")setAddingBill(true);};window.addEventListener("clover:open-circle-bill-add",open);return()=>window.removeEventListener("clover:open-circle-bill-add",open);},[circle.role]);
   const targetCurrency = displayCurrency ?? circle.currency;
   const summaryExpenses = circle.expenseCurrencyTotals ?? {
     [circle.currency]: circle.expenseTotalThisMonth,
@@ -102,7 +105,7 @@ export function CircleDetailWorkspace({
     [
       ...Object.keys(summaryExpenses),
       ...Object.keys(summaryContributions),
-      ...circle.expenses.map((e) => e.currency),
+      ...circle.expenses.filter(e=>e.title.toLowerCase().includes(billSearch.toLowerCase())).map((e) => e.currency),
     ],
     targetCurrency,
     tab === "Overview",
@@ -367,6 +370,8 @@ export function CircleDetailWorkspace({
           icon: <CircleTabIcon name={t} />,
         }))}
       />
+      {addingBill && circle.splitBillGroupId ? <SplitBillEntry currentUserName={circle.members.find(m=>m.isMe)?.displayName||"You"} context={{currency:circle.currency,group:{id:circle.splitBillGroupId,name:circle.name,members:circle.members.filter(m=>m.status==="active").map((m,sortOrder)=>({id:m.id,name:m.displayName,sortOrder}))}}} onClose={()=>setAddingBill(false)} onSaved={()=>{setAddingBill(false);void onChanged();}}/> : null}
+      {tab==="Expenses" ? <div className="split-entry-toolbar"><input type="search" aria-label="Search Circle expenses" placeholder="Search expenses" value={billSearch} onChange={e=>setBillSearch(e.target.value)}/>{canEdit?<button className="button button-primary" onClick={()=>setAddingBill(true)}>Add Bill</button>:null}</div>:null}
       {error ? <p role="alert">{error}</p> : null}
       {form && form.action !== "share_transaction" ? (
         <section className="panel glass">
@@ -799,13 +804,11 @@ export function CircleDetailWorkspace({
                     className="button button-primary"
                     onClick={() =>
                       window.dispatchEvent(
-                        new CustomEvent("clover:open-quick-transaction", {
-                          detail: { type: "expense" },
-                        }),
+                        new Event("clover:open-circle-bill-add"),
                       )
                     }
                   >
-                    + Add Transaction
+                    + Add Bill
                   </button>
                   <label>
                     Paid by
@@ -891,7 +894,7 @@ export function CircleDetailWorkspace({
                   <span>Amount</span>
                   <span />
                 </div>
-                {circle.expenses.map((e) => (
+                {circle.expenses.filter(e=>e.title.toLowerCase().includes(billSearch.toLowerCase())).map((e) => (
                   <Expense
                     key={e.id}
                     expense={e}

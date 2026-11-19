@@ -597,19 +597,18 @@ export function SplitBillQrLibrary() {
     }
   };
 
+  const [search,setSearch]=useState("");
   const paymentFieldLabels = getPaymentFieldLabels(draft.currency);
 
   return (
     <section className="split-bill-qr-library panel glass" aria-labelledby="split-bill-qr-title">
+      <div className="split-entry-toolbar"><input type="search" aria-label="Search payment options" placeholder="Search payments" value={search} onChange={e=>setSearch(e.target.value)}/><button className="button button-primary" onClick={openCreate}>Add Payment</button></div>
       <div className="split-bill-qr-library__head">
         <div>
           <h2 id="split-bill-qr-title">Payment Options</h2>
           <p>Save bank details or a QR code once, then share the right option with a payment request.</p>
         </div>
-        <button className="button button-primary button-small transactions-action-button" type="button" onClick={openCreate}>
-          <span aria-hidden="true">+</span>
-          <span>Add option</span>
-        </button>
+
       </div>
 
       {error && !isEditorOpen ? <p className="split-bill-qr-library__error" role="alert">{error}</p> : null}
@@ -619,7 +618,7 @@ export function SplitBillQrLibrary() {
         </div>
       ) : profiles.length > 0 ? (
         <div className="split-bill-qr-library__grid">
-          {profiles.map((profile) => {
+          {profiles.filter(profile=>`${profile.label} ${profile.provider}`.toLowerCase().includes(search.toLowerCase())).map((profile) => {
             const theme = getPaymentQrTheme(profile.provider);
             const accountBrand = getAccountBrand({ institution: profile.provider, name: profile.label, type: "bank" });
             const visibleAccountName = getVisibleAccountName(profile);

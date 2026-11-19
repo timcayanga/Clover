@@ -1,3 +1,4 @@
+import { requestContextBillEntry } from "./bill-entry-events";
 import { usePageAskClover } from "./page-ask-context";
 import { askPageContext } from "../../shared/ask-clover-page";
 import { Modal } from "./adaptive-modal";
@@ -1107,6 +1108,7 @@ export function DetailNavigation({
           add={item.title === "Add"}
           selected={path === item.route.replace("/(tabs)", "") || (item.title === "Home" && path === "/")}
           onPress={() => {
+            if(access.active&&item.title==="Add"&&(path==="/split-bills"||path==="/circles")){requestContextBillEntry(path==="/circles"?"circles":"split");return;}
             if (access.active && item.title === "Ask Clover") { askClover(askPageContext(path, params)); return; }
             onNavigate?.();
             if (access.active) router.navigate(item.route);

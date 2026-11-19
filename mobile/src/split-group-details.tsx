@@ -1,7 +1,11 @@
+import { TogetherToolbar } from "./together-toolbar";
+import { BillEditor } from "./direct-bill-editor";
+import { EntryOverlay } from "./entry-overlay";
+import { onContextBillEntry } from "./bill-entry-events";
 import { SwipeDeleteRow } from "./swipe-delete-row";
 import { Text } from "./app-text";
 import { PersonAvatar } from "./person-avatar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Pressable } from "react-native";
 import { useSession } from "./session";
 import { Body, Card, Field, Notice, Screen, money, useTheme } from "./ui";
@@ -22,12 +26,14 @@ export type SplitGroup = {
 const sample = { bills: [] as EditableBill[], hasMore: false };
 export function SplitGroupDetails({
   group,
+  entryScope="split",
   person,
   onClose,
   onBill,
   onChanged,
 }: {
   group?: SplitGroup;
+  entryScope?: "split"|"circles";
   person?: string;
   onClose: () => void;
   onBill: (id: string) => void;
@@ -35,6 +41,8 @@ export function SplitGroupDetails({
 }) {
   const session = useSession();
   const { colors } = useTheme();
+  const [adding,setAdding]=useState(false),[search,setSearch]=useState("");
+  useEffect(()=>onContextBillEntry(()=>setAdding(true),entryScope),[entryScope]);
   const [page, setPage] = useState(1);
   const [tab, setTab] = useState("Bills");
   const [editing, setEditing] = useState(false);
@@ -87,7 +95,8 @@ export function SplitGroupDetails({
   }
   return (
     <Screen>
-      <PlanHeader title={person ?? group?.name ?? "Group"} back={onClose} />
+      {adding?<EntryOverlay onClose={()=>setAdding(false)}><BillEditor context={{group,person}} onClose={()=>setAdding(false)} onSaved={()=>{setAdding(false);reload();onChanged();}}/></EntryOverlay>:null}
+      <PlanHeader title={person ?? group?.name ?? "Group"} back={onClose} add={()=>setAdding(true)} />
       {group ? (
         <PlanTabs
           items={["Bills", "People & balances"]}
@@ -95,6 +104,7 @@ export function SplitGroupDetails({
           onChange={setTab}
         />
       ) : null}
+      <TogetherToolbar search={search} onSearch={setSearch} onAdd={()=>setAdding(true)}/>
       {loadError ? <Notice>{loadError}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}
       {editing ? (
@@ -143,7 +153,7 @@ export function SplitGroupDetails({
             <Body>Bill</Body>
             <Body>Total</Body>
           </View>
-          {data?.bills.map((bill) => (
+          {data?.bills.filter(b=>b.title.toLowerCase().includes(search.toLowerCase())).map((bill) => (
             <SwipeDeleteRow key={bill.id} label={bill.title} disabled={session.demo} message={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`} onOpen={() => onBill(bill.id)} onDelete={async () => {
               await session.request(`split-bills/${bill.id}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
               setData(current => current ? { ...current, bills: current.bills.filter(row => row.id !== bill.id) } : current);

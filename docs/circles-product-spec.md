@@ -191,3 +191,7 @@ Do not send account numbers, transaction descriptions, invitation emails, balanc
 - Legal ownership or beneficiary management.
 - Automatic disclosure of income, balances, holdings, or transactions.
 - Editing another member's source financial records.
+
+## Direct bill entry (November 2026)
+
+Circle Expenses and Split Bills group/person views offer a shared, context-preserving Add Bill flow with photo capture and simple manual entry. Explicitly saved new bills create their linked personal expense atomically; existing confirmed records and balances remain untouched. See `docs/direct-split-entry.md` for the contract, retry behavior and held native-binary boundary.

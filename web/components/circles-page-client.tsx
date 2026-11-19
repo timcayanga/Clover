@@ -339,6 +339,7 @@ export function CirclesPageClient({
         selectedCircleId ? (
           <>
             <span className="circles-desktop-currency">{currencySelector}</span>
+            {circles.find(c=>c.id===selectedCircleId)?.role!=="participant"?<button className="button button-primary button-small" aria-label="Add Bill" onClick={()=>window.dispatchEvent(new Event("clover:open-circle-bill-add"))}>+</button>:null}
             <CollectionBack
               label="Circles"
               onClick={() => setSelectedCircleId(null)}

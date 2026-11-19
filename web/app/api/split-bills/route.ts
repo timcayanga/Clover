@@ -1,3 +1,5 @@
+import { invalidateWorkspaceSummaryCache, invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
+import { createDirectBillExpense } from "@/lib/split-bill-direct-expense";
 import { splitBillReadSurface, type SplitBillReadErrorCode } from "../../../../shared/split-bill-read";
 import { homePendingSplitBills } from "../../../../shared/home-split-bills";
 import { splitBillBalanceSummary } from "@/lib/split-bill-balance-summary";
@@ -42,6 +44,7 @@ const paymentSchema = z.object({
 });
 
 const billSchema = z.object({
+  expense: z.object({ workspaceId:z.string().min(1).max(128), attemptId:z.string().uuid(), accountId:z.string().nullable().optional(), categoryId:z.string().nullable().optional() }).optional(),
   title: z.string().trim().min(1),
   note: z.string().trim().nullable().optional(),
   billDate: z.string().min(1),
@@ -382,6 +385,14 @@ const persistSplitBill = async (
   const payload = await buildBillPayload(userId, input, billId);
 
   return prisma.$transaction(async (tx) => {
+    if(mode === "create" && input.expense){
+      if(input.transactionId)throw Error("An existing transaction cannot also create a new expense.");
+      const key=`direct-bill:${userId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+      const prior=await tx.splitBill.findFirst({where:{userId,rawPayload:{path:["directEntryAttemptId"],equals:input.expense.attemptId}},include:getBillInclude});
+      if(prior){if((prior.rawPayload as Record<string,unknown>|null)?.directEntryWorkspaceId!==input.expense.workspaceId)throw Error("This save attempt belongs to another Profile.");return prior;}
+      payload.billData.rawPayload={...(payload.billData.rawPayload as object),directEntryAttemptId:input.expense.attemptId,directEntryWorkspaceId:input.expense.workspaceId};
+    }
     const sourceIds = bulkSourceIds ?? (payload.transactionId ? [payload.transactionId] : []);
     if (mode === "create" && sourceIds.length) {
       const lockKey = `split-bulk:${userId}`;
@@ -526,6 +537,7 @@ const persistSplitBill = async (
       });
     }
 
+    if(mode === "create" && input.expense)await createDirectBillExpense(tx,userId,bill,input.expense,payload.items.map(i=>({description:i.description,amount:String(i.amount)})));
     return tx.splitBill.findUniqueOrThrow({
       where: { id: bill.id },
       include: getBillInclude,
@@ -605,6 +617,8 @@ const transactionBillSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
+    assertContentLengthWithin(request, 300_000);
     const user = await getSplitBillCurrentUser();
     const input = await request.json();
     let body: z.infer<typeof billSchema>;
@@ -655,6 +669,7 @@ export async function POST(request: Request) {
       body = billSchema.parse(input);
     }
     const bill = await persistSplitBill(user.id, body, "create", undefined, bulkSourceIds);
+    if(body.expense){try{invalidateWorkspaceSummaryCache(body.expense.workspaceId);invalidateUserSummaryCache(user.id,"circles");}catch{console.warn("[split-bills] committed bill saved; summary cache refresh deferred");}}
     const transferSettlements = await loadSplitBillTransferSettlementsForBill(bill.id);
 
     return NextResponse.json(

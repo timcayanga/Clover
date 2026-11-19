@@ -131,7 +131,7 @@ export function PlanTabs({
   const { colors, dark } = useTheme();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}
-      style={{ flexGrow: 0, flexShrink: 0, height: 44, maxHeight: 44 }}
+      style={{ flexGrow: 0, flexShrink: 0, flexBasis: 44, height: 44, minHeight: 44, maxHeight: 44, alignSelf: "stretch" }}
       contentContainerStyle={{ flexGrow: 1, height: 44, alignItems: "center" }} keyboardShouldPersistTaps="handled"
       accessibilityRole="tablist">
       {items.map((item, index) => {

@@ -220,7 +220,7 @@ export function SplitBillHome({
   };
 
   const visibleGroups = useMemo(() => {
-    return groups.map((group) => {
+    return groups.filter(g=>g.name.toLowerCase().includes(search.toLowerCase())).map((group) => {
       const groupBills = bills.filter((bill) => bill.group?.id === group.id);
       const billsByCurrency = groupBillsByCurrency(groupBills);
       const currencies = Object.keys(billsByCurrency);
@@ -243,7 +243,7 @@ export function SplitBillHome({
         status: buildGroupStatus(groupBills),
       };
     });
-  }, [bills, groups]);
+  }, [bills, groups, search]);
 
   const peopleWithBalances = useMemo(
     () =>
@@ -281,9 +281,8 @@ export function SplitBillHome({
       }),
     [bills, people],
   );
-  const visiblePeople = showAllPeople
-    ? peopleWithBalances
-    : peopleWithBalances.slice(0, 6);
+  const matchingPeople=peopleWithBalances.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
+  const visiblePeople = showAllPeople ? matchingPeople : matchingPeople.slice(0, 6);
   const hasHiddenPeople = peopleWithBalances.length > 6;
   const currentUserAvatarUrl = user?.imageUrl ?? cachedProfileImage;
   // These aliases affect avatars only, never recorded participants or balances.
@@ -519,6 +518,7 @@ export function SplitBillHome({
         </>
       ) : tab === "Groups" ? (
         <>
+          <div className="split-entry-toolbar"><input type="search" aria-label="Search groups" placeholder="Search groups" value={search} onChange={e=>setSearch(e.target.value)}/><button className="button button-primary" onClick={()=>window.dispatchEvent(new Event("clover:open-split-bill-group"))}>Add Group</button></div>
           <div className="split-bill-group-grid">
             {visibleGroups.map((group) => (
               <article className="split-bill-group-card" key={group.id} onClick={() => onOpenGroup(group.id)}>
@@ -549,17 +549,10 @@ export function SplitBillHome({
             ))}
           </div>
           {!visibleGroups.length ? <p>No groups yet.</p> : null}
-          <button
-            className="button button-secondary"
-            onClick={() =>
-              window.dispatchEvent(new Event("clover:open-split-bill-group"))
-            }
-          >
-            Add Group
-          </button>
         </>
       ) : tab === "People" ? (
         <>
+          <div className="split-entry-toolbar"><input type="search" aria-label="Search people" placeholder="Search people" value={search} onChange={e=>setSearch(e.target.value)}/><button className="button button-primary" onClick={()=>window.dispatchEvent(new Event("clover:open-split-bill-people"))}>Add Person</button></div>
           <div className="split-bill-table-scroll">
             <table aria-label="People">
               <thead>
@@ -602,14 +595,6 @@ export function SplitBillHome({
               {showAllPeople ? "Show fewer" : "View all people"}
             </button>
           ) : null}
-          <button
-            className="button button-secondary"
-            onClick={() =>
-              window.dispatchEvent(new Event("clover:open-split-bill-people"))
-            }
-          >
-            Add People
-          </button>
         </>
       ) : (
         <SplitBillQrLibrary />

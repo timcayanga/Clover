@@ -1,0 +1,11 @@
+# Direct Split Bills and Circle expenses — November 20, 2026
+
+Split Bills, group/person details and Circle expenses keep their subtabs at 44px through loading and loaded states, including web dialogs rendered outside the main content container. Mobile subtabs retain only the selected label. Group, People and Payments directories place a search field beside their gradient Add action. Group/person bill sections and Circle Expenses place Search and Add Bill below the tabs.
+
+The contextual top/bottom Add actions open receipt capture first, with Add Manually available. The dedicated manual form keeps Amount, Name and Group/People prominent; Account, Category, Notes, Date and Line Items are optional details. Ask Clover and existing-file upload remain available within the split entry, without bank Sync. Captured receipt evidence is reviewed in the same form before saving. A missing printed receipt date requires review rather than silently using today's date.
+
+For new dedicated entries, the explicit `expense` contract creates a linked expense and bill atomically in the active, owned Profile. Account defaults to matching-currency Cash; Category defaults to Other. No confirmed balance is changed, and no existing transaction is edited. New bill and item/participant IDs are unique; an owner-scoped lock and attempt ID return the original result after repeat requests. Invalid Profile, account, category or total rolls back the entire create. The full amount is the payer's recorded expense; default entry is the user paid, split equally. Detailed bill editing and settlement remain separate.
+
+Legacy clients without this new contract retain existing save behavior. Existing Transactions attached to a bill are not duplicated. Saving stays on Split Bills, the originating group/person or Circle; it does not navigate to Transactions. Both web summary caches and native page caches are refreshed after mutations. Native Add events are scoped so a background Circle cannot handle a Split Bills action.
+
+Verification includes actual form handler tests and isolated PostgreSQL checks for repeat-save idempotency, foreign Profile/group rejection, rollback, optional Cash, receipt traceability and exact preservation of pre-existing confirmed records. Native source changes need a future store package while OTA is disabled; this task creates no new binaries.

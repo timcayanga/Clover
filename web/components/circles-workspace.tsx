@@ -146,6 +146,9 @@ export function CirclesWorkspace({
     [data.circles, selectedCircleId],
   );
 
+  const [billCirclePicker,setBillCirclePicker]=useState(false),[pendingBillCircle,setPendingBillCircle]=useState<string|null>(null);
+  useEffect(()=>{const open=()=>{if(!selectedCircleId)setBillCirclePicker(true);};window.addEventListener("clover:open-circle-bill-add",open);return()=>window.removeEventListener("clover:open-circle-bill-add",open);},[selectedCircleId]);
+  useEffect(()=>{if(pendingBillCircle===selectedCircle?.id&&selectedCircle?.detailsLoaded!==false){setPendingBillCircle(null);window.dispatchEvent(new Event("clover:open-circle-bill-add"));}},[pendingBillCircle,selectedCircle]);
   const needsDetails = selectedCircle?.detailsLoaded === false;
   useEffect(() => {
     setDetailError(null);
@@ -650,6 +653,7 @@ export function CirclesWorkspace({
         </div>
       )}
 
+      {billCirclePicker?<div className="split-bill-modal direct-bill-backdrop" onClick={()=>setBillCirclePicker(false)}><section className="split-bill-modal__card direct-bill-entry" role="dialog" aria-modal="true" aria-label="Choose a Circle" onClick={e=>e.stopPropagation()}><h3>Choose a Circle</h3>{data.circles.filter(c=>c.role!=="participant").map(c=><button key={c.id} className="button button-secondary" onClick={()=>{setBillCirclePicker(false);setPendingBillCircle(c.id);onSelectedCircleChange(c.id);}}>{c.name}</button>)}<button className="button button-primary" onClick={()=>{setBillCirclePicker(false);setShowCreate(true);}}>Add Circle</button><button className="button button-secondary" onClick={()=>setBillCirclePicker(false)}>Cancel</button></section></div>:null}
       <CircleCreateDialog
         open={showCreate}
         creationPage={mobileCreation}

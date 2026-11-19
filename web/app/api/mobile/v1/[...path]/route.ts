@@ -676,6 +676,7 @@ async function handle(
       const body = bulk && input && typeof input === "object" && "fromTransactions" in input
         ? { fromTransactions: { ...(input.fromTransactions as object), workspaceId } }
         : operation === "split-bills" ? mobileSplitBillPayload(mobileSplitBillInput.parse(input)) : mobileCircleInput.parse(input);
+      if(operation === "split-bills" && "expense" in body && body.expense)body.expense.workspaceId=workspaceId;
       if (operation === "split-bills" && "transactionId" in body && body.transactionId && !await prisma.transaction.findFirst({ where: { id: body.transactionId, workspaceId, deletedAt: null }, select: { id: true } })) {
         return reply({ error: "Choose a transaction in this Profile." }, 400);
       }
@@ -798,6 +799,14 @@ async function handle(
         headers,
         body: safe,
       });
+    }
+    if(operation==="split-person-create"||operation==="split-payment-create"){
+      const text=await request.text();if(new TextEncoder().encode(text).length>10000)return reply({error:"Details are too large."},413);
+      const raw=JSON.parse(text);
+      const body=operation==="split-person-create"?z.object({name:z.string().trim().min(1).max(100)}).strict().parse(raw):(await import("@/lib/split-bill-payment-profile-schema")).splitBillPaymentProfileSchema.parse(raw);
+      const safe=new Request(request.url,{method:"POST",headers:request.headers,body:JSON.stringify(body)});
+      const response=await withMobileRequestContext(userId,safe,async()=>operation==="split-person-create"?(await import("@/app/api/split-bill-people/route")).POST(safe):(await import("@/app/api/split-bill-payment-profiles/route")).POST(safe));
+      const data=await response.json();return reply(response.ok?{ok:true}:{error:data.error??"Unable to save."},response.status);
     }
     if (operation === "split-group-create" || (operation === "split-group-edit" && request.method === "PATCH")) {
       const text = await request.text();

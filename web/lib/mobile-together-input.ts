@@ -20,6 +20,8 @@ export const mobileCircleInput = z
 
 export const mobileSplitBillInput = z
   .object({
+    expense: z.object({workspaceId:z.string().min(1),attemptId:z.string().uuid(),accountId:z.string().nullable().optional(),categoryId:z.string().nullable().optional()}).optional(),
+    groupId:z.string().min(1).optional(),
     transactionId: z.string().min(1).max(200).optional(),
     title: z.string().trim().min(1).max(100),
     note: z.string().trim().max(1000),
@@ -180,6 +182,8 @@ export function mobileSplitBillPayload(
   }));
   return {
     ...(input.transactionId ? { transactionId: input.transactionId } : {}),
+    ...(input.expense?{expense:input.expense}:{}),
+    ...(input.groupId?{groupId:input.groupId}:{}),
     title: input.title,
     note: input.note,
     billDate: input.billDate,

@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useCloverChrome } from "@/components/clover-shell";
 import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
-import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
+import { SplitBillEntry, type BillEntryContext } from "@/components/split-bill-entry";
 import { SplitBillPersonModal } from "@/components/split-bill-person-modal";
 import type { SplitBillSerializedBill } from "@/lib/split-bill";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
@@ -94,6 +94,7 @@ function SplitBillPeoplePicker({
 export function SplitBillPageActions({ currentUserName, people, groups, onBillSaved, onGroupSaved, onPersonSaved }: SplitBillPageActionsProps) {
   const { setMobileOverlayChrome } = useCloverChrome();
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
+  const [entryContext,setEntryContext]=useState<BillEntryContext>({});
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isPersonModalOpen, setIsPersonModalOpen] = useState(false);
@@ -130,8 +131,9 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
 
   useEffect(() => {
     const handleOpenAdd = (event: Event) => {
-      const detail = event instanceof CustomEvent ? (event.detail as { mode?: "manual" | "import" } | undefined) : undefined;
-      setOpenAddMode(detail?.mode === "import" ? "import" : "manual");
+      const detail = event instanceof CustomEvent ? (event.detail as BillEntryContext | undefined) : undefined;
+      setEntryContext(detail ?? {});
+      setOpenAddMode("manual");
     };
 
     const handleOpenGroup = (event: Event) => {
@@ -225,8 +227,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
         <SplitBillActionButtons onAddBill={() => setOpenAddMode("manual")} />
       ) : null}
 
-      <SplitBillManualModal open={openAddMode === "manual"} currentUserName={currentUserName} people={people} groups={groups} onClose={closeAddModal} onSaved={onBillSaved} />
-      <SplitBillImportModal open={openAddMode === "import"} currentUserName={currentUserName} onClose={closeAddModal} onSaved={onBillSaved} />
+      {openAddMode ? <SplitBillEntry currentUserName={currentUserName} people={people} groups={groups} context={entryContext} onClose={closeAddModal} onSaved={bill=>onBillSaved?.(bill)} /> : null}
       <SplitBillPersonModal open={isPersonModalOpen} onClose={closePersonModal} onSaved={onPersonSaved} />
 
       {isGroupModalOpen ? createPortal(

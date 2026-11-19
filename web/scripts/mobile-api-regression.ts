@@ -112,7 +112,10 @@ async function main() {
   for (const extra of [{ ownerUserId: "other" }, { role: "organizer" }, { members: [{ email: "unrequested@example.com" }] }, { avatarUrl: "unsafe" }]) assert.equal(mobileCircleInput.safeParse({ ...circleInput, ...extra }).success, false);
   const splitInput = { title: "Dinner", note: "", billDate: "2026-09-07", currency: "PHP", total: "100.01", participants: [{ name: "Alex" }, { name: "Mia" }], paidByIndex: 0 };
   assert.equal(mobileSplitBillInput.safeParse(splitInput).success, true);
-  for (const extra of [{ rawPayload: { tampered: true } }, { groupId: "foreign" }, { sourceType: "receipt" }, { paidByIndex: 2 }, { billDate: "2026-02-30" }, { total: "NaN" }, { participants: [{ name: "Alex", id: "foreign" }, { name: "Mia" }] }]) assert.equal(mobileSplitBillInput.safeParse({ ...splitInput, ...extra }).success, false);
+  for (const extra of [{ rawPayload: { tampered: true } }, { sourceType: "receipt" }, { paidByIndex: 2 }, { billDate: "2026-02-30" }, { total: "NaN" }, { participants: [{ name: "Alex", id: "foreign" }, { name: "Mia" }] }]) assert.equal(mobileSplitBillInput.safeParse({ ...splitInput, ...extra }).success, false);
+  assert.equal(mobileSplitBillPayload(mobileSplitBillInput.parse({...splitInput,groupId:"selected-group",expense:{workspaceId:"active",attemptId:"00000000-0000-4000-8000-000000000001"}})).groupId,"selected-group","Group authorization is checked by the shared route, not guessed by the client schema");
+  assert.equal(mobileOperation("POST",["split-bill-people"]),"split-person-create");
+  assert.equal(mobileOperation("POST",["split-bill-payment-profiles"]),"split-payment-create");
   assert.equal(mobileSplitBillPayload(mobileSplitBillInput.parse({ ...splitInput, transactionId: "owned-transaction" })).transactionId, "owned-transaction");
   assert.equal(mobileOperation("GET", ["billing", "usage"]), "billing-usage");
   assert.equal(mobileOperation("POST", ["billing", "usage"]), null);

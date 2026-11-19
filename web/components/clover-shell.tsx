@@ -1848,6 +1848,7 @@ export function CloverShell({
   }, [pathname, router]);
 
   const openQuickAddTransaction = () => {
+    if(pathname?.startsWith("/split-bill")||pathname?.startsWith("/circles")){setIsQuickAddOpen(false);window.dispatchEvent(new CustomEvent(pathname.startsWith("/circles")?"clover:open-circle-bill-add":"clover:open-split-bill-add"));return;}
     if (window.matchMedia("(max-width: 1100px)").matches) {
       setIsQuickAddOpen(false);
       void loadDashboardManualTransactionModal();

@@ -420,7 +420,7 @@ export function SplitBillWorkspace({
         item_count: bill.items.length,
       });
     }
-    setSelected({ kind: "bill", id: bill.id });
+    // Stay in the originating list, group or person after creating a bill.
   };
 
   const handleGroupSaved = (group: SplitBillGroupSummary, people: SplitBillPersonSummary[] = []) => {
@@ -1043,6 +1043,10 @@ export function SplitBillWorkspace({
     }
   };
 
+  const [detailSearch,setDetailSearch]=useState("");
+  useEffect(()=>{if(!selectedGroup&&!selectedPerson)return;const route=(e:Event)=>{const event=e as CustomEvent;if(event.detail?.group||event.detail?.person)return;event.stopImmediatePropagation();window.dispatchEvent(new CustomEvent("clover:open-split-bill-add",{detail:{group:selectedGroup??undefined,person:selectedPerson?.name}}));};window.addEventListener("clover:open-split-bill-add",route,true);return()=>window.removeEventListener("clover:open-split-bill-add",route,true);},[selectedGroup,selectedPerson]);
+  const openContextBill=()=>window.dispatchEvent(new CustomEvent("clover:open-split-bill-add",{detail:{group:selectedGroup??undefined,person:selectedPerson?.name}}));
+  const renderDetailToolbar=()=> <div className="split-entry-toolbar"><input type="search" aria-label="Search bills in this section" placeholder="Search bills" value={detailSearch} onChange={e=>setDetailSearch(e.target.value)}/><button className="button button-primary" onClick={openContextBill}>Add Bill</button></div>;
   const renderDetailTabs = () => {
     if (!selectedGroup && !selectedPerson) {
       return null;
@@ -1568,7 +1572,7 @@ export function SplitBillWorkspace({
                     <strong>{selectedGroup.name}</strong>
                   </div>
                 </div>
-                {renderDetailTabs()}
+                {renderDetailTabs()}{renderDetailToolbar()}
                 {detailTab === "overview" ? (
                   <>
                     <div className="split-bill-detail-modal__section-head split-bill-detail-modal__section-head--members">
@@ -1627,7 +1631,7 @@ export function SplitBillWorkspace({
                     ))}
                   </>
                 ) : null}
-                {detailTab === "bills" ? renderBillRows(selectedGroupBills) : null}
+                {detailTab === "bills" ? renderBillRows(selectedGroupBills.filter(b=>b.title.toLowerCase().includes(detailSearch.toLowerCase()))) : null}
                 {detailTab === "settle" ? renderSettlementBoard(selectedGroupBills) : null}
                 {detailTab === "insights" ? <SplitBillDetailTools bills={selectedGroupBills} label={selectedGroup.name} view="insights" /> : null}
                 {detailTab === "receipts" ? <SplitBillDetailTools bills={selectedGroupBills} label={selectedGroup.name} view="receipts" /> : null}
@@ -1653,7 +1657,7 @@ export function SplitBillWorkspace({
                     <strong>{selectedPerson.name}</strong>
                   </div>
                 </div>
-                {renderDetailTabs()}
+                {renderDetailTabs()}{renderDetailToolbar()}
                 {detailTab === "overview" ? (
                   <div className="split-bill-balance-dashboard">
                     <article>
@@ -1670,7 +1674,7 @@ export function SplitBillWorkspace({
                     </article>
                   </div>
                 ) : null}
-                {detailTab === "bills" ? renderBillRows(selectedPersonBills, selectedPerson.name) : null}
+                {detailTab === "bills" ? renderBillRows(selectedPersonBills.filter(b=>b.title.toLowerCase().includes(detailSearch.toLowerCase())), selectedPerson.name) : null}
                 {detailTab === "settle" ? renderSettlementBoard(selectedPersonBills, selectedPerson.name) : null}
                 {detailTab === "insights" ? <SplitBillDetailTools bills={selectedPersonBills} label={selectedPerson.name} view="insights" /> : null}
                 {detailTab === "receipts" ? <SplitBillDetailTools bills={selectedPersonBills} label={selectedPerson.name} view="receipts" /> : null}

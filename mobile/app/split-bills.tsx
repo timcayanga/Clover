@@ -1,3 +1,7 @@
+import { TogetherToolbar } from "../src/together-toolbar";
+import { TogetherEntry } from "../src/together-entry";
+import { onContextBillEntry } from "../src/bill-entry-events";
+import { BillEditor } from "../src/direct-bill-editor";
 import { usePageAskScope } from "../src/page-ask-context";
 import { useUser } from "@clerk/expo";
 import { type AccountCardPalette, accountCardPalette } from "../../shared/visual-identity";
@@ -139,9 +143,11 @@ export default function SplitBills() {
   const [deletePayment, setDeletePayment] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [creating,setCreating]=useState<"Group"|"Person"|"Payment"|null>(null);
   const [tab, setTab] = useState("Bills");
   const [selected, setSelected] = useState<Bill | null>(null);
   const [adding, setAdding] = useState(false);
+  useEffect(()=>onContextBillEntry(()=>{if(!entity)setAdding(true);}),[entity]);
   const [sourceTransaction, setSourceTransaction] = useState<Transaction | null>(null);
   useEffect(() => {
     let active = true;
@@ -232,7 +238,6 @@ export default function SplitBills() {
         onSaved={(bill) => {
           setAdding(false);
           setSourceTransaction(null);
-          setSelected(bill);
           if (session.demo)
             setData((current) => ({
               ...sample,
@@ -314,6 +319,7 @@ export default function SplitBills() {
   return (
     <Screen layout="dashboard">
       {entryOverlay}
+      {creating?<EntryOverlay onClose={()=>setCreating(null)}><TogetherEntry kind={creating} onClose={()=>setCreating(null)} onSaved={options.reload}/></EntryOverlay>:null}
       <PlanHeader
         title={selected ? "Bill Details" : "Split Bills"}
         back={selected ? () => setSelected(null) : undefined}
@@ -351,6 +357,7 @@ export default function SplitBills() {
             value={tab}
             onChange={setTab}
           />
+          {tab!=="Bills"?<TogetherToolbar search={search} onSearch={setSearch} placeholder={`Search ${tab.toLowerCase()}`} action={`Add ${tab==="Groups"?"Group":tab==="People"?"Person":"Payment"}`} onAdd={()=>setCreating(tab==="Groups"?"Group":tab==="People"?"Person":"Payment")}/>:null}
           {tab === "Bills" ? (
             <>
               <AdaptiveGrid minItemWidth={140} maxColumns={2} gap={8}>
@@ -555,7 +562,7 @@ export default function SplitBills() {
           ) : tab === "Groups" ? (
             <>
               {options.data.groups.length ? (
-                <AdaptiveGrid>{options.data.groups.map((group) => (
+                <AdaptiveGrid>{options.data.groups.filter(g=>g.name.toLowerCase().includes(search.toLowerCase())).map((group) => (
                   <Pressable key={group.id} onPress={() => setEntity({ group })}>
                   <LinearGradient
                     colors={
@@ -618,7 +625,7 @@ export default function SplitBills() {
           ) : tab === "People" ? (
             <>
               {options.data.people.length ? (
-                options.data.people.map((person) => (
+                options.data.people.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).map((person) => (
                   <Card key={person.id}>
                     <View
                       style={{
@@ -646,7 +653,7 @@ export default function SplitBills() {
           ) : (
             <>
               {options.data.profiles.length ? (
-                options.data.profiles.map((profile) => (
+                options.data.profiles.filter(p=>`${p.label} ${p.provider}`.toLowerCase().includes(search.toLowerCase())).map((profile) => (
                   <LinearGradient
                     key={profile.id}
                     colors={accountCardPalette({type:"bank",institution:profile.provider,brandPalette:profile.brandPalette}).colors}
@@ -706,290 +713,6 @@ export default function SplitBills() {
           )}
         </>
       )}
-    </Screen>
-  );
-}
-function BillEditor({
-  sourceTransaction,
-  onClose,
-  onSaved,
-}: {
-  onClose: () => void;
-  onSaved: (bill: Bill) => void;
-  sourceTransaction?: Transaction | null;
-}) {
-  const session = useSession();
-  const [title, setTitle] = useState(sourceTransaction?.merchantClean || sourceTransaction?.merchantRaw || "");
-  const [total, setTotal] = useState(sourceTransaction?.amount || "");
-  const [currency, setCurrency] = useState(sourceTransaction?.currency || "PHP");
-  const [date, setDate] = useState(
-    sourceTransaction?.date.slice(0, 10) || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }),
-  );
-  const { user } = useUser();
-  const [addingPerson, setAddingPerson] = useState(false);
-  const [personName, setPersonName] = useState("");
-  const [reviewedItems, setReviewedItems] = useState<(Omit<SplitItem, "participantIds"> & { participantIds?: string[] })[]>(() => {
-    const items=(sourceTransaction?.receiptLineItems??[]).filter(i=>i.amount&&Number(i.amount)>0).map((i,index)=>({id:`receipt-${index}`,description:i.description,amount:i.amount!}));
-    const difference=Math.round((Number(sourceTransaction?.amount??0)-items.reduce((sum,i)=>sum+Number(i.amount),0))*100)/100;
-    if(items.length&&difference>0)items.push({id:'receipt-charges',description:'Other Charges',amount:difference.toFixed(2)});
-    return items;
-  });
-  const [receipt, setReceipt] = useState<{
-    fileName: string;
-    mimeType: string;
-    storageKey: string;
-    text: string;
-    confidence: number;
-    items: { description: string; amount: string }[];
-  } | null>(null);
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
-  const uploadReceipt = async () => {
-    if (inFlight.current) return;
-    if (session.demo) {
-      setError(
-        "Receipt upload requires signing in. You can test a manual split with sample data.",
-      );
-      return;
-    }
-    inFlight.current = true;
-    setBusy(true);
-    setError("");
-    let copiedUri = "";
-    try {
-      const picked = await DocumentPicker.getDocumentAsync({
-        type: ["application/pdf", "image/*"],
-        copyToCacheDirectory: true,
-      });
-      if (picked.canceled || !alive.current) return;
-      const file = picked.assets[0];
-      copiedUri = file.uri;
-      const problem = fileProblem(file);
-      if (problem) throw new Error(problem);
-      const form = new FormData();
-      if (Platform.OS === "web")
-        form.append("file", await (await fetch(file.uri)).blob(), file.name);
-      else
-        form.append("file", {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType ?? "application/octet-stream",
-        } as unknown as Blob);
-      const result = await session.request<{
-        receiptStorageKey: string;
-        preview: {
-          merchantName: string | null;
-          billDate: string | null;
-          currency: string;
-          total: string | null;
-          receiptText: string;
-          confidence: number;
-          currencyWarning?: string | null;
-          items: { description: string; amount: string }[];
-        };
-      }>(
-        `split-bill-receipts/preview?workspaceId=${encodeURIComponent(session.profileId)}`,
-        { method: "POST", body: form },
-      );
-      if (!alive.current) return;
-      const p = result.preview;
-      setReceipt({
-        fileName: file.name,
-        mimeType: file.mimeType ?? "application/octet-stream",
-        storageKey: result.receiptStorageKey,
-        text: p.receiptText,
-        confidence: p.confidence,
-        items: p.items.map((i) => ({
-          description: i.description,
-          amount: i.amount,
-        })),
-      });
-      setReviewedItems(p.items.map(item => ({ description: item.description, amount: item.amount })));
-      setTitle(p.merchantName ?? "");
-      setTotal(p.total ?? "");
-      setCurrency(p.currency);
-      if (p.billDate) setDate(p.billDate.slice(0, 10));
-      if (p.currencyWarning) setError(p.currencyWarning);
-    } catch (e) {
-      if (alive.current)
-        setError(e instanceof Error ? e.message : "Receipt upload failed.");
-    } finally {
-      if (copiedUri) removeUploadCopy(copiedUri);
-      inFlight.current = false;
-      if (alive.current) setBusy(false);
-    }
-  };
-  const [names, setNames] = useState("You\n");
-  const [payer, setPayer] = useState<number | null>(null);
-  const [note, setNote] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const inFlight = useRef(false);
-  const participants = names
-    .split("\n")
-    .map((name) => ({ name: name.trim() }))
-    .filter((p) => p.name);
-  const save = async () => {
-    if (inFlight.current) return;
-    const parsedDate = new Date(`${date}T00:00:00Z`);
-    if (
-      !title.trim() ||
-      !/^\d+(\.\d{1,2})?$/.test(total) ||
-      Number(total) <= 0 ||
-      !/^[A-Z]{3}$/.test(currency) ||
-      participants.length < 2 ||
-      new Set(participants.map((p) => p.name.toLowerCase())).size !==
-        participants.length ||
-      !Number.isFinite(+parsedDate) ||
-      parsedDate.toISOString().slice(0, 10) !== date
-    ) {
-      setError(
-        "Enter a title, positive amount, valid date/currency and at least two distinct people.",
-      );
-      return;
-    }
-    if ((receipt || reviewedItems.length > 0) && (!reviewedItems.length || reviewedItems.some(item => !item.description.trim() || !/^\d+(\.\d{1,2})?$/.test(item.amount) || Number(item.amount) <= 0) || reviewedItems.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0) !== Math.round(Number(total) * 100))) {
-      setError("Review each item and include extra charges so the items match the bill total.");
-      return;
-    }
-    inFlight.current = true;
-    setBusy(true);
-    setError("");
-    try {
-      const payload = {
-        ...(sourceTransaction ? { transactionId: sourceTransaction.id } : {}),
-        title: title.trim(),
-        note,
-        billDate: date,
-        currency,
-        total,
-        participants,
-        paidByIndex: payer,
-        ...(receipt ? { receipt } : {}),
-        ...(reviewedItems.length ? { reviewedItems: reviewedItems.map(item=>({
-          description:item.description,amount:item.amount,
-          participantIndexes:(item.participantIds ?? participants.map(p=>p.name)).map(name=>participants.findIndex(p=>p.name===name)).filter(i=>i>=0),
-          splitMethod:item.splitMethod??"equal",
-          allocations:(item.allocations??[]).map(a=>({participantIndex:participants.findIndex(p=>p.name===a.participantId),value:a.value})),
-        })) } : {}),
-      };
-      const result = session.demo
-        ? {
-            bill: {
-              ...payload,
-              participants: payload.participants.map((p, index) => ({
-                ...p,
-                id: `demo-person-${index}`,
-              })),
-              id: `demo-${Date.now()}`,
-              settlementStatus: "open",
-            },
-          }
-        : await session.request<{ bill: Bill }>(
-            `split-bills?workspaceId=${encodeURIComponent(session.profileId)}`,
-            { method: "POST", body: JSON.stringify(payload) },
-          );
-      if (alive.current) onSaved(result.bill);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to create bill.");
-    } finally {
-      inFlight.current = false;
-      setBusy(false);
-    }
-  };
-  return (
-    <Screen sheet onDismiss={() => { if(!busy)onClose(); }}>
-      <PlanHeader
-        title="Add Split Bill"
-        back={() => {
-          if (!busy) onClose();
-        }}
-      />
-      <AddEntryMethods
-        kind="split"
-        disabled={busy}
-        context={{
-          kind: "split",
-          fields: { title, amount: total, currency, date, people: names },
-        }}
-        onReviewForm={({ fields: f }) => {
-          if (f.title !== undefined) setTitle(f.title);
-          if (f.amount !== undefined) setTotal(f.amount);
-          if (f.currency !== undefined) setCurrency(f.currency);
-          if (f.date !== undefined) setDate(f.date);
-          if (f.people !== undefined) {
-            setNames(f.people);
-            setPayer(null);
-          }
-        }}
-        onUpload={() => void uploadReceipt()}
-      >
-        <Field
-          label="Bill title"
-          value={title}
-          onChangeText={setTitle}
-          maxLength={100}
-        />
-        <Field
-          label="Total"
-          value={total}
-          onChangeText={setTotal}
-          keyboardType="decimal-pad"
-        />
-        <Field
-          label="Currency"
-          value={currency}
-          onChangeText={(v) => setCurrency(v.toUpperCase())}
-          maxLength={3}
-        />
-        <Field label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
-        <Field
-          label="People (one name per line)"
-          value={names}
-          onChangeText={(value) => {
-            setNames(value);
-            setPayer(null);
-          }}
-          multiline
-        />
-        {receipt ? <Body>{receipt.fileName} · Check the extracted items and total before saving.</Body> : null}
-        <SplitItemGrid people={participants.map(p=>({id:p.name,name:p.name,avatarUrl:/^(you|me)$/i.test(p.name)||p.name===user?.fullName?user?.imageUrl:null}))} currency={currency} onAddPerson={()=>setAddingPerson(true)}
-          items={reviewedItems.map((item,index)=>({...item,id:item.id??`new-${index}`,participantIds:item.participantIds??participants.map(p=>p.name)}))}
-          onChange={next=>{setReviewedItems(next);setTotal(next.reduce((sum,item)=>sum+(Number(item.amount)||0),0).toFixed(2));}} />
-        {addingPerson?<View><Field label="Person Name" value={personName} onChangeText={setPersonName}/><PlanAction title="Add Person" onPress={()=>{if(personName.trim()&&!participants.some(p=>p.name.toLowerCase()===personName.trim().toLowerCase())){setNames(v=>v.trim()+"\n"+personName.trim());setPersonName("");setAddingPerson(false);}}}/></View>:null}
-        {suggestBillCategory(title,reviewedItems.map(item=>item.description)) ? <Body>Suggested category: {suggestBillCategory(title,reviewedItems.map(item=>item.description))?.name}</Body> : null}
-        <Body>Who paid?</Body>
-        <PlanAction
-          title={payer === null ? "Not paid yet ✓" : "Not paid yet"}
-          onPress={() => setPayer(null)}
-        />
-        {participants.map((person, index) => (
-          <PlanAction
-            key={index}
-            title={`${person.name}${payer === index ? " ✓" : ""}`}
-            onPress={() => setPayer(index)}
-          />
-        ))}
-        <Field
-          label="Note"
-          value={note}
-          onChangeText={setNote}
-          maxLength={1000}
-        />
-        {error ? <Notice>{error}</Notice> : null}
-        <PlanAction title="Cancel" disabled={busy} onPress={onClose} />
-        <PlanAction
-          title={busy ? "Creating…" : "Create bill"}
-          tone="primary"
-          disabled={busy}
-          onPress={() => void save()}
-        />
-      </AddEntryMethods>
     </Screen>
   );
 }
