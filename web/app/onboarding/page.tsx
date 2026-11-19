@@ -7,8 +7,8 @@ import { getSessionContext } from "@/lib/auth";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { prisma } from "@/lib/prisma";
-import { fetchPayPalPlan } from "@/lib/paypal-billing";
-import { matchesOnboardingPrice } from "@/lib/onboarding-pricing";
+
+
 import { getEnv } from "@/lib/env";
 import {
   getCircleInvitationPath,
@@ -81,26 +81,20 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
     },
   });
   const upgradeForPro = params.upgrade === "pro";
-  const upgradeInterval = params.interval === "monthly" ? "monthly" : "annual";
+  const upgradeInterval = params.interval === "annual" ? "annual" : "monthly";
   const env = getEnv();
   const pricingMarket = requestHeaders.get("x-vercel-ip-country")?.toUpperCase() === "PH" ? "ph" : "global";
-  const verifyPlan = async (id: string | undefined, interval: "monthly" | "annual") => {
-    if (!upgradeForPro || !id || !env.PAYPAL_CLIENT_ID || !env.PAYPAL_CLIENT_SECRET) return null;
-    const plan = await fetchPayPalPlan(id, env).catch(() => null);
-    return matchesOnboardingPrice(plan, pricingMarket, interval) ? id : null;
-  };
-  const [monthlyPlanId, annualPlanId] = await Promise.all([
-    verifyPlan(env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID, "monthly"),
-    verifyPlan(env.PAYPAL_ANNUAL_PLAN_ID, "annual"),
-  ]);
-
-
   const trialAccess = await getProAccess(user.id);
   return (
     <main className="onboarding-page">
       <section className="onboarding-page__shell">
         <SignupTrialSummary trial={trialAccess.trial} />
         <OnboardingForm
+          key={user.id}
+          initialPlanTier={trialAccess.planTier}
+          customerEmail={user.email}
+          paddleClientToken={env.PADDLE_CLIENT_TOKEN ?? null}
+          paddleEnvironment={env.PADDLE_ENV === 'live' ? 'live' : 'sandbox'}
           workspaceId={onboardingWorkspace?.id ?? starterWorkspace.id}
           billingCustomerId={user.id}
           workspaceAccounts={onboardingWorkspace?.accounts ?? []}
@@ -108,8 +102,8 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
           upgradeForPro={upgradeForPro}
           upgradeInterval={upgradeInterval}
           paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
-          paypalMonthlyPlanId={monthlyPlanId}
-          paypalAnnualPlanId={annualPlanId}
+          paypalMonthlyPlanId={null}
+          paypalAnnualPlanId={null}
           paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
           pricingMarket={pricingMarket}
           completionUrl={completionUrl}

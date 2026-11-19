@@ -39,6 +39,8 @@ type PayPalSubscribeButtonProps = {
   buyerCountry?: string | null;
   className?: string;
   disabled?: boolean;
+  label?: string;
+  disabledMessage?: string;
   onStart?: () => void;
   entryPoint?: PlanEntryPoint;
   displayedCurrency?: string;
@@ -55,6 +57,7 @@ export function PayPalSubscribeButton({
   buyerCountry,
   className,
   disabled = false,
+  label = "Subscribe", disabledMessage = "PayPal checkout is not configured for this environment yet.",
   onStart,
   entryPoint = "settings",
   displayedCurrency,
@@ -63,6 +66,8 @@ export function PayPalSubscribeButton({
   onCancelled,
   fundingSource = "paypal",
 }: PayPalSubscribeButtonProps) {
+  const callbacks = useRef({ onStart, onApproved, onCancelled });
+  callbacks.current = { onStart, onApproved, onCancelled };
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const checkoutAttemptRef = useRef<string | null>(null);
   const checkoutDialogRef = useRef<HTMLDialogElement>(null);
@@ -146,7 +151,7 @@ export function PayPalSubscribeButton({
           height: fundingSource === "card" ? 40 : 45,
         },
         createSubscription: async (_data, actions) => {
-          onStart?.();
+          callbacks.current.onStart?.();
           capturePostHogClientEvent("billing_started", {
             billing_action: "create_subscription",
             funding_source: fundingSource,
@@ -184,7 +189,9 @@ export function PayPalSubscribeButton({
 
           finishCheckout("provider_completed");
           setMessage("Subscription approved. Clover will confirm access once PayPal posts the webhook.");
-          onApproved?.();
+          checkoutDialogRef.current?.close();
+          setCheckoutOpen(false);
+          callbacks.current.onApproved?.();
         },
         onCancel: () => {
           if (cancelled) {
@@ -193,7 +200,9 @@ export function PayPalSubscribeButton({
 
           finishCheckout("canceled");
           setMessage("Subscription checkout was cancelled.");
-          onCancelled?.();
+          checkoutDialogRef.current?.close();
+          setCheckoutOpen(false);
+          callbacks.current.onCancelled?.();
         },
         onError: (error) => {
           if (cancelled) {
@@ -233,11 +242,11 @@ export function PayPalSubscribeButton({
         containerRef.current.innerHTML = "";
       }
     };
-  }, [checkoutOpen, customId, disabled, fundingSource, onApproved, onCancelled, onStart, planId, scriptReady, referralCode, entryPoint, interval, displayedCurrency]);
+  }, [checkoutOpen, customId, disabled, fundingSource, planId, scriptReady, referralCode, entryPoint, interval, displayedCurrency]);
 
   return (
     <div className={className}>
-      <button type="button" className="button button-primary" disabled={disabled} onClick={() => {checkoutDialogRef.current?.showModal();setCheckoutOpen(true);}}>Subscribe</button>
+      <button type="button" className="button button-primary" disabled={disabled} onClick={() => {checkoutDialogRef.current?.showModal();setCheckoutOpen(true);}}>{label}</button>
       <dialog ref={checkoutDialogRef} onClose={() => setCheckoutOpen(false)} className="clover-checkout-dialog" aria-label="PayPal checkout"><h2>Subscribe to Plus</h2>
       <ReferralCheckoutField value={referralCode} onChange={setReferralCode} provider="paypal" planId={planId} />
       <Script
@@ -252,7 +261,7 @@ export function PayPalSubscribeButton({
       </dialog>
       {message ? <p className="billing-helper">{message}</p> : null}
       {!scriptReady && !scriptFailed ? <p className="billing-helper">Loading PayPal checkout...</p> : null}
-      {disabled ? <p className="billing-helper">PayPal checkout is not configured for this environment yet.</p> : null}
+      {disabled ? <p className="billing-helper">{disabledMessage}</p> : null}
     </div>
   );
 }

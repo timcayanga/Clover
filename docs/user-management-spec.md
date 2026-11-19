@@ -69,7 +69,7 @@ Acceptance checks:
 ### Default Plan Assignment
 
 - Every new user is automatically assigned the Free Plan at account creation.
-- Users should not need to choose a plan during signup.
+- After account creation and before financial knowledge, offer Plus and Pro with an equally functional Continue with Free path. No payment method is required for Free.
 - The Free Plan should feel like the natural starting state, not a downgraded state.
 
 ### Post-Signup Onboarding
@@ -290,3 +290,9 @@ only to this photo and recent receipt dates, behind printed currency/location ev
 permission denial or failure must never prevent scanning. Files and Photo Library do not
 inherit today's device location. Save only country/timestamps/approximate accuracy with
 the import for provenance, keeping raw extracted financial evidence separate.
+
+### Optional onboarding upgrade (November 2026)
+
+New accounts remain Free at creation. Immediately after authentication, present Plus and Pro in an optional onboarding step before financial knowledge. Reuse verified regional web offers and native store products. Cancellation returns to the offer with Free still available; provider completion alone never grants access. Preserve the current setup step during checkout and delayed verification.
+
+The first-action screen offers Connect a bank and Upload documents, with manual entry also available. Effective paid access can connect; Free users see Plus and Pro checkout within the bank option and can still upload or continue without purchase. A verified upgrade here returns to this first-action screen, without repeating financial knowledge or completing onboarding prematurely.

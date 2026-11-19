@@ -3,16 +3,17 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 const code=ts.transpileModule(fs.readFileSync(new URL('../app/onboarding.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
-function harness(fail=false){
+function harness(fail=false,planTier='pro'){
  const states=[],refs=[],requests=[],routes=[];let si=0,ri=0,effects=[];
- const session={data:{needsOnboarding:true,entitlement:{planTier:'pro',trial:{startsAt:'2026-10-24T00:00:00.000Z',endsAt:'2026-11-23T00:00:00.000Z',status:'active',remainingDays:30,relyingOnTrial:true,linkedAccounts:2}},currencyChoices:[{code:'PHP',name:'Philippine Peso'}]},completeOnboarding:async(body)=>{requests.push({path:"onboarding",body});if(fail)throw new Error("Setup unavailable");session.data={...session.data,needsOnboarding:false};},refresh:()=>{session.data={...session.data,needsOnboarding:false};}};
+ const session={data:{needsOnboarding:true,entitlement:{planTier,trial:{startsAt:'2026-10-24T00:00:00.000Z',endsAt:'2026-11-23T00:00:00.000Z',status:'active',remainingDays:30,relyingOnTrial:true,linkedAccounts:2}},currencyChoices:[{code:'PHP',name:'Philippine Peso'}]},completeOnboarding:async(body)=>{requests.push({path:"onboarding",body});if(fail)throw new Error("Setup unavailable");session.data={...session.data,needsOnboarding:false};},refresh:()=>{session.data={...session.data,needsOnboarding:false};}};
  const exports={};
  vm.runInNewContext(code,{exports,Intl,Error,require:name=>{
   if(name==='react')return {useState:v=>{const i=si++;if(!(i in states))states[i]=v;return [states[i],v=>{states[i]=v;}];},useRef:v=>{const i=ri++;return refs[i]??=( {current:v});},useEffect:f=>effects.push(f)};
   if(name==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'Fragment'};
   if(name==='expo-router')return {router:{replace:v=>routes.push(v)}};
   if(name==='react-native')return {Image:'Image',Pressable:'Pressable',View:'View'};
-  if(name.endsWith('/entry-controls'))return {EntrySelector:'EntrySelector'};
+  if(name.endsWith('/onboarding-plan-offers'))return {OnboardingPlanOffers:'OnboardingPlanOffers'};
+  if(name.endsWith('/onboarding-upgrade'))return {onboardingCanConnect:t=>t==='pro'||t==='premium'};
   if(name.endsWith('/signup-trial-summary'))return {SignupTrialSummary:'SignupTrialSummary'};
   if(name.endsWith('/clover-mascot'))return {CloverMascot:'CloverMascot'};
   if(name.endsWith('/app-text'))return {Text:'Text'};
@@ -37,16 +38,14 @@ for(const action of ['skip','connect','manual','file','camera','library']){
  nodes.find(n=>n.props.accessibilityRole==='radio').props.onPress();nodes=h.render();
  nodes.find(n=>n.props.title==='Continue').props.onPress();nodes=h.render();
  assert.equal(nodes.find(n=>n.type==='CloverMascot').props.pose,'receipt');
- const selector=nodes.find(n=>n.type==='EntrySelector');
- assert.equal(selector.props.value,'upload');
- assert.deepEqual(Array.from(selector.props.items),['connect','upload','manual']);
- assert.ok(!selector.props.items.some(item=>item==='Ask Clover'));
- if(['file','camera','library'].includes(action))selector.props.onChange('upload');
- if(action==='manual')selector.props.onChange('manual');
- if(action==='connect')selector.props.onChange('connect');
+ const tabs=nodes.filter(n=>n.props.accessibilityRole==='tab');
+ assert.deepEqual(tabs.map(n=>n.props.accessibilityLabel),['Connect a bank','Upload documents']);
+ if(['file','camera','library'].includes(action))tabs[1].props.onPress();
+ if(action==='manual')nodes.find(n=>n.props.title==='Add a transaction manually').props.onPress();
+ if(action==='connect')tabs[0].props.onPress();
  nodes=h.render();
  const title={skip:'Skip for now',connect:'Connect a bank',manual:'Add transaction',file:'Choose Files',camera:'Take Photo',library:'Photo Library'}[action];
- const button=nodes.find(n=>n.props.title===title||n.props.accessibilityLabel===title);
+ const button=nodes.find(n=>n.props.accessibilityRole!=='tab'&&(n.props.title===title||n.props.accessibilityLabel===title));
  button.props.onPress();button.props.onPress();await tick();nodes=h.render();
  assert.equal(h.requests.length,1,'Double tap must not save twice');assert.deepEqual(Object.keys(h.requests[0].body).sort(),['currency','experience','locale','timeZone']);
  assert.equal(h.requests[0].body.experience,'beginner');
@@ -60,3 +59,16 @@ const h=harness(true);let n=h.render();n.find(x=>x.props.accessibilityRole==='ra
 assert.equal(h.routes.length,0);assert.ok(n.some(x=>x.type==='Notice'&&x.props.children==='Setup unavailable'));
 assert.equal(n.find(x=>x.props.title==='Skip for now').props.disabled,false);
 console.log('PASS native onboarding: fixed artwork order, transparent mark, Free-first selectors and all six destinations, duplicate taps and retryable failure');
+
+const free=harness(false,'free');let freeNodes=free.render();
+assert(freeNodes.some(n=>n.type==='OnboardingPlanOffers'));assert(!freeNodes.some(n=>n.props.accessibilityRole==='radio'));
+freeNodes.find(n=>n.props.title==='Continue with Free').props.onPress();freeNodes=free.render();
+freeNodes.find(n=>n.props.accessibilityRole==='radio').props.onPress();freeNodes=free.render();freeNodes.find(n=>n.props.title==='Continue').props.onPress();freeNodes=free.render();
+freeNodes.find(n=>n.props.accessibilityRole==='tab'&&n.props.accessibilityLabel==='Connect a bank').props.onPress();freeNodes=free.render();
+assert(freeNodes.some(n=>n.type==='OnboardingPlanOffers'));assert(!freeNodes.some(n=>n.type==='Button'&&n.props.title==='Connect a bank'));
+assert.equal(free.requests.length,0,'Viewing bank upgrade must not prematurely complete onboarding');
+freeNodes.find(n=>n.type==='OnboardingPlanOffers').props.onBusy(true);freeNodes.find(n=>n.type==='OnboardingPlanOffers').props.onPending(true);freeNodes=free.render();
+freeNodes.find(n=>n.type==='OnboardingPlanOffers').props.onVerified('premium');freeNodes=free.render();
+assert(freeNodes.some(n=>n.type==='Button'&&n.props.title==='Connect a bank'&&!n.props.disabled),'Verified checkout must release the parent busy state');
+assert(!freeNodes.some(n=>n.props.accessibilityRole==='radio'),'Verified first-action purchase returns here rather than repeating knowledge');
+console.log('PASS native optional upgrade: Free before knowledge, usable Free continuation, guarded bank access, no premature onboarding completion, and verified purchase returns to first action.');

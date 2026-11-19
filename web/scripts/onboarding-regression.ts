@@ -36,7 +36,9 @@ const sourceButtons = readFileSync(resolve(process.cwd(), "components/upload-sou
 assert.match(onboardingForm, /<UploadSourceButtons/u, "Onboarding must use the shared upload choices");
 for (const label of ["Photo library", "Take photo", "Choose files"]) assert.ok(sourceButtons.includes(label));
 assert.match(onboardingForm, /useState<"connect" \| "upload" \| "manual">\("upload"\)/u, "Free upload must be the initial method");
-assert.match(onboardingForm, /\["connect", "upload", "manual"\]/u, "Account entry methods must follow the approved order");
+assert.match(onboardingForm, /\['connect','upload'\]/u, "Bank and upload must be the two primary first actions");
+assert.match(onboardingForm, /Add a transaction manually/u, "Manual entry remains available");
+assert.match(onboardingForm, /onboardingCanConnect\(planTier\)/u, "Free bank entry must offer an upgrade before account linking");
 assert.match(onboardingForm, /onboarding=\$\{method\}/u, "Account handoff must retain the selected entry method");
 assert.doesNotMatch(onboardingForm, /show you the magic behind the import/u, "Onboarding upload copy must stay concrete and concise");
 assert.doesNotMatch(onboardingForm, /Set a goal/u, "Onboarding must not include goal setup");

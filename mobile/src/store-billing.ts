@@ -77,6 +77,7 @@ export function purchaseStorePackage(
   status: StoreStatus,
   item: PurchasesPackage,
   verifyOwner?: () => Promise<StoreStatus>,
+  onReady?: () => void,
 ) {
   return exclusive(async () => {
     await identify(status);
@@ -104,6 +105,7 @@ export function purchaseStorePackage(
         throw new StoreActionError('Manage this subscription in its original store.');
       change = googleReplacement(current, item.product.identifier);
     }
+    onReady?.();
     await trackOperation("store_purchase", () => Purchases.purchasePackage(item, null, change ? {
       oldProductIdentifier: change.oldProductIdentifier,
       replacementMode: Purchases.STORE_REPLACEMENT_MODE[change.replacementMode],

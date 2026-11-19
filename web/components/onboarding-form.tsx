@@ -3,7 +3,7 @@
 import { getEntryMethodIconSrc } from "@/lib/entry-method-icons";
 
 import dynamic from "next/dynamic";
-import type { ChangeEvent, CSSProperties } from "react";
+import type { ChangeEvent } from "react";
 import { UploadSourceButtons } from "@/components/upload-source-buttons";
 import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -12,8 +12,11 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getFinancialExperienceDefinition, type FinancialExperienceLevel } from "@/lib/goals";
-import { plannedProPrices, type PricingMarket } from "@/lib/public-plan-comparison";
-import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
+import { type PricingMarket } from "@/lib/public-plan-comparison";
+import { OnboardingPlanOffers } from './onboarding-plan-offers';
+import upgradeStyles from './onboarding-plan-offers.module.css';
+import { onboardingCanConnect, readOnboardingUpgradeDraft, stageAfterVerifiedUpgrade } from '../../shared/onboarding-upgrade';
+import type { CloverPlanTier } from '../../shared/plan-catalog';
 import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
 import { CurrencySelector } from "@/components/currency-selector";
 import { getCurrencyCatalogCodes, getCurrencyCatalogOption } from "@/lib/currencies";
@@ -77,6 +80,10 @@ type OnboardingFormProps = {
   pricingMarket?: PricingMarket;
   completionUrl?: string;
   regionalDefaults: RegionalPreferences;
+  initialPlanTier?: CloverPlanTier;
+  customerEmail?: string;
+  paddleClientToken?: string | null;
+  paddleEnvironment?: 'sandbox' | 'live';
 };
 
 const jsonHeaders = { "Content-Type": "application/json" };
@@ -95,6 +102,7 @@ export function OnboardingForm({
   pricingMarket = "global",
   completionUrl = "/dashboard",
   regionalDefaults,
+  initialPlanTier = 'free', customerEmail = '', paddleClientToken = null, paddleEnvironment = 'sandbox',
 }: OnboardingFormProps) {
   const router = useRouter();
   const photoInputRef = useRef<HTMLInputElement | null>(null);
@@ -103,10 +111,20 @@ export function OnboardingForm({
   const [experience, setExperience] = useState<FinancialExperienceLevel | null>(
     (currentExperience as FinancialExperienceLevel | null) ?? null,
   );
-  const [step, setStep] = useState<OnboardingStep>(upgradeForPro ? "upgrade" : "experience");
-  const [message, setMessage] = useState(
-    upgradeForPro ? "Choose Plus now or continue with Clover Free. You can upgrade later." : null,
-  );
+  const [step, setStep] = useState<OnboardingStep>(onboardingCanConnect(initialPlanTier) ? "experience" : "upgrade");
+  const [message, setMessage] = useState<string | null>(null);
+  const [planTier, setPlanTier] = useState(initialPlanTier);
+  const [returnStep, setReturnStep] = useState<'experience' | 'upload'>('experience');
+  const [checkoutPending, setCheckoutPending] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+  const draftKey = `clover:onboarding-upgrade:v1:${billingCustomerId}`;
+  useEffect(() => {
+    try { const draft = readOnboardingUpgradeDraft(sessionStorage.getItem(draftKey));
+      if (draft) { setStep(onboardingCanConnect(initialPlanTier) && draft.step === 'upgrade' ? stageAfterVerifiedUpgrade(initialPlanTier,draft.returnStep,draft.experience) : draft.step); setExperience(draft.experience); setReturnStep(draft.returnStep); setCheckoutPending(draft.pending && !onboardingCanConnect(initialPlanTier)); if(draft.pending && draft.returnStep==='upload')setAccountMethod('connect'); }
+    } catch { /* In-memory setup still works without browser storage. */ }
+    setDraftReady(true);
+  }, [draftKey, initialPlanTier]);
+  useEffect(() => { if (!draftReady) return; try { sessionStorage.setItem(draftKey,JSON.stringify({step,returnStep,experience,pending:checkoutPending})); } catch {} }, [draftReady,draftKey,step,returnStep,experience,checkoutPending]);
   const [isPending, startTransition] = useTransition();
   const [isCompleting, setIsCompleting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -115,7 +133,7 @@ export function OnboardingForm({
   const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>(regionalDefaults);
   const [currencyError, setCurrencyError] = useState<string | null>(null);
   const [isSavingCurrency, setIsSavingCurrency] = useState(false);
-  const [selectedUpgradeInterval, setSelectedUpgradeInterval] = useState<"monthly" | "annual">(upgradeInterval);
+
   const getBrowserRegionalDefaults = () =>
     normalizeRegionalPreferences({
       ...regionalPreferences,
@@ -138,7 +156,9 @@ export function OnboardingForm({
   const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
   const selectedCurrency = getCurrencyCatalogOption(regionalPreferences.baseCurrency);
 
-  const upgradePlanId = selectedUpgradeInterval === "annual" ? paypalAnnualPlanId : paypalMonthlyPlanId;
+  const planOffers = <OnboardingPlanOffers embedded={step === "upload"} customerId={billingCustomerId} email={customerEmail} paddleClientToken={paddleClientToken} paddleEnvironment={paddleEnvironment} paypalClientId={paypalClientId} paypalBuyerCountry={paypalBuyerCountry} interval={upgradeInterval} pending={checkoutPending}
+    onPending={() => { setCheckoutPending(true); setReturnStep(step === 'upload' ? 'upload' : 'experience'); }}
+    onVerified={tier => { setPlanTier(tier); setCheckoutPending(false); setStep(stageAfterVerifiedUpgrade(tier,step === 'upload' ? 'upload' : returnStep,experience)); setMessage(`${tier === 'premium' ? 'Pro' : 'Plus'} access verified. Bank connections are ready.`); }} />;
 
   const persistOnboarding = async (startAction: "import" | "skip" | "connect" | "manual") => {
     const preferences = getBrowserRegionalDefaults();
@@ -160,6 +180,7 @@ export function OnboardingForm({
       const result = (await response.json().catch(() => null)) as { error?: string } | null;
       throw new Error(result?.error || "Unable to finish Clover setup.");
     }
+    try { sessionStorage.removeItem(draftKey); } catch {}
   };
 
   const saveRegionalPreferences = async () => {
@@ -298,15 +319,10 @@ export function OnboardingForm({
   const uploadStep = (
     <>
       <h3>Record your first transaction</h3>
-      <div className="transaction-creation-tabs" role="tablist" aria-label="Add your accounts"
-        style={{ "--entry-tab-index": ["connect", "upload", "manual"].indexOf(accountMethod), "--entry-tab-count": 3 } as CSSProperties}>
-        {(["connect", "upload", "manual"] as const).map((method, index, methods) => <button type="button" role="tab" key={method}
-          id={`onboarding-${method}`} aria-controls={`onboarding-${method}-panel`} aria-selected={accountMethod === method} tabIndex={accountMethod === method ? 0 : -1}
-          onClick={() => setAccountMethod(method)} onKeyDown={event => {
-            const next = event.key === "ArrowRight" ? (index + 1) % 3 : event.key === "ArrowLeft" ? (index + 2) % 3 : event.key === "Home" ? 0 : event.key === "End" ? 2 : null;
-            if (next !== null) { event.preventDefault(); setAccountMethod(methods[next]); document.getElementById(`onboarding-${methods[next]}`)?.focus(); }
-          }}><img src={getEntryMethodIconSrc(method)} width="20" height="20" alt="" />{method === "connect" ? "Connect" : method === "upload" ? "Upload" : "Manual"}</button>)}
+      <div className={upgradeStyles.firstChoices} role="group" aria-label="Add your accounts">
+        {(['connect','upload'] as const).map(method => <button type="button" key={method} id={`onboarding-${method}`} aria-pressed={accountMethod===method} onClick={()=>setAccountMethod(method)}><img src={getEntryMethodIconSrc(method)} width={32} height={32} alt="" /><strong>{method==='connect'?'Connect a bank':'Upload documents'}</strong><span>{method==='connect'?'Automatic bank sync':'Statements and receipts'}</span></button>)}
       </div>
+      <button type="button" className={upgradeStyles.manual} id="onboarding-manual" onClick={()=>setAccountMethod('manual')}>Add a transaction manually →</button>
       <div role="tabpanel" id={`onboarding-${accountMethod}-panel`} aria-labelledby={`onboarding-${accountMethod}`} className="onboarding-account-method">
         {accountMethod === "upload" ? <>
           <h4>Add a statement or receipt</h4>
@@ -319,12 +335,13 @@ export function OnboardingForm({
         </> : <>
           <h4>{accountMethod === "connect" ? "Connect a supported bank" : "Add a transaction manually"}</h4>
           <p className="onboarding-card__copy">{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Record something you spent or earned. You can use Cash and add other accounts later."}</p>
-          {accountMethod === "connect" ? <p className="onboarding-card__copy onboarding-card__copy--subtle">Available with Plus and Pro</p> : null}
-          <button className="button button-primary" type="button" disabled={isCompleting} onClick={() => {
+          {accountMethod === "connect" && !onboardingCanConnect(planTier) ? <div className={upgradeStyles.upsell}><p>Choose Plus or Pro to connect your bank. You can also upload documents on Free.</p>{planOffers}</div> : null}
+          {accountMethod !== "connect" || onboardingCanConnect(planTier) ? <button className="button button-primary" type="button" disabled={isCompleting} onClick={() => {
             const method = accountMethod;
+            if (method === 'connect' && !onboardingCanConnect(planTier)) return;
             setIsCompleting(true);
             void persistOnboarding(method).then(() => router.replace(method === "manual" ? "/transactions?manual=1" : `/accounts?add=1&onboarding=${method}`)).catch(error => { setIsCompleting(false); setMessage(error instanceof Error ? error.message : "Unable to continue setup."); });
-          }}>{accountMethod === "connect" ? "Connect a bank" : "Add transaction"}</button>
+          }}>{accountMethod === "connect" ? "Connect a bank" : "Add transaction"}</button> : null}
         </>}
       </div>
 
@@ -350,54 +367,11 @@ export function OnboardingForm({
     </>
   );
 
-  const upgradeStep = (
-    <>
-      <p className="eyebrow">Clover Plus</p>
-      <h3>Get more room when you need it.</h3>
-      <p className="onboarding-card__copy">
-        Choose monthly or annual billing now, or continue with Free and upgrade later. Your choice will not stop you from finishing setup.
-      </p>
-
-      <div className="onboarding-upgrade__interval" role="group" aria-label="Plus billing frequency">
-        {(["monthly", "annual"] as const).map((option) => (
-          <button
-            key={option}
-            className={selectedUpgradeInterval === option ? "is-selected" : ""}
-            type="button"
-            aria-pressed={selectedUpgradeInterval === option}
-            onClick={() => setSelectedUpgradeInterval(option)}
-          >
-            {option === "monthly" ? "Monthly" : "Annually"} · {plannedProPrices(pricingMarket)[option]}
-          </button>
-        ))}
-      </div>
-
-      <div className="onboarding-upgrade__actions">
-        {paypalClientId && upgradePlanId ? (
-          <PayPalSubscribeButton
-            clientId={paypalClientId}
-            planId={upgradePlanId}
-            customId={billingCustomerId}
-            buyerCountry={paypalBuyerCountry}
-            fundingSource="card"
-            className="onboarding-upgrade__paypal"
-            entryPoint="onboarding"
-            interval={selectedUpgradeInterval}
-            displayedCurrency="USD"
-            onApproved={() => {
-              setMessage("Plus is being confirmed. Continue setting up Clover while we finish that step.");
-              setStep("experience");
-            }}
-          />
-        ) : (
-          <p className="onboarding-card__copy onboarding-card__copy--subtle">Payment setup is not available in this environment yet.</p>
-        )}
-        <button className="button button-secondary" type="button" onClick={() => setStep("experience")}>
-          Upgrade later
-        </button>
-      </div>
-    </>
-  );
+  const upgradeStep = <>
+    {planOffers}
+    <button className={`button button-secondary ${upgradeStyles.free}`} type="button" onClick={() => { setStep(experience && returnStep === 'upload' ? 'upload' : 'experience'); setMessage(null); }}>{checkoutPending ? 'Continue setup' : 'Continue with Free'}</button>
+    <p className={upgradeStyles.freeHint}>No card required for Free. You can upgrade later.</p>
+  </>;
 
   if (isCompleting) {
     return <CloverRouteLoadingScreen label="Clover" viewport />;
@@ -412,14 +386,15 @@ export function OnboardingForm({
           current_experience: currentExperience ?? null,
         }}
       />
-      <section className="glass onboarding-card">
+      <section className="glass onboarding-card onboarding-card--plans">
         <div className="onboarding-icon-preload" aria-hidden="true">
           {EXPERIENCE_OPTIONS.map((option) => (
             <img key={option.value} src={option.icon} alt="" width={1} height={1} loading="eager" decoding="async" />
           ))}
         </div>
-        <div className="onboarding-card__brand" aria-label="Clover">
-          <img className="onboarding-card__mark" src={step === "experience" ? "/assets/mascots/velvet-chat.webp" : accountMethod === "connect" ? "/assets/mascots/velvet-banks.webp" : accountMethod === "upload" ? "/assets/mascots/velvet-receipt.webp" : "/assets/mascots/velvet-manual.webp"} alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
+        <div className={`onboarding-card__brand ${step === "upgrade" ? upgradeStyles.brand : ""}`} aria-label="Clover">
+          <img className="onboarding-card__mark" src={step === "upgrade" ? "/clover-mark.svg" : step === "experience" ? "/assets/mascots/velvet-chat.webp" : accountMethod === "connect" ? "/assets/mascots/velvet-banks.webp" : accountMethod === "upload" ? "/assets/mascots/velvet-receipt.webp" : "/assets/mascots/velvet-manual.webp"} alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
+          {step === "upgrade" ? <strong>Welcome to Clover</strong> : null}
         </div>
 
         {step === "upgrade" ? upgradeStep : step === "experience" ? experienceStep : uploadStep}

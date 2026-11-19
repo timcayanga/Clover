@@ -1,5 +1,6 @@
 import { SignupTrialSummary } from "../src/signup-trial-summary";
-import { EntrySelector } from "../src/entry-controls";
+import { OnboardingPlanOffers } from '../src/onboarding-plan-offers';
+import { onboardingCanConnect } from '../../shared/onboarding-upgrade';
 import { CloverMascot } from "../src/clover-mascot";
 import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
@@ -19,7 +20,12 @@ import {
 export default function Onboarding() {
   const session = useSession();
   const { colors } = useTheme();
-  const [step, setStep] = useState<"experience" | "upload">("experience");
+  const [step, setStep] = useState<"upgrade" | "experience" | "upload">(onboardingCanConnect(session.data?.entitlement.planTier) ? "experience" : "upgrade");
+  const [paidTier, setPaidTier] = useState(session.data?.entitlement.planTier ?? 'free');
+  const [checkoutPending, setCheckoutPending] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const initialAccess = useRef(Boolean(session.data));
+  useEffect(() => { if (!initialAccess.current && session.data) { initialAccess.current = true; setPaidTier(session.data.entitlement.planTier); if(onboardingCanConnect(session.data.entitlement.planTier))setStep('experience'); } }, [session.data]);
   const [accountMethod, setAccountMethod] = useState("upload");
   const saving = useRef(false);
   const enteredBeforeBootstrap = useRef(!session.data);
@@ -54,6 +60,7 @@ export default function Onboarding() {
       ?.name ?? "Philippine Peso";
   const finish = async (upload: "file" | "camera" | "library" | "skip" | "connect" | "manual") => {
     if (!experience || saving.current) return;
+    if (upload === 'connect' && !onboardingCanConnect(paidTier)) { setAccountMethod('connect'); return; }
     if (!session.data) { setError(session.error || "Your account is connecting. Please try again in a moment."); return; }
     saving.current = true;
     setBusy(true);
@@ -73,11 +80,12 @@ export default function Onboarding() {
       setBusy(false);
     }
   };
+  const planOffers = <OnboardingPlanOffers embedded={step === "upload"} pending={checkoutPending} onPending={setCheckoutPending} onBusy={setCheckoutBusy} onVerified={tier => { setPaidTier(tier); setCheckoutPending(false); setCheckoutBusy(false); setStep(step === 'upload' ? 'upload' : 'experience'); }} />;
   return (
     <Screen>
       <SignupTrialSummary trial={session.data?.entitlement.trial} />
-      <View style={{ alignItems: "center" }}><CloverMascot pose={step === "experience" ? "chat" : accountMethod === "connect" ? "banks" : accountMethod === "upload" ? "receipt" : "manual"} size={128} /></View>
-      {step === "experience" ? (
+      {step !== 'upgrade' ? <View style={{ alignItems: "center" }}><CloverMascot pose={step === "experience" ? "chat" : accountMethod === "connect" ? "banks" : accountMethod === "upload" ? "receipt" : "manual"} size={128} /></View> : null}
+      {step === 'upgrade' ? <>{planOffers}<Button title={checkoutPending ? 'Continue setup' : 'Continue with Free'} secondary disabled={checkoutBusy} onPress={()=>setStep('experience')} /><Body>No card required for Free. You can upgrade later.</Body></> : step === "experience" ? (
         <>
           <Heading>How comfortable are you with financial management?</Heading>
           {(
@@ -175,12 +183,12 @@ export default function Onboarding() {
         <>
           <Card>
             <Heading>Record your first transaction</Heading>
-            <EntrySelector value={accountMethod} items={["connect", "upload", "manual"]} onChange={setAccountMethod} disabled={busy} />
+            <View accessibilityRole="tablist" style={{flexDirection:'row',gap:12}}>{(['connect','upload'] as const).map(method=><Pressable key={method} accessibilityLabel={method==='connect'?'Connect a bank':'Upload documents'} accessibilityRole="tab" accessibilityState={{selected:accountMethod===method,disabled:busy}} disabled={busy} onPress={()=>setAccountMethod(method)} style={{flex:1,padding:14,borderRadius:18,borderWidth:1,borderColor:accountMethod===method?colors.teal:colors.line,backgroundColor:accountMethod===method?'#e5f7f8':colors.white,gap:8}}><Text style={{fontFamily:'Poppins-SemiBold',color:colors.ink}}>{method==='connect'?'Connect a bank':'Upload documents'}</Text><Text style={{fontSize:12,color:colors.muted}}>{method==='connect'?'Automatic bank sync':'Statements and receipts'}</Text></Pressable>)}</View>
+            <Button title="Add a transaction manually" secondary disabled={busy} onPress={()=>setAccountMethod('manual')} />
             {accountMethod !== "upload" ? <>
               <Heading>{accountMethod === "connect" ? "Connect a supported bank" : "Add a transaction manually"}</Heading>
               <Body>{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Record something you spent or earned. You can use Cash and add other accounts later."}</Body>
-              {accountMethod === "connect" ? <Body>Available with Plus and Pro</Body> : null}
-              <Button title={accountMethod === "connect" ? "Connect a bank" : "Add transaction"} disabled={busy} onPress={() => void finish(accountMethod === "connect" ? "connect" : "manual")} />
+              {accountMethod === 'connect' && !onboardingCanConnect(paidTier) ? <><Body>Choose Plus or Pro to connect your bank. You can also upload documents on Free.</Body>{planOffers}</> : <Button title={accountMethod === "connect" ? "Connect a bank" : "Add transaction"} disabled={busy || checkoutBusy} onPress={() => void finish(accountMethod === "connect" ? "connect" : "manual")} /> }
             </> : (
               [
                 [

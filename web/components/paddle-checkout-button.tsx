@@ -51,6 +51,9 @@ type PaddleCheckoutButtonProps = {
   interval: BillingInterval;
   className?: string;
   onStart?: () => void;
+  onCompleted?: () => void;
+  onCancelled?: () => void;
+  label?: string;
   entryPoint?: PlanEntryPoint;
   displayedCurrency?: string;
 };
@@ -65,9 +68,12 @@ export function PaddleCheckoutButton({
   interval,
   className,
   onStart,
+  onCompleted, onCancelled, label,
   entryPoint = "settings",
   displayedCurrency,
 }: PaddleCheckoutButtonProps) {
+  const callbacks = useRef({ onCompleted, onCancelled });
+  callbacks.current = { onCompleted, onCancelled };
   const checkoutDialogRef = useRef<HTMLDialogElement>(null);
   const checkoutActiveRef = useRef(false);
   const checkoutAttemptRef = useRef<string | null>(null);
@@ -115,6 +121,8 @@ export function PaddleCheckoutButton({
         }
         checkoutAttemptRef.current = null;
         checkoutActiveRef.current = false;
+        if (completed) callbacks.current.onCompleted?.();
+        else callbacks.current.onCancelled?.();
         if (completed) setMessage(`Payment received. Clover is confirming your ${planTier === "premium" ? "Pro" : "Plus"} access.`);
         else setMessage((current) => current ?? "Checkout closed.");
       }
@@ -211,7 +219,7 @@ export function PaddleCheckoutButton({
         onClick={() => checkoutDialogRef.current?.showModal()}
         disabled={preparing}
       >
-        {preparing ? "Preparing checkout…" : `Subscribe to ${planTier === "premium" ? "Pro" : "Plus"}`}
+        {preparing ? "Preparing checkout…" : label ?? `Subscribe to ${planTier === "premium" ? "Pro" : "Plus"}`}
       </button>
       {message ? <p className="billing-helper" aria-live="polite">{message}</p> : null}
     </div>

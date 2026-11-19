@@ -67572,3 +67572,7 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
   .transactions-bulk-grid.form-grid > label > select { min-width: 0; width: 100%; }
   .transactions-bulk-tags { min-width: 0; padding-top: 10px; }
 }
+
+/* Onboarding plans use the shared Clover plan surfaces; no redirect away from setup. */
+.onboarding-page__shell:has(.onboarding-card--plans){width:min(1000px,100%)}
+.onboarding-card--plans:has(.onboarding-account-method){max-width:900px;width:100%}
