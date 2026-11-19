@@ -4,6 +4,12 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {execFileSync} from "node:child_process";
 import {createRequire} from "node:module";
+// Git hooks export repository-local variables. Clear them in this test process
+// before `git init`, including calls made by the copied provenance helper.
+// Otherwise the fixture can reinitialize the caller's real Git directory.
+const gitVariables=execFileSync("git",["rev-parse","--local-env-vars"],{encoding:"utf8"}).trim().split("\n");
+const inheritedGit=new Map(gitVariables.map(name=>[name,process.env[name]]));
+for(const name of gitVariables) delete process.env[name];
 const dir=mkdtempSync(join(tmpdir(),"clover-release-contract-"));
 try {
   mkdirSync(join(dir,"mobile/scripts"),{recursive:true});mkdirSync(join(dir,"shared"));
@@ -28,4 +34,7 @@ try {
   assert.throws(()=>prepare({...options,build:0}),/explicit release/);
   prepare(options);assert.equal(read(options.apiUrl).build,60);
   console.log("PASS source freeze rejects missing stamp, changed source, wrong environment, untracked source and stale checkout; identical source validates");
-} finally {rmSync(dir,{recursive:true,force:true});}
+} finally {
+  rmSync(dir,{recursive:true,force:true});
+  for(const [name,value] of inheritedGit) { if(value===undefined) delete process.env[name]; else process.env[name]=value; }
+}
