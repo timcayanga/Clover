@@ -6,6 +6,7 @@ import { router, useNavigation, type Href } from "expo-router";
 import { Text } from "./app-text";
 import { Card, Icon, useTheme } from "./ui";
 import { productPages } from "../../shared/circle-experience";
+import { FreeHomeBanners } from "./free-home-banners";
 export function HomeQuickAccess() {
   const askClover = usePageAskClover();
   const navigation = useNavigation();
@@ -141,6 +142,7 @@ export function HomeQuickAccess() {
           </Pressable>
         ))}
       </View>
+      <FreeHomeBanners />
     </>
   );
 }

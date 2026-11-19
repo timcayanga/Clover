@@ -137,6 +137,9 @@ async function handle(
         return reply(await result.json(), result.status);
       });
     }
+    if (operation === "home-banners") {
+      return reply(await (await import("@/lib/home-banners.server")).homeBannersForUser(user.id));
+    }
     if (operation === "referrals") {
       return await withMobileRequestContext(userId, request, async () => {
         const handler = await import("@/app/api/referrals/route");

@@ -31,11 +31,11 @@ export async function dispatchSwitchEmails() {
  const environment=getCurrentUserEnvironment();const testRecipient=process.env.SWITCH_CAMPAIGN_TEST_EMAIL?.trim();
  if(environment!=="production"&&!testRecipient)return {skipped:"Set SWITCH_CAMPAIGN_TEST_EMAIL to test email delivery safely."};
  if(!process.env.ZOHO_SMTP_PASSWORD)return {skipped:"SMTP is not configured; messages remain pending."};
+ const reviewEmails=await dispatchSwitchReviewEmails();
  const events=await prisma.switchEvent.findMany({where:{emailStatus:"pending",application:{campaignId:campaignId()}},include:{application:{include:{user:{select:{email:true}}}}},take:25,orderBy:{createdAt:"asc"}});
  for(const e of events){const claimed=await prisma.switchEvent.updateMany({where:{id:e.id,emailStatus:"pending"},data:{emailStatus:"sending"}});if(!claimed.count)continue;
  const url=`${environment==="production"?"https://clover.ph":"https://staging.clover.ph"}${SWITCH_PATH}`;
  try{await sendNotificationMail(testRecipient&&environment!=="production"?testRecipient:e.application.user.email,"Your Switch to Clover application",`${e.message}\n\nView your application: ${url}`,`<p>${e.message.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")}</p><p><a href="${url}">View your application</a></p>`);await prisma.switchEvent.update({where:{id:e.id},data:{emailStatus:"sent"}});}catch{await prisma.switchEvent.update({where:{id:e.id},data:{emailStatus:"failed"}});}
  }
- const reviewEmails=await dispatchSwitchReviewEmails();
  return {processed:events.length,reviewEmails};
 }

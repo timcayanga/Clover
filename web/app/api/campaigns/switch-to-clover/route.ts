@@ -15,7 +15,7 @@ export async function POST(request:Request){try{
     if(Number(request.headers.get("content-length")??0)>3.5*1024*1024) throw new Error("Choose a receipt up to 3 MB.");
     const data=await request.formData();const file=data.get("file");if(!(file instanceof File)) throw new Error("Choose a receipt.");
     await submitSwitchEvidence(u.id,file,String(data.get("note")??""),data.get("consent")==="true");
-    after(async()=>{const {dispatchSwitchEmails}=await import("@/lib/switch-campaign-notifications.server");await dispatchSwitchEmails();});
+    after(async()=>{const {dispatchSwitchReviewEmails}=await import("@/lib/switch-review-mail.server");await dispatchSwitchReviewEmails();});
     await switchAnalytics(u.id,"application_submitted");
   }else{
     const body=await request.json();if(body.action!=="activate")throw new Error("Invalid action.");

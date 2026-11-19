@@ -2,6 +2,24 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Account-independent marketing content. Never contains financial uploads.
+model HomeBannerConfig {
+  environment String @id
+  version Int @default(1)
+  items Json
+  updatedAt DateTime @updatedAt
+}
+
+model HomeBannerAsset {
+  id String @id @default(cuid())
+  environment String
+  storageKey String @unique
+  width Int
+  height Int
+  createdAt DateTime @default(now())
+  @@index([environment, createdAt])
+}
+
 // Server-only notification configuration. Deletion preserves overrides and audit history.
 model NotificationTemplate {
   key            String

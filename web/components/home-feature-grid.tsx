@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { productPages } from "../../shared/circle-experience";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
+import { FreeHomeBanners } from "./free-home-banners";
 export function HomeFeatureGrid() {
   const track = useRef<HTMLDivElement>(null),
     [page, setPage] = useState(0);
@@ -82,6 +83,7 @@ export function HomeFeatureGrid() {
           + Add Income
         </button>
       </div>
+      <FreeHomeBanners />
     </section>
   );
 }
