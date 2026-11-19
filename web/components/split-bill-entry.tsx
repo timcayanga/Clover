@@ -7,6 +7,7 @@ import { requestAiConsent } from "./ai-consent";
 import { mergeSplitBillItemSplitMetadata } from "@/lib/split-bill";
 import { SplitItemGrid } from "./split-item-grid";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { containDialogFocus } from "@/lib/dialog-focus";
 import type { SplitItem } from "../../shared/split-bill-experience";
 import type {
   SplitBillSerializedBill,
@@ -65,6 +66,10 @@ export function SplitBillEntry({
     >([]),
     [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const camera = useRef<HTMLInputElement>(null);
+  const dialog = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (dialog.current) return containDialogFocus(dialog.current);
+  }, []);
   const key = useRef(crypto.randomUUID()),
     lock = useRef(false),
     alive = useRef(true);
@@ -294,7 +299,8 @@ export function SplitBillEntry({
       }}
     >
       <section
-        className="split-bill-modal__card direct-bill-entry"
+        ref={dialog}
+        className="split-bill-modal__card glass direct-bill-entry"
         role="dialog"
         aria-modal="true"
         aria-label="Add Bill"

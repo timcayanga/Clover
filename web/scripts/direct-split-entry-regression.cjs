@@ -199,6 +199,7 @@ async function main() {
         "@/lib/workspace-selection": {
           readSelectedWorkspaceId: () => "profile",
         },
+        "@/lib/dialog-focus": { containDialogFocus: () => () => {} },
         "./ai-consent": { requestAiConsent: async () => true },
         "@/lib/split-bill": {
           mergeSplitBillItemSplitMetadata: (_raw, items) => ({
@@ -232,6 +233,7 @@ async function main() {
         }),
       );
     let t = render();
+    assert(nodes(t).some(n => n.props?.role === "dialog" && /\bglass\b/.test(n.props.className)), "Bill entry retains Clover's card surface");
     assert(text(t).includes("Take Photo"));
     assert(text(t).includes("Add Manually"));
     assert(!text(t).includes("Sync"));
