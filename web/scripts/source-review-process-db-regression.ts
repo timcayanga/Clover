@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import sharp from 'sharp';
 import { createRequire } from 'node:module';
 import { createHash, randomUUID } from 'node:crypto';
 import { SourceReviewRequiredError, SOURCE_REVIEW_PHASE } from '../lib/import-source-review';
@@ -47,7 +48,8 @@ async function main() {
     for (const device of [false, true]) {
       const fileName = device ? 'capture.png' : 'unfamiliar.pdf';
       const fileType = device ? 'image/png' : 'application/pdf';
-      const bytes = device ? Uint8Array.from([137,80,78,71,13,10,26,10]) : new TextEncoder().encode('%PDF-1.4\n% invented transport fixture\n%%EOF');
+      // Valid synthetic pixels reach the worker; truncated PNG headers must stop at byte validation.
+      const bytes = device ? new Uint8Array(await sharp({create:{width:8,height:8,channels:3,background:'#ffffff'}}).png().toBuffer()) : new TextEncoder().encode('%PDF-1.4\n% invented transport fixture\n%%EOF');
       const file = await db.importFile.create({ data: { workspaceId: workspace.id, fileName, fileType, storageKey: 'qa/'+randomUUID() } });
       const form = new FormData();
       form.set('file', new File([bytes],fileName,{type:fileType}));
@@ -71,7 +73,8 @@ async function main() {
       controlOnParse = action;
       const file = await db.importFile.create({data:{workspaceId:workspace.id,fileName:'controlled.png',fileType:'image/png',storageKey:'qa/'+randomUUID()}});
       const form = new FormData();
-      form.set('file',new File([Uint8Array.from([137,80,78,71,13,10,26,10,action==='pause'?1:2])],'controlled.png',{type:'image/png'}));
+      const pixels = new Uint8Array(await sharp({create:{width:8,height:8,channels:3,background:action==='pause'?'#eeeeee':'#dddddd'}}).png().toBuffer());
+      form.set('file',new File([pixels],'controlled.png',{type:'image/png'}));
       form.set('workspaceId',workspace.id);form.set('importMode','receipt');form.set('forceInlineProcessing','true');
       const response = await POST(new Request('https://staging.clover.ph/api/imports/'+file.id+'/process',{method:'POST',headers:{Origin:'https://staging.clover.ph'},body:form}),{params:Promise.resolve({importId:file.id})});
       assert.equal(response.status,409);
