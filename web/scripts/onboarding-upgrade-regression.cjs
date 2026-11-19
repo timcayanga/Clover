@@ -10,7 +10,7 @@ const jsx={jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fr
 const nodes=t=>!t||typeof t!=='object'?[]:Array.isArray(t)?t.flatMap(nodes):[t,...nodes(t.props?.children)];
 const text=t=>t==null?'':typeof t==='string'||typeof t==='number'?String(t):Array.isArray(t)?t.map(text).join(''):text(t.props?.children);
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-function hooks(){const state=[],refs=[],effects=[],callbacks=[];let si=0,ri=0,ei=0,ci=0,pending=[];const same=(a,b)=>a&&b&&a.length===b.length&&a.every((x,i)=>Object.is(x,b[i]));const h={useState(value){const i=si++;if(!(i in state))state[i]=typeof value==='function'?value():value;return[state[i],v=>state[i]=typeof v==='function'?v(state[i]):v];},useRef(value){return refs[ri++]??=({current:value});},useEffect(fn,deps){const i=ei++;if(!effects[i]||!same(effects[i].deps,deps)){const old=effects[i];effects[i]={deps};pending.push(()=>{old?.cleanup?.();effects[i].cleanup=fn();});}},useCallback(fn,deps){const i=ci++;if(!callbacks[i]||!same(callbacks[i].deps,deps))callbacks[i]={fn,deps};return callbacks[i].fn;},useTransition:()=>[false,fn=>fn()]};return{h,state,refs,render(fn){si=ri=ei=ci=0;const t=fn();for(const n of nodes(t)){if(n.props?.ref&&n.props.ref.current===null)n.props.ref.current={close(){},showModal(){}};}while(pending.length)pending.shift()();return t;},stop(){effects.forEach(e=>e?.cleanup?.());}};}
+function hooks(){const state=[],refs=[],effects=[],callbacks=[];let si=0,ri=0,ei=0,ci=0,pending=[];const same=(a,b)=>a&&b&&a.length===b.length&&a.every((x,i)=>Object.is(x,b[i]));const h={useState(value){const i=si++;if(!(i in state))state[i]=typeof value==='function'?value():value;return[state[i],v=>state[i]=typeof v==='function'?v(state[i]):v];},useRef(value){return refs[ri++]??=({current:value});},useEffect(fn,deps){const i=ei++;if(!effects[i]||!same(effects[i].deps,deps)){const old=effects[i];effects[i]={deps};pending.push(()=>{old?.cleanup?.();effects[i].cleanup=fn();});}},useCallback(fn,deps){const i=ci++;if(!callbacks[i]||!same(callbacks[i].deps,deps))callbacks[i]={fn,deps};return callbacks[i].fn;},useMemo:fn=>fn(),useTransition:()=>[false,fn=>fn()]};return{h,state,refs,render(fn){si=ri=ei=ci=0;const t=fn();for(const n of nodes(t)){if(n.props?.ref&&n.props.ref.current===null)n.props.ref.current={close(){},showModal(){}};}while(pending.length)pending.shift()();return t;},stop(){effects.forEach(e=>e?.cleanup?.());}};}
 const styles={__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};
 async function offerChecks(){
  const h=hooks(),events=[],timers=new Map(),listeners=new Map();let timerId=0,tier='free',pending=false;const verified=[];
@@ -46,4 +46,28 @@ async function nativeChecks(){
  cancel=false;choose('Choose Pro').props.onPress();await flush();t=render();await flush();t=render();assert(pending);assert(choose('Choose Plus').props.disabled);assert.equal(verified.length,0,'Native store return cannot grant access without Clover verification');assert(timers.size);serverTier='premium';const[id,timer]=timers.entries().next().value;timers.delete(id);await timer.fn();await flush();render();assert.equal(verified.at(-1),'premium');assert.equal(buys,2);h.stop();assert.equal(timers.size,0);assert.equal(listeners.size,0);assert(events.some(e=>e[0]==='checkout_started'));
  console.log('PASS actual native offer hooks: store products, canceled purchase, delayed server verification, no false unlock or extra purchase, bounded polling and cleanup.');
 }
-(async()=>{await offerChecks();await paddleChecks();await nativeChecks();})().catch(e=>{console.error(e);process.exitCode=1;});
+
+async function paypalChecks(){
+ const h=hooks();let config,renders=0,closed=0,completed=0,canceled=0;
+ const window={paypal:{Buttons:options=>{config=options;return{render:async()=>{renders++;},close:()=>closed++};}}};
+ const funnel={planFunnelProperties:()=>({entry_point:'onboarding'}),beginCheckoutPreparation:()=>({id:'prep',finish(){}})};
+ const {PayPalSubscribeButton}=load('components/paypal-subscribe-button.tsx',{'react':h.h,'react/jsx-runtime':jsx,'next/script':{default:'Script'},'./referral-checkout-field':{ReferralCheckoutField:'Referral',prepareCheckout:async()=>({checkoutId:'attempt'})},'../../shared/plan-funnel':funnel,'@/components/posthog-analytics':{capturePostHogClientEvent(){}}},{window,URLSearchParams});
+ const render=()=>h.render(()=>PayPalSubscribeButton({clientId:'fixture',planId:'plus-month',customId:'fixture',entryPoint:'onboarding',onApproved:()=>completed++,onCancelled:()=>canceled++,onStart(){}}));
+ let t=render();nodes(t).find(n=>n.type==='button'&&text(n)==='Subscribe').props.onClick();render();await flush();render();assert.equal(renders,1);assert.equal(closed,0,'Changing callback identities must not close the active payment renderer');
+ let created;await config.createSubscription(null,{subscription:{create:async payload=>{created=payload;return 'subscription';}}});assert.equal(created.plan_id,'plus-month');config.onCancel();render();assert.equal(canceled,1);assert.equal(completed,0);
+ t=render();nodes(t).find(n=>n.type==='button'&&text(n)==='Subscribe').props.onClick();render();await flush();await config.onApprove();render();assert.equal(completed,1);h.stop();
+ console.log('PASS actual PayPal renderer: stable callbacks, correct product, cancellation and completion return.');
+}
+async function readinessChecks(){
+ const warnings=[],env={PADDLE_ENV:'live',PADDLE_API_KEY:'private-fixture',PADDLE_CLIENT_TOKEN:'public-fixture',PADDLE_WEBHOOK_SECRET:'webhook-fixture'};
+ const plan={tier:'plus',interval:'monthly',priceId:'private-price-fixture'};
+ let status=403,approved=false,environment='production';
+ const {getVerifiedBillingOffers}=load('lib/billing-offers.server.ts',{'./paddle-plans':{getPaddlePlans:()=>[plan]},'./deployment-environment':{getDeploymentEnvironment:()=>environment},'./env':{getEnv:()=>env},'./paypal-billing':{fetchPayPalPlan:async()=>null},'./onboarding-pricing':{matchesOnboardingPrice:()=>false},'./billing-offer-rules':{pricingMarketForCountry:()=> 'ph',matchesPaddleApprovedPrice:()=>approved,paddleProPricing:{ph:{monthly:{label:'2.69'},annual:{label:'19.99'}}},paddlePremiumPricing:{ph:{monthly:{label:'5.99'},annual:{label:'49.99'}}}},'./public-plan-comparison':{plannedProPrices:()=>({monthly:'169',annual:'1259'})}},{console:{warn:(...args)=>warnings.push(args)},fetch:async()=>({ok:status===200,status,json:async()=>({data:{}})}),AbortSignal});
+ assert.equal((await getVerifiedBillingOffers('PH')).paddle.monthly,null);assert(warnings.some(x=>x[1].reason==='provider_http_403'));
+ status=200;assert.equal((await getVerifiedBillingOffers('PH')).paddle.monthly,null);approved=true;assert.equal((await getVerifiedBillingOffers('PH')).paddle.monthly,plan.priceId);
+ environment='staging';assert.equal((await getVerifiedBillingOffers('PH')).paddle.monthly,null);assert(warnings.some(x=>x[1].reason==='environment_mismatch'));
+ assert(!JSON.stringify(warnings).includes('private-'));assert(!JSON.stringify(warnings).includes('webhook-fixture'));
+ console.log('PASS billing readiness diagnostics: rejected provider/configuration/prices stay unavailable; credentials and provider IDs never logged.');
+}
+
+(async()=>{await offerChecks();await paddleChecks();await paypalChecks();await nativeChecks();await readinessChecks();})().catch(e=>{console.error(e);process.exitCode=1;});
