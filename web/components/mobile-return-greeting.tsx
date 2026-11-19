@@ -8,7 +8,7 @@ import { greetingName } from "../../shared/home-return";
 const greeted = new Set<string>();
 
 export function MobileReturnGreeting() {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const userId = user?.id;
   const [phase, setPhase] = useState<"hidden" | "entering" | "leaving">("hidden");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -23,6 +23,7 @@ export function MobileReturnGreeting() {
   }, []);
 
   useEffect(() => {
+    if (!isLoaded) return;
     setPhase("hidden");
     if (!userId) { greeted.clear(); return; }
     if (!window.matchMedia("(max-width: 767px)").matches) return;
@@ -46,7 +47,7 @@ export function MobileReturnGreeting() {
       clearTimeout(timer.current);
       document.removeEventListener("visibilitychange", change);
     };
-  }, [dismiss, userId]);
+  }, [dismiss, isLoaded, userId]);
 
   if (!user || phase === "hidden") return null;
   const greeting = greetingName(user.firstName);

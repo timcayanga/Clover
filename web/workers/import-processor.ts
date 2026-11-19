@@ -12149,7 +12149,13 @@ const processImportFileTextImpl = async (
     openAiParsed?.receiptDetails?.parser_evidence?.source_text,
   ].filter(Boolean).join("\n");
   await checkBankingScreenshot(purchaseEvidence);
-  await checkPurchaseDocument(purchaseEvidence, true);
+  // A completed bank proof can print an invoice reference for its recipient.
+  // Require independent source-to-row verification; the word "successful"
+  // alone never establishes a payment. Explicit unpaid/quote gates still run.
+  const verifiedBankPaymentProof = [opticalPurchaseText, ...purchaseTranscripts].some(
+    source => Boolean(source) && hasVerifiedEastwestTransferRows(source, parsedRows),
+  );
+  await checkPurchaseDocument(purchaseEvidence, !verifiedBankPaymentProof);
 
   let pdfStatementEvidencePages: ReturnType<typeof readPdfStatementEvidencePages> | null = null;
   if (isPdfStatementSource && effectiveImportMode === "statement" && previouslyVisibleRows === 0 && !importFile.confirmedAt) {

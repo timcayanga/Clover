@@ -12,15 +12,21 @@ for(const target of ["staging","production"]){
   assert.match(deployed?.deploymentId??"",/^dpl_/);assert.equal(deployed?.healthVerified,true,`${target} health is unverified`);
   assert.equal(deployed?.financialRecordChanges,false,`${target} must preserve confirmed records`);
 }
+async function sha256(file) { const hash=crypto.createHash("sha256"); for await (const chunk of fs.createReadStream(file)) hash.update(chunk); return hash.digest("hex"); }
 let version,build,fingerprint;
 for(const platform of ["ios","android"]){
- const pkg=record.packages?.[platform];assert.equal(pkg?.sourceCommit,record.sourceCommit,`${platform} package source is unverified`);
+ const pkg=record.packages?.[platform];assert.match(pkg?.version??"",/^\d+\.\d+\.\d+$/);
+ assert(Number.isSafeInteger(pkg?.build)&&pkg.build>0,"Package build number is missing");
+ assert.equal(pkg?.sourceCommit,record.sourceCommit,`${platform} package source is unverified`);
  assert.match(pkg?.sourceFingerprint??"",/^[a-f0-9]{64}$/);
  version??=pkg.version;build??=pkg.build;fingerprint??=pkg.sourceFingerprint;
  assert.equal(pkg.version,version);assert.equal(pkg.build,build);assert.equal(pkg.sourceFingerprint,fingerprint,"Both platforms must use the same frozen source");
- const bytes=fs.readFileSync(path.resolve(path.dirname(file),pkg.artifactPath));
- assert.equal(crypto.createHash("sha256").update(bytes).digest("hex"),pkg.artifactSha256,"Package bytes differ from tested artifact");
+ assert.equal(await sha256(path.resolve(path.dirname(file),pkg.artifactPath)),pkg.artifactSha256,"Package bytes differ from tested artifact");
  assert.equal(pkg.embeddedProvenanceVerified,true,`${platform} embedded provenance not inspected`);
+ const inspection=JSON.parse(fs.readFileSync(path.resolve(path.dirname(file),pkg.inspectionEvidencePath),"utf8"));
+ assert.equal(inspection.provenanceVerified,true);assert.equal(inspection.artifactSha256,pkg.artifactSha256);
+ assert.equal(inspection.sourceCommit,pkg.sourceCommit);assert.equal(inspection.sourceFingerprint,pkg.sourceFingerprint);
+ assert.equal(inspection.version,pkg.version);assert.equal(inspection.build,pkg.build);
  for(const row of requirements.filter(row=>row.platforms.includes(platform))){
   const proof=pkg.checks?.[row.id];assert.equal(proof?.status,"passed",`${platform}: ${row.id} not verified`);
   assert.equal(proof?.artifactSha256,pkg.artifactSha256,`${platform}: ${row.id} tested another package`);

@@ -625,7 +625,7 @@ const isReceiptDateLine = (line: string) =>
 const isReceiptAdministrativeLine = (line: string) =>
   /\b(?:trans(?:action)?\s*no|trans\s*no|ref(?:erence)?\s*no|permit\s*no|serial\s*n[bo0]|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accred?\.?\s*no|date\s+issued|ptu\s*no|min\s*[:#]|s\/n\s*[:#]|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city|this serves as an official receipt|not valid for payment)\b/i.test(
     line
-  ) || /^(?:MIN|S\/N)\s*[:#]/i.test(line) || /^[A-Za-z][A-Za-z ]{0,20}\s*[#:]\s*\d{7,}\s*$/.test(line);
+  ) || /^(?:valid\s+(?:until|through|thru)|expir(?:y|ation)\s+date)\s*[:：]?\s*\d{1,4}[/.\-]\d{1,2}[/.\-]\d{1,4}\b/i.test(line) || /^(?:MIN|S\/N)\s*[:#]/i.test(line) || /^[A-Za-z][A-Za-z ]{0,20}\s*[#:]\s*\d{7,}\s*$/.test(line);
 
 const isReceiptFooterValueLine = (line: string) =>
   /^\s*amount\b/i.test(line) ||
@@ -866,9 +866,13 @@ const parseSummaryAmountFromLine = (line: string, options?: { keywordPattern?: R
   }
 
   const keywordPattern = options?.keywordPattern ?? null;
-  const searchText = keywordPattern ? normalized.replace(keywordPattern, " ") : normalized;
+  const labelledText = keywordPattern ? normalized.replace(keywordPattern, " ") : normalized;
+  // A printed peso prefix is not a garbled character attached to an amount.
+  // Keep the standalone-token guard for genuinely unreadable prices.
+  const searchText = options?.standaloneAmount ? labelledText.replace(/\b(?:PHP|P)(?=\s*\d)/giu, " ") : labelledText;
   const amountTokens = options?.standaloneAmount ? /(?<![\p{L}\d.,])-?\(?[\d,.-]+\)?(?![\p{L}\d.,])/gu : /-?\(?[\d,.-]+\)?/g;
   const matches = Array.from(searchText.matchAll(amountTokens))
+    .filter(match => !/^\s*%/u.test(searchText.slice((match.index ?? 0) + match[0].length)))
     .map((match) => match[0] ?? null)
     .filter((token): token is string => Boolean(token));
   if (matches.length === 0) {
@@ -2564,10 +2568,10 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
 /** A photo with a clipped settlement line is still a receipt. Keep its
  * visible fields while leaving the amount for a second read or review. */
 export function hasUnreadableReceiptPhotoTotal(source: string) {
-  const { body } = splitReceiptPromotionalFooter(readReceiptOpticalLayout(source));
+  const { body } = splitReceiptPromotionalFooter(joinReceiptSettlementLines(readReceiptOpticalLayout(source)));
   const lines = body.normalize("NFKC").split(/\r?\n/);
   const label = /^\s*(?:grand total|bill total|total(?: amount| paid| due)?|amount (?:paid|due|to pay)|sale amount)\b[ :：-]*/i;
-  const stripCurrency = (value: string) => value.trim().replace(/^(?:[A-Z]{3}\b|[₱$€£¥])\s*/iu, "");
+  const stripCurrency = (value: string) => value.trim().replace(/^(?:[A-Z]{3}\b|P(?=\s*\d)|[₱$€£¥])\s*/iu, "");
   // Integer totals are valid in several currencies. A trailing decimal
   // separator or a lone digit after it is insufficient evidence.
   const amount = /^(?:\d+|\d{1,3}(?:[,. ]\d{3})+)(?:[.,]\d{2})?$/u;

@@ -119,3 +119,19 @@ If `docs/product-spec.md` is added later, it should become the primary product s
 - Do not push if the command fails. Fix the failing regression, rerun the complete command, and only push after it passes.
 - Keep `.github/workflows/quality-gate.yml` aligned with `qa:prepush` so local and GitHub validation cannot drift.
 - Keep the reviewed parser corpus and real-worker preservation checks in `qa:release`. Do not regenerate expected financial labels from parser output or remove failing cases to make a refactor pass. For parser/extraction changes, also replay the retained private corpus using the existing originals; preserve any missing-source inventory instead of requesting wholesale reuploads.
+
+## Local Training Source Libraries
+
+- Organize all future downloaded training documents into `/Users/TimCayanga1/Documents/Bank Statements`, `/Users/TimCayanga1/Documents/Receipt Samples`, or `/Users/TimCayanga1/Documents/Bank Screenshots`, using `Organized Samples/<Country>/<Institution>/`. Create countries and institutions as needed after source review; retain unknown classifications under Unverified.
+- Never reorganize, rename, edit, or add files within Actual folders, including Actual Files, Actual SOAs, and Actual Receipts.
+- Preserve sealed knowledge archives and historical original paths. Retain the official batch source first, then place a SHA-256-verified copy in the appropriate library. File organization must not change financial data, source bytes, labels, or learning status.
+- Follow `/Users/TimCayanga1/Documents/Clover File Organization/README.md`. Review `organize.py` dry-run output and use `--apply` to create idempotent organized copies and update source indexes before completing future batches.
+
+## Release source and coverage
+
+- Before release work, identify the live staging and production commit from `/api/health` and the deployment metadata. Start from the current production source and reconcile every intended change into one integration branch. Do not replace mobile/shared trees from an older checkout.
+- Keep release source in a persistent checkout, publish the integration commit to Git, and retain prior histories. Do not force-push main/staging or discard other worktrees' edits.
+- Web deployments and installed native apps are separate targets. Native UI, local parsers, widgets and native permission changes require new packages while OTA updates are disabled. Report source-only and held-binary work explicitly.
+- Use `docs/releases/mobile-115-116-coverage.json` and the release tools to record requested behavior, web deployment IDs/commits, exact IPA/AAB hashes, embedded provenance and platform QA. A source check or one empty test account does not establish device coverage.
+- Full combined releases must pass exact-package coverage. Web-only releases can proceed with appropriate web/backend checks and backwards compatibility; do not describe them as updating installed native code.
+- Freeze store source with `mobile/scripts/release-provenance.cjs`, explicit versions/builds and the target API URL. Verify generated package provenance and runtime behavior before submission. Preserve archives and the release evidence directory.

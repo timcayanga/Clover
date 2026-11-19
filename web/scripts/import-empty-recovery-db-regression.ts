@@ -25,25 +25,28 @@ async function main() {
     const snapshot = async () => JSON.stringify([await db.account.findUniqueOrThrow({ where: { id: account.id } }), await db.transaction.findUniqueOrThrow({ where: { id: tx.id } })]);
     const before = await snapshot();
     const file = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'unreadable-bank.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID() } });
-    const execute = db.$executeRawUnsafe;
+    const { Pool } = require('pg');
+    const query = Pool.prototype.query;
     const delayedWrites: Promise<unknown>[] = [];
-    Object.assign(db, { $executeRawUnsafe: (query: string, ...values: unknown[]) => {
-      const run = async () => {
-        if (query.startsWith('UPDATE "ImportFile"') && values.includes('identifying_transactions')) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-        return execute.call(db, query, ...values);
-      };
-      const write = run();
-      if (values.includes('identifying_transactions')) delayedWrites.push(write);
+    // Delay the root pool's cosmetic write, not Prisma's method. Replacing a
+    // Prisma raw method also affects transaction proxies and detaches their
+    // transaction context, manufacturing a row-lock timeout in this test.
+    Pool.prototype.query = function (...args: unknown[]) {
+      const config = args[0] as string | { text?: string; values?: unknown[] };
+      const sql = typeof config === 'string' ? config : config.text ?? '';
+      const values = typeof config === 'string' ? args[1] : config.values;
+      const execute = () => Reflect.apply(query, this, args);
+      if (!sql.startsWith('UPDATE "ImportFile"') || !Array.isArray(values) || !values.includes('identifying_transactions')) return execute();
+      const write = new Promise(resolve => setTimeout(resolve, 200)).then(execute);
+      delayedWrites.push(write);
       return write;
-    } });
+    };
     const startedAt = performance.now();
     await assert.rejects(processImportFileText(file.id, { text: 'BANK ACCOUNT STATEMENT\nAccount number 12345678\nCurrency PHP\nOpening balance 100.00\nEnding balance 50.00\nTransaction records are unreadable', importMode: 'statement', skipVisualBackupParser: true, actorUserId: user.clerkUserId }), SourceReviewRequiredError);
     assert(performance.now() - startedAt < 10000, 'An empty import must terminate, not recurse for minutes');
     assert(delayedWrites.length > 0, 'Delayed progress race was actually exercised');
     await Promise.all(delayedWrites);
-    Object.assign(db, { $executeRawUnsafe: execute });
+    Pool.prototype.query = query;
     const stored = await db.importFile.findUniqueOrThrow({ where: { id: file.id } });
     assert.equal(stored.status, 'failed'); assert.equal(stored.processingPhase, SOURCE_REVIEW_PHASE);
     assert.equal(await db.auditLog.count({ where: { entityId: file.id, action: 'import.parser_usage' } }), 1, 'One processing request must mean one parser pass');
@@ -66,6 +69,17 @@ async function main() {
     assert.equal(await snapshot(),before);
     const sender = await db.account.create({ data: { workspaceId: workspace.id, name: 'Confirmed EastWest source', nameCustomized: true, type: 'bank', institution: 'EastWest', accountNumber: '123456781234', currency: 'PHP', balance: '543.21' } });
     const senderBefore = JSON.stringify(sender);
+    for (const [name, source] of [
+      ['pending-proof', eastwestProof.replace('Transfer successful!', 'Transfer pending')],
+      ['missing-proof-reference', eastwestProof.replace('Reference Number', 'Missing Reference')],
+      ['unpaid-invoice', 'SALES INVOICE\nInvoice Number 123456\nStatus: Unpaid\nTotal PHP 1250.00\nPayment Method: Bank Transfer'],
+    ]) {
+      const held = await db.importFile.create({data:{workspaceId:workspace.id,fileName:name+'.jpg',fileType:'image/jpeg',storageKey:'qa/'+randomUUID()}});
+      await assert.rejects(processImportFileText(held.id,{text:source,importMode:'statement',skipVisualBackupParser:true,actorUserId:user.clerkUserId}),SourceReviewRequiredError);
+      assert.equal(await db.transaction.count({where:{importFileId:held.id}}),0,'Pending, incomplete and unpaid evidence cannot become a paid expense');
+      assert.equal(await snapshot(),before);
+    }
+
     const proof = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'transfer.jpg', fileType: 'image/jpeg', storageKey: 'qa/'+randomUUID() } });
     await processImportFileText(proof.id, { text: eastwestProof, importMode: 'statement', skipVisualBackupParser: true, actorUserId: user.clerkUserId });
     const proofRows = await db.transaction.findMany({ where: { importFileId: proof.id } });
@@ -128,14 +142,19 @@ async function main() {
     let release!: () => void; let entered!: () => void;
     const hold = new Promise<void>(resolve => { release = resolve; });
     const reached = new Promise<void>(resolve => { entered = resolve; });
-    Object.assign(db, { $executeRawUnsafe: async (query: string, ...values: unknown[]) => {
-      if (query.startsWith('UPDATE "ImportFile"') && values.includes('late_race')) { entered(); await hold; }
-      return execute.call(db, query, ...values);
-    } });
+    Pool.prototype.query = function (...args: unknown[]) {
+      const config = args[0] as string | {text?:string;values?:unknown[]};
+      const sql = typeof config === 'string' ? config : config.text ?? '';
+      const values = typeof config === 'string' ? args[1] : config.values;
+      if (sql.startsWith('UPDATE "ImportFile"') && Array.isArray(values) && values.includes('late_race')) {
+        entered(); return hold.then(() => Reflect.apply(query, this, args));
+      }
+      return Reflect.apply(query, this, args);
+    };
     const late = updateImportFileCompat(liveFile.id, { processingPhase: 'late_race', status: 'processing' }, { fetchUpdated: false, progressOnly: true });
     await reached;
     const completed = await db.importFile.update({ where: { id: liveFile.id }, data: { status: 'done', processingPhase: 'complete' } });
-    release(); await late; Object.assign(db, { $executeRawUnsafe: execute });
+    release(); await late; Pool.prototype.query = query;
     assert.equal(JSON.stringify(await db.importFile.findUniqueOrThrow({ where: { id: liveFile.id } })), JSON.stringify(completed));
 
     const columnFile = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'column-receipt.jpg', fileType: 'image/jpeg', storageKey: 'qa/'+randomUUID() } });

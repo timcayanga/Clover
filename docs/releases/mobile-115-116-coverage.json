@@ -108,8 +108,7 @@
     "android": "pending-exact-package-verification",
     "platforms": [
       "ios",
-      "android",
-      "web"
+      "android"
     ]
   },
   {
@@ -530,8 +529,7 @@
     "android": "pending-exact-package-verification",
     "platforms": [
       "ios",
-      "android",
-      "web"
+      "android"
     ]
   },
   {
@@ -549,5 +547,60 @@
     "platforms": [
       "web"
     ]
+  },
+  {
+    "id": "native-ocr",
+    "requirement": "On-device image validation, previews, OCR/layout, cancellation and bounded concurrency",
+    "sourcePaths": [
+      "mobile/modules/clover-local-ai/ios/CloverLocalAIModule.swift",
+      "mobile/modules/clover-local-ai/android/src/main/java/ph/clover/localai/CloverLocalAIModule.kt",
+      "mobile/src/offline/local-ocr-slot.ts"
+    ],
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "unresolvedPathAnchors": []
+  },
+  {
+    "id": "opening-onboarding",
+    "requirement": "Opening slides, native signup/onboarding and first visible transaction attribution",
+    "sourcePaths": [
+      "mobile/app/welcome.tsx",
+      "mobile/app/onboarding.tsx",
+      "mobile/src/first-use-activation.tsx"
+    ],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "unresolvedPathAnchors": []
+  },
+  {
+    "id": "native-optimization",
+    "requirement": "Release R8/resource optimization and supported Android compatibility",
+    "sourcePaths": [
+      "mobile/plugins/with-clover-android-release.cjs"
+    ],
+    "platforms": [
+      "android"
+    ],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "source-present-runtime-not-reverified",
+    "production": "source-present-runtime-not-reverified",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "unresolvedPathAnchors": []
   }
 ]

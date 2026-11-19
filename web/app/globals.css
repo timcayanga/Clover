@@ -67444,3 +67444,12 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 @media (prefers-reduced-motion: reduce) {
   .mobile-return-greeting[data-phase] { animation: none; }
 }
+
+@media (max-width: 767px) {
+  .report-v2[data-filters-open="true"] .report-v2-toolbar,
+  .report-v2[data-filters-open="true"] > div[aria-busy] { display: none; }
+  .report-v2[data-filters-open="true"] .report-v2-panel { padding: 12px; gap: 8px; }
+  .report-v2-filter > label, .report-v2-filter summary { min-height: 44px; padding: 2px 0; gap: 8px; }
+  .report-v2-filter select, .report-v2-filter input[type=date] { padding: 4px 8px; }
+  .report-mobile-export { flex: 1 0 100%; }
+}

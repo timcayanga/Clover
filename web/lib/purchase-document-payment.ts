@@ -1,3 +1,4 @@
+import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
 export type UnsettledPurchaseDocument = "quote" | "unpaid_invoice" | "unverified_invoice";
@@ -18,7 +19,7 @@ function hasPositiveAmount(text: string, label: string) {
 }
 
 export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurchaseDocument | null {
-  const text = splitReceiptPromotionalFooter(source).body.split(/\r?\n/).map((line) => line.trim()).join("\n");
+  const text = splitReceiptPromotionalFooter(joinReceiptColumnSettlement(source)).body.split(/\r?\n/).map((line) => line.trim()).join("\n");
   if (statementHeading.test(text)) return null;
   if (quoteHeading.test(text)) return "quote";
   if (!invoiceHeading.test(text)) return null;

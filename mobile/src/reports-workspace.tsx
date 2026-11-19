@@ -291,14 +291,14 @@ function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportVie
           </Pressable>
         }
       />
-      <PlanTabs
+      {!filters ? <PlanTabs
         items={names}
         value={names[sections.indexOf(view.section)]}
         onChange={(name) =>
           setView((v) => ({ ...v, section: sections[names.indexOf(name)] }))
         }
-      />
-      {data ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
+      /> : null}
+      {!filters && data ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
       {filters && data ? (
         <ReportCard title="Filter reports" compact>
           <DropdownFilter

@@ -1,8 +1,12 @@
+import { columnReceipt } from "./receipt-column-settlement-regression";
 import assert from "node:assert/strict";
 import { classifyUnsettledPurchaseDocument, type UnsettledPurchaseDocument } from "../lib/purchase-document-payment";
 import { assessFinancialUploadScope } from "../lib/financial-upload-scope";
 
 const examples: [string, UnsettledPurchaseDocument | null][] = [
+  [columnReceipt, null],
+  [columnReceipt.replace('750.00', '749.00'), "unverified_invoice"],
+  [columnReceipt + "\nStatus: Unpaid", "unpaid_invoice"],
   ["Tax Invoice\nStatus: Unpaid\nTotal ₱425.00", "unpaid_invoice"],
   ["Invoice #PH-123\nPayment status: Pending payment\nTotal ₱425.00", "unpaid_invoice"],
   ["Invoice\nAmount paid PHP 100.00\nBalance due PHP 325.00", "unpaid_invoice"],

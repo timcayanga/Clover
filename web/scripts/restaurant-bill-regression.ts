@@ -29,6 +29,8 @@ assert.match(joined,/Amount due P374\.00/);
 assert.equal(joinRestaurantBillColumns(joined),joined);
 const receipt=parseReceiptText(restaurantBill);
 assert.equal(receipt.total,"374.00");
+assert.equal(receipt.serviceCharge,"34.00","Read printed P34, not the 10% rate");
+assert.equal(parseReceiptText("SAMPLE STORE\n2026-10-22\nSubtotal PHP 100.00\nService charge 10%\nTotal PHP 110.00").serviceCharge,null,"A percentage alone is not a printed fee amount");
 assert.equal(receipt.billDate?.slice(0,10),"2026-10-22");
 assert.equal(receipt.receiptText,restaurantBill,"Original source survives reconstructed reading order");
 for(const invalid of [restaurantBill.replace("P374.00","P375.00"),restaurantBill.replace("10%","12%"),

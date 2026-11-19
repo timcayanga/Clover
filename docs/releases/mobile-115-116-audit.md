@@ -41,8 +41,26 @@ For CLI web deployments set `CLOVER_BUILD_SOURCE_SHA` to the actual full commit,
 
 ## Evidence
 
-Private local evidence: `/Users/TimCayanga1/Documents/Clover/QA/2026-11-19-release-coverage/` (live health snapshots, archived-package hashes/config inspection, 187 historical request summaries, 30 coverage groups, test and audit logs). Earlier November18 manifest: `QA/2026-11-18-mobile-116-discrepancies/release.json`.
+Private local evidence: `/Users/TimCayanga1/Documents/Clover/QA/2026-11-19-release-coverage/` (live health snapshots, archived-package hashes/config inspection, 187 historical request summaries, 33 coverage groups, test and audit logs). Earlier November18 manifest: `QA/2026-11-18-mobile-116-discrepancies/release.json`.
 
 No confirmed financial transactions or balances were changed by this audit.
 
 Build configuration references: [Expo version management](https://docs.expo.dev/build-reference/app-versions/) and [EAS upload exclusions](https://docs.expo.dev/build-reference/easignore/).
+
+## Additional release-gate findings
+
+The broader pre-push gate reproduced a peso-prefixed restaurant-bill defect already present in production source: settlement parsing refused `P374.00`, while the standalone service-charge guard skipped `P34.00` and selected `10%`. The narrow correction recognizes that printed peso prefix and excludes rate tokens from monetary summary amounts. Tests retain malformed totals, mixed currencies and arithmetic conflicts as unresolved. This changes draft extraction, not confirmed financial records.
+
+The empty-import concurrency regression also wrapped every Prisma raw call in an async promise. That removes transaction binding for unrelated transaction writes and creates a test-only row-lock timeout. Its spy now delays only the intended cosmetic progress write at the PostgreSQL pool boundary, preserving Prisma transaction binding; all original terminal-state, no-network and confirmed-record snapshot assertions remain.
+
+Mobile web Reports now removes tabs/date overhead while its filter panel is open, retains at least 44px filter row targets and gives export its own full row. The greeting ignores transient Clerk loading when deciding whether a user has logged out.
+
+`python3 tools/release/inspect-package.py ARTIFACT --commit FULL_SHA --api https://clover.ph --output INSPECTION.json` reads embedded source metadata directly from the IPA/AAB and hashes the exact artifact. The final coverage gate consumes that inspection file. Android app-config metadata is labeled separately from native manifest/version validation; the installed-version check is still required. The archived1.1.6 AAB correctly fails the new provenance check because it predates the stamp. No new packages were generated for this inspection.
+
+## Git publication gap
+
+Read-only `git ls-remote` on 19 November confirmed GitHub `main` at `9396824a4bd50f70b320617a441d5658240a028c` (4 May) and `staging` at `f6e899dc0ad087a898e5931857237a48417161d7` (14 November). The live November deployment lineage starts at orphan snapshot `7ed9249f0`, with no common ancestor with those refs. The repository workflow uses staging as its shared development branch, so main’s age alone is not a defect. The unpublished staging changes and unrelated deployed snapshot are the publication gap. The reconciliation reconnects the validated release tree with staging history; file-tree equality is checked at that history merge. Publication uses a normal fast-forward push to staging, never a force update or a remote temporary branch.
+
+Further independent regressions found that the photo-total guard, field-evidence checker and invoice classifier did not share the parser's verified column reading order. They could discard a correctly reconstructed total or payment evidence; an expiry date could also appear as a priced item. The correction reuses the existing conservative column reconstruction, preserves raw evidence and suggested-currency status, and excludes dated permit-expiry lines from itemization. Conflicting cash/total columns and clipped cents remain unresolved. The real worker test retains byte-identical confirmed-record snapshots and adds pending/incomplete/unpaid counterexamples.
+
+The local broad test run also hit a resource-related Adviser timeout while other source checks were running. The Adviser case passed in isolation; release checks are being run sequentially on the supported Node24 toolchain. A timed-out run is not counted as a pass.

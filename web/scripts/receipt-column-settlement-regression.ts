@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { joinReceiptColumnSettlement } from '../lib/receipt-column-settlement';
-import { parseReceiptText } from '../lib/split-bill';
+import { parseReceiptText, parseReceiptPhotoText, hasUnreadableReceiptPhotoTotal } from '../lib/split-bill';
 import { applyReceiptDefaultCurrency, inferReceiptLocationCurrency } from '../lib/receipt-intake';
 
 // Invented source reproducing column-order OCR, not a customer receipt.
@@ -52,6 +52,7 @@ assert.match(prepared, /CASH 1,000\.00/);
 const receipt = parseReceiptText(columnReceipt);
 assert.equal(receipt.merchantName, 'QUICK MEALS CORPORATION');
 assert.equal(receipt.total, '250.00');
+assert.deepEqual(receipt.items.map(item=>item.description),['Rice Meal','Chicken Meal'],'Permit expiry dates are administrative evidence, never priced items');
 assert.equal(receipt.subtotal, '250.00');
 assert.equal(receipt.billDate?.slice(0,10), '2026-10-23', 'Purchase date outranks old printer permit dates');
 assert.equal(receipt.receiptText, columnReceipt, 'Preserve the exact source independently of reconstructed cells');
@@ -75,3 +76,8 @@ for (const invalid of [
 ]) assert.equal(joinReceiptColumnSettlement(invalid), invalid, 'Unsafe/ambiguous alignment must remain unresolved');
 assert.equal(joinReceiptColumnSettlement('RECEIPT\nTOTAL\n250.00'), 'RECEIPT\nTOTAL\n250.00');
 console.log('Receipt columns: printed item/subtotal/total/cash/change agreement, exact source, purchase dates, idempotence and unsafe negatives passed.');
+
+assert.equal(hasUnreadableReceiptPhotoTotal(columnReceipt),false,"Independently reconciled columns are not clipped totals");
+assert.equal(parseReceiptPhotoText(columnReceipt).total,"250.00","The photo route must preserve the same verified total");
+assert.equal(hasUnreadableReceiptPhotoTotal(columnReceipt.replace("750.00","749.00")),true,"Conflicting columns stay unreadable");
+assert.equal(parseReceiptPhotoText("SAMPLE STORE\n2026-10-23\nSUBTOTAL P340.00\nTOTAL P374.").total,null,"Clipped peso-prefixed cents remain unresolved");

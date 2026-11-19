@@ -1,3 +1,4 @@
+import { columnReceipt } from "./receipt-column-settlement-regression";
 import assert from "node:assert/strict";
 import { keepVerifiedReceiptFields, receiptBackupQuestions, requireReceiptFieldEvidence } from "../lib/receipt-field-evidence";
 import { hasIndependentReceiptCore, shouldRefineReceiptCore } from "../lib/receipt-detail-refinement";
@@ -50,3 +51,10 @@ assert(shouldRefineReceiptCore(deferred));
 assert(!shouldRefineReceiptCore({ ...deferred, imageCount: 0 }));
 assert(!shouldRefineReceiptCore({ ...deferred, importMode: "statement" }));
 assert(!shouldRefineReceiptCore({ ...deferred, localItemsDeferred: false }));
+
+const columnEvidence = requireReceiptFieldEvidence({...details,merchant_raw:"QUICK MEALS CORPORATION",merchant_clean:"QUICK MEALS CORPORATION",transaction_date:"2026-10-23",total:250,parser_evidence:{source_text:columnReceipt},currency_resolution:{source:"receipt_location",evidence:"BIR"}},columnReceipt);
+assert.equal(columnEvidence.total,250);
+assert.equal(columnEvidence.core_field_evidence.total.status,"supported");
+assert.equal(columnEvidence.core_field_evidence.currency.status,"suggested","Regional currency remains a suggestion");
+assert.equal(columnEvidence.parser_evidence.source_text,columnReceipt,"Layout recovery never replaces original evidence");
+assert.equal(requireReceiptFieldEvidence({...columnEvidence,core_field_evidence:undefined},columnReceipt.replace("750.00","749.00")).total,null,"Unreconciled columns cannot establish a payable total");

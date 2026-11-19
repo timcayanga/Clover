@@ -45,3 +45,5 @@ This document captures the current EastWest parsing guidance for Clover.
 - Require the exact success heading, EastWest brand, sender role, masked account suffix, printed PHP principal, explicit PHP fee, InstaPay mode, valid complete date/time and reference. Pending/failed screens are not successful proof.
 - Keep principal and nonzero fee as separate outgoing components, each linked to the reference and source timestamp. Zero fee produces no invented extra expense. Do not manufacture hidden account digits, balances, or a matching incoming transfer.
 - Masked sender matching remains review-required. Preserve source text, recipient roles, component amounts and user-confirmed existing account identity/balance.
+
+- An incidental `Invoice Number` on a verified successful transfer is a recipient/reference field, not evidence that the bank proof is an unpaid purchase invoice. Exempt only the unverified-invoice gate after independently matching all source rows. Keep explicit unpaid/quote, pending/failed, malformed evidence and source-account review safeguards.

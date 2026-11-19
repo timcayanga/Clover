@@ -1,3 +1,4 @@
+import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
 import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { getExplicitEvidenceDates, resolveReceiptPurchaseDateRoles } from "./receipt-date-evidence";
 import { readReceiptMerchantEvidence } from "./receipt-merchant-evidence";
@@ -31,7 +32,9 @@ export function requireReceiptFieldEvidence<T extends {
     confidence: field.status === "supported" && Number.isFinite(origin.confidence) ? origin.confidence : null,
   } : field;
   const source = opticalText.trim() ? opticalText : details.parser_evidence.source_text ?? "";
-  const { body } = splitReceiptPromotionalFooter(source);
+  // Use the same independently reconciled reading order as extraction. The
+  // original optical/source transcript remains unchanged in parser_evidence.
+  const { body } = splitReceiptPromotionalFooter(joinReceiptColumnSettlement(source));
   const lines = body.split(/\r?\n/u);
   const words = lines.map(line => line.trim());
   const merchant = details.merchant_raw || details.merchant_clean;
