@@ -12,16 +12,22 @@ async function main(){
  const account=await db.account.create({data:{workspaceId:ws.id,name:'Metrobank Savings',institution:'Metrobank',accountNumber:'0012345678901',type:'bank',currency:'PHP',source:'manual',balance:1000}});
  const conn=await db.finverseConnection.create({data:{workspaceId:ws.id,userId:user.id,stateHash:`qa-${Date.now()}`,stateExpiresAt:new Date(),status:'ready'}});
  await db.finverseAccountLink.create({data:{connectionId:conn.id,workspaceId:ws.id,accountId:account.id,externalAccountId:'qa-bank',rawPayload:{},normalizedPayload:{balance:900}}});
- const transaction=await db.transaction.create({data:{workspaceId:ws.id,accountId:account.id,date:new Date('2026-09-20'),amount:100,currency:'PHP',type:'expense',merchantRaw:'Coffee Store',merchantClean:'My coffee',description:'Keep my note',reviewStatus:'confirmed'}});
+ const transaction=await db.transaction.create({data:{workspaceId:ws.id,accountId:account.id,date:new Date('2026-09-20'),amount:100,currency:'PHP',type:'expense',merchantRaw:'Coffee Store',merchantClean:'My coffee',description:'Keep my note. Payment reference: ABC123456',reviewStatus:'confirmed'}});
  await db.finverseTransactionRecord.create({data:{connectionId:conn.id,externalTransactionId:'qa-payment',externalAccountId:'qa-bank',transactionId:transaction.id,rawPayload:{},normalizedPayload:{}}});
- const makeFile=async(name:string,merchant:string)=>{
+ const makeFile=async(name:string,merchant:string,reference?:string)=>{
  const file=await db.importFile.create({data:{workspaceId:ws.id,accountId:account.id,fileName:name,fileType:'text/csv',storageKey:'qa-local-only',status:'processing'}});
- await db.parsedTransaction.create({data:{workspaceId:ws.id,importFileId:file.id,institution:'Metrobank',accountName:account.name,accountNumber:account.accountNumber,date:new Date('2026-09-20'),amount:100,currency:'PHP',type:'expense',merchantRaw:merchant,merchantClean:merchant,categoryName:'Food & Dining',confidence:99,rawPayload:{source:'structured_transaction_csv',sourceRowIndex:1,accountType:'bank',parserConfidence:100}}});return file;
+ await db.parsedTransaction.create({data:{workspaceId:ws.id,importFileId:file.id,institution:'Metrobank',accountName:account.name,accountNumber:account.accountNumber,date:new Date('2026-09-20'),amount:100,currency:'PHP',type:'expense',merchantRaw:reference ? `${merchant} ref ${reference}` : merchant,merchantClean:merchant,categoryName:'Food & Dining',confidence:99,rawPayload:{source:'structured_transaction_csv',sourceRowIndex:1,accountType:'bank',parserConfidence:100}}});return file;
  };
  const before=JSON.stringify(transaction);
- const exact=await makeFile('exact.csv','Coffee Store');await confirmImportFile(exact.id,account.id);
+ const exact=await makeFile('exact.csv','Coffee Store','ABC123456');await confirmImportFile(exact.id,account.id);
  assert.equal(await db.transaction.count({where:{workspaceId:ws.id}}),1,'Statement after bank sync must not duplicate the payment');
  assert.equal(JSON.stringify(await db.transaction.findUnique({where:{id:transaction.id}})),before,'Bank row must be byte-for-byte unchanged');
+ // Identical merchant/date/amount without a shared reference is not proof:
+ // preserve a possible second purchase and ask for review rather than dropping it.
+ const sameMerchant=await makeFile('same-merchant.csv','Coffee Store');await confirmImportFile(sameMerchant.id,account.id);
+ const repeatedPurchase=await db.transaction.findFirstOrThrow({where:{importFileId:sameMerchant.id}});
+ assert.equal(repeatedPurchase.reviewStatus,'pending_review');assert.equal(repeatedPurchase.isExcluded,false);
+ assert.equal(JSON.stringify(await db.transaction.findUnique({where:{id:transaction.id}})),before);
  const uncertain=await makeFile('uncertain.csv','Unrecognized narration');await confirmImportFile(uncertain.id,account.id);
  const review=await db.transaction.findFirstOrThrow({where:{importFileId:uncertain.id}});
  assert.equal(review.isExcluded,false);assert.equal(review.reviewStatus,'pending_review');
