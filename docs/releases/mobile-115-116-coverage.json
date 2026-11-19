@@ -679,7 +679,10 @@
   {
     "id": "free-home-banners",
     "requirement": "Free-only swipeable Home banners, five-second rotation and Plans/campaign destinations",
-    "sourcePaths": [],
+    "sourcePaths": [
+      "mobile/src/free-home-banners.tsx",
+      "web/components/free-home-banners.tsx"
+    ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
     "staging": "pending-exact-release-verification",
