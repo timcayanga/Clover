@@ -14,6 +14,7 @@ import {
 import { ImportFilesModal } from "./import-files-modal";
 import type { AdviserPlanningSurface } from "@/lib/adviser-planning";
 import "./add-entry-methods.css";
+import { RecentImportHistory } from "./recent-import-history";
 const AdviserChat = dynamic(() =>
   import("./adviser-chat").then((m) => m.AdviserChat),
   { loading: () => <div className="adviser-chat__loading" role="status">Opening Ask Clover…</div> },
@@ -241,6 +242,7 @@ export function AddEntryMethods({
           <p>Choose a Profile before uploading.</p>
         )}
         <UploadSecurityCopy />
+        {tab === "upload" ? <RecentImportHistory key={workspaceId} workspaceId={workspaceId} /> : null}
       </div>
       {kind === "accounts" && (tab === "connect" || connectVisited) ? <div role="tabpanel" hidden={tab !== "connect"} id={`${id}-connect-panel`} aria-labelledby={`${id}-connect`}>{workspaceId ? <FinverseConnectButton workspaceId={workspaceId} onSynced={onAccountsSynced} /> : <p>Choose a Profile before connecting your bank.</p>}</div> : null}
       {workspaceId && upload ? (

@@ -7894,6 +7894,7 @@ function TransactionsPageContent() {
                 checked={allMobileSelected} ref={input => { if (input) input.indeterminate = !allMobileSelected; }}
                 onChange={() => setSelectedTransactionIds(allMobileSelected ? [] : mobileVisibleTransactions.slice(0, 500).map(row => row.id))} />
               <button className="button button-primary button-small" type="button" onClick={() => setBulkDestinationOpen(true)}>Add To</button>
+              <button className="button button-secondary button-small" type="button" onClick={editSelection}>Edit</button>
               <button className="button button-secondary button-small" type="button" onClick={() => setBulkDeleteConfirmOpen(true)}>Delete</button>
             </div>
           ) : null}

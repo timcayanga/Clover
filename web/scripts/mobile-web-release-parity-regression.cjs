@@ -102,6 +102,11 @@ function declarations(selector, width) {
 const summary = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-summary';
 const calendar = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-calendar';
 for (const width of [320,393,820,1100]) {
+  assert.equal(declarations('.transactions-entry--figma[data-entry-method="ask"] .adviser-chat__composer',width)['margin-top'], 'auto');
+  for (const selector of ['.transactions-entry--figma[data-entry-method="ask"] > #quick-entry-panel-ask:not([hidden])', '.transactions-entry--figma[data-entry-method="ask"] .adviser-experience--entry', '.transactions-entry--figma[data-entry-method="ask"] .adviser-experience__main', '.transactions-entry--figma[data-entry-method="ask"] .adviser-chat']) {
+    assert.equal(declarations(selector,width).flex,'1');
+    assert.equal(declarations(selector,width)['min-height'],'0');
+  }
   assert.equal(declarations('.contextual-ask-clover__panel',width).bottom, 'var(--ask-keyboard-inset, 0px)');
   assert.equal(declarations('.contextual-ask-clover__panel',width).height, 'min(86dvh, 800px, var(--ask-visible-height, 100dvh))');
   for (const selector of ['.contextual-ask-clover__chat', '.contextual-ask-clover__chat > .adviser-experience', '.contextual-ask-clover__chat .adviser-experience__main', '.contextual-ask-clover__chat .adviser-chat']) {

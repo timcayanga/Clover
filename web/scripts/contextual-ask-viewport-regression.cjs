@@ -32,4 +32,7 @@ for (const hasVisualViewport of [true,false]) {
   assert.equal(frames.size,0);assert.equal(values.size,0);assert.equal(browser.listeners.size,0);assert.equal(viewport.listeners.size,0);
 }
 assert.match(fs.readFileSync(path.join(__dirname,'../components/contextual-ask-clover.tsx'),'utf8'),/if \(isOpen && panelRef.current\) return bindAskCloverViewport\(panelRef.current\)/);
+const entry = fs.readFileSync(path.join(__dirname,'../components/dashboard-top-actions.tsx'),'utf8');
+assert.match(entry,/if \(entryTab === "ask" && rootRef.current\) return bindAskCloverViewport\(rootRef.current\)/);
+assert.match(entry,/data-entry-method=\{entryTab\}/);
 console.log('PASS actual sheet viewport binding: keyboard open/close, pan, resize fallback, frame coalescing and complete close cleanup.');

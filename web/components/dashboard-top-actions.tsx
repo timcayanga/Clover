@@ -8,10 +8,12 @@ import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinverseConnectButton } from "./finverse-connect-button";
 import { TransactionTableEntry } from "@/components/transaction-table-entry";
 import { UploadSourcePicker, UploadSecurityCopy } from "@/components/upload-source-buttons";
+import { RecentImportHistory } from "@/components/recent-import-history";
 
 import dynamic from "next/dynamic";
 const AdviserChat = dynamic(() => import("@/components/adviser-chat").then(module => module.AdviserChat), { loading: () => <div className="adviser-chat__loading" role="status">Opening Ask Clover…</div> });
 import { containDialogFocus } from "@/lib/dialog-focus";
+import { bindAskCloverViewport } from "@/lib/ask-clover-viewport";
 import { InterfaceIcon } from "@/components/interface-icon";
 
 import { createPortal } from "react-dom";
@@ -155,6 +157,9 @@ export function DashboardManualTransactionModal({
   });
   useEffect(() => { if (!form.merchantRaw && !form.amount) setManualCategoryTouched(false); }, [form.merchantRaw, form.amount]);
   const rootRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (entryTab === "ask" && rootRef.current) return bindAskCloverViewport(rootRef.current);
+  }, [entryTab]);
   const categoryButtonRef = useRef<HTMLButtonElement | null>(null);
   const manualModalStyle = useMemo<CSSProperties>(
     () => ({
@@ -498,6 +503,7 @@ export function DashboardManualTransactionModal({
     <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={handleClose}>
       <section
         className="modal-card modal-card--manual transactions-entry--figma glass"
+        data-entry-method={entryTab}
         style={manualModalStyle}
         ref={rootRef}
         role="dialog"
@@ -905,6 +911,7 @@ export function DashboardManualTransactionModal({
         <div id="quick-entry-panel-upload" role="tabpanel" aria-labelledby="quick-entry-tab-upload" hidden={entryTab !== "upload"} className="transaction-creation-panel">
 
           <UploadSourcePicker onSelect={files => { setEntryUploadFiles(files); setEntryUploadOpen(true); }} /><UploadSecurityCopy />
+          {entryTab === "upload" ? <RecentImportHistory key={workspaceId} workspaceId={workspaceId} /> : null}
         </div>
       </section>
       <ImportFilesModal initialFiles={entryUploadFiles} onInitialFilesConsumed={() => setEntryUploadFiles([])} open={entryUploadOpen} workspaceId={workspaceId} accounts={accounts} onClose={() => setEntryUploadOpen(false)} onImported={() => router.refresh()} />

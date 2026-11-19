@@ -67438,6 +67438,36 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 }
 
 /* Release audit: mobile counterparts must match the restored native screens. */
+.recent-import-history { margin-top: 16px; }
+.recent-import-history h4 { margin: 0 0 8px; font-size: 14px; }
+.recent-import-history ul { margin: 0; padding: 0; list-style: none; }
+.recent-import-history li { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--stroke); font-size: 13px; overflow-wrap: anywhere; }
+.recent-import-history li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.recent-import-history small { color: var(--muted); font-size: 11px; }
+@media (max-width: 1100px) {
+  body.mobile-creation-page .modal-backdrop > .transactions-entry--figma[data-entry-method="ask"],
+  .modal-backdrop--centered-mobile > .transactions-entry--figma[data-entry-method="ask"] {
+    display: flex;
+    flex-direction: column;
+    height: calc(var(--ask-visible-height, 100dvh) - 80px - clamp(0px, calc(92px - var(--ask-keyboard-inset, 0px)), 92px)) !important;
+    min-height: 0 !important;
+    max-height: calc(100dvh - 24px) !important;
+    padding: 16px 16px 12px !important;
+    overflow: hidden !important;
+  }
+  .transactions-entry--figma[data-entry-method="ask"] > #quick-entry-panel-ask:not([hidden]),
+  .transactions-entry--figma[data-entry-method="ask"] .adviser-experience--entry,
+  .transactions-entry--figma[data-entry-method="ask"] .adviser-experience__main,
+  .transactions-entry--figma[data-entry-method="ask"] .adviser-chat {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .transactions-entry--figma[data-entry-method="ask"] .adviser-chat__thread { flex: 1; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
+  .transactions-entry--figma[data-entry-method="ask"] .adviser-chat__composer { position: relative; margin-top: auto; flex: 0 0 auto; }
+}
 @media (max-width: 1100px) {
   .contextual-ask-clover__panel {
     bottom: var(--ask-keyboard-inset, 0px);

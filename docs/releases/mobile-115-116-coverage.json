@@ -4,7 +4,8 @@
     "requirement": "Quick Access and main menu open Accounts and Recurring; centered headers",
     "sourcePaths": [
       "mobile/app/_layout.tsx",
-      "mobile/src/ui.tsx"
+      "mobile/src/ui.tsx",
+      "web/components/clover-shell.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -22,7 +23,10 @@
     "id": "home",
     "requirement": "Compact Quick Access, insights before reminders, upcoming dates and pending Split Bills",
     "sourcePaths": [
-      "mobile/app/(tabs)/index.tsx"
+      "mobile/app/(tabs)/index.tsx",
+      "web/components/dashboard-page-content.tsx",
+      "web/components/home-feature-grid.tsx",
+      "web/components/dashboard-top-actions.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -196,7 +200,8 @@
     "id": "filter-options",
     "requirement": "Category/type/account icons; institution groups; exclude investment holdings",
     "sourcePaths": [
-      "mobile/src/transaction-filters.tsx"
+      "mobile/src/transaction-filters.tsx",
+      "web/app/transactions/page.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -215,10 +220,12 @@
     "requirement": "Select all, Edit/Add To/Delete toolbar replacing search; safe explicit mass edit",
     "sourcePaths": [
       "mobile/src/transaction-bulk-edit.tsx",
-      "mobile/app/(tabs)/transactions.tsx"
+      "mobile/app/(tabs)/transactions.tsx",
+      "web/app/transactions/page.tsx",
+      "web/components/transaction-selection-toolbar.tsx"
     ],
     "unresolvedPathAnchors": [],
-    "sourceStatus": "present-requires-behavior-verification",
+    "sourceStatus": "reconciled-in-branch",
     "staging": "source-present-runtime-not-reverified",
     "production": "source-present-runtime-not-reverified",
     "ios": "pending-exact-package-verification",
@@ -233,7 +240,8 @@
     "id": "destinations",
     "requirement": "Income eligible for Recurring; expenses only for Circles/Split Bills; dismissible sheet",
     "sourcePaths": [
-      "mobile/src/transaction-bulk-destination.tsx"
+      "mobile/src/transaction-bulk-destination.tsx",
+      "web/components/transaction-bulk-destination.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -251,7 +259,9 @@
     "id": "manual-items",
     "requirement": "Manual entry More Details exposes line items",
     "sourcePaths": [
-      "mobile/src/transaction-entry.tsx"
+      "mobile/src/transaction-entry.tsx",
+      "web/components/dashboard-top-actions.tsx",
+      "web/components/transaction-table-entry.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -274,7 +284,8 @@
       "web/lib/ask-clover-viewport.ts",
       "web/components/adviser-chat.tsx",
       "mobile/app/(tabs)/adviser.tsx",
-      "mobile/src/ui.tsx"
+      "mobile/src/ui.tsx",
+      "web/components/dashboard-top-actions.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "reconciled-in-branch",
@@ -292,7 +303,10 @@
     "id": "add-methods",
     "requirement": "White selected icons; consistent manual/upload source artwork",
     "sourcePaths": [
-      "mobile/src/add-entry-methods.tsx"
+      "mobile/src/add-entry-methods.tsx",
+      "web/components/add-entry-methods.tsx",
+      "web/components/add-entry-methods.css",
+      "web/components/dashboard-top-actions.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -311,10 +325,13 @@
     "requirement": "25MiB accepted-source limit; compact date/account/count/status import history",
     "sourcePaths": [
       "mobile/src/upload.ts",
-      "mobile/app/(tabs)/add.tsx"
+      "mobile/app/(tabs)/add.tsx",
+      "web/components/recent-import-history.tsx",
+      "web/app/api/imports/recent/route.ts",
+      "web/lib/data-engine.ts"
     ],
     "unresolvedPathAnchors": [],
-    "sourceStatus": "present-requires-behavior-verification",
+    "sourceStatus": "reconciled-in-branch",
     "staging": "source-present-runtime-not-reverified",
     "production": "source-present-runtime-not-reverified",
     "ios": "pending-exact-package-verification",
@@ -330,7 +347,9 @@
     "requirement": "Profile-scoped cached rows and visible-result measurement",
     "sourcePaths": [
       "mobile/app/(tabs)/transactions.tsx",
-      "mobile/src/offline/engine.ts"
+      "mobile/src/offline/engine.ts",
+      "web/lib/workspace-cache.ts",
+      "web/app/transactions/page.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -349,7 +368,9 @@
     "requirement": "Bank logos including Public Bank Malaysia; account branding",
     "sourcePaths": [
       "shared/bank-logo-catalog.json",
-      "mobile/src/finverse-connect.tsx"
+      "mobile/src/finverse-connect.tsx",
+      "web/lib/bank-logo-catalog.ts",
+      "web/components/finverse-bank-picker.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -368,7 +389,10 @@
     "requirement": "Selection attribution, hosted handoff, MFA visibility limits, selection and usable-data milestones",
     "sourcePaths": [
       "shared/bank-journey-monitor.ts",
-      "mobile/src/use-bank-visible-stage.ts"
+      "mobile/src/use-bank-visible-stage.ts",
+      "web/lib/bank-link-journey.ts",
+      "web/lib/bank-journey-monitor.ts",
+      "web/components/finverse-connect-button.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -386,7 +410,8 @@
     "id": "bank-sync",
     "requirement": "Every sync has own attempt/outcome; backwards-compatible API",
     "sourcePaths": [
-      "shared/bank-sync-outcome.ts"
+      "shared/bank-sync-outcome.ts",
+      "web/app/api/integrations/finverse/sync/route.ts"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -439,7 +464,9 @@
     "id": "corrections",
     "requirement": "This-only/future corrections, service-specific matching; confirmed records protected",
     "sourcePaths": [
-      "shared/category-correction.ts"
+      "shared/category-correction.ts",
+      "web/app/transactions/[transactionId]/page.tsx",
+      "web/app/api/transactions/[transactionId]/route.ts"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -475,7 +502,9 @@
     "id": "checkout",
     "requirement": "Plan/selection/start/preparation outcomes and verified billing attribution",
     "sourcePaths": [
-      "shared/billing-funnel.ts"
+      "shared/billing-funnel.ts",
+      "web/components/billing-actions.tsx",
+      "web/lib/web-billing-analytics.ts"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -493,7 +522,8 @@
     "id": "auth-recovery",
     "requirement": "Compromised password direct reset, rate limit recovery and callback handling",
     "sourcePaths": [
-      "mobile/app/auth.tsx"
+      "mobile/app/auth.tsx",
+      "web/components/clerk-auth-screen.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -511,7 +541,9 @@
     "id": "activation",
     "requirement": "Activation when client displays first real transaction",
     "sourcePaths": [
-      "mobile/src/first-use-activation.tsx"
+      "mobile/src/first-use-activation.tsx",
+      "web/components/first-use-activation.tsx",
+      "web/lib/first-use-activation.ts"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -584,7 +616,9 @@
     "sourcePaths": [
       "mobile/app/welcome.tsx",
       "mobile/app/onboarding.tsx",
-      "mobile/src/first-use-activation.tsx"
+      "mobile/src/first-use-activation.tsx",
+      "web/components/onboarding-form.tsx",
+      "web/components/clerk-auth-screen.tsx"
     ],
     "platforms": [
       "ios",
