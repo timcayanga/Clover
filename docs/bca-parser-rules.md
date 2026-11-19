@@ -39,3 +39,7 @@ A separate two-page legacy layout can use the complete native Indonesian greetin
 ## Printed compact current-event proof
 
 A separate one-page native Gmail print may retain a complete current-event Indonesian and English financial block while hiding earlier quoted email. Require matching full payer/recipient, explicit Rp principal, current-event date/clock, unique reference, both successful statuses/immediate types, official sender text, visible Indonesian tax notice, complete printed1/1 Gmail footer, physical1 and exactly the bounded hidden-quote marker after the completed English status. Retain one visible payment only. Earlier hidden quoted history is not extracted or counted; missing charges, timezone and bank balance remain unknown. Conflicting or partial financial fields, other page counts, malformed print boundary, or one-sided explicit charges fail review. This does not accept an ordinary two-page proof with a corrupted physical-page count. Preserve original bytes and the explicit current-event/hidden-quote scope in raw evidence.
+
+## Container-independent refusal before fallback
+
+A recognized dedicated source whose complete proof fails must stop before generic/backup extraction, candidate persistence or learning writes, including when the evidence arrives as a normalized text file. PDF MIME type alone must not decide whether the proof is mandatory. Preserve the saved source and return the stable source-review error; never reinterpret an incomplete proof as another accepted financial document. Valid dedicated sources keep their existing rules.

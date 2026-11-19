@@ -9676,6 +9676,13 @@ const processImportFileTextImpl = async (
   let recoveredHybridPdfPages = false;
   const heldReviewReason = heldSourceReviewReason(text);
   if (heldReviewReason) throw new SourceReviewRequiredError(heldReviewReason);
+  // A recognized but incomplete native proof is unsafe regardless of its
+  // container. Refuse before generic fallback, candidates or learning writes.
+  const nativeStatementProof = importMode === "statement"
+    ? parseCimbConsolidatedStatement(text) ?? parseBcaTransferProof(text) : null;
+  if (nativeStatementProof && nativeStatementProof.rows.length === 0) {
+    throw new SourceReviewRequiredError("Clover needs the complete statement or native bank proof to verify these amounts. Nothing was added; review the source pages and fields before retrying.");
+  }
   if (isPdfStatementSource && importMode === "statement" && previouslyVisibleRows === 0 && !importFile.confirmedAt && text.trim()) {
     const source = await readSourceBytes();
     if (source) {

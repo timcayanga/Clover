@@ -1,5 +1,6 @@
 import { processSyntheticTextImport as processImportFileText } from "./fixtures/synthetic-worker-import";
 import assert from "node:assert/strict";
+import { isSourceReviewRequiredError } from "../lib/import-source-review";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -389,9 +390,10 @@ async function main() {
           importMode: "statement",
           actorUserId: user.clerkUserId,
         }),
-      /complete statement or native bank proof/,
+      isSourceReviewRequiredError,
     );
     await settle();
+    assert.equal((await db.importFile.findUniqueOrThrow({where:{id:badFile.id}})).processingPhase, "source_review_required");
     assert.equal(
       await db.transaction.count({ where: { workspaceId: workspace.id } }),
       beforeUnsafe,

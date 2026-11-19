@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { syntheticPdfFixtureBytes } from './fixtures/synthetic-source-pdf';
-import { SOURCE_REVIEW_PHASE } from '../lib/import-source-review';
+import { SOURCE_REVIEW_PHASE, isSourceReviewRequiredError } from '../lib/import-source-review';
 const url = new URL(process.env.DATABASE_URL ?? 'http://invalid');
 assert.equal(url.hostname,'127.0.0.1'); assert.equal(url.pathname,'/clover_migration_qa'); assert(process.argv.includes('--execute'));
 const require = createRequire(import.meta.url);
@@ -59,6 +59,17 @@ async function main(){
    const supplied=native.replace('6:09:19 PM','6:09:18 PM');assert.notEqual(supplied,native);
    const file=await db.importFile.create({data:{workspaceId:workspace.id,fileName:'gcash-bill-fee-email.pdf',fileType:'application/pdf',storageKey:'qa/'+randomUUID(),sourceFingerprint:createHash('sha256').update(bytes).digest('hex')}});
    await assert.rejects(()=>processImportFileText(file.id,{text:supplied,sourceBytes:bytes,importMode:'statement',actorUserId:user.clerkUserId}),/verify every transaction/);
+   assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),0);
+   assert.equal(await db.learningJob.count({where:{workspaceId:workspace.id}}),0);
+   assert.equal((await db.importFile.findUniqueOrThrow({where:{id:file.id}})).processingPhase,SOURCE_REVIEW_PHASE);
+  }
+  {
+   const workspace=await db.workspace.create({data:{userId:user.id,name:'Incomplete native BCA proof'}});
+   const bytes=syntheticPdfFixtureBytes(source('bca-transfer-components').replace('BCA_NATIVE_PAGES 1','BCA_NATIVE_PAGES 2'));
+   await verifyPdfStatementPageCoverage(bytes,'');
+   const text=readPdfStatementEvidencePages(bytes,'').nativeStructuredText!;
+   const file=await db.importFile.create({data:{workspaceId:workspace.id,fileName:'partial-bca.pdf',fileType:'application/pdf',storageKey:'qa/'+randomUUID(),sourceFingerprint:createHash('sha256').update(bytes).digest('hex')}});
+   await assert.rejects(()=>processImportFileText(file.id,{text,sourceBytes:bytes,importMode:'statement',actorUserId:user.clerkUserId}),isSourceReviewRequiredError);
    assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),0);
    assert.equal(await db.learningJob.count({where:{workspaceId:workspace.id}}),0);
    assert.equal((await db.importFile.findUniqueOrThrow({where:{id:file.id}})).processingPhase,SOURCE_REVIEW_PHASE);
