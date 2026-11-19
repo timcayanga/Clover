@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { statementPdf } from "./fixtures/synthetic-statement-pdf";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync, rmSync, mkdtempSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -28,8 +29,9 @@ async function main() {
     const category = await db.category.create({ data: { workspaceId: w.id, name: "Reviewed learning meals", type: "expense" } });
     const settle = async () => { await drain(); for (const job of await db.learningJob.findMany({ where: { workspaceId: w.id, status: "queued" } })) await processLearningJob(job.id); };
     const upload = async (text: string, name: string, mode: "statement" | "receipt" = "statement") => {
-      const file = await db.importFile.create({ data: { workspaceId: w.id, fileName: name, fileType: mode === "receipt" ? "application/pdf" : "text/csv", storageKey: `qa/${randomUUID()}`, sourceFingerprint: createHash("sha256").update(text).digest("hex") } });
-      await processImportFileText(file.id, { text, importMode: mode, actorUserId: user.id }); await settle();
+      const sourceBytes = mode === "receipt" ? statementPdf(text.split("\n")) : new TextEncoder().encode(text);
+      const file = await db.importFile.create({ data: { workspaceId: w.id, fileName: name, fileType: mode === "receipt" ? "application/pdf" : "text/csv", storageKey: `qa/${randomUUID()}`, sourceFingerprint: createHash("sha256").update(sourceBytes).digest("hex") } });
+      await processImportFileText(file.id, { text, sourceBytes, importMode: mode, actorUserId: user.id }); await settle();
       const rows = await db.transaction.findMany({ where: { importFileId: file.id }, orderBy: { sourceRowKey: "asc" } });
       return { file, rows };
     };

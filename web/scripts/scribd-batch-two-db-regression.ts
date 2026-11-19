@@ -1,3 +1,4 @@
+import { processSyntheticTextImport as processImportFileText } from "./fixtures/synthetic-worker-import";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
@@ -139,9 +140,7 @@ async function main() {
     "Multiple transfer rows require their own reviewed layout",
   );
   const { prisma: db } = await import("../lib/prisma");
-  const { processImportFileText, confirmImportFile } = await import(
-    "../workers/import-processor"
-  );
+  const { confirmImportFile } = await import('../workers/import-processor');
   const { loadImportStatusSnapshot } = await import(
     "../lib/import-status-snapshot"
   );

@@ -76,7 +76,7 @@ async function main() {
     const workspace = await db.workspace.create({ data: { userId: user.id, name: "BPI checkpoint preservation" } });
     const file = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: "retained-bpi.pdf", fileType: "application/pdf", storageKey: `qa/${randomUUID()}`, sourceFingerprint: sourceSha256 } });
     const settle = async () => { await drain(); for (const job of await db.learningJob.findMany({ where: { workspaceId: workspace.id, status: "queued" } })) await processLearningJob(job.id); };
-    await processImportFileText(file.id, { text, importMode: "statement", actorUserId: user.id }); await settle();
+    await processImportFileText(file.id, { text, sourceBytes: bytes, importMode: "statement", actorUserId: user.id }); await settle();
     let checkpoint = await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { importFileId: file.id } });
     assert.equal(Number(checkpoint.endingBalance), 1000); assert.equal(checkpoint.openingBalance, null);
     assert.equal(checkpoint.statementStartDate?.toISOString(), assessment.statementStartDate);

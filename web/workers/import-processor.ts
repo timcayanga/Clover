@@ -75,6 +75,7 @@ import {
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { isTrustedMetadataOnlyWiseStatement } from "@/lib/metadata-only-statement";
+import { sameNativeFinancialRows } from "@/lib/pdf-native-row-proof";
 import { assessPdfStatementRowEvidence } from "@/lib/pdf-statement-row-evidence";
 import { applyStatementFilenameCoverage } from "@/lib/statement-filename-coverage";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
@@ -9645,6 +9646,32 @@ const processImportFileTextImpl = async (
   await requireImportMayContinue(importFileId, String(importFile.workspaceId));
   // Keep historical raw parsing available for evidence retrieval, but never
   // turn a contradictory/unsupported source into finance or learned labels.
+  let nativeProofCache: { source: string; selected: string; rows: ParsedImportRow[] | null; conflict: boolean } | null = null;
+  const verifiedNativeRows = (source: string, selected: string): ParsedImportRow[] | null => {
+    if (nativeProofCache?.source === source && nativeProofCache.selected === selected) return nativeProofCache.rows;
+    let verified: ParsedImportRow[] | null = null;
+    let conflict = false;
+    const finishNativeProof = startImportTiming(importFileId, "pdf_native_family_proof");
+    try {
+      const nativeRows = parseImportText(source, fileName, fileType);
+      const family = hasVerifiedGrabReceiptRows(source, nativeRows) || hasVerifiedPosbRows(source, nativeRows) || hasVerifiedGcashBillsRows(source, nativeRows) ||
+        hasVerifiedHeldNativeRows(source, nativeRows) || hasVerifiedMariBankNativeRows(source, nativeRows) ||
+        hasVerifiedMaybankIslamicRows(source, nativeRows) || hasVerifiedGcashWalletHistoryRows(source, nativeRows) ||
+        hasVerifiedEastwestTransferRows(source, nativeRows) || hasVerifiedBcaTransferRows(source, nativeRows) ||
+        hasVerifiedCimbConsolidatedRows(source, nativeRows);
+      if (family) {
+        try {
+          const selectedRows = parseImportText(selected, fileName, fileType);
+          if (sameNativeFinancialRows(nativeRows, selectedRows)) verified = nativeRows;
+          else conflict = true;
+        } catch { conflict = true; }
+      }
+    } catch { /* Unsupported or conflicting source retains ordinary review checks. */ }
+    finally { finishNativeProof(); }
+    nativeProofCache = { source, selected, rows: verified, conflict };
+    return verified;
+  };
+  const nativeProofConflicts = () => Boolean(nativeProofCache?.conflict);
   let hasPageVerifiedPdfText = false;
   let recoveredHybridPdfPages = false;
   const heldReviewReason = heldSourceReviewReason(text);
@@ -9654,8 +9681,14 @@ const processImportFileTextImpl = async (
     if (source) {
       const quality = await measureImportTiming(importFileId, "pdf_statement_text_quality", () =>
         recoverPdfStatementTextPages(source, text, options.password, options.pdfJsBaseUrl,
-          () => requireImportMayContinue(importFileId, String(importFile.workspaceId)), String(importFile.workspaceId))
+          () => requireImportMayContinue(importFileId, String(importFile.workspaceId)), String(importFile.workspaceId),
+          (native, selected) => Boolean(verifiedNativeRows(native, selected)))
       );
+      if (nativeProofConflicts()) {
+        const message = pdfStatementReviewMessage("row_disagreement");
+        await holdPurchaseDocumentForReview(text, "statement", "pdf_native_field_conflict", 0, message, { reason: "native_core_field_disagreement" });
+        throw new SourceReviewRequiredError(message);
+      }
       if (quality.unresolved.length) {
         const pages = quality.unresolved.map(page => page.page);
         await holdPurchaseDocumentForReview(text, "statement", "pdf_text_layer_review", 0,
@@ -12737,7 +12770,15 @@ const processImportFileTextImpl = async (
     const grabSource = pdfStatementEvidencePages.grabReceiptSource;
     const verifiedGrabReceipt = grabSource !== null && candidates.length === effectiveRows.length &&
       hasVerifiedGrabReceiptRows(grabSource, candidates);
-    const proof = verifiedGrabReceipt ? null :
+    const nativeSource = pdfStatementEvidencePages.nativeStructuredText;
+    // Dedicated column/proof parsers carry evidence that a generic dated-row
+    // reader cannot represent. Reparse the byte-bound native source, verify
+    // the entire family and compare every core field and row occurrence.
+    const nativeRows = nativeSource ? verifiedNativeRows(nativeSource, textForParse) : null;
+    const verifiedNativeFamily = Boolean(nativeRows && sameNativeFinancialRows(nativeRows, effectiveRows));
+    const proof = nativeRows && !verifiedNativeFamily
+      ? { complete: false, issues: [{ row: 0, reason: "native_core_field_disagreement", page: undefined }], evidence: [] }
+      : verifiedGrabReceipt || verifiedNativeFamily ? null :
       assessPdfStatementRowEvidence(pdfStatementEvidencePages.pages, candidates, resolvedMetadata.accountNumber, pdfStatementEvidencePages.continuations);
     if (proof && !proof.complete) {
       const targetedIssue = proof.issues.find(issue => issue.reason === "unverified_account_number")
@@ -12753,7 +12794,9 @@ const processImportFileTextImpl = async (
     const proofByRow = new Map(candidates.map((row, index) => [row, proof?.evidence[index]]));
     effectiveRows = effectiveRows.map(row => {
       const source = proofByRow.get(row);
-      return source ? { ...row, rawPayload: { ...(isRecord(row.rawPayload) ? row.rawPayload : {}), pdfStatementRowEvidence: source } } : row;
+      return source ? { ...row, rawPayload: { ...(isRecord(row.rawPayload) ? row.rawPayload : {}), pdfStatementRowEvidence: source } }
+        : verifiedNativeFamily ? { ...row, rawPayload: { ...(isRecord(row.rawPayload) ? row.rawPayload : {}),
+          pdfStatementRowEvidence: { method: "verified_native_family", sourceFingerprint: classificationFingerprint } } } : row;
     });
   }
   let confirmedImportResult: ConfirmImportResult | null = null;

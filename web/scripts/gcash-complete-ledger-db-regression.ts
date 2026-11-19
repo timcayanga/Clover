@@ -1,3 +1,4 @@
+import { processSyntheticTextImport as processImportFileText } from "./fixtures/synthetic-worker-import";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -18,7 +19,7 @@ globalThis.fetch = async () => { network++; throw new Error('GCash complete-ledg
 
 async function main() {
   const { prisma: db } = await import('../lib/prisma');
-  const { processImportFileText, confirmImportFile } = await import('../workers/import-processor');
+  const { confirmImportFile } = await import('../workers/import-processor');
   const { processLearningJob } = await import('../lib/learning-jobs');
   const { AI_CONSENT_VERSION } = await import('../../shared/ai-consent');
   const user = await db.user.create({ data: { clerkUserId: randomUUID(), email: `${randomUUID()}@example.invalid`, environment: 'staging', planTier: 'pro', planTierLocked: true, appPreferences: { aiConsent: { version: AI_CONSENT_VERSION, grantedAt: new Date().toISOString(), withdrawnAt: null } } } });

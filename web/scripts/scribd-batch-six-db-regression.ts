@@ -1,3 +1,4 @@
+import { processSyntheticTextImport as processImportFileText } from "./fixtures/synthetic-worker-import";
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
@@ -16,7 +17,7 @@ async function main(){
  assert.throws(()=>parseMariBankNativeLedger(zero.replace('ACCOUNT: 00123456789','ACCOUNT: 001234567890Call (+632) 8424 8050')),/review/,'Longer identifiers cannot be truncated to eleven digits');
  for(const bad of [zero.replace('NO RECENT TRANSACTION\nSAVINGS','UNKNOWN\nSAVINGS'),zero.replace('MARIBANK_NATIVE_ROW_COUNT 0','MARIBANK_NATIVE_ROW_COUNT 1'),zero.replace('page 2 of 2','page 2 of 3'),zero.replace('31 JUL 2026','32 JUL 2026'),zero.replace('SAVINGS 0.00 0.00 0.00 0.00','SAVINGS 0.00 1.00 1.00 0.00'),zero.replace('NO RECENT TRANSACTION\nSAVINGS','NO RECENT TRANSACTION\n10 JUL Hidden transfer\nSAVINGS')])assert.throws(()=>parseMariBankNativeLedger(bad),/review/);
  const everyday=source('posb-native-everyday-alias');assert.equal(parsePosbStatement(everyday)?.rows.length,4);assert.equal(parsePosbStatement(everyday.replaceAll('eEveryday Savings','Fixed Deposit')),null,'Unreviewed products cannot borrow the savings proof');assert.throws(()=>parsePosbStatement(everyday.replace('Page 2 of 2','Page 2 of 3')),/page|review/i);
- const {prisma:db}=await import('../lib/prisma');const {processImportFileText,confirmImportFile}=await import('../workers/import-processor');const {loadImportStatusSnapshot}=await import('../lib/import-status-snapshot');const {processLearningJob}=await import('../lib/learning-jobs');const {AI_CONSENT_VERSION}=await import('../../shared/ai-consent');
+ const {prisma:db}=await import('../lib/prisma');const { confirmImportFile } = await import('../workers/import-processor');const {loadImportStatusSnapshot}=await import('../lib/import-status-snapshot');const {processLearningJob}=await import('../lib/learning-jobs');const {AI_CONSENT_VERSION}=await import('../../shared/ai-consent');
  const user=await db.user.create({data:{clerkUserId:randomUUID(),email:randomUUID()+'@example.invalid',environment:'staging',planTier:'pro',planTierLocked:true,appPreferences:{aiConsent:{version:AI_CONSENT_VERSION,grantedAt:new Date().toISOString(),withdrawnAt:null}}}});
  try{for(const id of ['maribank-empty-zero-snapshot','seabank-empty-retained-balance']){for(const existing of [false,true]){
  const workspace=await db.workspace.create({data:{userId:user.id,name:id+' '+existing}});

@@ -210,3 +210,11 @@ See [Import reliability and timing](import-reliability-measurement.md) for measu
 
 
 The merchant-payment confirmation regression adds an independently invented negative-debit screen and transfer/refund/fee/history/account-identity counterexamples. Its separate mandatory real-worker suite verifies one exact pending-review expense, source date/reference, default-currency provenance, no merchant-code funding account, zero provider calls, unchanged confirmed finance and repeat no-op. The privately recovered original and its checksum are incident evidence, not user-confirmed labels or training. Existing financial corpus expectations and review locks remain unchanged.
+
+## November 19 source-bound PDF verification
+
+Normalized-transcript worker contracts now use truthful `text/plain` QA sources in the disposable local database. A historical test supplying only a transcript must not be reported as an original-PDF end-to-end test. Financial labels and preservation snapshots remain independent inputs. Exact transcript reuploads use normal source deduplication rather than forcing the duplicate override.
+
+Original-byte checks (including the retained BPI checkpoint) pass their actual bytes. The additive `pdf-native-family-db-regression.ts` exercises physical synthetic PDF pages through the current native reader and actual worker, checking expected core fields/occurrences, exact source hashes, immutable replay, duplicate physical-page refusal and a conflicting supplied timestamp. Synthetic native text fixtures establish worker contracts, not original-image OCR accuracy or device latency.
+
+The reader retains its coordinate-derived native transcript tied to the exact byte object. Only dedicated verified native families whose independently reparsed complete rows agree with selected candidates may avoid redundant generic OCR. Account, date precision, merchant, amount, currency, type, occurrence and available row-balance/source evidence must agree. A conflicting supplied transcript is held for review. Page coverage, duplicate-page, payment-state, ownership and confirmed-record guards still apply.

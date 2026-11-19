@@ -1,3 +1,4 @@
+import { processSyntheticTextImport as processImportFileText } from "./fixtures/synthetic-worker-import";
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -29,7 +30,7 @@ async function main() {
     assert.throws(() => parseGrabEmailReceipt(bad), isSourceReviewRequiredError);
   }
   const { prisma: db } = await import('../lib/prisma');
-  const { processImportFileText, confirmImportFile } = await import('../workers/import-processor');
+  const { confirmImportFile } = await import('../workers/import-processor');
   const { processLearningJob, retryLearningJob } = await import('../lib/learning-jobs');
   const { loadImportStatusSnapshot } = await import('../lib/import-status-snapshot');
   const { AI_CONSENT_VERSION } = await import('../../shared/ai-consent');

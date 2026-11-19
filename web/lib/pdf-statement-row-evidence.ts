@@ -39,6 +39,10 @@ function datesAgree(observed: string, expected: string) {
 
 export function assessPdfStatementRowEvidence(pages: readonly string[], rows: readonly Record<string, unknown>[], accountNumber?: unknown, continuations: readonly PdfStatementContinuation[] = []) {
   const continuationPages = new Map(continuations.map(span => [`${span.page}:${span.line}`, span.continuationPage]));
+  // BPI cards print their ledger identity as Customer Number. This is an
+  // institution-specific printed label, not permission to accept customer IDs
+  // from unrelated invoices or infer a card number from a suffix.
+  const bpiCustomerField = /^Customer\s+(?:Number|No\.?)\s*[:#]?\s*((?:[\dXx*•●][ -]?){4,30})(?![\d.,])/gi;
   const printedAccounts = new Set<string>();
   let activeAccounts = new Set<string>();
   let trailingBalance = false;
@@ -47,11 +51,15 @@ export function assessPdfStatementRowEvidence(pages: readonly string[], rows: re
   }>>();
 
   for (const [index, page] of pages.entries()) {
+    const bpiCardStatement = /^\s*(?:BPI|BANK OF THE PHILIPPINE ISLANDS)\b[^\n]*(?:CREDIT CARD|SIGNATURE)\b/im.test(page);
     const lines = page.normalize("NFKC").split(/\r?\n/).map(line => line.trim());
     const header = lines.find(line => /^(?:date|tanggal|transaction date|posting date)\b.*\b(?:debit|credit|amount|withdrawals?|deposits?)\b/i.test(line));
     if (header) trailingBalance = /\b(?:running\s+)?balance\s*$/i.test(header);
     for (const [offset, line] of lines.entries()) {
-      const accountHeader = [...line.matchAll(accountField)].map(match => number(match[1]));
+      const accountHeader = [
+        ...line.matchAll(accountField),
+        ...(bpiCardStatement ? line.matchAll(bpiCustomerField) : []),
+      ].map(match => number(match[1]));
       if (accountHeader.length && !datePrefix(line)) {
         accountHeader.forEach(value => printedAccounts.add(value));
         activeAccounts = new Set(accountHeader);

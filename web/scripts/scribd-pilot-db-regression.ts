@@ -1,3 +1,4 @@
+import { processSyntheticTextImport as processImportFileText } from "./fixtures/synthetic-worker-import";
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -39,7 +40,7 @@ async function main(){
   assert(buildPosbPdfRows([...points,item('2.00',420,500)]).includes('POSB_INVALID_COLUMN_EVIDENCE'));
   assert.deepEqual(buildPosbPdfRows(points.filter(p=>p.str!=='Details of Your POSB Payroll Account')),[]);
   const {prisma:db}=await import('../lib/prisma');
-  const {processImportFileText,confirmImportFile}=await import('../workers/import-processor');
+  const { confirmImportFile } = await import('../workers/import-processor');
   const {processLearningJob}=await import('../lib/learning-jobs');
   const {loadImportStatusSnapshot}=await import('../lib/import-status-snapshot');
   const {AI_CONSENT_VERSION}=await import('../../shared/ai-consent');

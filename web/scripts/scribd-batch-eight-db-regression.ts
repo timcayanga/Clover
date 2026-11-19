@@ -1,3 +1,4 @@
+import { processSyntheticTextImport as processImportFileText } from "./fixtures/synthetic-worker-import";
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
@@ -10,7 +11,7 @@ const drain=async()=>{while(tasks.length)await Promise.all(tasks.splice(0).map(t
 let network=0;globalThis.fetch=async()=>{network++;throw new Error('Batch eight preservation forbids provider calls');};
 async function main(){
  const {prisma:db}=await import('../lib/prisma');
- const {processImportFileText,confirmImportFile}=await import('../workers/import-processor');
+ const { confirmImportFile } = await import('../workers/import-processor');
  const {loadImportStatusSnapshot}=await import('../lib/import-status-snapshot');
  const {processLearningJob}=await import('../lib/learning-jobs');
  const {AI_CONSENT_VERSION}=await import('../../shared/ai-consent');
@@ -31,7 +32,7 @@ async function main(){
     const savedAccount=await db.account.findUniqueOrThrow({where:{id:account.id}});
     const previousTransactions=await db.transaction.findMany({where:{workspaceId:workspace.id},orderBy:{id:'asc'}});
     const file=await db.importFile.create({data:{workspaceId:workspace.id,fileName:id+'.pdf',fileType:'application/pdf',storageKey:'qa/'+randomUUID()}});
-    await processImportFileText(file.id,{text,importMode:'statement',actorUserId:user.clerkUserId,allowDuplicateStatement:true});await settle();
+    await processImportFileText(file.id,{text,importMode:'statement',actorUserId:user.clerkUserId});await settle();
     assert.deepEqual(await db.account.findUniqueOrThrow({where:{id:account.id}}),savedAccount,'Every confirmed identity, balance and timestamp survives historical English/IDR imports');
     for(const previous of previousTransactions)assert.deepEqual(await db.transaction.findUniqueOrThrow({where:{id:previous.id}}),previous,'Existing confirmed/edited financial and raw values survive');
     assert.deepEqual(await db.transaction.findUniqueOrThrow({where:{id:confirmed.id}}),confirmed);
@@ -39,7 +40,7 @@ async function main(){
     const rows=await db.transaction.findMany({where:{importFileId:file.id},orderBy:{id:'asc'}});
     const parsed=await db.parsedTransaction.findMany({where:{importFileId:file.id},orderBy:{id:'asc'}});
     parsed.sort((a,b)=>Number((a.rawPayload as Record<string,unknown>)?.sourceRowIndex)-Number((b.rawPayload as Record<string,unknown>)?.sourceRowIndex));
-    assert.equal(rows.length,balance==='765432.10'?5:0,'A reupload matches existing source movements without creating duplicates');assert.equal(parsed.length,5);
+    assert.equal(rows.length,balance==='765432.10'?5:0,'A reupload matches existing source movements without creating duplicates');assert.equal(parsed.length,balance==='765432.10'?5:0,'An exact-source reupload is skipped before rebuilding candidates');
     const sourceTransactions=await db.transaction.findMany({where:{workspaceId:workspace.id,importFileId:{not:null}}});
     assert.equal(sourceTransactions.filter(row=>Number(row.amount)===40).length,2,'Identical same-day purchases remain separate across reuploads');
     const ledger=sourceTransactions.map(row=>[row.date.toISOString(),Number(row.amount).toFixed(2),row.currency,row.type,row.accountId].join('|')).sort();

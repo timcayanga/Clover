@@ -72,3 +72,5 @@ Use these rules for BPI savings and credit-card statement imports.
 - BPI credit-card page counters (`Page N of M` or `Page N/M`) and repeated card-statement headings end the current row segment. Never append footer/header text to the last merchant on a page; resume collecting transactions on the next page. Preserve legitimate wrapped merchant lines.
 
 BPI credit-card statement metadata uses Bank of the Philippine Islands. Do not label a BPI credit card as BPI Family Savings Bank; no confirmed historical account is renamed automatically.
+
+- PDF row-evidence verification recognizes a separately printed `Customer Number` as the card-ledger identity only under an explicit BPI credit-card/Signature statement heading. Preserve exact digits/masking; do not generalize customer IDs from invoices or unrelated institutions, and do not accept a masked suffix as proof of an unprinted full number.

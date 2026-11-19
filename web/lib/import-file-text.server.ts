@@ -1006,6 +1006,7 @@ type PdfOcrProfile = "standard" | "aggressive";
 const pdfOriginalLayoutReads = new WeakMap<Uint8Array, readonly string[]>();
 const pdfStatementContinuations = new WeakMap<Uint8Array, PdfStatementContinuation[]>();
 const pdfNativeGrabReceipts = new WeakMap<Uint8Array, string>();
+const pdfNativeStructuredReads = new WeakMap<Uint8Array, string>();
 const pdfNativePageReads = new WeakMap<Uint8Array, readonly string[]>();
 const pdfOcrPageReads = new WeakMap<Uint8Array, Array<{ page: number; text: string; imageDigest: string }>>();
 
@@ -1047,7 +1048,7 @@ export function readPdfStatementEvidencePages(data: Uint8Array, selectedText: st
     const nativePage = ocrPageNumbers.has(span.page) ? span.continuationPage : span.page;
     pages[nativePage - 1] = pdfOriginalLayoutReads.get(data)?.[nativePage - 1] ?? "";
   }
-  return { pages, continuations, grabReceiptSource: pdfNativeGrabReceipts.get(data) ?? null };
+  return { pages, continuations, nativeStructuredText: pdfNativeStructuredReads.get(data) ?? null, grabReceiptSource: pdfNativeGrabReceipts.get(data) ?? null };
 }
 
 function hybridPdfRecoveryPlan(data: Uint8Array, text: string) {
@@ -1062,11 +1063,16 @@ export async function recoverPdfStatementTextPages(
   baseUrl?: string | null,
   mayContinue?: () => Promise<void>,
   workspaceId?: string,
+  verifyNativeSource?: (nativeText: string, selectedText: string) => boolean,
 ) {
   // A prior successful OCR cache entry never grants access to an encrypted file.
   await preflightPdfPassword(data, password);
   const native = pdfNativePageReads.has(data) ? null : await extractTextFromPdfBytes(data, password, baseUrl);
   const pages = pdfNativePageReads.get(data) ?? [];
+  const nativeStructuredText = pdfNativeStructuredReads.get(data);
+  if (nativeStructuredText && verifyNativeSource?.(nativeStructuredText, selectedText)) {
+    return { text: selectedText, recoveredPages: [], unresolved: [] };
+  }
   const nativeText = pages.join("\n").trim();
   const hasHeader = pages.some(hasPdfStatementLedgerHeader);
   const selected = selectedText.trim();
@@ -2424,7 +2430,7 @@ type ImportFileLike = {
 
 const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, baseUrl?: string | null,
   observePages?: (pages: readonly string[]) => void, maxInspectedPages?: number) => {
-  return withPdfDocument("text", () => createPdfJsLoadOptions(data, password, baseUrl), async pdf => {
+  const nativeStructuredText = await withPdfDocument("text", () => createPdfJsLoadOptions(data, password, baseUrl), async pdf => {
     if (maxInspectedPages && pdf.numPages > maxInspectedPages) return "";
     const pages = new Array<string>(pdf.numPages);
     const statementLayouts = new Array<{ rows: PositionedPdfRow[]; lines: string[] } | null>(pdf.numPages).fill(null);
@@ -2556,6 +2562,10 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     return /\bMARI\s*BANK\b/i.test(extractedText) && structuredMariBankRows.some(row => row.startsWith("MARIBANK_TXN"))
       ? `${extractedText}\n${structuredMariBankRows.filter(row => row.startsWith("MARIBANK_TXN")).join("\n")}` : extractedText;
   });
+  // Retain coordinate-derived evidence tied to these exact bytes. A caller's
+  // transcript cannot populate this map or override its native source.
+  pdfNativeStructuredReads.set(data, nativeStructuredText);
+  return nativeStructuredText;
 };
 
 const normalizePdfTextContentItem = (value: unknown) => {
