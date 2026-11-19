@@ -21,7 +21,7 @@ Admin → Home banners (`/admin/home-banners`). Owner/Admin can add up to twelve
 
 Recommended artwork: **1200 × 600 px (2:1)**, PNG/JPEG/WebP, up to **2 MB**. Minimum 600 × 300; maximum 2400 × 1200. Keep essential artwork 40px from the edges. Text and CTA are separate accessible content. Genuine raster format, decoded dimensions, animation and pixel limits are checked server-side. Uploaded images are re-encoded to WebP. Only public promotional artwork belongs here; private campaign evidence remains in its existing private store.
 
-Configurations and artwork are isolated by environment. Campaign, transaction, account and balance records are not part of banner storage. Production does not copy staging applications or private evidence.
+Configurations and artwork are isolated by environment. Both new tables have RLS enabled and revoke direct Supabase API-role access; management goes through the authorized application API. Campaign, transaction, account and balance records are not part of banner storage. Production does not copy staging applications or private evidence.
 
 ## Campaign alerts
 

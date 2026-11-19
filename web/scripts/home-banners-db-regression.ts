@@ -8,6 +8,18 @@ globalThis.fetch=async()=>{throw Error('External services disabled for Home bann
 const require=createRequire(import.meta.url);
 async function main(){
  const {prisma:db}=await import('../lib/prisma');
+ const {Client}=require('pg');const security=new Client({connectionString:process.env.DATABASE_URL});await security.connect();
+ try{
+  // Exercise the exact new migration's access controls after disposable db push.
+  for(const role of ['anon','authenticated','service_role'])await security.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role}; END IF; END $$`);
+  await security.query('GRANT ALL ON "HomeBannerConfig", "HomeBannerAsset" TO anon, authenticated, service_role');
+  const migration=readFileSync(new URL('../prisma/migrations/20261119130000_free_home_banners/migration.sql',import.meta.url),'utf8');
+  await security.query(migration.slice(migration.indexOf('-- Only the trusted')));
+  for(const table of ['HomeBannerConfig','HomeBannerAsset']){
+   assert.equal((await security.query('SELECT relrowsecurity FROM pg_class WHERE oid=$1::regclass',[`"${table}"`])).rows[0].relrowsecurity,true);
+   for(const role of ['anon','authenticated','service_role'])for(const privilege of ['SELECT','INSERT','UPDATE','DELETE'])assert.equal((await security.query('SELECT has_table_privilege($1,$2,$3) AS allowed',[role,`"${table}"`,privilege])).rows[0].allowed,false);
+  }
+ }finally{await security.end();}
  const saved=new Map<string,NodeModule|undefined>();const stub=(name:string,exports:unknown)=>{const id=require.resolve(name);saved.set(id,require.cache[id]);require.cache[id]={id,filename:id,loaded:true,exports} as NodeModule;};
  let identity:string|null=null,role='owner';const uploaded:Uint8Array[]=[];
  stub('../lib/user-environment',{getCurrentUserEnvironment:()=> 'staging'});

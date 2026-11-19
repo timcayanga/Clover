@@ -16,3 +16,15 @@ CREATE TABLE "HomeBannerAsset" (
 );
 CREATE UNIQUE INDEX "HomeBannerAsset_storageKey_key" ON "HomeBannerAsset"("storageKey");
 CREATE INDEX "HomeBannerAsset_environment_createdAt_idx" ON "HomeBannerAsset"("environment", "createdAt");
+
+-- Only the trusted application connection may manage promotional configuration.
+ALTER TABLE "HomeBannerConfig" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "HomeBannerAsset" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON "HomeBannerConfig", "HomeBannerAsset" FROM PUBLIC;
+DO $$ DECLARE role_name TEXT; BEGIN
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+      EXECUTE format('REVOKE ALL ON "HomeBannerConfig", "HomeBannerAsset" FROM %I', role_name);
+    END IF;
+  END LOOP;
+END $$;
