@@ -50,14 +50,18 @@ async function main(){
     return (await response.json()).transaction;
   };
   const matches = (await detail(statement.id)).sourceMatches;
-  assert(matches.some((match: {id:string;canCopyLineItems:boolean}) => match.id === receipt.id && match.canCopyLineItems));
+  assert(matches.some((match: {id:string;canCopyLineItems:boolean}) => match.id === receipt.id && !match.canCopyLineItems));
   assert(matches.some((match: {id:string}) => match.id === manual.id));
   assert(!matches.some((match: {id:string}) => match.id === unrelated.id));
   const timed = await db.transaction.create({ data: { ...matchData, amount: "68.50", importFileId: soa.id, merchantRaw: "Unfamiliar descriptor",
     rawPayload: { transactionTime: "13:45" } } });
-  const timedReceipt = await db.transaction.create({ data: { ...matchData, amount: "68.50", importFileId: receiptFile.id, merchantRaw: "Market Square",
+  const timedReceipt = await db.transaction.create({ data: { ...matchData, amount: "68.50", importFileId: receiptFile.id, merchantRaw: "Unfamiliar descriptor",
     rawPayload: { source: "receipt", receiptDetails: { transactionTime: "13:49" } } } });
   assert((await detail(timed.id)).sourceMatches.some((match: {id:string;evidence:string[]}) => match.id === timedReceipt.id && match.evidence.includes("Similar payment time")));
+  const unrelatedTime = await db.transaction.create({ data: { ...matchData, amount: "68.50", importFileId: receiptFile.id, merchantRaw: "Different merchant",
+    rawPayload: { source: "receipt", receiptDetails: { transactionTime: "13:49" } } } });
+  assert(!(await detail(timed.id)).sourceMatches.some((match: {id:string}) => match.id === unrelatedTime.id),
+    "A nearby timestamp alone is insufficient to identify a different merchant's payment");
   const ikea = await db.transaction.create({ data: { ...matchData, amount: "123.45", merchantRaw: "IKEA" } });
   const ikeaStatement = await db.transaction.create({ data: { ...matchData, amount: "123.45", merchantRaw: "PAYPAL * SQ * IKEA TID A771", importFileId: soa.id } });
   const otherIkeaAccount = await db.account.create({ data: { workspaceId: workspace.id, name: "Another card", currency: "USD", type: "credit_card" } });
@@ -107,6 +111,10 @@ async function main(){
   assert.equal(await db.auditLog.count({ where: { entityId: statement.id, action: "transaction_source_match_dismissed" } }), 1);
   assert.deepEqual(await db.transaction.findUnique({ where: { id: manual.id } }), manual);
   assert.deepEqual(await db.transaction.findUnique({ where: { id: statement.id } }), statement);
+  assert.equal((await send({ copyReceiptFromTransactionId: receipt.id }, statement.id)).status, 409,
+    "Suggested matches cannot modify line items before explicit confirmation");
+  assert.equal((await send({ confirmSourceMatchId: receipt.id }, statement.id)).status, 200);
+  assert((await detail(statement.id)).sourceMatches.some((match: {id:string;canCopyLineItems:boolean}) => match.id === receipt.id && match.canCopyLineItems));
   const copy = { copyReceiptFromTransactionId: receipt.id };
   const copies = await Promise.all([send(copy, statement.id), send(copy, statement.id)]);
   for (const response of copies) assert.equal(response.status, 200, await response.clone().text());

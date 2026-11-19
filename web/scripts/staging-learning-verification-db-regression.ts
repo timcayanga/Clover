@@ -195,7 +195,14 @@ async function main() {
       const digestResponse = await route.POST(request({runId,action:"inspect-digest"})); assert.equal(digestResponse.status,200);
       assert.equal(Object.keys((await digestResponse.json()).own).length, manifestTables.length);
       assert.equal((await route.POST(request())).status, 200);
-      process.env.VERCEL_ENV = "production"; assert.equal((await route.POST(request())).status, 404);
+      const previousEnvironment = process.env.VERCEL_ENV;
+      try {
+        process.env.VERCEL_ENV = "production";
+        assert.equal((await route.POST(request())).status, 404);
+      } finally {
+        if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+        else process.env.VERCEL_ENV = previousEnvironment;
+      }
     } finally { if (prior) require.cache[adminPath] = prior; else delete require.cache[adminPath]; }
     {
       const batchIds = [randomUUID(), randomUUID()];
