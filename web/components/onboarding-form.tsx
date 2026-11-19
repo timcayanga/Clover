@@ -340,7 +340,7 @@ export function OnboardingForm({
             const method = accountMethod;
             if (method === 'connect' && !onboardingCanConnect(planTier)) return;
             setIsCompleting(true);
-            void persistOnboarding(method).then(() => router.replace(method === "manual" ? "/transactions?manual=1" : `/accounts?add=1&onboarding=${method}`)).catch(error => { setIsCompleting(false); setMessage(error instanceof Error ? error.message : "Unable to continue setup."); });
+            void persistOnboarding(method).then(() => router.replace(method === "manual" ? "/transactions?manual=1" : "/accounts/new?onboarding=connect")).catch(error => { setIsCompleting(false); setMessage(error instanceof Error ? error.message : "Unable to continue setup."); });
           }}>{accountMethod === "connect" ? "Connect a bank" : "Add transaction"}</button> : null}
         </>}
       </div>

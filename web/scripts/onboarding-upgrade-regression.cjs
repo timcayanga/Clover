@@ -47,6 +47,22 @@ async function nativeChecks(){
  console.log('PASS actual native offer hooks: store products, canceled purchase, delayed server verification, no false unlock or extra purchase, bounded polling and cleanup.');
 }
 
+
+async function firstActionHandoffChecks(){
+ const h=hooks(),routes=[],requests=[],drafts=new Map();
+ const router={replace:href=>routes.push(href)};
+ const region={baseCurrency:'PHP',countryCode:'PH',timeZone:'Asia/Manila',locale:'en-PH',detectionSource:'location'};
+ const {OnboardingForm}=load('components/onboarding-form.tsx',{'react':h.h,'react/jsx-runtime':jsx,'next/dynamic':()=> 'ImportFilesModal','next/navigation':{useRouter:()=>router},'@/lib/entry-method-icons':{getEntryMethodIconSrc:m=>'/fixture/'+m},'@/components/upload-source-buttons':{UploadSourceButtons:'UploadSources'},'@/lib/import-format-policies':{PUBLIC_IMPORT_ACCEPT:'image/*,application/pdf'},'@/components/page-file-drop-zone':{PageFileDropZone:'DropZone'},'@/components/posthog-analytics':{PostHogEvent:'Event',analyticsOnceKey:()=> 'fixture'},'@/lib/goals':{getFinancialExperienceDefinition:()=>({title:'Still learning'})},'./onboarding-plan-offers':{OnboardingPlanOffers:'Offers'},'./onboarding-plan-offers.module.css':styles,'../../shared/onboarding-upgrade':rules,'@/components/clover-route-loading-screen':{CloverRouteLoadingScreen:'Loading'},'@/components/currency-selector':{CurrencySelector:'Currency'},'@/lib/currencies':{getCurrencyCatalogCodes:()=>['PHP'],getCurrencyCatalogOption:()=>({code:'PHP',name:'Philippine Peso'})},'@/lib/regional-preferences':{normalizeRegionalPreferences:p=>p,persistRegionalPreferences(){}}},{navigator:{languages:['en-PH'],language:'en-PH'},sessionStorage:{getItem:k=>drafts.get(k)??null,setItem:(k,v)=>drafts.set(k,v),removeItem:k=>drafts.delete(k)},fetch:async(url,options)=>{requests.push({url,options});return{ok:true};}});
+ const render=()=>h.render(()=>OnboardingForm({workspaceId:'qa-profile',billingCustomerId:'qa-user',workspaceAccounts:[],currentExperience:'beginner',regionalDefaults:region}));
+ let t=render();nodes(t).find(n=>n.type==='button'&&text(n)==='Continue with Free').props.onClick();t=render();nodes(t).find(n=>n.type==='button'&&text(n)==='Continue').props.onClick();await flush();t=render();nodes(t).find(n=>n.props?.id==='onboarding-connect').props.onClick();t=render();assert(!nodes(t).some(n=>n.type==='button'&&text(n)==='Connect a bank'),'Free first action cannot bypass upgrade');nodes(t).find(n=>n.type==='Offers').props.onVerified('pro');t=render();nodes(t).find(n=>n.type==='button'&&text(n)==='Connect a bank').props.onClick();await flush();assert.equal(routes.length,1);const destination=new URL(routes[0],'https://clover.invalid');assert.equal(destination.pathname,'/accounts/new','Bank handoff must enter the creation route directly, avoiding query-dropping mobile canonicalization');assert.equal(destination.searchParams.get('onboarding'),'connect');assert.equal(JSON.parse(requests.at(-1).options.body).startAction,'connect');h.stop();
+ for(const mobile of [true,false]){
+  const state=hooks(),location={pathname:destination.pathname,search:destination.search,hash:''};let open=false;const pushes=[],listeners=new Map();
+  const {useMobileCreationRoute}=load('lib/use-mobile-creation-route.ts',{'react':state.h,'next/navigation':{usePathname:()=>location.pathname,useRouter:()=>({replace(){}})},'./responsive-layout':{MOBILE_LAYOUT_MEDIA_QUERY:'(max-width:767px)'}},{location,matchMedia:()=>({matches:mobile,addEventListener(){},removeEventListener(){}}),window:{history:{state:{},pushState:(...args)=>pushes.push(args)}},document:{body:{classList:{add(){},remove(){}}}},addEventListener:(n,f)=>listeners.set(n,f),removeEventListener:n=>listeners.delete(n)});
+  state.render(()=>useMobileCreationRoute(open,v=>open=v,'/accounts'));state.render(()=>useMobileCreationRoute(open,v=>open=v,'/accounts'));assert(open);assert.equal(location.search,'?onboarding=connect');assert.equal(pushes.length,0,'Direct creation must retain Sync intent on both viewport sizes');state.stop();
+ }
+ console.log('PASS actual Free-to-Plus first-action handoff: knowledge retained, no Free bypass, direct bank creation with Sync intent on mobile and desktop.');
+}
+
 async function paypalChecks(){
  const h=hooks();let config,renders=0,closed=0,completed=0,canceled=0;
  const window={paypal:{Buttons:options=>{config=options;return{render:async()=>{renders++;},close:()=>closed++};}}};
@@ -70,4 +86,4 @@ async function readinessChecks(){
  console.log('PASS billing readiness diagnostics: rejected provider/configuration/prices stay unavailable; credentials and provider IDs never logged.');
 }
 
-(async()=>{await offerChecks();await paddleChecks();await paypalChecks();await nativeChecks();await readinessChecks();})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{await offerChecks();await paddleChecks();await paypalChecks();await nativeChecks();await firstActionHandoffChecks();await readinessChecks();})().catch(e=>{console.error(e);process.exitCode=1;});

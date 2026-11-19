@@ -15,3 +15,5 @@ Plan view, selection, checkout preparation, checkout start and outcomes retain o
 Checks include actual component lifecycle/provider callback tests, native onboarding return paths, SSR, approved regional pricing, and a real isolated database API test. Database QA verifies approval-pending versus paid, both tiers and store products, identity isolation, expiry, incomplete onboarding preservation, and exact confirmed transaction/account snapshots.
 
 Release is web/backend plus native source only. No new IPA/AAB is created. Existing installed native apps require a future verified binary while OTA updates are disabled.
+
+The web bank handoff enters `/accounts/new?onboarding=connect` directly. This preserves the Sync intent on both desktop and mobile; the older `/accounts?add=1` conversion dropped that intent before the account form mounted. The regression clicks through the actual Free-to-Plus first-action component and checks the creation hook at both viewport sizes.
