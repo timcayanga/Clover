@@ -82,6 +82,10 @@ row.props.onClick(); assert.equal(opened, 'bill');
 assert.equal(JSON.stringify(bill), before, 'Presentation never rewrites participants, money or source records');
 
 const css = postcss.parse(fs.readFileSync(path.join(root, 'app/globals.css'), 'utf8'));
+css.walkRules(rule => {
+  if (!rule.selector.includes('.clover-tabs.clover-tabs:is(.recurring-tabs--mobile, .investments-tabs--mobile)') && !rule.selector.includes('.clover-tabs.clover-tabs.recurring-tabs--mobile .recurring-tab-label')) return;
+  rule.walkDecls(decl => assert(!['row wrap','auto','normal'].includes(decl.value) || !['flex-flow','height','white-space'].includes(decl.prop), 'Do not restore higher-specificity wrapping/auto-height mobile tab overrides'));
+});
 function declarations(selector, width) {
   const result = {};
   css.walkRules(rule => {

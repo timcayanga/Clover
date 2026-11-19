@@ -66308,16 +66308,6 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
   .content.content > :is(.topbar, .shell-compact-bar) .shell-mobile-relocated-action .adviser-header-link {
     display: inline-flex !important; width: 36px !important; min-width: 36px !important;
   }
-  .content.content .shell-mobile-subheader:has(:is(.recurring-tabs--mobile, .investments-tabs--mobile)) {
-    height: auto !important; max-height: none !important; overflow: visible !important;
-  }
-  .content.content .shell-mobile-subheader .clover-tabs.clover-tabs:is(.recurring-tabs--mobile, .investments-tabs--mobile) {
-    display: flex !important; flex-flow: row wrap !important;
-    height: auto !important; max-height: none !important; overflow: visible !important;
-  }
-  .content.content .shell-mobile-subheader .clover-tabs.clover-tabs:is(.recurring-tabs--mobile, .investments-tabs--mobile) > :is(button, .animated-tabs__tab) {
-    flex: 1 1 30% !important; min-width: 0 !important; padding: 8px 2px !important;
-  }
   .content.content .shell-mobile-subheader .split-bill-tabs.clover-tabs {
     display: flex !important; flex-flow: row nowrap !important; width: 100% !important;
   }
@@ -66328,13 +66318,6 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
     width: 40px !important; height: 40px !important; min-width: 40px !important; min-height: 40px !important;
     max-width: 40px !important; max-height: 40px !important; flex: 0 0 40px !important;
     padding: 0 !important; aspect-ratio: 1; border-radius: 50% !important;
-  }
-}
-
-@media (max-width: 1100px) {
-  .content.content .shell-mobile-subheader .clover-tabs.clover-tabs.recurring-tabs--mobile .recurring-tab-label {
-    white-space: normal !important; flex-shrink: 1; line-height: 14px !important;
-    overflow-wrap: normal !important; word-break: normal !important;
   }
 }
 
