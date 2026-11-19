@@ -654,5 +654,61 @@
     "ios": "pending-exact-package-verification",
     "android": "pending-exact-package-verification",
     "unresolvedPathAnchors": []
+  },
+  {
+    "id": "direct-bill-entry",
+    "requirement": "Split Bills/Circle contextual photo/manual entry, no Sync, optional details/items, one linked expense and origin retained",
+    "sourcePaths": [
+      "mobile/src/direct-bill-editor.tsx",
+      "mobile/src/split-group-details.tsx",
+      "mobile/app/circles.tsx",
+      "web/components/split-bill-entry.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "pending-exact-release-verification",
+    "production": "pending-exact-release-verification",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "free-home-banners",
+    "requirement": "Free-only swipeable Home banners, five-second rotation and Plans/campaign destinations",
+    "sourcePaths": [],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "pending-exact-release-verification",
+    "production": "pending-exact-release-verification",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  },
+  {
+    "id": "onboarding-upgrade",
+    "requirement": "Plus/Pro and Continue with Free, canceled checkout returns to onboarding, verified access unlocks bank/upload choices",
+    "sourcePaths": [
+      "mobile/app/onboarding.tsx",
+      "web/components/onboarding-form.tsx"
+    ],
+    "unresolvedPathAnchors": [],
+    "sourceStatus": "present-requires-behavior-verification",
+    "staging": "pending-exact-release-verification",
+    "production": "pending-exact-release-verification",
+    "ios": "pending-exact-package-verification",
+    "android": "pending-exact-package-verification",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
   }
 ]

@@ -1,10 +1,11 @@
 import type { ExpoConfig } from "expo/config";
+import releaseProvenance from "./scripts/release-provenance.cjs";
 
 const iosBundleIdentifier = process.env.CLOVER_IOS_BUNDLE_ID || "ph.clover.preview";
 
 // Store packages must be built from the same explicit, immutable release source.
 const storeBuild = iosBundleIdentifier === "ph.clover.app" || process.env.CLOVER_ANDROID_PACKAGE_ID === "ph.clover.app";
-const release = storeBuild ? require("./scripts/release-provenance.cjs").read(process.env.EXPO_PUBLIC_API_URL) : null;
+const release = storeBuild ? releaseProvenance.read(process.env.EXPO_PUBLIC_API_URL) : null;
 const config: ExpoConfig = {
   name: process.env.CLOVER_APP_NAME || "Clover Preview",
   slug: "clover-mobile",
