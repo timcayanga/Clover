@@ -115,6 +115,30 @@ const jsx = {
   jsxs: (type, props) => ({ type, props }),
   Fragment: "Fragment",
 };
+const contextRules = load("../shared/direct-bill-context.ts");
+assert.deepEqual(
+  Array.from(
+    contextRules.circleBillMembers([
+      { id: "owner", displayName: "Alex", status: "active" },
+      { id: "friend", displayName: "Bea", status: "invited" },
+      { id: "removed", displayName: "Removed", status: "removed" },
+    ]),
+    (m) => m.name,
+  ),
+  ["Alex", "Bea"],
+);
+assert.equal(
+  contextRules.circleBillContextReady({ detailsLoaded: false }, false),
+  false,
+);
+assert.equal(
+  contextRules.circleBillContextReady({ detailsLoaded: true }, true),
+  false,
+);
+assert.equal(
+  contextRules.circleBillContextReady({ detailsLoaded: true }, false),
+  true,
+);
 async function main() {
   for (const context of [
     { person: "Bea" },
