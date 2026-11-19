@@ -234,32 +234,11 @@ async function main() {
       );
     let t = render();
     assert(nodes(t).some(n => n.props?.role === "dialog" && /\bglass\b/.test(n.props.className)), "Bill entry retains Clover's card surface");
-    assert(text(t).includes("Take Photo"));
-    assert(text(t).includes("Add Manually"));
-    assert(!text(t).includes("Sync"));
-    nodes(t)
-      .find((n) => n.type === "button" && text(n) === "Add Manually")
-      .props.onClick();
-    t = render();
-    const capture = nodes(t).find(
-      (n) => n.type === "input" && n.props.capture === "environment",
-    );
-    assert(capture, "Camera input remains mounted when Manual is selected");
-    let photoClicks = 0;
-    capture.props.ref.current.click = () => photoClicks++;
-    nodes(t)
-      .find((n) => n.type === "button" && text(n) === "Take Photo")
-      .props.onClick();
-    assert.equal(photoClicks, 1);
-    t = render();
-    nodes(t)
-      .find((n) => n.type === "input" && n.props.capture === "environment")
-      .props.onChange({
-        target: {
-          files: [new File(["receipt"], "receipt.jpg", { type: "image/jpeg" })],
-          value: "receipt.jpg",
-        },
-      });
+    assert(!text(t).includes("Add Manually"), "No preliminary chooser before the shared selector");
+    const methods = nodes(t).find(n => n.type === "Methods");
+    assert.equal(methods.props.initialMethod, "upload", "Receipt capture is the initial selector tab");
+    assert.equal(methods.props.kind, "split", "No bank Sync method for split entry");
+    methods.props.onUploadFiles([new File(["receipt"], "receipt.jpg", { type: "image/jpeg" })]);
     await flush();
     await flush();
     t = render();
@@ -313,6 +292,33 @@ async function main() {
     h.stop();
     assert.equal(keyboard.size, 0);
   }
+  // Exercise the real native selector callback: camera/library must stay in
+  // this bill editor, rather than navigate to generic Add Transaction.
+  const nativeHooks = hooks(), routed = [], sources = [];
+  const { AddEntryMethods: NativeMethods } = load("../mobile/src/add-entry-methods.tsx", {
+    react: nativeHooks.h, "react/jsx-runtime": jsx,
+    "react-native": { View: "View", Pressable: "Pressable" },
+    "expo-linear-gradient": { LinearGradient: "Gradient" },
+    "expo-router": { router: { push: route => routed.push(route) } },
+    "./contextual-upgrade": { ResourceUpgradeNotice: "Upgrade" },
+    "./entry-navigation": { useEntryNavigation: () => fn => fn() },
+    "./entry-controls": { EntrySelector: "Selector", EntryTransition: "Transition", UploadTiles: "Tiles" },
+    "./app-text": { Text: "Text" },
+    "./ui": { Body: "Body", Button: "Button", useTheme: () => ({ colors: {} }) },
+    "./transaction-entry": { TransactionChat: "Chat" },
+  });
+  const nativeRender = () => nativeHooks.render(() => NativeMethods({ kind: "split", initialMethod: "upload", children: "Retained manual draft", onUploadSource: source => sources.push(source) }));
+  let native = nativeRender();
+  assert.equal(nodes(native).find(n => n.type === "Selector").props.value, "upload");
+  const tiles = nodes(native).find(n => n.type === "Tiles");
+  assert.equal(tiles.props.cameraFirst, true);
+  for (const source of ["camera", "library", "file"]) tiles.props.onChoose(source);
+  assert.deepEqual(sources, ["camera", "library", "file"]);
+  assert.deepEqual(routed, [], "All receipt sources retain the bill/group context");
+  nodes(native).find(n => n.type === "Selector").props.onChange("manual");
+  native = nativeRender();
+  assert.equal(nodes(native).find(n => n.type === "Selector").props.value, "manual");
+  assert(text(native).includes("Retained manual draft"));
   const shell = fs.readFileSync(
     path.join(root, "components/clover-shell.tsx"),
     "utf8",

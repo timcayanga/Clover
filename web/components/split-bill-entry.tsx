@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AddEntryMethods } from "./add-entry-methods";
-import { UploadSourcePicker } from "./upload-source-buttons";
 import { requestAiConsent } from "./ai-consent";
 import { mergeSplitBillItemSplitMetadata } from "@/lib/split-bill";
 import { SplitItemGrid } from "./split-item-grid";
@@ -37,7 +36,7 @@ export function SplitBillEntry({
   onClose: () => void;
   onSaved: (bill: SplitBillSerializedBill) => void;
 }) {
-  const [mode, setMode] = useState<"photo" | "manual">("photo"),
+  const [mode, setMode] = useState<"upload" | "manual">("upload"),
     [title, setTitle] = useState(""),
     [amount, setAmount] = useState(""),
     [currency, setCurrency] = useState(context.currency || "PHP"),
@@ -65,7 +64,6 @@ export function SplitBillEntry({
       { id: string; name: string; currency: string; type: string }[]
     >([]),
     [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
-  const camera = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLElement>(null);
   useEffect(() => {
     if (dialog.current) return containDialogFocus(dialog.current);
@@ -318,53 +316,15 @@ export function SplitBillEntry({
             ×
           </button>
         </header>
-        <input
-          hidden
-          ref={camera}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            e.target.value = "";
-            void upload(files);
-          }}
-        />
-
-        <div className="direct-bill-methods">
-          <button
-            className={`button ${mode === "photo" ? "button-primary" : "button-secondary"}`}
-            disabled={busy}
-            onClick={() => {
-              setMode("photo");
-              camera.current?.click();
-            }}
-          >
-            Take Photo
-          </button>
-          <button
-            className={`button ${mode === "manual" ? "button-primary" : "button-secondary"}`}
-            disabled={busy}
-            onClick={() => setMode("manual")}
-          >
-            Add Manually
-          </button>
-        </div>
         {error ? <p role="alert">{error}</p> : null}
         {busy ? (
           <p role="status">
-            {mode === "photo" ? "Reading receipt…" : "Saving bill…"}
+            {mode === "upload" ? "Reading receipt…" : "Saving bill…"}
           </p>
         ) : null}
-        {mode === "photo" ? (
-          <>
-            <details>
-              <summary>Upload an existing receipt</summary>
-              <UploadSourcePicker onSelect={(files) => void upload(files)} />
-            </details>
-          </>
-        ) : (
           <AddEntryMethods
+            key={mode}
+            initialMethod={mode}
             kind="split"
             workspaceId={workspaceId || undefined}
             disabled={busy}
@@ -562,7 +522,6 @@ export function SplitBillEntry({
               Save Bill
             </button>
           </AddEntryMethods>
-        )}
       </section>
     </div>,
     document.body,

@@ -70,7 +70,7 @@ export function AddEntryMethods({
   onboarding = false,
   onAccountsSynced,
 }: {
-  initialMethod?: "manual" | "connect";
+  initialMethod?: "manual" | "connect" | "upload";
   onboarding?: boolean;
   onAccountsSynced?: () => Promise<void> | void;
   kind: keyof typeof guidance;
@@ -223,7 +223,7 @@ export function AddEntryMethods({
             : "Upload statements, receipts, and screenshots"}
         </h4>
         {kind !== "accounts" && kind !== "recurring" && kind !== "investments" ? <p>{info.upload}</p> : null}
-        {onUploadFiles ? <UploadSourcePicker onSelect={onUploadFiles} /> : onUpload ? (
+        {onUploadFiles ? <UploadSourcePicker cameraFirst={kind === "split"} onSelect={onUploadFiles} /> : onUpload ? (
           <button
             className="button button-primary"
             type="button"

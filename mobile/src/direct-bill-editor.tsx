@@ -60,7 +60,7 @@ export function BillEditor({
 }) {
   const session = useSession();
   const [entryMode, setEntryMode] = useState(
-      sourceTransaction ? "manual" : "photo",
+      sourceTransaction ? "manual" : "upload",
     ),
     [moreDetails, setMoreDetails] = useState(false),
     [accountId, setAccountId] = useState(""),
@@ -133,7 +133,7 @@ export function BillEditor({
       alive.current = false;
     };
   }, []);
-  const uploadReceipt = async (camera = false) => {
+  const uploadReceipt = async (source: "file" | "camera" | "library" = "file") => {
     if (inFlight.current) return;
     if (session.demo) {
       setError(
@@ -147,12 +147,14 @@ export function BillEditor({
     let copiedUri = "";
     try {
       let file: { uri: string; name: string; mimeType?: string; size?: number };
-      if (camera) {
-        if (!(await ImagePicker.requestCameraPermissionsAsync()).granted)
+      if (source === "camera" || source === "library") {
+        if (source === "camera" && !(await ImagePicker.requestCameraPermissionsAsync()).granted)
           throw Error(
             "Allow camera access to take a photo, or add the bill manually.",
           );
-        const photo = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+        const photo = source === "camera"
+          ? await ImagePicker.launchCameraAsync({ quality: 0.85 })
+          : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.85 });
         if (photo.canceled || !alive.current) return;
         const image = photo.assets[0];
         file = {
@@ -375,24 +377,10 @@ export function BillEditor({
           if (!busy) onClose();
         }}
       />
-      {entryMode === "photo" ? (
-        <>
-          <Body>Take a receipt photo or add a bill manually.</Body>
-          <PlanAction
-            title="Take Photo"
-            tone="primary"
-            disabled={busy}
-            onPress={() => void uploadReceipt(true)}
-          />
-          <PlanAction
-            title="Add Manually"
-            disabled={busy}
-            onPress={() => setEntryMode("manual")}
-          />
-          {error ? <Notice>{error}</Notice> : null}
-        </>
-      ) : (
+      {error ? <Notice>{error}</Notice> : null}
         <AddEntryMethods
+          key={entryMode}
+          initialMethod={entryMode === "manual" ? "manual" : "upload"}
           kind="split"
           disabled={busy}
           context={{
@@ -409,7 +397,7 @@ export function BillEditor({
               setPayer(0);
             }
           }}
-          onUpload={() => void uploadReceipt()}
+          onUploadSource={source => void uploadReceipt(source)}
         >
           <Field
             label="Name"
@@ -612,7 +600,6 @@ export function BillEditor({
               />
             </>
           ) : null}
-          {error ? <Notice>{error}</Notice> : null}
           <PlanAction title="Cancel" disabled={busy} onPress={onClose} />
           <PlanAction
             title={busy ? "Creating…" : "Create bill"}
@@ -621,7 +608,6 @@ export function BillEditor({
             onPress={() => void save()}
           />
         </AddEntryMethods>
-      )}
     </Screen>
   );
 }

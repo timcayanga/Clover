@@ -135,15 +135,17 @@ export function EntryTransition({
 }
 export function UploadTiles({
   onChoose,
+  cameraFirst = false,
   disabled = false,
 }: {
   onChoose: (source: "file" | "camera" | "library") => void;
+  cameraFirst?: boolean;
   disabled?: boolean;
 }) {
   const { colors } = useTheme();
   return (
     <View style={{ gap: 10 }}>
-      {(["file", "camera", "library"] as const).map((source) => (
+      {(cameraFirst ? ["camera", "library", "file"] as const : ["file", "camera", "library"] as const).map((source) => (
         <Pressable
           key={source}
           disabled={disabled}

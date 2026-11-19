@@ -6,10 +6,12 @@ export function UploadSourceButtons({
   onFiles,
   onCamera,
   onLibrary,
+  cameraFirst = false,
 }: {
   onFiles: () => void;
   onCamera: () => void;
   onLibrary: () => void;
+  cameraFirst?: boolean;
 }) {
   const [cameraHelp, setCameraHelp] = useState(false);
   return (
@@ -24,8 +26,7 @@ export function UploadSourceButtons({
     <div className="organize-upload-choices">
       {(
         [
-          ["library", "Photo library", onLibrary],
-          ["camera", "Take photo", onCamera],
+          ...(cameraFirst ? [["camera", "Take photo", onCamera], ["library", "Photo library", onLibrary]] as const : [["library", "Photo library", onLibrary], ["camera", "Take photo", onCamera]] as const),
           ["files", "Choose files", onFiles],
         ] as const
       ).map(([key, label, onClick]) => (
@@ -53,8 +54,10 @@ export function UploadSourceButtons({
 }
 export function UploadSourcePicker({
   onSelect,
+  cameraFirst = false,
 }: {
   onSelect: (files: File[]) => void;
+  cameraFirst?: boolean;
 }) {
   const files = useRef<HTMLInputElement>(null),
     camera = useRef<HTMLInputElement>(null),
@@ -94,6 +97,7 @@ export function UploadSourcePicker({
         onChange={(e) => selected(e.currentTarget)}
       />
       <UploadSourceButtons
+        cameraFirst={cameraFirst}
         onFiles={() => files.current?.click()}
         onCamera={() => camera.current?.click()}
         onLibrary={() => library.current?.click()}

@@ -19,13 +19,14 @@ export function AddEntryMethods({
   onDraft,
   onReviewForm,
   onUpload,
+  onUploadSource,
   connect,
   initialMethod = "manual",
   onboarding = false,
 }: {
   children: ReactNode;
   connect?: ReactNode;
-  initialMethod?: "manual" | "connect";
+  initialMethod?: "manual" | "connect" | "upload";
   onboarding?: boolean;
   kind: "account" | "investment" | "recurring" | "split" | "trade";
   disabled?: boolean;
@@ -34,6 +35,7 @@ export function AddEntryMethods({
   onDraft?: (draft: EntryDraft) => void;
   onReviewForm?: (draft: AddFormDraft) => void;
   onUpload?: () => void;
+  onUploadSource?: (source: "file" | "camera" | "library") => void;
 }) {
   const [tab, setTab] = useState(initialMethod as string),
     [visited, setVisited] = useState(false);
@@ -98,7 +100,8 @@ export function AddEntryMethods({
               ? "Review a bill or statement first. Confirm its repeating schedule in Manual; a single bill never establishes a recurring payment."
               : "Upload a statement and review the account or holding match before confirming."}
         </Body>
-        <UploadTiles disabled={disabled} onChoose={source => {
+        <UploadTiles cameraFirst={kind === "split"} disabled={disabled} onChoose={source => {
+          if (onUploadSource) { onUploadSource(source); return; }
           if (onUpload && source === "file") { onUpload(); setTab("manual"); }
           else navigate(() => router.push({ pathname: "/add-transaction", params: { entry: `upload-${source}`, picker: source } }));
         }}/>
