@@ -85,7 +85,7 @@ const css = postcss.parse(fs.readFileSync(path.join(root, 'app/globals.css'), 'u
 function declarations(selector, width) {
   const result = {};
   css.walkRules(rule => {
-    if (!rule.selector.split(',').map(s => s.trim()).includes(selector)) return;
+    if (!postcss.list.comma(rule.selector).includes(selector)) return;
     for (let parent = rule.parent; parent; parent = parent.parent) {
       if (parent.type !== 'atrule' || parent.name !== 'media') continue;
       const max = /max-width:\s*(\d+)px/.exec(parent.params), min = /min-width:\s*(\d+)px/.exec(parent.params);
@@ -98,6 +98,14 @@ function declarations(selector, width) {
 const summary = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-summary';
 const calendar = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-calendar';
 for (const width of [320,393,820,1100]) {
+  for (const scope of ['.content .clover-tabs.compact-product-tabs', '.shell-mobile-subheader .clover-tabs.compact-product-tabs', '.circle-detail .circle-product-tabs.clover-tabs.compact-product-tabs']) {
+    assert.equal(declarations(scope,width).height, '44px');
+    assert.equal(declarations(scope,width)['max-height'], '44px');
+    assert.equal(declarations(scope,width).display, 'flex');
+    assert.equal(declarations(`${scope} > button`,width).height, '44px');
+    assert.equal(declarations(`${scope} > button:not(.is-active):not([aria-selected="true"]) :is(.animated-tabs__label,.recurring-tab-label)`,width).display, 'none');
+    assert.equal(declarations(`${scope} > button:is(.is-active,[aria-selected="true"]) :is(.animated-tabs__label:not(.recurring-tab-label--mobile),.recurring-tab-label--desktop)`,width)['white-space'], 'nowrap');
+  }
   assert.equal(declarations(summary,width)['grid-row'], '2');
   assert.equal(declarations(calendar,width)['grid-row'], '1');
   assert.equal(declarations(summary,width).width, '100%');
@@ -109,5 +117,6 @@ for (const width of [320,393,820,1100]) {
 }
 assert.equal(declarations(summary,1280)['grid-row'], '1', 'Desktop keeps its original summary-first arrangement');
 assert.equal(declarations(calendar,1280)['grid-row'], '2');
+assert.equal(declarations('.circle-detail .circle-product-tabs.clover-tabs.compact-product-tabs',1280).height, undefined, 'Mobile overrides do not change desktop tabs');
 assert.match(fs.readFileSync(path.join(root,'components/circles-page-client.tsx'),'utf8'), /ariaLabel="Circle display currency"\s+showChevron=\{false\}/);
 console.log('PASS rendered mobile web parity: calendar/summary/review order; five participant avatars and self identity; retained desktop arrangement, matching row type, 44px search/filter, row gaps, and Circle currency control.');

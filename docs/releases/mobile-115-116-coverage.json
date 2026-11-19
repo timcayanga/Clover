@@ -40,6 +40,8 @@
     "id": "subtabs",
     "requirement": "Fixed 44px loading/loaded tabs, selected icon and one-line label",
     "sourcePaths": [
+      "web/app/globals.css",
+      "web/components/animated-tabs.tsx",
       "mobile/src/plan-ui.tsx"
     ],
     "unresolvedPathAnchors": [],
