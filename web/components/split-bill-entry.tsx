@@ -98,10 +98,14 @@ export function SplitBillEntry({
   }, []);
   useEffect(() => {
     const close = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !lock.current) onClose();
+      if (e.key === "Escape" && !lock.current) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onClose();
+      }
     };
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
+    document.addEventListener("keydown", close, true);
+    return () => document.removeEventListener("keydown", close, true);
   }, [onClose]);
   const loadDetails = () => {
     if (!workspaceId || accounts.length) return;
@@ -308,6 +312,19 @@ export function SplitBillEntry({
             ×
           </button>
         </header>
+        <input
+          hidden
+          ref={camera}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            void upload(files);
+          }}
+        />
+
         <div className="direct-bill-methods">
           <button
             className={`button ${mode === "photo" ? "button-primary" : "button-secondary"}`}
@@ -335,18 +352,6 @@ export function SplitBillEntry({
         ) : null}
         {mode === "photo" ? (
           <>
-            <input
-              hidden
-              ref={camera}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => {
-                const files = Array.from(e.target.files ?? []);
-                e.target.value = "";
-                void upload(files);
-              }}
-            />
             <details>
               <summary>Upload an existing receipt</summary>
               <UploadSourcePicker onSelect={(files) => void upload(files)} />

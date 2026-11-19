@@ -133,6 +133,7 @@ async function main() {
       calls = [],
       saved = [],
       events = [];
+    const keyboard = new Map();
     let closed = 0,
       release;
     const fetch = async (url, options) => {
@@ -185,7 +186,14 @@ async function main() {
         crypto: require("node:crypto").webcrypto,
         fetch,
         FormData,
-        document: { body: {}, addEventListener() {}, removeEventListener() {} },
+        document: {
+          body: {},
+          addEventListener: (event, listener, capture) => {
+            assert.equal(capture, true);
+            keyboard.set(event, listener);
+          },
+          removeEventListener: (event) => keyboard.delete(event),
+        },
         window: { dispatchEvent: (e) => events.push(e.type) },
         Event,
       },
@@ -207,6 +215,34 @@ async function main() {
       .find((n) => n.type === "button" && text(n) === "Add Manually")
       .props.onClick();
     t = render();
+    const capture = nodes(t).find(
+      (n) => n.type === "input" && n.props.capture === "environment",
+    );
+    assert(capture, "Camera input remains mounted when Manual is selected");
+    let photoClicks = 0;
+    capture.props.ref.current.click = () => photoClicks++;
+    nodes(t)
+      .find((n) => n.type === "button" && text(n) === "Take Photo")
+      .props.onClick();
+    assert.equal(photoClicks, 1);
+    t = render();
+    nodes(t)
+      .find((n) => n.type === "input" && n.props.capture === "environment")
+      .props.onChange({
+        target: {
+          files: [new File(["receipt"], "receipt.jpg", { type: "image/jpeg" })],
+          value: "receipt.jpg",
+        },
+      });
+    await flush();
+    await flush();
+    t = render();
+    assert(
+      nodes(t).find(
+        (n) => n.type === "input" && n.props.value === "Receipt cafe",
+      ),
+      "Receipt preview returns to the same editable form",
+    );
     const input = (label, value) => {
       const row = nodes(t).find(
         (n) => n.type === "label" && text(n).startsWith(label),
@@ -223,8 +259,9 @@ async function main() {
     );
     save.props.onClick();
     save.props.onClick();
-    assert.equal(calls.length, 1, "In-flight saves are coalesced");
-    const payload = JSON.parse(calls[0].body);
+    const creates = calls.filter((c) => c.url === "/api/split-bills");
+    assert.equal(creates.length, 1, "In-flight saves are coalesced");
+    const payload = JSON.parse(creates[0].body);
     assert.equal(payload.expense.workspaceId, "profile");
     assert.equal(payload.groupId, context.group?.id ?? null);
     assert.deepEqual(
@@ -239,7 +276,16 @@ async function main() {
     assert.equal(saved.length, 1);
     assert.equal(closed, 1);
     assert(events.includes("clover:transactions-changed"));
+    let prevented = false,
+      stopped = false;
+    keyboard.get("keydown")({
+      key: "Escape",
+      preventDefault: () => (prevented = true),
+      stopImmediatePropagation: () => (stopped = true),
+    });
+    assert(prevented && stopped, "Escape stays within the bill entry");
     h.stop();
+    assert.equal(keyboard.size, 0);
   }
   const shell = fs.readFileSync(
     path.join(root, "components/clover-shell.tsx"),
@@ -260,7 +306,12 @@ async function main() {
   stop();
   events.requestContextBillEntry();
   assert.equal(opens, 1);
-  const stopCircle=events.onContextBillEntry(()=>opens+=10,"circles");events.requestContextBillEntry("split");assert.equal(opens,1);events.requestContextBillEntry("circles");assert.equal(opens,11);stopCircle();
+  const stopCircle = events.onContextBillEntry(() => (opens += 10), "circles");
+  events.requestContextBillEntry("split");
+  assert.equal(opens, 1);
+  events.requestContextBillEntry("circles");
+  assert.equal(opens, 11);
+  stopCircle();
   console.log(
     "PASS actual direct bill form: default photo, manual input, group/person context, equal split, one save, linked expense contract, origin retained and native event cleanup",
   );
