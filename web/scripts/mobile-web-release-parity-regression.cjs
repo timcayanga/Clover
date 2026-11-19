@@ -103,7 +103,7 @@ const summary = '.recurring-redesign--overview .recurring-redesign__overview > .
 const calendar = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-calendar';
 for (const width of [320,393,820,1100]) {
   assert.equal(declarations('.transactions-entry--figma[data-entry-method="ask"] .adviser-chat__composer',width)['margin-top'], 'auto');
-  for (const selector of ['.transactions-entry--figma[data-entry-method="ask"] > #quick-entry-panel-ask:not([hidden])', '.transactions-entry--figma[data-entry-method="ask"] .adviser-experience--entry', '.transactions-entry--figma[data-entry-method="ask"] .adviser-experience__main', '.transactions-entry--figma[data-entry-method="ask"] .adviser-chat']) {
+  for (const selector of ['.transactions-entry--figma[data-entry-method="ask"] > .transaction-creation-panel:not([hidden])', '.transactions-entry--figma[data-entry-method="ask"] .adviser-experience--entry', '.transactions-entry--figma[data-entry-method="ask"] .adviser-experience__main', '.transactions-entry--figma[data-entry-method="ask"] .adviser-chat']) {
     assert.equal(declarations(selector,width).flex,'1');
     assert.equal(declarations(selector,width)['min-height'],'0');
   }

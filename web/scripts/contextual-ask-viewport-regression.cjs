@@ -35,4 +35,8 @@ assert.match(fs.readFileSync(path.join(__dirname,'../components/contextual-ask-c
 const entry = fs.readFileSync(path.join(__dirname,'../components/dashboard-top-actions.tsx'),'utf8');
 assert.match(entry,/if \(entryTab === "ask" && rootRef.current\) return bindAskCloverViewport\(rootRef.current\)/);
 assert.match(entry,/data-entry-method=\{entryTab\}/);
+const transactions = fs.readFileSync(path.join(__dirname,'../app/transactions/page.tsx'),'utf8');
+assert.match(transactions,/if \(manualOpen && creationTab === "ask" && manualDialogRef.current\) return bindAskCloverViewport\(manualDialogRef.current\)/);
+assert.match(transactions,/ref=\{manualDialogRef\}\s+data-entry-method=\{creationTab\}/);
+assert.match(transactions,/id="creation-panel-ask"[^\n]+className="transaction-creation-panel"/);
 console.log('PASS actual sheet viewport binding: keyboard open/close, pan, resize fallback, frame coalescing and complete close cleanup.');

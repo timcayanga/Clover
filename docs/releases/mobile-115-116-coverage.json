@@ -261,7 +261,8 @@
     "sourcePaths": [
       "mobile/src/transaction-entry.tsx",
       "web/components/dashboard-top-actions.tsx",
-      "web/components/transaction-table-entry.tsx"
+      "web/components/transaction-table-entry.tsx",
+      "web/app/transactions/page.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -285,7 +286,8 @@
       "web/components/adviser-chat.tsx",
       "mobile/app/(tabs)/adviser.tsx",
       "mobile/src/ui.tsx",
-      "web/components/dashboard-top-actions.tsx"
+      "web/components/dashboard-top-actions.tsx",
+      "web/app/transactions/page.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "reconciled-in-branch",
@@ -306,7 +308,8 @@
       "mobile/src/add-entry-methods.tsx",
       "web/components/add-entry-methods.tsx",
       "web/components/add-entry-methods.css",
-      "web/components/dashboard-top-actions.tsx"
+      "web/components/dashboard-top-actions.tsx",
+      "web/app/transactions/page.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "present-requires-behavior-verification",
@@ -328,7 +331,8 @@
       "mobile/app/(tabs)/add.tsx",
       "web/components/recent-import-history.tsx",
       "web/app/api/imports/recent/route.ts",
-      "web/lib/data-engine.ts"
+      "web/lib/data-engine.ts",
+      "web/app/transactions/page.tsx"
     ],
     "unresolvedPathAnchors": [],
     "sourceStatus": "reconciled-in-branch",

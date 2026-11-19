@@ -45,6 +45,7 @@ function load(file,dependencies,globals={}) {
   render({rows:[]});effects[0]();resolve({ok:false});await new Promise(r=>setImmediate(r));assert.equal(fetches.length,1,'No automatic retry loop');assert.equal(writes.at(-1),true);
   const transactions=fs.readFileSync(path.join(__dirname,'../app/transactions/page.tsx'),'utf8');
   assert.match(transactions,/transactions-mobile-bulk-toolbar[\s\S]{0,1600}onClick=\{editSelection\}>Edit<\/button>/);
+  assert.match(transactions,/creationTab === "upload" \? <RecentImportHistory key=\{selectedWorkspaceId\} workspaceId=\{selectedWorkspaceId \|\| undefined\}/);
   for(const file of ['dashboard-top-actions.tsx','add-entry-methods.tsx'])assert.match(fs.readFileSync(path.join(__dirname,'../components',file),'utf8'),/RecentImportHistory key=\{workspaceId\} workspaceId=\{workspaceId\}/);
   console.log('PASS recent imports: auth/Profile refusal before bounded read, metadata-only/no recovery, escaped compact rows, Profile isolation, abort/stale response, no retry loop and mobile Edit wiring.');
 })().catch(error=>{console.error(error);process.exitCode=1});

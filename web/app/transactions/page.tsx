@@ -24,6 +24,8 @@ import { InterfaceIcon } from "@/components/interface-icon";
 import { AdviserChat } from "@/components/adviser-chat";
 import { formatTransactionAccountName } from "@/lib/transaction-account-sort";
 import { containDialogFocus } from "@/lib/dialog-focus";
+import { bindAskCloverViewport } from "@/lib/ask-clover-viewport";
+import { RecentImportHistory } from "@/components/recent-import-history";
 import { getRecordedTransactionConfidence } from "@/lib/transaction-confidence";
 import { normalizeTransactionAmountInput, transactionAmountFormatMessage } from "@/lib/transaction-amount-input";
 import { createTransactionRequestGate } from "@/lib/transaction-request-gate";
@@ -4139,6 +4141,10 @@ function TransactionsPageContent() {
       if (manualDialogRef.current && !mobileCreation) return containDialogFocus(manualDialogRef.current, manualNameInputRef.current, addMenuRef.current?.querySelector("button"));
     }
   }, [manualOpen, mobileCreation]);
+
+  useEffect(() => {
+    if (manualOpen && creationTab === "ask" && manualDialogRef.current) return bindAskCloverViewport(manualDialogRef.current);
+  }, [manualOpen, creationTab]);
 
   useEffect(() => {
     if (bulkEditOpen && bulkEditDialogRef.current) return containDialogFocus(bulkEditDialogRef.current);
@@ -8805,6 +8811,7 @@ function TransactionsPageContent() {
           <section
             className={`modal-card modal-card--manual transactions-entry--figma glass${enlargedText ? " modal-card--enlarged-text" : ""}`}
             ref={manualDialogRef}
+            data-entry-method={creationTab}
             tabIndex={-1}
             style={manualModalStyle}
             role={mobileCreation ? "region" : "dialog"}
@@ -9258,6 +9265,7 @@ function TransactionsPageContent() {
             {true ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
 
               <UploadSourceButtons onFiles={openMobileFilePicker} onCamera={openPhotoCapture} onLibrary={openPhotoLibrary} /><UploadSecurityCopy />
+              {creationTab === "upload" ? <RecentImportHistory key={selectedWorkspaceId} workspaceId={selectedWorkspaceId || undefined} /> : null}
             </div> : null}
           </section>
         </div>, document.body
