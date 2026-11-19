@@ -45,7 +45,7 @@
       "mobile/src/plan-ui.tsx"
     ],
     "unresolvedPathAnchors": [],
-    "sourceStatus": "present-requires-behavior-verification",
+    "sourceStatus": "reconciled-in-branch",
     "staging": "source-present-runtime-not-reverified",
     "production": "source-present-runtime-not-reverified",
     "ios": "pending-exact-package-verification",
@@ -269,11 +269,15 @@
     "id": "context-chat",
     "requirement": "One bottom composer, emoji chips above; page context; no nested draggable sheet",
     "sourcePaths": [
+      "web/app/globals.css",
+      "web/components/contextual-ask-clover.tsx",
+      "web/lib/ask-clover-viewport.ts",
+      "web/components/adviser-chat.tsx",
       "mobile/app/(tabs)/adviser.tsx",
       "mobile/src/ui.tsx"
     ],
     "unresolvedPathAnchors": [],
-    "sourceStatus": "present-requires-behavior-verification",
+    "sourceStatus": "reconciled-in-branch",
     "staging": "source-present-runtime-not-reverified",
     "production": "source-present-runtime-not-reverified",
     "ios": "pending-exact-package-verification",

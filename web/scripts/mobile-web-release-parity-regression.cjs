@@ -102,6 +102,17 @@ function declarations(selector, width) {
 const summary = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-summary';
 const calendar = '.recurring-redesign--overview .recurring-redesign__overview > .recurring-calendar';
 for (const width of [320,393,820,1100]) {
+  assert.equal(declarations('.contextual-ask-clover__panel',width).bottom, 'var(--ask-keyboard-inset, 0px)');
+  assert.equal(declarations('.contextual-ask-clover__panel',width).height, 'min(86dvh, 800px, var(--ask-visible-height, 100dvh))');
+  for (const selector of ['.contextual-ask-clover__chat', '.contextual-ask-clover__chat > .adviser-experience', '.contextual-ask-clover__chat .adviser-experience__main', '.contextual-ask-clover__chat .adviser-chat']) {
+    assert.equal(declarations(selector,width).flex, '1');
+    assert.equal(declarations(selector,width)['min-height'], '0');
+    assert.equal(declarations(selector,width).overflow, 'hidden', 'Only welcome/history/thread content scrolls, never a second outer sheet');
+  }
+  assert.equal(declarations('.contextual-ask-clover__chat .adviser-chat__composer',width)['margin-top'], 'auto');
+  assert.equal(declarations('.contextual-ask-clover__chat .adviser-chat__composer',width).flex, '0 0 auto');
+  assert.equal(declarations('.contextual-ask-clover__chat .adviser-chat__composer textarea',width)['min-height'], '64px');
+  assert.equal(declarations('.contextual-ask-clover__chat .adviser-chat__welcome',width)['justify-content'], 'flex-end');
   for (const scope of ['.content .clover-tabs.compact-product-tabs', '.shell-mobile-subheader .clover-tabs.compact-product-tabs', '.circle-detail .circle-product-tabs.clover-tabs.compact-product-tabs']) {
     assert.equal(declarations(scope,width).height, '44px');
     assert.equal(declarations(scope,width)['max-height'], '44px');
@@ -121,6 +132,7 @@ for (const width of [320,393,820,1100]) {
 }
 assert.equal(declarations(summary,1280)['grid-row'], '1', 'Desktop keeps its original summary-first arrangement');
 assert.equal(declarations(calendar,1280)['grid-row'], '2');
+assert.equal(declarations('.contextual-ask-clover__chat .adviser-chat__composer',1280)['margin-top'], undefined, 'Composer docking is scoped to mobile sheets');
 assert.equal(declarations('.circle-detail .circle-product-tabs.clover-tabs.compact-product-tabs',1280).height, undefined, 'Mobile overrides do not change desktop tabs');
 assert.match(fs.readFileSync(path.join(root,'components/circles-page-client.tsx'),'utf8'), /ariaLabel="Circle display currency"\s+showChevron=\{false\}/);
 console.log('PASS rendered mobile web parity: calendar/summary/review order; five participant avatars and self identity; retained desktop arrangement, matching row type, 44px search/filter, row gaps, and Circle currency control.');

@@ -67439,6 +67439,45 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 
 /* Release audit: mobile counterparts must match the restored native screens. */
 @media (max-width: 1100px) {
+  .contextual-ask-clover__panel {
+    bottom: var(--ask-keyboard-inset, 0px);
+    height: min(86dvh, 800px, var(--ask-visible-height, 100dvh));
+    max-height: calc(var(--ask-visible-height, 100dvh) - env(safe-area-inset-top) - 12px);
+  }
+  .contextual-ask-clover__chat {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 12px;
+  }
+  .contextual-ask-clover__chat > .adviser-experience,
+  .contextual-ask-clover__chat .adviser-experience__main,
+  .contextual-ask-clover__chat .adviser-chat {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .contextual-ask-clover__chat .adviser-history-toggle { align-self: flex-start; flex-shrink: 0; }
+  .contextual-ask-clover__chat .adviser-history.is-open { flex: 0 1 35%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .contextual-ask-clover__chat .adviser-chat__welcome {
+    flex: 1;
+    min-height: 0;
+    justify-content: flex-end;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 8px 0;
+  }
+  .contextual-ask-clover__chat .adviser-chat__thread { flex: 1; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
+  .contextual-ask-clover__chat .adviser-chat__prompt-row { flex-shrink: 0; max-height: none; overflow: visible; }
+  .contextual-ask-clover__chat .adviser-chat__composer { flex: 0 0 auto; position: relative; margin-top: auto; padding: 4px 0 0; }
+  .contextual-ask-clover__chat .adviser-chat__composer textarea { min-height: 64px; max-height: 112px; font-size: 16px; resize: none; }
+}
+@media (max-width: 1100px) {
   .content .clover-tabs.compact-product-tabs,
   .shell-mobile-subheader .clover-tabs.compact-product-tabs,
   .circle-detail .circle-product-tabs.clover-tabs.compact-product-tabs {

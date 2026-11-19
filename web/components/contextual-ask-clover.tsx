@@ -11,6 +11,7 @@ const AdviserChat = dynamic(() => import("@/components/adviser-chat").then(modul
 import { selectedWorkspaceEventName } from "@/lib/workspace-selection";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
+import { bindAskCloverViewport } from "@/lib/ask-clover-viewport";
 
 type AskCloverContext = AskPage;
 type PlanTier = "free" | "pro" | "premium" | "unknown";
@@ -131,6 +132,10 @@ export function ContextualAskClover({ context, planTier = "unknown", navigation,
     setIsOpen(false);
     window.requestAnimationFrame(() => triggerRef.current?.focus());
   };
+
+  useEffect(() => {
+    if (isOpen && panelRef.current) return bindAskCloverViewport(panelRef.current);
+  }, [isOpen]);
 
   return (
     <span hidden={captureLinks} className={navigation ? "contextual-ask-clover contextual-ask-clover--navigation" : "contextual-ask-clover"}>
