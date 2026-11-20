@@ -1,3 +1,4 @@
+import { AccountDetailActions } from "./account-detail-actions";
 import { AccountTypeMark } from "./account-type-mark";
 import { CardReplacementPanel } from "./card-replacement-panel";
 import { supportsCardReplacement, type PublicCardReplacement } from "../../shared/card-replacement";
@@ -101,6 +102,7 @@ const numericFields = new Set([
 ]);
 export function AccountEditor({
   initial,
+  mergeAccounts = [],
   callbackConnection,
   connectInitially = false,
   onboarding = false,
@@ -111,6 +113,7 @@ export function AccountEditor({
   onSaved,
 }: {
   initial: AccountRecord | null;
+  mergeAccounts?: readonly AccountRecord[];
   callbackConnection?: string;
   connectInitially?: boolean;
   onboarding?: boolean;
@@ -412,13 +415,13 @@ export function AccountEditor({
           </Card>
         </AddEntryMethods>
       ) : record ? (
-        <Card>
+        <><Card>
           {record.type === "investment" ? (
             <AssetSnapshot account={record} onEdit={beginEdit} />
           ) : (
             <>
               <AccountIdentity account={record} onEdit={beginEdit} />
-              <CardReplacementPanel key={record.id} account={record} onChanged={setRecord} />
+              <CardReplacementPanel readOnly key={record.id} account={record} onChanged={setRecord} />
               <FinverseConnect mode="sync" accountId={record.id} onSynced={()=>{}} />
               {Object.keys(labels)
                 .filter(
@@ -458,11 +461,8 @@ export function AccountEditor({
               if (!session.demo) setHistoryRevision((v) => v + 1);
             }}
           />
-          <PlanAction
-            title="Delete account"
-            tone="delete"
-            onPress={() => setConfirmDelete(true)}
-          />
+        </Card>
+        <AccountDetailActions key={`actions-${session.profileId}-${record.id}`} account={record} accounts={mergeAccounts} disabled={busy} onChanged={setRecord} onMerged={()=>onSaved(null)} onDelete={()=>setConfirmDelete(true)}>
           {confirmDelete ? (
             <Notice>
               <Body>
@@ -483,7 +483,7 @@ export function AccountEditor({
               />
             </Notice>
           ) : null}
-        </Card>
+        </AccountDetailActions></>
       ) : null}
 
     </Screen>

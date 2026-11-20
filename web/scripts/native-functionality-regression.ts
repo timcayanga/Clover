@@ -113,3 +113,6 @@ assert.equal(
 console.log(
   "PASS native report transfer exclusion, merchant grouping, cumulative pace and Pro projection",
 );
+
+assert.equal(mobileOperation("POST",["accounts","id","merge"]),"account-merge");
+for(const method of ["GET","PATCH","DELETE"])assert.equal(mobileOperation(method,["accounts","id","merge"]),null);

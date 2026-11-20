@@ -1,4 +1,5 @@
 "use client";
+import { AccountDetailActions } from "@/components/account-detail-actions";
 import { CardReplacementPanel } from "@/components/card-replacement-panel";
 import { supportsCardReplacement, type PublicCardReplacement } from "../../../../shared/card-replacement";
 import { FinverseConnectButton } from "@/components/finverse-connect-button";
@@ -3793,6 +3794,9 @@ function AccountDetailPageContent() {
     }
   };
 
+  const [replaceCardSignal, setReplaceCardSignal] = useState(0);
+  const [replacingCard,setReplacingCard]=useState(false);
+  useEffect(()=>setReplaceCardSignal(0),[account?.id]);
   const mergeableAccounts = useMemo(
     () =>
       workspaceAccounts
@@ -3806,10 +3810,11 @@ function AccountDetailPageContent() {
   );
 
   const openMergeAccountModal = () => {
-    if (!account || mergeBusy || mergeableAccounts.length === 0) {
+    if (!account || mergeBusy || replacingCard || mergeableAccounts.length === 0) {
       return;
     }
 
+    setReplaceCardSignal(0);
     setMergeDirection((current) => current ?? "into_other");
     setMergeAccountId((current) => {
       if (current && mergeableAccounts.some((candidate) => candidate.id === current)) {
@@ -4119,7 +4124,7 @@ function AccountDetailPageContent() {
                   showEditAction
                 />
 
-                <CardReplacementPanel key={`replacement-${account.id}`} account={account} onChanged={next=>{setAccount(next);setAccountEditDraft({name:next.name,accountNumber:next.accountNumber??""});}} />
+                <CardReplacementPanel readOnly key={`replacement-${account.id}`} account={account} onChanged={next=>{setAccount(next);setAccountEditDraft({name:next.name,accountNumber:next.accountNumber??""});}} />
 
                 <FinverseConnectButton key={`${account.workspaceId}:${account.id}`} mode="sync" accountId={account.id} workspaceId={account.workspaceId} />
 
@@ -5310,6 +5315,8 @@ function AccountDetailPageContent() {
           </div>
         ) : null}
 
+      </section>
+      <section className="accounts-detail__account-actions glass" aria-label="Account actions">
         {deleteAction ? (
           <div className="detail-warning-box accounts-detail__delete-confirm" style={{ marginTop: 20 }}>
             <div className="detail-warning-box__header">
@@ -5466,30 +5473,12 @@ function AccountDetailPageContent() {
             </div>
           </div>
         ) : (
-          <div className="accounts-detail__footer-actions" style={{ marginTop: 20 }}>
-            {mergeableAccounts.length > 0 ? (
-              <button className="button button-secondary button-small" type="button" onClick={() => openMergeAccountModal()} disabled={Boolean(deleteBusy)}>
-                Merge
-              </button>
-            ) : null}
-            <button
-              className="button button-secondary button-small"
-              type="button"
-              onClick={() => setDeleteAction("activity")}
-              disabled={Boolean(deleteBusy)}
-            >
-              {account?.type === "investment" ? "Delete Assets" : "Delete Transactions"}
-            </button>
-            <button
-              className="button button-danger button-small accounts-drawer__delete"
-              type="button"
-              onClick={() => setDeleteAction("account")}
-              disabled={Boolean(deleteBusy)}
-            >
-              {account?.type === "investment" ? "Delete Asset" : "Delete Account"}
-            </button>
-          </div>
+          <AccountDetailActions canReplace={Boolean(account && supportsCardReplacement(account.type))} canMerge={mergeableAccounts.length>0} disabled={Boolean(deleteBusy)} replacing={replacingCard} asset={account?.type==="investment"} onReplace={()=>setReplaceCardSignal(v=>v+1)} onMerge={openMergeAccountModal} onDelete={()=>{setReplaceCardSignal(0);setDeleteAction("account");}}>
+            {account ? <CardReplacementPanel compact onBusyChange={setReplacingCard} openSignal={replaceCardSignal} key={`replacement-action-${account.id}`} account={account} onChanged={next=>{setAccount(next);setAccountEditDraft({name:next.name,accountNumber:next.accountNumber??""});}} /> : null}
+          </AccountDetailActions>
         )}
+      </section>
+      <section className="accounts-detail__dialogs">
 
         {balanceAdjustmentOpen && account?.workspaceId ? (
           <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={closeBalanceAdjustment}>

@@ -286,6 +286,21 @@ async function handle(
     }
     if (!workspaceId) return splitBillFailure("Choose a Profile first.", 400, "split_bills_profile_required");
     await assertWorkspaceAccess(userId, workspaceId);
+    if (operation === "account-merge") {
+      const text=await request.text();
+      if(new TextEncoder().encode(text).length>2048)return reply({error:"Merge details are too large."},413);
+      let input:unknown;try{input=JSON.parse(text);}catch{return reply({error:"Please check the merge details."},400);}
+      const body=z.object({targetAccountId:z.string().min(1).max(128),confirmed:z.literal(true)}).strict().parse(input);
+      if(body.targetAccountId===path[1])return reply({error:"Choose a different account to keep."},400);
+      const accounts=await prisma.account.findMany({where:{workspaceId,id:{in:[path[1],body.targetAccountId]}},select:{id:true,type:true,currency:true}});
+      const source=accounts.find(a=>a.id===path[1]),target=accounts.find(a=>a.id===body.targetAccountId);
+      if(!source||!target)return reply({error:"Choose accounts in this Profile."},404);
+      if(source.currency!==target.currency||source.type!==target.type)return reply({error:"Choose accounts of the same type and currency."},400);
+      const headers=new Headers(request.headers);headers.delete("cookie");headers.delete("content-length");headers.set("content-type","application/json");
+      const forwarded=new Request(request.url,{method:"POST",headers,body:JSON.stringify({workspaceId,targetAccountId:target.id})});
+      const result=await withMobileRequestContext(userId,forwarded,async()=>(await import("@/app/api/accounts/[accountId]/merge/route")).POST(forwarded,{params:Promise.resolve({accountId:source.id})}));
+      return reply(mobileApiResponse("account",await result.json()),result.status);
+    }
     if (operation === "investment-holding-delete") {
       const forwarded = new Request(request.url, { method: "DELETE", headers: request.headers, body: JSON.stringify({ workspaceId }) });
       const response = await withMobileRequestContext(userId, forwarded, async () => (await import("@/app/api/investment-holdings/[holdingId]/route")).DELETE(forwarded, { params: Promise.resolve({ holdingId: path[1] }) }));

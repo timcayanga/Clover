@@ -258,6 +258,7 @@ function AccountsContent() {
   const summary = consolidatedAccountSummary(summaryRows, summaryCurrency, exchangeRates.rates);
   const accountEditor = selected || adding ? (
       <AccountEditor
+        mergeAccounts={accounts}
         defaultCurrency={session.data?.defaultCurrency ?? "PHP"}
         callbackConnection={finverseConnection}
         connectInitially={add === "connect"}
