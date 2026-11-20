@@ -86,7 +86,9 @@ async function main() {
     id: "circle", name: "QA", type: "custom", description: null, avatarUrl: null, color: "teal", currency: "PHP", ownerUserId: "owner", updatedAt: today,
     memberships: [{ id: "member", userId: "owner", role: "organizer", status: "active", displayName: "Owner", email: "owner@example.test", contributionTarget: null }],
     _count: { memberships: 1 }, budgets: [], goals: [], commitments: [], contributions: [], investmentShares: [], invitations: [], activities: [],
-    splitBillGroup: { id: "group", bills: [{ id: "bill", title: "Meal", total: 90, currency: "PHP", billDate: today, transactionId: "duplicate" }] },
+    splitBillGroup: { id: "group", bills: [{ id: "bill", title: "Meal", total: 90, currency: "PHP", billDate: today, transactionId: "duplicate",
+      payments: [{ participant: { name: "Owner" }, amount: 90 }],
+      items: [{ description: "Lunch", amount: 90 }] }] },
     sharedTransactions: [
       { id: "shared", transactionId: "duplicate", sharedAmount: null, visibility: "summary", transaction: { date: today, amount: -90, merchantRaw: "Private", currency: "PHP" } },
       { id: "other", transactionId: "other", sharedAmount: 25, visibility: "summary", transaction: { date: today, amount: -60, merchantRaw: "Private", currency: "PHP" } },
@@ -100,6 +102,9 @@ async function main() {
   for (const relation of ["goals", "budgets", "activities", "invitations", "contributions", "investmentShares"]) assert.equal(select[relation], undefined);
   const detail = await loadCirclesWorkspaceData(user, "circle");
   assert.equal(detail.circles[0].members[0].avatarUrl,"https://example.test/owner.jpg");
+  const bill = detail.circles[0].expenses.find(expense => expense.id === "bill");
+  assert.equal(bill?.paidByName, "Owner");
+  assert.deepEqual(bill?.lineItems, [{ description: "Lunch", amount: "90" }]);
   assert.equal(directory.circles[0].expenseTotalThisMonth, 115);
   assert.equal(directory.circles[0].expenseTotalThisMonth, detail.circles[0].expenseTotalThisMonth);
   assert.equal(directory.circles[0].memberCount, detail.circles[0].memberCount);
