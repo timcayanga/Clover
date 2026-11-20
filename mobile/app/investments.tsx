@@ -1,6 +1,10 @@
 import { ContextualUpgrade } from "../src/contextual-upgrade";
 import { AccountSummaryGrid } from "../src/account-summary-grid";
-import { investmentTypeLabel } from "../../shared/investment-entry";
+import { filterMarketHistoryByRange, type MarketRange } from "../../shared/market-history-range";
+import { MARKET_OPTIONS, POPULAR_TICKERS, marketIcon, toggleTicker, type MarketKey } from "../../shared/market-selection";
+import { ReportLineChart } from "../src/report-line-chart";
+import { HoldingLogo } from "../src/holding-logo";
+import { investmentQuoteIdentity, investmentTypeLabel } from "../../shared/investment-entry";
 import { useLiveInvestmentValues } from "../src/use-live-investment-values";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { DropdownFilter } from "../src/transaction-filters";
@@ -9,8 +13,8 @@ import { createScreenDataLoader, registerScreenRefresh } from "../src/screen-ref
 import { EntryOverlay } from "../src/entry-overlay";
 import { Text } from "../src/app-text";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
-import { Image, Pressable, View, useWindowDimensions } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Image, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "../src/session";
 import { AccountEditor, type AccountRecord } from "../src/account-editor";
@@ -388,7 +392,7 @@ export default function Investments() {
           initial={total}
         />
       ) : tab.startsWith("Markets") ? (
-        <NativeMarkets accounts={accounts} />
+        <NativeMarkets key={session.profileId} holdings={recordedHoldings} />
       ) : (
         <>
           <Card>
@@ -447,180 +451,109 @@ export default function Investments() {
     </Screen>
   );
 }
-function NativeMarkets({ accounts }: { accounts: AccountRecord[] }) {
+function NativeMarkets({ holdings }: { holdings: PortfolioHolding[] }) {
+  const { colors } = useTheme();
   const session = useSession();
+  const [market, setMarket] = useState<MarketKey>("us");
+  const [menu, setMenu] = useState<"Markets" | "Assets" | null>(null);
   const [query, setQuery] = useState("");
-  const [market, setMarket] = useState("us");
-  const [symbol, setSymbol] = useState("");
   const [range, setRange] = useState("1M");
-  const [newsOpen, setNewsOpen] = useState(false);
-  useEffect(() => setNewsOpen(false), [symbol, market]);
-  const [history, setHistory] = useState<{
-    points: { date: string; value: number }[];
-    provider?: string;
-    currency?: string;
-  } | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [revision, setRevision] = useState(0);
+  const owned = holdings.flatMap(h => {
+    const identity = investmentQuoteIdentity(h);
+    return identity ? [{ ...identity, name: h.name, logoUrl: h.logoUrl, subtype: h.subtype }] : [];
+  });
+  function assetsFor(m: MarketKey): {name:string; symbol:string; market: MarketKey; subtype:string; logoUrl?:string | null}[] {
+    const catalog = POPULAR_TICKERS[m].map(a => ({...a, subtype: m === "crypto" ? "crypto" : "stock",
+      logoUrl: `/assets/investments/${m === "ph" ? "philippines" : m}/${encodeURIComponent(a.symbol)}.svg`}));
+    return [...new Map([...catalog, ...owned.filter(a => a.market === m)].map(a => [a.symbol, a])).values()];
+  }
+  const assets = assetsFor(market);
+  const [selection, setSelection] = useState(() => toggleTicker([], assets[0].symbol));
+  const [results, setResults] = useState<Record<string, {points: {date:string; value:number}[]; error?:string}>>({});
+  const prices = useRef(new Map<string, {points: {date:string; value:number}[]; expires: number}>());
+  const keyOf = (symbol: string) => [market, range, symbol].join(":");
   useEffect(() => {
-    if (!symbol) {
-      setHistory(null);
-      setLoading(false);
-      setError("");
-      return;
-    }
     let active = true;
-    setLoading(true);
-    setError("");
-    setHistory(null);
-    const refresh = createScreenDataLoader<typeof history>({
-      load: () => session.demo ? Promise.resolve({ points: [] }) : session.request<typeof history>(
-        `market-history?workspaceId=${encodeURIComponent(session.profileId)}&symbol=${encodeURIComponent(symbol)}&market=${market}&range=${range}`,
-      ),
+    let force = false;
+    const refresh = createScreenDataLoader({
       active: () => active,
-      apply: result => { setHistory(result); setError(""); },
-      error: e => setError((e as Error).message),
-      settled: () => setLoading(false),
+      load: () => Promise.all(selection.map(async ({symbol}) => {
+        const key = [market, range, symbol].join(":");
+        try {
+          const cached = prices.current.get(key);
+          if (!force && cached && cached.expires > Date.now()) return [key, {points: cached.points}] as const;
+          const data = session.demo ? {points: [], currency: market === "ph" ? "PHP" : "USD"} : await session.request<{currency:string;points:{date:string; value:number}[]}>(
+            `market-history?workspaceId=${encodeURIComponent(session.profileId)}&symbol=${encodeURIComponent(symbol)}&market=${market}&range=${range}`);
+          if (data.currency !== (market === "ph" ? "PHP" : "USD"))
+            return [key, {points: [], error: "Quote currency unavailable for comparison"}] as const;
+          const points = filterMarketHistoryByRange(data.points, range as MarketRange);
+          if (active) {
+            if (prices.current.size >= 64) prices.current.delete(prices.current.keys().next().value!);
+            prices.current.set(key, {points, expires: Date.now()+60_000});
+          }
+          return [key, {points}] as const;
+        } catch (cause) { return [key, {points: [], error: cause instanceof Error ? cause.message : "History unavailable"}] as const; }
+      })),
+      apply: rows => setResults(Object.fromEntries(rows)),
+      error: () => setResults({}),
     });
     void refresh();
-    const unregister = registerScreenRefresh("/investments", refresh);
-    return () => {
-      active = false; unregister();
-    };
-  }, [
-    symbol,
-    market,
-    revision,
-    range,
-    session.demo,
-    session.profileId,
-    session.request,
-  ]);
-  return (
-    <>
+    const unregister = registerScreenRefresh("/investments", () => {force = true; return refresh();});
+    return () => { active = false; unregister(); };
+  }, [market, range, selection, session.request, session.demo, session.profileId]);
+  for (const {symbol} of selection) {
+    if (!assets.some(a => a.symbol === symbol)) assets.push({name:symbol, symbol, market, subtype:market === "crypto" ? "crypto" : "stock"});
+  }
+  const term = query.trim().toUpperCase();
+  const options = assets.filter(a => (a.name + " " + a.symbol).toUpperCase().includes(term));
+  const elsewhere = MARKET_OPTIONS.some(m => m.key !== market && assetsFor(m.key).some(a => a.symbol === term));
+  if (!elsewhere && /^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(term) && !assets.some(a => a.symbol === term)) {
+    options.push({name: term, symbol: term, market, subtype: market === "crypto" ? "crypto" : "stock", logoUrl: null});
+  }
+  const chart = selection.map(s => ({name: s.symbol, color: s.color, points: results[keyOf(s.symbol)]?.points ?? []}));
+  return <>
+    <Card>
+      <View style={{flexDirection:"row", gap:10}}>
+        {(["Markets","Assets"] as const).map(label => <Pressable key={label} accessibilityRole="button"
+          accessibilityState={{expanded:menu === label}} onPress={() => {setMenu(menu === label ? null : label); setQuery("");}}
+          style={{flex:1, minHeight:54, borderColor:colors.line, borderWidth:1, borderRadius:12, padding:8}}>
+          <Text style={{color:colors.muted}}>{label}</Text>
+          <Text numberOfLines={1} style={{color:colors.ink}}>{label === "Markets" ? marketIcon[market]+" "+market.toUpperCase() : selection.length === 1 ? selection[0].symbol : selection.length+" selected"} ▾</Text>
+        </Pressable>)}
+      </View>
+      {menu === "Markets" && MARKET_OPTIONS.map(m => <Pressable key={m.key} accessibilityRole="radio"
+        accessibilityState={{checked:market === m.key}} style={{paddingVertical:12}}
+        onPress={() => {if (m.key !== market) {setMarket(m.key); setSelection(toggleTicker([], assetsFor(m.key)[0].symbol));} setMenu(null);}}>
+        <Body muted={false}>{marketIcon[m.key]}  {m.description}{market === m.key ? "  ✓" : ""}</Body>
+      </Pressable>)}
+      {menu === "Assets" && <>
+        <Field label="Search assets or ticker" value={query} onChangeText={setQuery}/>
+        <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{maxHeight:260}}>
+        {options.map(a => {
+          const selected = selection.find(s => s.symbol === a.symbol);
+          return <Pressable key={a.symbol} accessibilityRole="checkbox" accessibilityState={{checked:!!selected}}
+            onPress={() => setSelection(current => toggleTicker(current, a.symbol))}
+            style={{minHeight:44, flexDirection:"row", alignItems:"center", gap:10, borderBottomWidth:1, borderColor:colors.line}}>
+            <HoldingLogo holding={a} size={26}/><Text style={{flex:1, color:colors.ink}}>{a.name} · {a.symbol}</Text>
+            {selected && <Text style={{color:selected.color}}>● ✓</Text>}
+          </Pressable>;
+        })}
+        {!options.length && <Body>No matching assets in this market.</Body>}
+        </ScrollView>
+        <PlanAction title="Done" onPress={() => setMenu(null)}/>
+      </>}
+    </Card>
+    {selection.length ? <>
       <Card>
-        <Field
-          label="Search owned assets or ticker"
-          value={query}
-          onChangeText={setQuery}
-        />
-        <Body>Market</Body>
-        {["us", "ph", "crypto"].map((value) => (
-          <PlanAction
-            key={value}
-            title={`${value.toUpperCase()}${market === value ? " ✓" : ""}`}
-            onPress={() => {
-              setMarket(value);
-              setSymbol("");
-            }}
-          />
-        ))}
-        {accounts
-          .filter(
-            (a) =>
-              a.investmentSymbol &&
-              `${a.name} ${a.investmentSymbol}`
-                .toLowerCase()
-                .includes(query.toLowerCase()),
-          )
-          .slice(0, 8)
-          .map((a) => (
-            <PlanAction
-              key={a.id}
-              title={`${a.name} · ${a.investmentSymbol}`}
-              onPress={() => {
-                setMarket(
-                  a.investmentSubtype === "crypto"
-                    ? "crypto"
-                    : a.currency === "PHP"
-                      ? "ph"
-                      : "us",
-                );
-                setSymbol(a.investmentSymbol!);
-              }}
-            />
-          ))}
-        <PlanAction
-          title="View market"
-          tone="primary"
-          disabled={!query.trim()}
-          onPress={() => {
-            setSymbol(query.trim().toUpperCase());
-            setRevision((v) => v + 1);
-          }}
-        />
+        <Body muted={false}>Price history · {market === "ph" ? "PHP" : "USD"}</Body>
+        <Choices value={range} options={["1M","3M","1Y","MAX"].map(value => ({value,label:value}))} onChange={setRange}/>
+        {chart.some(s => s.points.length > 0) && <ReportLineChart series={chart} currency={market === "ph" ? "PHP" : "USD"}/>}
+        {selection.filter(s => !results[keyOf(s.symbol)]?.points.length).map(s =>
+          <Body key={s.symbol}>{s.symbol} · {results[keyOf(s.symbol)]?.error ?? (results[keyOf(s.symbol)] ? "No history available" : "Loading history…")}</Body>)}
       </Card>
-      {symbol ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-          {["1M", "3M", "1Y", "MAX"].map((value) => (
-            <PlanAction
-              key={value}
-              title={`${value}${range === value ? " ✓" : ""}`}
-              onPress={() => setRange(value)}
-            />
-          ))}
-        </View>
-      ) : null}
-      {loading ? (
-        <Body>Loading market history…</Body>
-      ) : error ? (
-        <Notice>{error}</Notice>
-      ) : history ? (
-        <Card>
-          <Body muted={false}>
-            {symbol} · {range}
-          </Body>
-          {history.points.length ? (
-            history.points
-              .filter(
-                (_, i) =>
-                  i % Math.max(1, Math.floor(history.points.length / 12)) === 0,
-              )
-              .map((p) => (
-                <View key={p.date} style={{ gap: 8 }}>
-                  <Body>
-                    {p.date.slice(0, 10)} ·{" "}
-                    {money(
-                      String(p.value),
-                      history.currency ?? (market === "ph" ? "PHP" : "USD"),
-                    )}
-                  </Body>
-                  <Progress
-                    value={
-                      (p.value /
-                        Math.max(
-                          ...history.points.map((point) => point.value),
-                        )) *
-                      100
-                    }
-                  />
-                </View>
-              ))
-          ) : (
-            <Body>No market history available.</Body>
-          )}
-          <Body>Source: {history.provider ?? "No provider data"}</Body>
-        </Card>
-      ) : (
-        <Body>Select an asset to view its market history.</Body>
-      )}
-      {symbol ? (
-        newsOpen ? (
-          <NativeAssetNews
-            key={`${market}:${symbol}`}
-            market={market}
-            symbol={symbol}
-          />
-        ) : (
-          <PlanAction
-            title="Load recent news"
-            onPress={() => setNewsOpen(true)}
-          />
-        )
-      ) : null}
-    </>
-  );
+      {selection.map(s => <NativeAssetNews key={market+s.symbol} market={market} symbol={s.symbol} name={assets.find(a => a.symbol === s.symbol)?.name ?? s.symbol}/>)}
+    </> : <Body>Select an asset to view its price history and news.</Body>}
+  </>;
 }
 
 const newsSample = {
@@ -633,14 +566,16 @@ const newsSample = {
   }[],
 };
 function NativeAssetNews({
+  name,
   symbol,
   market,
 }: {
+  name: string;
   symbol: string;
   market: string;
 }) {
   const { data, error, reload } = usePlanData(
-    `market-news?symbol=${encodeURIComponent(symbol)}&market=${market}`,
+    `market-news?symbol=${encodeURIComponent(symbol)}&market=${market}&name=${encodeURIComponent(name)}`,
     newsSample,
   );
   return (

@@ -4,7 +4,7 @@ import { SvgUri } from "react-native-svg";
 import type { PortfolioHolding } from "../../shared/investment-portfolio";
 import { investmentIcons } from "./investment-icons";
 import { apiBase } from "./api";
-export function HoldingLogo({ holding, size = 44 }: { size?: number; holding: PortfolioHolding }) {
+export function HoldingLogo({ holding, size = 44 }: { size?: number; holding: Pick<PortfolioHolding, "logoUrl" | "subtype"> }) {
   const [failedPath, setFailedPath] = useState<string | null>(null);
   const path = holding.logoUrl;
   return (

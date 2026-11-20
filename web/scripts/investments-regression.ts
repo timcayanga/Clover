@@ -1,5 +1,6 @@
 import { emptyInvestmentRow, populatedInvestmentRow, investmentRowIssue, normalizeInvestmentTableCell } from "@/lib/investment-table-entry";
 import assert from "node:assert/strict";
+import { toggleTicker } from "../../shared/market-selection";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates, getLocalInvestmentLogo } from "@/lib/investment-assets";
@@ -481,13 +482,19 @@ assert.match(investmentsStyles, /\.content--investments \.investments-portfolio-
 assert.match(investmentsPageSource, /endAngle - startAngle >= Math\.PI \* 2/, "A single 100% portfolio allocation must render as a full pie.");
 assert.match(investmentsPageSource, /investments-portfolio-outlook__unrated/, "Holdings without purchase values must remain visible without restoring a Neutral outlook column.");
 assert.match(investmentsStyles, /\.investments-portfolio-outlook__unrated\s*\{/, "Unrated portfolio holdings must have a compact visible treatment.");
+const firstAsset = toggleTicker([], "AAPL");
+const comparisonAssets = toggleTicker(firstAsset, "MSFT");
+assert.notEqual(comparisonAssets[0].color, comparisonAssets[1].color);
+const remainingAssets = toggleTicker(comparisonAssets, "AAPL");
+assert.deepEqual(remainingAssets, [comparisonAssets[1]], "Removing an asset must preserve the remaining chart line color.");
+assert.equal(toggleTicker(remainingAssets, "MSFT").length, 0);
 assert.match(marketChartSource, /seenSymbols\.has\(key\)/, "Portfolio market tickers must be deduplicated.");
 assert.match(
   marketChartSource,
   /portfolioAssetsForSelectedMarket = useMemo\([\s\S]{0,240}getMarketForInvestment\(account\) === selectedMarket/,
   "The market selector must scope Your Portfolio to holdings from that market."
 );
-assert.match(marketChartSource, /selectMarket\(nextMarket\)/, "Changing markets must immediately synchronize the selected portfolio asset.");
+assert.match(marketChartSource, /setSelection\(toggleTicker\(\[\], first\)\)/, "Changing markets must immediately synchronize the selected portfolio asset.");
 assert.match(marketChartSource, /preserveAspectRatio="none"/, "Every market chart must fill the available chart width.");
 assert.doesNotMatch(marketChartSource, /<iframe/, "PH, US, and Crypto must use the same Clover chart canvas.");
 assert.doesNotMatch(marketChartSource, /buildPhTradingViewUrl/, "PH charts must not branch into a separate embedded presentation.");

@@ -1,0 +1,8 @@
+.controls { display: grid; width: 100%; gap: 12px; }
+.selectors { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.selectors > button, .rows { border: 1px solid var(--stroke); border-radius: 12px; background: var(--surface); color: var(--text); }
+.selectors > button { display: grid; gap: 4px; text-align: left; padding: 10px 14px; cursor: pointer; }
+.rows { display: grid; padding: 8px; max-height: 320px; overflow: auto; }
+.rows button { display: flex; gap: 10px; align-items: center; min-height: 44px; padding: 6px 10px; text-align: left; font: inherit; background: transparent; color: inherit; border: 0; border-bottom: 1px solid var(--stroke); cursor: pointer; }
+.rows button[aria-pressed="true"] { background: var(--surface-soft); }
+.rows b { margin-left: auto; }

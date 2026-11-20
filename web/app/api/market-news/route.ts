@@ -100,6 +100,15 @@ export async function GET(request: Request) {
     const items = (payload.feed ?? [])
       .filter((item) => item.title && item.summary)
       .filter((item) => {
+        if (market === "ph" && symbol) {
+          // Unqualified Philippine tickers can refer to unrelated US listings.
+          const words = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+          const text = ` ${words(`${item.title} ${item.summary}`)} `;
+          const company = words(name).replace(/ (inc|corp|corporation|incorporated)$/, "");
+          const ticker = words(symbol);
+          if (company && company !== ticker && text.includes(` ${company} `)) return true;
+          return text.includes(` ${ticker} `) && /\b(philippines?|philippine|pse|manila|filipino)\b/.test(text);
+        }
         if (symbol) {
           return true;
         }

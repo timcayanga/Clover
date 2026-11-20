@@ -10,23 +10,23 @@ type News = {
 const cache = new Map<string, { expires: number; items: News[] }>();
 export function MarketAssetNews({
   symbol,
+  name,
   market,
 }: {
   symbol: string;
+  name: string;
   market: string;
 }) {
-  const [open, setOpen] = useState(false);
   const [items, setItems] = useState<News[] | null>(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   useEffect(() => {
-    setOpen(false);
     setItems(null);
     setError("");
   }, [symbol, market]);
   useEffect(() => {
-    if (!open || !symbol) return;
-    const key = `${market}:${symbol}`;
+    if (!symbol) return;
+    const key = JSON.stringify([market, symbol, name]);
     const cached = cache.get(key);
     if (cached && cached.expires > Date.now()) {
       setItems(cached.items);
@@ -35,7 +35,7 @@ export function MarketAssetNews({
     const controller = new AbortController();
     setItems(null);
     setError("");
-    void fetch(`/api/market-news?${new URLSearchParams({ symbol, market })}`, {
+    void fetch(`/api/market-news?${new URLSearchParams({ symbol, market, name })}`, {
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -51,19 +51,12 @@ export function MarketAssetNews({
         if (!controller.signal.aborted) setError(e.message);
       });
     return () => controller.abort();
-  }, [open, symbol, market, revision]);
+  }, [symbol, market, name, revision]);
   return (
     <section className="market-asset-news" aria-label="Asset news">
       <h3>{symbol ? `${symbol} news` : "Asset news"}</h3>
       {!symbol ? (
         <p>Choose an asset to view coverage.</p>
-      ) : !open ? (
-        <button
-          className="button plan-action-view"
-          onClick={() => setOpen(true)}
-        >
-          Load recent news
-        </button>
       ) : error ? (
         <p role="status">
           {error}{" "}

@@ -1,6 +1,10 @@
 "use client";
 import { registerPullRefresh } from "@/lib/pull-refresh";
 
+import { MARKET_OPTIONS, POPULAR_TICKERS, marketIcon, toggleTicker, type SelectedTicker, type MarketKey } from "../../shared/market-selection";
+import { ReportsComparisonChart } from "./reports-comparison-chart";
+import { investmentQuoteIdentity } from "../../shared/investment-entry";
+import styles from "./market-selectors.module.css";
 import { MarketAssetNews } from "@/components/market-asset-news";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -45,7 +49,7 @@ type CurrencyCode = "USD" | "PHP";
 
 type BenchmarkKey = "none" | "sp500" | "nasdaq" | "bitcoin";
 
-type MarketKey = "us" | "ph" | "crypto";
+
 
 type BenchmarkOption = {
   key: BenchmarkKey;
@@ -55,12 +59,7 @@ type BenchmarkOption = {
   note: string;
 };
 
-type TickerSuggestion = {
-  symbol: string;
-  name: string;
-  market: MarketKey;
-  popularity: number;
-};
+
 
 type InvestmentMarketChartProps = {
   investmentAccounts: InvestmentAccount[];
@@ -104,6 +103,8 @@ const isMarketTrackableSubtype = (value: string | null) =>
   value === "stock" || value === "etf" || value === "reit" || value === "crypto";
 
 const getMarketForInvestment = (account: InvestmentAccount): MarketKey => {
+  const identity = investmentQuoteIdentity({name:account.name, subtype:account.investmentSubtype, symbol:account.investmentSymbol, currency:account.currency});
+  if (identity) return identity.market;
   if (account.investmentSubtype === "crypto") {
     return "crypto";
   }
@@ -137,45 +138,6 @@ const volumeFormatter = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 2,
 });
-
-const MARKET_OPTIONS: Array<{ key: MarketKey; label: string; description: string }> = [
-  { key: "us", label: "US", description: "United States" },
-  { key: "ph", label: "PH", description: "Philippines" },
-  { key: "crypto", label: "Crypto", description: "Digital assets" },
-];
-
-const POPULAR_TICKERS: Record<MarketKey, TickerSuggestion[]> = {
-  us: [
-    { symbol: "AAPL", name: "Apple", market: "us", popularity: 100 },
-    { symbol: "MSFT", name: "Microsoft", market: "us", popularity: 99 },
-    { symbol: "NVDA", name: "NVIDIA", market: "us", popularity: 98 },
-    { symbol: "AMZN", name: "Amazon", market: "us", popularity: 97 },
-    { symbol: "GOOGL", name: "Alphabet", market: "us", popularity: 96 },
-    { symbol: "SPY", name: "S&P 500 ETF", market: "us", popularity: 95 },
-    { symbol: "QQQ", name: "Nasdaq 100 ETF", market: "us", popularity: 94 },
-    { symbol: "TSLA", name: "Tesla", market: "us", popularity: 93 },
-  ],
-  ph: [
-    { symbol: "BPI", name: "Bank of the Philippine Islands", market: "ph", popularity: 100 },
-    { symbol: "BDO", name: "BDO Unibank", market: "ph", popularity: 99 },
-    { symbol: "ALI", name: "Ayala Land", market: "ph", popularity: 98 },
-    { symbol: "SM", name: "SM Investments", market: "ph", popularity: 97 },
-    { symbol: "JFC", name: "Jollibee Foods", market: "ph", popularity: 96 },
-    { symbol: "FMETF", name: "First Metro ETF", market: "ph", popularity: 95 },
-    { symbol: "PSEI", name: "PSEi Index", market: "ph", popularity: 94 },
-    { symbol: "ICT", name: "International Container Terminal", market: "ph", popularity: 93 },
-  ],
-  crypto: [
-    { symbol: "BTC", name: "Bitcoin", market: "crypto", popularity: 100 },
-    { symbol: "ETH", name: "Ethereum", market: "crypto", popularity: 99 },
-    { symbol: "SOL", name: "Solana", market: "crypto", popularity: 98 },
-    { symbol: "XRP", name: "XRP", market: "crypto", popularity: 97 },
-    { symbol: "BNB", name: "BNB", market: "crypto", popularity: 96 },
-    { symbol: "ADA", name: "Cardano", market: "crypto", popularity: 95 },
-    { symbol: "DOGE", name: "Dogecoin", market: "crypto", popularity: 94 },
-    { symbol: "TON", name: "Toncoin", market: "crypto", popularity: 93 },
-  ],
-};
 
 const formatAxisDate = (value: string, range: MarketRange, isDailySource = false) => {
   const date = new Date(value);
@@ -301,14 +263,14 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
     [focusAssetId, trackablePortfolioAssets]
   );
   const defaultMarket = defaultMarketAsset ? getMarketForInvestment(defaultMarketAsset) : "us";
-  const defaultSymbol = defaultMarketAsset?.investmentSymbol?.trim().toUpperCase() ?? "";
-  const [tickerInput, setTickerInput] = useState(defaultSymbol);
+  const defaultSymbol = defaultMarketAsset?.investmentSymbol?.trim().toUpperCase() || POPULAR_TICKERS[defaultMarket][0].symbol;
+  const [tickerInput, setTickerInput] = useState("");
   const [selectedMarket, setSelectedMarket] = useState<MarketKey>(defaultMarket);
   const [submittedSymbol, setSubmittedSymbol] = useState(defaultSymbol);
   const [submittedMarket, setSubmittedMarket] = useState<MarketKey>(defaultMarket);
-  const [queryRevision, setQueryRevision] = useState(0);
-  const [isTickerFocused, setTickerFocused] = useState(false);
-  const [range, setRange] = useState<MarketRange>("1D");
+  const [menu, setMenu] = useState<"Markets" | "Assets" | null>(null);
+  const [selection, setSelection] = useState(() => toggleTicker([], defaultSymbol));
+  const [range, setRange] = useState<MarketRange>("1M");
   const [history, setHistory] = useState<MarketHistoryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -326,22 +288,18 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
     [selectedMarket, trackablePortfolioAssets]
   );
 
-  useEffect(() => {
-    if (!submittedSymbol && defaultSymbol) {
-      setTickerInput(defaultSymbol);
-      setSelectedMarket(defaultMarket);
-      setSubmittedSymbol(defaultSymbol);
-      setSubmittedMarket(defaultMarket);
-      setDisplayCurrency(defaultMarket === "ph" ? "PHP" : "USD");
-      setQueryRevision((value) => value + 1);
-    }
-  }, [defaultMarket, defaultSymbol, submittedSymbol]);
-
   const tickerSuggestions = useMemo(() => {
     const query = normalizeMarketSymbol(tickerInput);
     const owned = trackablePortfolioAssets.filter(account => getMarketForInvestment(account) === selectedMarket && account.investmentSymbol).map(account => ({ symbol:normalizeMarketSymbol(account.investmentSymbol!), name:account.name, market:selectedMarket, popularity:100000 }));
     const pool = [...owned, ...POPULAR_TICKERS[selectedMarket].filter(item => !owned.some(account => account.symbol === item.symbol))];
 
+    for (const {symbol} of selection) {
+      if (!pool.some(a => a.symbol === symbol)) pool.push({symbol, name:symbol, market:selectedMarket, popularity:0});
+    }
+    const elsewhere = MARKET_OPTIONS.some(m => m.key !== selectedMarket && POPULAR_TICKERS[m.key].some(a => a.symbol === query))
+      || trackablePortfolioAssets.some(a => getMarketForInvestment(a) !== selectedMarket && a.investmentSymbol === query);
+    if (!elsewhere && /^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(query) && !pool.some(a => a.symbol === query))
+      pool.push({symbol:query, name:query, market:selectedMarket, popularity:0});
     return pool
       .filter((suggestion) => {
         if (!query) {
@@ -372,43 +330,27 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
                 ? 1
                 : 2;
         return leftScore - rightScore || right.popularity - left.popularity;
-      })
-      .slice(0, 8);
-  }, [selectedMarket, tickerInput, trackablePortfolioAssets]);
+      });
+  }, [selectedMarket, tickerInput, trackablePortfolioAssets, selection]);
 
-  const submitTicker = (symbolValue = tickerInput, marketValue: MarketKey = selectedMarket) => {
-    const next = normalizeMarketSymbol(symbolValue);
-    if (!next) {
-      return;
+  const selectMarket = (market: MarketKey) => {
+    if (market !== selectedMarket) {
+      const owned = trackablePortfolioAssets.find(a => getMarketForInvestment(a) === market && a.investmentSymbol);
+      const first = normalizeMarketSymbol(owned?.investmentSymbol || POPULAR_TICKERS[market][0].symbol);
+      setSelection(toggleTicker([], first));
+      setSelectedMarket(market);
+      setSubmittedMarket(market);
+      setSubmittedSymbol(first);
+      setDisplayCurrency(market === "ph" ? "PHP" : "USD");
+      setBenchmarkKey("none");
     }
-
-    setTickerInput(next);
-    setSelectedMarket(marketValue);
-    setSubmittedSymbol(next);
-    setSubmittedMarket(marketValue);
-    setDisplayCurrency(marketValue === "ph" ? "PHP" : "USD");
-    setQueryRevision((value) => value + 1);
-    setTickerFocused(false);
-  };
-
-  const selectMarket = (nextMarket: MarketKey) => {
-    setSelectedMarket(nextMarket);
-    setDisplayCurrency(nextMarket === "ph" ? "PHP" : "USD");
-    setBenchmarkKey("none");
-
-    const firstMarketAsset = trackablePortfolioAssets.find(
-      (account) => getMarketForInvestment(account) === nextMarket && Boolean(account.investmentSymbol?.trim())
-    );
-    if (firstMarketAsset?.investmentSymbol) {
-      submitTicker(firstMarketAsset.investmentSymbol, nextMarket);
-      return;
-    }
-
     setTickerInput("");
-    setSubmittedSymbol("");
-    setSubmittedMarket(nextMarket);
-    setHistory(null);
-    setError(null);
+    setMenu(null);
+  };
+  const toggleAsset = (symbol: string) => {
+    const next = toggleTicker(selection, symbol);
+    setSelection(next);
+    setSubmittedSymbol(next.some(s => s.symbol === symbol) ? symbol : next.at(-1)?.symbol ?? "");
   };
 
   useEffect(() => {
@@ -467,7 +409,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
       unregister(); cancelled = true;
       controller.abort();
     };
-  }, [queryRevision, range, submittedMarket, submittedSymbol]);
+  }, [range, submittedMarket, submittedSymbol]);
 
   useEffect(() => {
     let cancelled = false;
@@ -679,7 +621,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
   const submittedMarketLabel = MARKET_OPTIONS.find((option) => option.key === submittedMarket)?.description ?? "United States";
   const isDailySource = history?.provider === "stockanalysis";
   const trendIsPositive = priceChange === null ? true : priceChange >= 0;
-  const trendColor = trendIsPositive ? "var(--good)" : "var(--bad)";
+  const trendColor = selection.find(s => s.symbol === submittedSymbol)?.color ?? "var(--teal)";
   const trendFillTop = trendIsPositive ? "rgba(34, 197, 94, 0.24)" : "rgba(239, 68, 68, 0.24)";
   const trendFillBottom = trendIsPositive ? "rgba(34, 197, 94, 0.03)" : "rgba(239, 68, 68, 0.03)";
   const benchmarkComparisonLabel = benchmarkIsActive
@@ -707,78 +649,31 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
   return (
     <section className="investments-market glass">
       <div className="investments-market__head">
-        <form
-          className="investments-market__controls investments-market__controls--compact"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submitTicker();
-          }}
-        >
-          <div className="investments-market__ticker-field">
-            <label>
-              <span className="investments-market__field-label">Search your assets or ticker</span>
-              <input
-                value={tickerInput}
-                onChange={(event) => {
-                  setTickerInput(event.target.value.toUpperCase());
-                  setTickerFocused(true);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    submitTicker();
-                  }
-                }}
-                onFocus={() => setTickerFocused(true)}
-                onBlur={() => {
-                  window.setTimeout(() => setTickerFocused(false), 120);
-                  setTickerInput((current) => normalizeMarketSymbol(current));
-                }}
-                placeholder="AAPL, BPI, BTC"
-              />
-            </label>
-
-            {isTickerFocused && tickerSuggestions.length > 0 ? (
-              <div className="investments-market__suggestions" role="listbox" aria-label="Ticker suggestions">
-                {tickerSuggestions.map((suggestion) => (
-                  <button
-                    key={`${suggestion.market}:${suggestion.symbol}`}
-                    className="investments-market__suggestion"
-                    type="button"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      setTickerInput(suggestion.symbol);
-                      setSelectedMarket(suggestion.market);
-                      setDisplayCurrency(suggestion.market === "ph" ? "PHP" : "USD");
-                      submitTicker(suggestion.symbol, suggestion.market);
-                    }}
-                  >
-                    <strong>{suggestion.symbol}</strong>
-                    <span>{suggestion.name}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
+        <div className={styles.controls}>
+          <div className={styles.selectors}>
+            {(["Markets","Assets"] as const).map(label => <button key={label} type="button" aria-expanded={menu === label}
+              onClick={() => {setMenu(menu === label ? null : label); setTickerInput("");}}>
+              <small>{label}</small><strong>{label === "Markets" ? marketIcon[selectedMarket]+" "+ selectedMarket.toUpperCase()
+                : selection.length === 1 ? selection[0].symbol : selection.length+" selected"} ▾</strong>
+            </button>)}
           </div>
-
-          <label>
-            <span className="investments-market__field-label">Market</span>
-            <select
-              value={selectedMarket}
-              className="investments-market__select investments-market__select--compact"
-              onChange={(event) => {
-                const nextMarket = event.target.value as MarketKey;
-                selectMarket(nextMarket);
-              }}
-            >
-              {MARKET_OPTIONS.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
+          {menu === "Markets" && <div className={styles.rows}>{MARKET_OPTIONS.map(m =>
+            <button type="button" aria-pressed={m.key === selectedMarket} key={m.key} onClick={() => selectMarket(m.key)}>
+              {marketIcon[m.key]} {m.description} {m.key === selectedMarket && "✓"}
+            </button>)}</div>}
+          {menu === "Assets" && <div className={styles.rows}>
+            <input aria-label="Search assets or ticker" placeholder="Search assets or ticker" value={tickerInput} onChange={e=>setTickerInput(e.target.value)}/>
+            {tickerSuggestions.map(a => {
+              const picked = selection.find(s => s.symbol === a.symbol);
+              return <button key={a.symbol} type="button" aria-pressed={!!picked} onClick={() => toggleAsset(a.symbol)}>
+                <AccountBrandMark accountBrand={getInvestmentAssetBrand({name:a.name,symbol:a.symbol,market:selectedMarket,subtype:selectedMarket === "crypto" ? "crypto" : "stock"})} label={a.name}/>
+                <span>{a.name} · {a.symbol}</span>{picked && <b style={{color:picked.color}}>● ✓</b>}
+              </button>;
+            })}
+            {!tickerSuggestions.length && <p>No matching assets in this market.</p>}
+            <button type="button" onClick={()=>setMenu(null)}>Done</button>
+          </div>}
+          {selection.length === 1 && <div className={styles.selectors}>
           <label className="investments-market__currency-select">
             <span className="investments-market__field-label">Currency</span>
             <select
@@ -805,40 +700,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
               ))}
             </select>
           </label>
-        </form>
-      </div>
-
-      <div className="investments-market__portfolio-tickers">
-        <span>Your portfolio</span>
-        <div className="investments-market__portfolio-ticker-list">
-          {portfolioAssetsForSelectedMarket.every((account) => !account.investmentSymbol?.trim()) ? (
-            <span className="investments-market__portfolio-empty">
-              No {MARKET_OPTIONS.find((option) => option.key === selectedMarket)?.label ?? "market"} assets with tickers
-            </span>
-          ) : null}
-          {portfolioAssetsForSelectedMarket
-            .filter((account) => Boolean(account.investmentSymbol?.trim()))
-            .slice(0, 8)
-            .map((account) => {
-              const symbol = normalizeMarketSymbol(account.investmentSymbol ?? "");
-              const market = getMarketForInvestment(account);
-              return (
-                <button
-                  key={account.id}
-                  type="button"
-                  className={submittedSymbol === symbol ? "is-active" : ""}
-                  onClick={() => submitTicker(symbol, market)}
-                  title={account.name}
-                >
-                  {symbol}
-                </button>
-              );
-            })}
-          {portfolioAssetsForSelectedMarket.some((account) => !account.investmentSymbol?.trim()) && onOpenPortfolio ? (
-            <button className="investments-market__add-tickers" type="button" onClick={onOpenPortfolio}>
-              + Add missing tickers
-            </button>
-          ) : null}
+          </div>}
         </div>
       </div>
 
@@ -867,7 +729,9 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
 
       {benchmarkError ? <p className="panel-muted">Benchmark unavailable: {benchmarkError}</p> : null}
 
-      <div className="insight-chart">
+      {selection.length > 1
+        ? <MarketComparison key={submittedMarket+range} market={submittedMarket} range={range} selection={selection} primarySymbol={submittedSymbol} primaryHistory={history} primaryLoading={loading}/>
+        : <div className="insight-chart">
         {chartIsLoading ? (
           <div className="empty-state">Loading market data...</div>
         ) : chartError ? (
@@ -1039,12 +903,13 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
         ) : (
           <div className="empty-state">
             <strong>Pick a ticker to see its movement.</strong>
-            <p>Choose a market, type a ticker, and press Enter to load it.</p>
+            <p>Choose an asset from the Assets dropdown.</p>
           </div>
         )}
-      </div>
+      </div>}
 
-      <MarketAssetNews symbol={submittedSymbol} market={submittedMarket} />
+      {selection.map(asset => <MarketAssetNews key={submittedMarket+asset.symbol} symbol={asset.symbol} market={submittedMarket}
+        name={portfolioAssetsForSelectedMarket.find(a => normalizeMarketSymbol(a.investmentSymbol ?? "") === asset.symbol)?.name ?? POPULAR_TICKERS[submittedMarket].find(a => a.symbol === asset.symbol)?.name ?? asset.symbol} />)}
       <section className="investments-market-insights" aria-label="Market insights">
         <div className="investments-market-insights__head">
           <div>
@@ -1147,4 +1012,39 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
       ) : null}
     </section>
   );
+}
+
+function MarketComparison({ selection, market, range, primarySymbol, primaryHistory, primaryLoading }: { selection: SelectedTicker[]; market: MarketKey; range: MarketRange; primarySymbol:string; primaryHistory:MarketHistoryResponse | null; primaryLoading:boolean }) {
+  const [rows, setRows] = useState<Record<string, MarketHistoryPoint[] | null>>({});
+  useEffect(() => {
+    const controller = new AbortController();
+    async function load(symbol: string, refresh = false) {
+      const cached = readCachedMarketHistory(symbol, market, range);
+      const currency = market === "ph" ? "PHP" : "USD";
+      let points = cached?.payload.currency === currency ? filterMarketHistoryByRange(cached.payload.points, range) : null;
+      if (!cached || refresh) {
+        try {
+          const response = await fetch(`/api/market-history?${new URLSearchParams({symbol, market, range})}`, {signal:controller.signal});
+          if (!response.ok) throw new Error();
+          const history: MarketHistoryResponse = await response.json();
+          points = history.currency === currency ? filterMarketHistoryByRange(history.points, range) : null;
+          writeCachedMarketHistory(history);
+        } catch { points = null; }
+      }
+      if (!controller.signal.aborted) setRows(current => ({...current, [symbol]:points}));
+    }
+    const others = selection.filter(s => s.symbol !== primarySymbol);
+    others.forEach(s => void load(s.symbol));
+    const unregister = registerPullRefresh(async () => { await Promise.all(others.map(s=>load(s.symbol,true))); });
+    return () => {controller.abort(); unregister();};
+  }, [market, range, selection, primarySymbol]);
+  const primary = primaryHistory?.symbol === primarySymbol && primaryHistory.market === market &&
+    primaryHistory.currency === (market === "ph" ? "PHP" : "USD") ? filterMarketHistoryByRange(primaryHistory.points, range) : null;
+  const visible = {...rows, [primarySymbol]: primaryLoading ? undefined : primary};
+  const series = selection.map(s=>({name:s.symbol, color:s.color, points:visible[s.symbol] ?? []}));
+  return <div className="insight-chart">
+    <h3>Price history · {market === "ph" ? "PHP" : "USD"}</h3>
+    {series.some(s=>s.points.length) && <ReportsComparisonChart series={series} currency={market === "ph" ? "PHP" : "USD"}/>}
+    {selection.filter(s=>!visible[s.symbol]?.length).map(s=><p key={s.symbol}>{s.symbol} · {visible[s.symbol] === undefined ? "Loading history…" : "No history available"}</p>)}
+  </div>;
 }

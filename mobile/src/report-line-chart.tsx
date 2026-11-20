@@ -102,7 +102,7 @@ export function ReportLineChart({
                   stroke={series[index].color}
                   strokeWidth={2.5}
                 />
-                {item.points.map((point, pointIndex) => (
+                {item.points.length <= 48 && item.points.map((point, pointIndex) => (
                   <Circle
                     key={`${point.date}-${pointIndex}`}
                     cx={x(point.x)}
