@@ -1,4 +1,5 @@
 "use client";
+import { calendarAmount, recurringEventColors } from "../../shared/recurring-calendar-display";
 import { InterfaceIcon } from "@/components/interface-icon";
 
 import { useMemo, useRef, useState, type PointerEvent } from "react";
@@ -30,7 +31,7 @@ const changeMonth = (year: number, month: number, offset: number) => {
 
 const formatCommitmentAmount = (commitment: FinancialCommitmentSummary, compact = false, occurrenceDate?: string) => {
   if (recurringPaymentAmount(commitment, occurrenceDate) === null || !Number.isFinite(recurringPaymentAmount(commitment, occurrenceDate))) return "No amount set";
-  return compact ? new Intl.NumberFormat("en-PH", { style: "currency", currency: commitment.currency, notation: "compact", maximumFractionDigits: 1 }).format(recurringPaymentAmount(commitment, occurrenceDate)!) : formatCurrencyAmount(recurringPaymentAmount(commitment, occurrenceDate)!, commitment.currency);
+  return compact ? calendarAmount(recurringPaymentAmount(commitment, occurrenceDate), commitment.currency) : formatCurrencyAmount(recurringPaymentAmount(commitment, occurrenceDate)!, commitment.currency);
 };
 
 export function RecurringCalendar({
@@ -91,7 +92,7 @@ export function RecurringCalendar({
   };
 
   return (
-    <section className="recurring-calendar panel glass" aria-label={`${monthNames[selectedMonth]} ${selectedYear} payment calendar`}>
+    <section className="recurring-calendar" aria-label={`${monthNames[selectedMonth]} ${selectedYear} payment calendar`}>
       <header className="recurring-calendar__header">
         <div className="recurring-calendar__heading">
           <h2 className="recurring-calendar__eyebrow">Payment calendar</h2>
@@ -158,6 +159,7 @@ export function RecurringCalendar({
                     type="button"
                     className={`recurring-calendar__event${eventIndex === 2 ? " recurring-calendar__event--desktop-third" : ""}`}
                     data-kind={commitment.kind}
+                    style={{backgroundColor:recurringEventColors[commitment.kind]}}
                     onClick={() => { setSelectedDay(occurrenceKey); onSelectCommitment(commitment, occurrenceKey); }}
                     title={`${commitment.title} · ${formatCommitmentAmount(commitment, false, occurrenceKey)}`}
                     aria-label={`Open ${commitment.title}, due ${monthNames[selectedMonth]} ${day}`}

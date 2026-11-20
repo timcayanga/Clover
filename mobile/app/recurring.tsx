@@ -1,3 +1,5 @@
+import { calendarAmount, recurringEventColors } from "../../shared/recurring-calendar-display";
+import { useAdaptiveLayout } from "../src/adaptive";
 import { MerchantLogo } from "../src/merchant-logo";
 import { SwipeDeleteRow } from "../src/swipe-delete-row";
 
@@ -57,6 +59,7 @@ export default function RecurringRoute() {
 }
 
 function Recurring() {
+  const { gutter } = useAdaptiveLayout();
   const { colors, styles } = useTheme();
   const session = useSession();
   const [month, setMonth] = useState(
@@ -154,6 +157,8 @@ function Recurring() {
   const dueLabel = monthlyAmounts.length
     ? monthlyAmounts.map(([currency, value]) => money(String(value), currency)).join(" · ")
     : "No amount set";
+  const daysInMonth = new Date(year, month.getMonth() + 1, 0).getDate();
+  const weekCount = Math.ceil((month.getDay() + daysInMonth) / 7);
   const due = occurrences.filter((item) => item.date === day);
   const amount = (item: Occurrence | Item) =>
     item.amount === null
@@ -361,7 +366,7 @@ function Recurring() {
       ) : (
         <>
 
-          <Card>
+          <View style={{gap:8}}>
             <Text
               style={{
                 color: colors.ink,
@@ -434,7 +439,7 @@ function Recurring() {
                 <Icon name="chevron-forward" size={18} />
               </Pressable>
             </View>
-            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal:-gutter, borderTopWidth:1, borderColor:colors.line }}>
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
                 (name, index) => (
                   <Text
@@ -443,6 +448,7 @@ function Recurring() {
                       width: "14.2857%",
                       color: colors.muted,
                       textAlign: "center",
+                      borderBottomWidth: 1, borderColor: colors.line,
                       paddingBottom: 8,
                       fontSize: 10,
                     }}
@@ -451,18 +457,10 @@ function Recurring() {
                   </Text>
                 ),
               )}
-              {Array.from({ length: month.getDay() }, (_, index) => (
-                <View key={`blank-${index}`} style={{ width: "14.2857%" }} />
-              ))}
-              {Array.from(
-                {
-                  length: new Date(
-                    month.getFullYear(),
-                    month.getMonth() + 1,
-                    0,
-                  ).getDate(),
-                },
-                (_, index) => {
+              {Array.from({ length: weekCount * 7 }, (_, cell) => {
+                  const index = cell - month.getDay();
+                  const cellStyle = {width:"14.2857%" as const, minHeight:86, padding:1, borderRightWidth:1, borderBottomWidth:1, borderColor:colors.line};
+                  if (index < 0 || index >= daysInMonth) return <View key={`blank-${cell}`} style={cellStyle}/>;
                   const date = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`;
                   const bills = occurrences.filter(
                     (item) => item.date === date,
@@ -474,38 +472,33 @@ function Recurring() {
                       accessibilityLabel={`${date}, ${bills.length} bills due. Show full list`}
                       onPress={() => setDay(date)}
                       style={{
-                        width: "14.2857%",
-                        minHeight: 76,
-                        padding: 4,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: colors.line,
+                        ...cellStyle,
                         backgroundColor:
                           day === date ? colors.pale : colors.white,
                       }}
                     >
-                      <Text style={{ color: colors.ink, fontSize: 12 }}>
+                      <Text style={{ color: colors.ink, fontSize: 12, textAlign:"center" }}>
                         {index + 1}
                       </Text>
-                      {bills.slice(0, 1).map((item) => (
-                        <View key={item.id} style={{ backgroundColor: colors.pale, borderLeftWidth: 2, borderLeftColor: colors.teal, borderRadius: 3, padding: 2, marginTop: 3 }}>
+                      {bills.slice(0, 2).map((item) => (
+                        <View key={item.id} style={{ backgroundColor: recurringEventColors[item.kind] ?? "#007581", borderRadius: 2, paddingHorizontal: 2, marginTop: 3 }}>
                           <Text
                             numberOfLines={1}
-                            style={{ color: colors.teal, fontSize: 8 }}
+                            style={{ color: "white", fontSize: 10 }}
                           >
                             {item.title}
                           </Text>
                           <Text
                             numberOfLines={1}
-                            style={{ color: colors.muted, fontSize: 8 }}
+                            style={{ color: "white", fontSize: 10 }}
                           >
-                            {amount(item)}
+                            {calendarAmount(item.amount,item.currency)}
                           </Text>
                         </View>
                       ))}
-                      {bills.length > 1 ? (
+                      {bills.length > 2 ? (
                         <Text style={{ color: colors.teal, fontSize: 10 }}>
-                          +{bills.length - 1}
+                          +{bills.length - 2}
                         </Text>
                       ) : null}
                     </Pressable>
@@ -535,7 +528,7 @@ function Recurring() {
                 )}
               </View>
             ) : null}
-          </Card>
+          </View>
           {kind ? (
             <View style={{ flexDirection: "row", gap: 8 }}>
               {data.summaries?.[({ planned_payment: "planned", debt: "debt", receivable: "owed", reminder: "installments" } as Record<string, string>)[kind]]?.slice(0, 2).map(([label, value]) => (

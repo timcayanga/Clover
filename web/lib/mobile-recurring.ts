@@ -1,3 +1,4 @@
+import { recurringBankBrand } from "./recurring-bank-brand";
 import { transactionMerchantLogo } from "./transaction-merchant-logo";
 import { recurringDashboardSummary, type RecurringSummaryTab } from "./recurring-dashboard-summary";
 import { getPlannedPaymentSuggestions } from "./planned-payment-suggestions";
@@ -47,31 +48,36 @@ export async function mobileRecurring(
       evidenceTransactionIds: s.transactionIds,
       statementCheckpointId: s.statementCheckpointId,
     })),
-    items: commitments.map((c) => ({
-      ...transactionMerchantLogo({ merchantRaw: c.title, merchantClean: c.title, categoryName: c.categoryName, currency: c.currency }),
-      principalAmount: c.amount,
-      accountId: c.accountId,
-      dueDate: c.dueDate,
-      plannedPaymentDate: c.plannedPaymentDate,
-      nextDueDate: c.nextDueDate,
-      counterparty: c.counterparty,
-      tracking: c.tracking,
-      completedDates:
-        records
-          .find((r) => r.id === c.id)
-          ?.occurrences.map((o) => o.dueDate.toISOString().slice(0, 10)) ?? [],
-      id: c.id,
-      title: c.title,
-      kind: c.kind,
-      amount: recurringPaymentAmount(c),
-      currency: c.currency,
-      date: c.plannedPaymentDate ?? c.nextDueDate ?? c.dueDate,
-      status: c.status,
-      recurrence: c.recurrence,
-      accountName: c.account?.name ?? null,
-      categoryName: c.categoryName,
-      notes: c.notes,
-    })),
+    items: commitments.map((c) => {
+      const bank = recurringBankBrand(c.title);
+      const logo = bank ? {merchantLogoUrl:bank.logoSrc, merchantLogoNameKey:JSON.stringify([c.title,c.title])}
+        : transactionMerchantLogo({ merchantRaw:c.title, merchantClean:c.title, categoryName:c.categoryName, currency:c.currency });
+      return {
+        ...logo,
+        principalAmount: c.amount,
+        accountId: c.accountId,
+        dueDate: c.dueDate,
+        plannedPaymentDate: c.plannedPaymentDate,
+        nextDueDate: c.nextDueDate,
+        counterparty: c.counterparty,
+        tracking: c.tracking,
+        completedDates:
+          records
+            .find((r) => r.id === c.id)
+            ?.occurrences.map((o) => o.dueDate.toISOString().slice(0, 10)) ?? [],
+        id: c.id,
+        title: c.title,
+        kind: c.kind,
+        amount: recurringPaymentAmount(c),
+        currency: c.currency,
+        date: c.plannedPaymentDate ?? c.nextDueDate ?? c.dueDate,
+        status: c.status,
+        recurrence: c.recurrence,
+        accountName: c.account?.name ?? null,
+        categoryName: c.categoryName,
+        notes: c.notes,
+      };
+    }),
     occurrences: (calendarYear
       ? Array.from({ length: 14 }, (_, index) => {
           const date = new Date(year, index - 1, 1);

@@ -67657,3 +67657,13 @@ html[data-theme="dark"] .report-v2-summary--accounts .report-v2-summary__cell:fi
 .account-edit-remove { position:absolute; top:0; left:0; min-width:32px; height:32px; border:2px solid white; border-radius:50%; background:#b42318; color:white; font-size:20px; }
 @keyframes account-edit-wiggle { from { transform:rotate(-1deg); } to { transform:rotate(1deg); } }
 @media (prefers-reduced-motion:no-preference) { .account-edit-tile.is-editing { animation:account-edit-wiggle .14s ease-in-out infinite alternate; } }
+
+.recurring-redesign .recurring-calendar { padding:0; background:transparent; border:0; box-shadow:none; border-radius:0; }
+.recurring-redesign--overview .recurring-redesign__overview { grid-template-columns:minmax(0,1fr); }
+.recurring-redesign--overview .recurring-redesign__overview > .recurring-calendar { grid-column:1 / -1; }
+.recurring-redesign--overview .recurring-redesign__overview > .recurring-redesign__review { grid-column:1 / -1; grid-row:3; }
+.recurring-redesign .recurring-calendar__grid { gap:0; border-radius:0; }
+.recurring-redesign .recurring-calendar__day { border-radius:0; border:0; border-right:1px solid var(--stroke); border-bottom:1px solid var(--stroke); padding:1px; text-align:center; }
+.recurring-redesign .recurring-calendar__event { border:0; border-radius:2px; padding:2px; color:white; }
+.recurring-redesign .recurring-calendar__event :is(span,small) { display:block; color:white; }
+@media(max-width:760px) { .recurring-redesign .recurring-calendar__event :is(span,small) { font-size:10px; } }
