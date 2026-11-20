@@ -66036,6 +66036,7 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 .reports-subtab-card,.report-sankey,.reports-subtab-card svg text { font-family:var(--font-poppins),sans-serif; }
 .adviser-chat__send { background:var(--surface)!important; color:var(--text)!important; border:1px solid var(--line)!important; box-shadow:none!important; font-size:24px; }
 .adviser-chat--workspace.adviser-chat--empty .adviser-chat__composer { min-height:112px; align-items:flex-end; padding:16px; }
+.adviser-chat--workspace .adviser-chat__composer-bar textarea { text-align: left; }
 .adviser-chat--workspace.adviser-chat--empty textarea { min-height:72px!important; }
 .adviser-chat__loading { min-height:120px; }
 .transaction-creation-panel .organize-upload-choices,.add-entry-methods .organize-upload-choices { display:grid!important; grid-template-columns:1fr!important; width:100%; }
