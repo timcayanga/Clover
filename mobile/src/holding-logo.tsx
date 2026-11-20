@@ -4,15 +4,15 @@ import { SvgUri } from "react-native-svg";
 import type { PortfolioHolding } from "../../shared/investment-portfolio";
 import { investmentIcons } from "./investment-icons";
 import { apiBase } from "./api";
-export function HoldingLogo({ holding }: { holding: PortfolioHolding }) {
+export function HoldingLogo({ holding, size = 44 }: { size?: number; holding: PortfolioHolding }) {
   const [failedPath, setFailedPath] = useState<string | null>(null);
   const path = holding.logoUrl;
   return (
     <View
       style={{
-        width: 44,
-        height: 44,
-        borderRadius: 12,
+        width: size,
+        height: size,
+        borderRadius: 7,
         overflow: "hidden",
         backgroundColor: "#fff",
         padding: 0,
@@ -21,21 +21,21 @@ export function HoldingLogo({ holding }: { holding: PortfolioHolding }) {
       {failedPath !== path && path?.startsWith("/assets/") && !path.includes("..") ? path.endsWith(".svg") ? (
         <SvgUri
           uri={`${apiBase()}${path}`}
-          width={44}
-          height={44}
+          width={size}
+          height={size}
           onError={() => setFailedPath(path!)}
         />
       ) : (
         <Image
           source={{ uri: `${apiBase()}${path}` }}
-          style={{ width: 44, height: 44 }}
+          style={{ width: size, height: size }}
           resizeMode="contain"
           onError={() => setFailedPath(path)}
         />
       ) : (
         <Image
           source={investmentIcons[holding.subtype] ?? investmentIcons.other}
-          style={{ width: 44, height: 44 }}
+          style={{ width: size, height: size }}
         />
       )}
     </View>

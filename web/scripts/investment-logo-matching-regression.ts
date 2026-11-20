@@ -5,6 +5,10 @@ import { matchInvestmentLogo } from "../lib/investment-logo-matching";
 import { getInvestmentAssetBrand } from "../lib/investment-assets";
 
 const cases = [
+  [{ name: "The Graph", symbol: "GRT", subtype: "crypto" }, "/assets/investments/crypto/GRT.svg"],
+  [{ name: "ATRAM Global Technology Feeder Fund", subtype: "other" }, "/assets/banks/philippines/atram.png"],
+  [{ name: "PDAX Gold RWA", subtype: "real_world_asset" }, "/assets/investments/materials/gold.svg"],
+  [{ name: "Silver", subtype: "commodity" }, "/assets/investments/materials/silver.svg"],
   [{ name: "Apple Inc", subtype: "stock" }, "/assets/investments/us/AAPL.svg"],
   [{ name: "Jollibee Foods Corporation", subtype: "stock" }, "/assets/investments/philippines/JFC.svg"],
   [{ name: "Bitcoin", subtype: "crypto" }, "/assets/investments/crypto/BTC.svg"],

@@ -1,4 +1,5 @@
 "use client";
+import { balanceChangePercent, portfolioAssetKey } from "../../../shared/investment-portfolio";
 import { investmentNameLabel, investmentTickerMatches, investmentTickerHint } from "../../../shared/investment-entry";
 import { registerPullRefresh, usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
@@ -494,6 +495,7 @@ type InvestmentAllocationRow = InvestmentGroup & {
 };
 
 type PortfolioDisplayRow = {
+  startingValue?: number | null;
   positionId?: string;
   key: string;
   accountId: string;
@@ -1486,6 +1488,7 @@ export default function InvestmentsPage() {
               symbol: holdingSymbol,
               detail: holding.quantity,
               currentValue: holdingCurrentValue,
+              startingValue: matchingPositionAccount?.currency === holding.currency ? parseNullableAmount(matchingPositionAccount.investmentPrincipal) : null,
               purchaseValue: holdingPurchaseValue,
               gainLoss: holdingGainLoss,
               currency: holding.currency || matchingSnapshot.currency || account.currency,
@@ -1566,6 +1569,7 @@ export default function InvestmentsPage() {
                 : null,
           }),
           detail: account.investmentQuantity,
+          startingValue: parseNullableAmount(account.investmentPrincipal),
           currentValue,
           purchaseValue,
           gainLoss,
@@ -1963,7 +1967,17 @@ export default function InvestmentsPage() {
     [portfolioAllocationAccounts]
   );
 
-  const portfolioTableRows = useMemo(() => visiblePortfolioRows, [visiblePortfolioRows]);
+  const portfolioGroups = useMemo(() => {
+    const groups = new Map<string, PortfolioDisplayRow[]>();
+    for (const row of visiblePortfolioRows) {
+      const id = portfolioView === "assets" ? portfolioAssetKey(row) : row.key;
+      const members = groups.get(id);
+      if (members) members.push(row);
+      else groups.set(id, [row]);
+    }
+    return Array.from(groups.entries());
+  }, [visiblePortfolioRows, portfolioView]);
+  const [expandedPortfolioGroup, setExpandedPortfolioGroup] = useState<string | null>(null);
 
   const portfolioAllocation = useMemo<InvestmentAllocationRow[]>(() => {
     const totalValue = investmentGroups.reduce((sum, group) => sum + group.currentValue, 0);
@@ -3166,9 +3180,26 @@ export default function InvestmentsPage() {
                 </div>
               </div>
 
-              {portfolioTableRows.length > 0 ? (
+              {portfolioGroups.length > 0 ? (
                 <div className="investments-portfolio-table__table" role="table" aria-label="Portfolio assets">
-                  <div className="investments-portfolio-table__row investments-portfolio-table__row--head" role="row">
+                  {portfolioGroups.map(([id, members]) => {
+                    const row = members[0];
+                    const expanded = expandedPortfolioGroup === id;
+                    const value = members.every(item => item.currentValue !== null)
+                      ? members.reduce((sum, item) => sum + item.currentValue!, 0) : null;
+                    const opening = members.every(item => item.startingValue != null)
+                      ? members.reduce((sum, item) => sum + item.startingValue!, 0) : null;
+                    const change = balanceChangePercent(value, opening);
+                    return <div key={id} role="rowgroup">
+                      <button className={overviewStyles.assetGroup} aria-expanded={expanded} type="button"
+                        onClick={() => setExpandedPortfolioGroup(expanded ? null : id)}>
+                        <AccountBrandMark accountBrand={getInvestmentAssetBrand(row)} label={row.name} />
+                        <span><strong>{row.name}</strong><small>{members.length > 1 ? `${members.length} holdings` : [row.symbol, row.institution].filter(Boolean).join(" · ")}</small></span>
+                        <strong>{value === null ? "Not recorded" : formatInvestmentAmount(value, row.currency)}</strong>
+                        {change !== null && <small>{change > 0 ? "+" : ""}{change}%</small>}
+                        <span aria-hidden="true">{expanded ? "⌄" : "›"}</span>
+                      </button>
+                      {expanded && <div className="investments-portfolio-table__row investments-portfolio-table__row--head" role="row">
                     <span role="columnheader">Asset</span>
                     <span role="columnheader">Institution</span>
                     <span role="columnheader">Type</span>
@@ -3177,8 +3208,9 @@ export default function InvestmentsPage() {
                     <span role="columnheader">Estimated value</span>
                     <span role="columnheader">Gain / loss</span>
                     <span role="columnheader" aria-label="Open details" />
-                  </div>
-                  {portfolioTableRows.map((row) => {
+                  </div>}
+                      {expanded && members.map((row) => {
+                    const rowChange = balanceChangePercent(row.currentValue, row.startingValue);
                     return (
                       <MobileSwipeDelete
                         key={row.key}
@@ -3263,6 +3295,9 @@ export default function InvestmentsPage() {
                             className="investments-portfolio-inline-edit--amount"
                             onCommit={(value) => commitPortfolioRowField(row, "currentValue", value)}
                           />
+                          {rowChange !== null && <small>
+                            {rowChange > 0 ? "+" : ""}{rowChange}%
+                          </small>}
                         </div>
                         <div className={`investments-portfolio-table__cell investments-portfolio-table__cell--gain ${row.gainLoss === null ? "" : row.gainLoss >= 0 ? "is-positive" : "is-negative"}`}>
                           {row.gainLoss === null ? "" : `${row.gainLoss >= 0 ? "+" : "-"}${formatInvestmentAmount(Math.abs(row.gainLoss), row.currency)}`}
@@ -3280,6 +3315,8 @@ export default function InvestmentsPage() {
                       </div>
                       </MobileSwipeDelete>
                     );
+                      })}
+                    </div>;
                   })}
                 </div>
               ) : (

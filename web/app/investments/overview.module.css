@@ -30,3 +30,7 @@
   .summary article:nth-child(2) { border-left: 0; }
   .summary strong { font-size: 18px; }
 }
+
+.assetGroup { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; background: transparent; color: inherit; border: 0; border-bottom: 1px solid var(--line); font: inherit; text-align: left; cursor: pointer; }
+.assetGroup span:nth-child(2) { flex: 1; }
+.assetGroup small { display: block; }

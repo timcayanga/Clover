@@ -11,6 +11,7 @@ import {
   type PortfolioHolding,
   type RecordedValuation,
   recordedNumber,
+  holdingBalanceChange,
   recordedPortfolioSeries,
 } from "../../shared/investment-portfolio";
 import { Body, Card, Screen, money, useTheme } from "./ui";
@@ -26,12 +27,15 @@ export function HoldingRow({
   holding,
   onPress,
   onDelete,
+  subtitle,
 }: {
   holding: PortfolioHolding;
+  subtitle?: string;
   onPress: () => void;
   onDelete?: () => Promise<void>;
 }) {
   const { colors } = useTheme();
+  const change = holdingBalanceChange(holding);
   return (
     <SwipeDeleteRow label={holding.name} disabled={!onDelete} onOpen={onPress} onDelete={onDelete ?? (async () => {})} message={holding.positionId ? `Delete "${holding.name}" and its trading and valuation history? The institution account and other assets stay unchanged.` : holding.source === "snapshot" ? `Delete "${holding.name}"? Its source import stays in Clover.` : `Delete "${holding.name}" and its investment account and linked transactions?`}>
     <Pressable
@@ -42,12 +46,13 @@ export function HoldingRow({
         flexDirection: "row",
         gap: 12,
         alignItems: "center",
-        paddingVertical: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
         borderBottomWidth: 1,
         borderBottomColor: colors.line,
       }}
     >
-      <HoldingLogo key={holding.id} holding={holding}/>
+      <HoldingLogo key={holding.id} holding={holding} size={32}/>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           style={{
@@ -58,7 +63,7 @@ export function HoldingRow({
         >
           {holding.name}
         </Text>
-        <Body>{holding.symbol || investmentTypeLabel(holding.subtype)}</Body>
+        <Body>{subtitle || holding.symbol || investmentTypeLabel(holding.subtype)}</Body>
       </View>
       <Text
         style={{
@@ -70,9 +75,10 @@ export function HoldingRow({
       >
         {holding.value === null
           ? "Not recorded"
-          : money(holding.value, holding.currency)}{" "}
-        ›
+          : money(holding.value, holding.currency)}
       </Text>
+      {change !== null && <Text style={{fontSize: 12, color: change > 0 ? colors.positive : change < 0 ? colors.danger : colors.ink}}>{change > 0 ? "+" : ""}{change}%</Text>}
+      <Text style={{color: colors.teal}}>›</Text>
     </Pressable>
     </SwipeDeleteRow>
   );

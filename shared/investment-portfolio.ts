@@ -34,6 +34,7 @@ export type PortfolioSnapshot = {
   }[];
 };
 export type PortfolioHolding = {
+  startingValue?: string | null;
   logoUrl?:string|null;
   positionId?:string;
   positionRevision?:number;
@@ -62,6 +63,7 @@ const key = (value: string | null | undefined) =>
 export function projectPortfolio(
   accounts: PortfolioAccount[],
   snapshots: PortfolioSnapshot[],
+  completeHistory = true,
 ): PortfolioHolding[] {
   const latest = new Map<string, PortfolioSnapshot>();
   for (const snapshot of [...snapshots].sort(
@@ -69,6 +71,21 @@ export function projectPortfolio(
   ))
     if (snapshot.accountId && !latest.has(snapshot.accountId))
       latest.set(snapshot.accountId, snapshot);
+  const firstValues = new Map<string, { date: string; value: string }>();
+  const historyKey = (accountId: string, h: PortfolioSnapshot["holdings"][number]) =>
+    JSON.stringify([accountId, h.currency, key(h.symbol || h.name)]);
+  if (completeHistory) {
+    for (const snapshot of snapshots) {
+      if (!snapshot.accountId) continue;
+      for (const h of snapshot.holdings) {
+        if (h.value === null || recordedNumber(h.value) === null) continue;
+        const id = historyKey(snapshot.accountId, h);
+        const previous = firstValues.get(id);
+        if (!previous || Date.parse(snapshot.date) < Date.parse(previous.date))
+          firstValues.set(id, { date: snapshot.date, value: h.value });
+      }
+    }
+  }
   const rows: PortfolioHolding[] = [];
   const covered = new Set<string>();
   for (const account of [...accounts].sort(
@@ -108,7 +125,9 @@ export function projectPortfolio(
         rows.some((r) => r.accountId === match.id && r.currency === h.currency)
       )
         continue;
+      const opening = firstValues.get(historyKey(account.id, h));
       rows.push({
+        startingValue: match?.investmentPrincipal ?? (opening && Date.parse(opening.date) < Date.parse(snapshot!.date) ? opening.value : null),
         id: h.id,
         accountId: match?.id ?? account.id,
         accountType: match?.type ?? account.type,
@@ -140,6 +159,7 @@ export function projectPortfolio(
         currency: a.currency,
         quantity: a.investmentQuantity || null,
         value: a.balance,
+        startingValue: a.investmentPrincipal,
         cost: a.investmentCostBasis ?? a.investmentPrincipal ?? null,
         date: a.updatedAt || null,
       });
@@ -178,4 +198,50 @@ export function recordedPortfolioSeries(
     else points.push(point);
   }
   return points;
+}
+
+export function portfolioAssetKey(h: { currency: string; name: string; subtype: string | null; symbol: string | null }) {
+  const symbol = key(h.symbol);
+  const identity = h.subtype === "crypto" && symbol ? symbol : [symbol, key(h.name)];
+  return JSON.stringify([h.currency, h.subtype, identity]);
+}
+
+/** Combine positions only for display. Each source keeps its own details and actions. */
+export function portfolioAssetGroups(holdings: PortfolioHolding[]) {
+  const groups = new Map<string, PortfolioHolding[]>();
+  for (const h of holdings) {
+    const id = portfolioAssetKey(h);
+    const members = groups.get(id);
+    if (members) members.push(h);
+    else groups.set(id, [h]);
+  }
+  return Array.from(groups, ([id, members]) => {
+    const first = members[0];
+    const total = (field: "value" | "startingValue") => {
+      let sum = 0;
+      for (const h of members) {
+        const n = recordedNumber(h[field]);
+        if (n === null) return null;
+        sum += n;
+      }
+      return String(sum);
+    };
+    const holding = members.length === 1 ? first : {
+      ...first, name: first.subtype === "crypto" && key(first.symbol) === "btc" ? "Bitcoin" : first.name,
+      value: total("value"), startingValue: total("startingValue"),
+    };
+    return { id, holding, members };
+  });
+}
+
+export function holdingBalanceChange(h: PortfolioHolding) {
+  const opening = recordedNumber(h.startingValue);
+  const current = recordedNumber(h.value);
+  return balanceChangePercent(current, opening);
+}
+
+export function balanceChangePercent(current: number | null, opening?: number | null) {
+  if (opening == null || opening <= 0 || current === null) return null;
+  const change = Math.round(100 * (current - opening) / opening);
+  return Number.isFinite(change) ? change : null;
 }

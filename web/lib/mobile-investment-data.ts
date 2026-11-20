@@ -1,3 +1,4 @@
+import { getCanonicalPdaxHoldingIdentity } from "./pdax-portfolio-accounts";
 import { listInvestmentPositions } from "./investment-position-store";
 import { getInvestmentAssetBrand } from "./investment-assets";
 import type { InvestmentSubtype } from "./investments";
@@ -128,12 +129,32 @@ export async function loadMobileInvestments(workspaceId: string) {
         value: Number(a.balance),
       });
   const positions=await listInvestmentPositions(workspaceId);
-  const projected=projectPortfolio(accounts as PortfolioAccount[],snapshots.slice(0,200));
+  const projected=projectPortfolio(accounts as PortfolioAccount[],snapshots.slice(0,200), snapshots.length <= 200);
   const holdings=projected.filter(h=>!positions.some(p=>(p.accountId===h.accountId || p.accountId===h.valuationAccountId) && p.currency===h.currency && (h.source==="account" || p.sourceHoldingId===h.id || (p.symbol||p.assetName).trim().toLowerCase()===(h.symbol||h.name).trim().toLowerCase())));
-  for(const p of positions)holdings.push({id:p.id,positionId:p.id,positionRevision:p.revision,accountId:p.accountId,accountType:"investment",source:"snapshot",name:p.assetName,institution:p.institution??null,subtype:p.subtype,symbol:p.symbol,currency:p.currency,quantity:p.quantity,cost:p.costBasis,value:p.value,date:p.valueDate});
+  // Opening cost basis can differ from the first recorded valuation.
+  const firstValuations = positions.length ? await prisma.$queryRaw<{ positionId: string; value: string }[]>`
+    SELECT DISTINCT ON (r."positionId") r."positionId", r."after"->>'value' AS value
+    FROM "InvestmentPositionRevision" r
+    JOIN "InvestmentPosition" p ON p.id = r."positionId"
+    JOIN "Account" a ON a.id = p."accountId"
+    WHERE a."workspaceId" = ${workspaceId}
+      AND r."after"->>'value' IS NOT NULL
+      AND r."after"->>'currency' = p.currency
+    ORDER BY r."positionId", COALESCE(NULLIF(r."after"->>'valueDate', ''), to_char(r."createdAt", 'YYYY-MM-DD')), r."createdAt", r.id
+  ` : [];
+  const openings = new Map(firstValuations.map(r => [r.positionId, r.value]));
+  for(const p of positions)holdings.push({id:p.id,positionId:p.id,positionRevision:p.revision,accountId:p.accountId,accountType:"investment",source:"snapshot",name:p.assetName,institution:p.institution??null,subtype:p.subtype,symbol:p.symbol,currency:p.currency,quantity:p.quantity,cost:p.costBasis,startingValue:openings.get(p.id) ?? null,value:p.value,date:p.valueDate});
   return {
     accounts,
-    holdings: holdings.map(holding=>({...holding,logoUrl:getInvestmentAssetBrand({name:holding.name,symbol:holding.symbol,institution:holding.institution,currency:holding.currency,subtype:holding.subtype as InvestmentSubtype}).logoSrcs[0] ?? null})),
+    holdings: holdings.map(holding => {
+      const identity = /\bpdax\b/i.test(holding.institution ?? "")
+        ? getCanonicalPdaxHoldingIdentity({assetName: holding.name, assetSymbol: holding.symbol, assetType: holding.subtype})
+        : null;
+      const symbol = identity?.assetSymbol ?? holding.symbol;
+      const subtype = identity?.assetType ?? holding.subtype;
+      const brand = getInvestmentAssetBrand({...holding, symbol, subtype: subtype as InvestmentSubtype});
+      return {...holding, symbol, subtype, logoUrl: brand.logoSrcs[0] ?? null};
+    }),
     history,
     limited: rows.length > 1000 || snapshots.length > 200,
   };

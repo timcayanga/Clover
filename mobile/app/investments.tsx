@@ -36,6 +36,7 @@ import { NativePlanner } from "../src/growth-planner";
 import { sampleInvestments as sample } from "../src/investment-sample";
 import {
   projectPortfolio,
+  portfolioAssetGroups,
   type PortfolioHolding,
   recordedNumber,
 } from "../../shared/investment-portfolio";
@@ -54,6 +55,7 @@ export default function Investments() {
   const [tab, setTab] = useState("Overview");
   const [institution, setInstitution] = useState<string | null>(null);
   const [holding, setHolding] = useState<PortfolioHolding | null>(null);
+  const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
   const [portfolioView, setPortfolioView] = useState("assets");
   const [currency, setCurrency] = useState("");
   const [search, setSearch] = useState("");
@@ -347,15 +349,21 @@ export default function Investments() {
             ]}
             onChange={setPortfolioView}
           />
+          <View style={{ backgroundColor: colors.white, borderRadius: 12, overflow: "hidden" }}>
           {portfolioView === "assets"
-            ? visibleHoldings.map((h) => (
-                <HoldingRow
-                  key={h.id}
-                  holding={h}
-                  onDelete={session.demo ? undefined : () => deleteHolding(h)}
-                  onPress={() => openHolding(h)}
-                />
-              ))
+            ? <View>{portfolioAssetGroups(visibleHoldings).map(({ id, holding, members }) => {
+                const multiple = members.length > 1;
+                return <View key={id}>
+                  <HoldingRow holding={holding}
+                    subtitle={multiple ? [holding.symbol, `${members.length} holdings`].filter(Boolean).join(" · ") : undefined}
+                    onDelete={multiple || session.demo ? undefined : () => deleteHolding(holding)}
+                    onPress={() => multiple ? setExpandedAsset(expandedAsset === id ? null : id) : openHolding(holding)} />
+                  {multiple && expandedAsset === id && <View style={{paddingLeft: 20}}>
+                    {members.map(h => <HoldingRow key={h.id} holding={h} subtitle={h.institution || h.symbol || undefined}
+                      onPress={() => openHolding(h)} onDelete={session.demo ? undefined : () => deleteHolding(h)} />)}
+                  </View>}
+                </View>;
+              })}</View>
             : [
                 ...new Set(
                   visibleHoldings.map(
@@ -392,6 +400,7 @@ export default function Investments() {
                   />
                 );
               })}
+          </View>
           {!visibleHoldings.length ? (
             <CloverEmptyState pose="investments">No matching holdings.</CloverEmptyState>
           ) : null}

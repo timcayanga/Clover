@@ -7,6 +7,16 @@ const markets: Record<string, string> = { PSE: "philippines", NASDAQ: "us", NYSE
 
 /** Artwork identifies the held asset, never its broker. No fuzzy name matching. */
 export function matchInvestmentLogo(input: AssetIdentity): string | null {
+  const name = input.name?.trim() ?? "";
+  const ticker = input.symbol?.trim().toUpperCase();
+  if (input.subtype === "crypto" && (!input.market || input.market === "crypto")
+    && (ticker === "GRT" || (!ticker && /^the graph$/i.test(name)))) return "/assets/investments/crypto/GRT.svg";
+  if (/^ATRAM\b/i.test(name) && /\bfund\b/i.test(name)) return "/assets/banks/philippines/atram.png";
+  if (["real_world_asset", "commodity", "other"].includes(input.subtype ?? "other")) {
+    const metal = name.match(/^(?:pdax )?(gold|silver|copper|platinum)(?: bullion| bars?| rwa)?$/i);
+    if (metal) return `/assets/investments/materials/${metal[1].toLowerCase()}.svg`;
+    if (input.subtype !== "other" && input.subtype) return "/assets/investment-types/real_world_asset.png";
+  }
   if (!["stock", "crypto", "etf", "reit"].includes(input.subtype ?? "") && !input.symbol?.startsWith("^")) return null;
   const named = investmentTickerMatches(input.name ?? "", input.subtype!, "");
   const identity = named.length === 1 ? named[0] : null;
