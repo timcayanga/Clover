@@ -1,0 +1,8 @@
+.controls { display: flex; gap: 12px; flex-wrap: wrap; }
+.controls label { display: grid; gap: 4px; }
+.ring { width: min(210px,100%); aspect-ratio: 1; margin: 20px auto; border-radius: 50%; display: grid; place-items: center; }
+.ring div { width: 72%; aspect-ratio: 1; border-radius: 50%; background: var(--surface,#fff); display: flex; align-items: center; justify-content: center; flex-direction: column; }
+.legend { list-style: none; padding: 0; }
+.legend li { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--stroke); }
+.legend i { width: 10px; height: 10px; border-radius: 50%; }
+.legend button { background: transparent; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }

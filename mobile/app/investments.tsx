@@ -1,3 +1,5 @@
+import { allocationViews, investmentAllocation, type AllocationView } from "../../shared/investment-allocation";
+import { SpendingDonut } from "../src/spending-donut";
 import { ContextualUpgrade } from "../src/contextual-upgrade";
 import { AccountSummaryGrid } from "../src/account-summary-grid";
 import { filterMarketHistoryByRange, type MarketRange } from "../../shared/market-history-range";
@@ -24,6 +26,7 @@ import {
   Field,
   Notice,
   Screen,
+  SectionTitle,
   money,
   useTheme,
   Icon,
@@ -32,7 +35,6 @@ import {
   PlanAction,
   PlanHeader,
   PlanTabs,
-  Progress,
   usePlanData,
 } from "../src/plan-ui";
 import { investmentIcons } from "../src/investment-icons";
@@ -63,6 +65,7 @@ export default function Investments() {
   const [holding, setHolding] = useState<PortfolioHolding | null>(null);
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
   const [portfolioView, setPortfolioView] = useState("assets");
+  const [allocationView, setAllocationView] = useState<AllocationView>("Markets");
   const [currency, setCurrency] = useState("");
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
@@ -396,33 +399,14 @@ export default function Investments() {
       ) : (
         <>
           <Card>
-            <Body muted={false}>Allocation · {selectedCurrency}</Body>
-            {visibleHoldings.length ? (
-              visibleHoldings
-                .slice()
-                .sort((a, b) => Number(b.value ?? 0) - Number(a.value ?? 0))
-                .map((a) => (
-                  <View key={a.id} style={{ gap: 8 }}>
-                    <Body>
-                      {a.name} ·{" "}
-                      {total > 0
-                        ? ((Number(a.value ?? 0) / total) * 100).toFixed(1)
-                        : 0}
-                      %
-                    </Body>
-                    <Progress
-                      value={
-                        total > 0 ? (Number(a.value ?? 0) / total) * 100 : 0
-                      }
-                    />
-                  </View>
-                ))
-            ) : (
-              <Body>Add holdings to see your allocation.</Body>
-            )}
+            <SectionTitle>Allocation</SectionTitle>
+            <DropdownFilter label="Currency" value={selectedCurrency} options={currencies.map(value => ({value, label:value}))} onChange={setCurrency}/>
+            <DropdownFilter label="Group By" value={allocationView} options={allocationViews.map(value => ({value, label:value}))}
+              onChange={value => setAllocationView(value as AllocationView)}/>
+            <AllocationDonut holdings={visibleHoldings} currency={selectedCurrency} view={allocationView}/>
           </Card>
           <Card>
-            <Body muted={false}>Return breakdown</Body>
+            <SectionTitle>Return Breakdown</SectionTitle>
             <Body>
               {known.length} of {visibleHoldings.length} holdings have a
               recorded purchase value.
@@ -434,23 +418,25 @@ export default function Investments() {
             </Body>
             <Body>These are recorded results, not forecasts.</Body>
           </Card>
-          {visibleHoldings
-            .slice()
-            .sort((a, b) => Number(b.value ?? 0) - Number(a.value ?? 0))
-            .slice(0, 5)
-            .map((h) => (
-              <HoldingRow
-                key={h.id}
-                holding={h}
-                onDelete={session.demo ? undefined : () => deleteHolding(h)}
-                onPress={() => openHolding(h)}
-              />
-            ))}
         </>
       )}
     </Screen>
   );
 }
+function AllocationDonut({holdings, currency, view}: {holdings: PortfolioHolding[]; currency:string; view:AllocationView}) {
+  const {colors} = useTheme();
+  const {slices} = investmentAllocation(holdings.map(h => ({...h, value: recordedNumber(h.value)})), currency, view);
+  if (!slices.length) return <Body>No positive holding values in this selection.</Body>;
+  return <>
+    <SpendingDonut categories={slices} currency={currency} totalLabel="Portfolio value"/>
+    {slices.map(slice => <View key={slice.key} style={{flexDirection:"row", alignItems:"center", gap:8, paddingVertical:6}}>
+      <View style={{width:10, height:10, borderRadius:5, backgroundColor:slice.color}}/>
+      <Text style={{flex:1, color:colors.ink}}>{slice.name}</Text>
+      <Text style={{color:colors.ink}}>{money(String(slice.amount),currency)} · {slice.percent.toFixed(1)}%</Text>
+    </View>)}
+  </>;
+}
+
 function NativeMarkets({ holdings }: { holdings: PortfolioHolding[] }) {
   const { colors } = useTheme();
   const session = useSession();

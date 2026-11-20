@@ -18,7 +18,7 @@ export function SpendingDonut({
   totalLabel = "Total spending",
   onCategoryPress,
 }: {
-  categories: { name: string; amount: number }[];
+  categories: { key?: string; color?: string; name: string; amount: number }[];
   currency: string;
   totalLabel?: string;
   onCategoryPress?: (name: string) => void;
@@ -53,15 +53,15 @@ export function SpendingDonut({
           offset += length;
           return (
             <Circle
-              key={c.name}
+              key={c.key ?? c.name}
               cx={105}
               cy={105}
               r={radius}
               fill="none"
               stroke={
-                useCategoryColors
+                c.color ?? (useCategoryColors
                   ? categoryIconColor(c.name)
-                  : palette[index % palette.length]
+                  : palette[index % palette.length])
               }
               strokeWidth={strokeWidth}
               strokeDasharray={`${length} ${circumference}`}

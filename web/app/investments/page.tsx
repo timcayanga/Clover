@@ -25,6 +25,7 @@ import { CloverMascot } from "@/components/clover-mascot";
 import { CurrencySelector } from "@/components/currency-selector";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
+import { InvestmentAnalysisAllocation } from "@/components/investment-analysis-allocation";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { InvestmentPortfolioGrowthChart } from "@/components/investment-portfolio-growth-chart";
 import { InvestmentPortfolioFilters } from "@/components/investment-portfolio-filters";
@@ -3536,56 +3537,17 @@ export default function InvestmentsPage() {
                 )}
               </article>
             ) : null}
-            <article className="investments-allocation glass">
-              <div className="investments-allocation__head">
-                <div className="investments-allocation__head-title">
-                  <div className="investments-allocation__title-row">
-                    <h5>Allocation By Subtype</h5>
-                    <InfoTooltip label="A broader view of concentration across the portfolio." />
-                  </div>
-                </div>
-                <div className="investments-allocation__summary">
-                  <span>Estimated value</span>
-                  <strong>{formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)}</strong>
-                </div>
-              </div>
-
-              {allocationAnalysisSlices.length > 0 ? (
-                <InvestmentInsightDonut
-                  ariaLabel="Allocation by subtype pie chart"
-                  centerValue={
-                    hasVisibleCurrencySelection
-                      ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
-                      : "—"
-                  }
-                  centerLabel="Visible value"
-                  slices={allocationAnalysisSlices}
-                  className="investments-analysis-donut"
-                  onSliceSelect={(slice) => {
-                    setInvestmentSubtypeFilter(slice.key as InvestmentSubtype);
-                    selectInvestmentTab("portfolio");
-                  }}
-                />
-              ) : (
-                <EmptyDataCta
-                  className="empty-state--illustrated investments-empty-state--compact"
-                  eyebrow=""
-                  title="No allocation to show yet."
-                  copy="Add an investment to see how your portfolio mix is split."
-                  illustration={investmentsEmptyStateIllustration}
-                  illustrationAlt=""
-                  accountHref="/accounts"
-                  transactionHref="/transactions?manual=1"
-                  actions={
-                    <>
-                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)}>
-                        Add investment
-                      </button>
-                    </>
-                  }
-                />
-              )}
-            </article>
+            <InvestmentAnalysisAllocation
+              onAdd={() => setAddOpen(true)}
+              holdings={portfolioSourceRows.filter(row =>
+                (investmentSubtypeFilter === "all" || row.subtype === investmentSubtypeFilter) &&
+                [row.name, row.symbol, row.institution].some(label => label?.toLowerCase().includes(investmentSearch.trim().toLowerCase()))
+              ).map(row => ({...row, value:row.currentValue}))}
+              currency={portfolioCurrencyFilter || "ALL"}
+              currencies={[...new Set([...portfolioCurrencyOptions, ...portfolioSourceRows.map(row => row.currency)])]}
+              onCurrency={code => { setPortfolioCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }}
+              onSubtype={subtype => { setInvestmentSubtypeFilter(subtype as InvestmentSubtype); selectInvestmentTab("portfolio"); }}
+            />
 
             <article className="investments-insights-panel glass">
               <div className="investments-allocation__head">

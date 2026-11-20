@@ -1,3 +1,4 @@
+import { investmentAllocation } from "../../shared/investment-allocation";
 import assert from 'node:assert/strict';
 import { portfolioInstitutions, portfolioAssetGroups, holdingBalanceChange, projectPortfolio, recordedNumber, recordedPortfolioSeries, type PortfolioAccount, type PortfolioSnapshot } from '../../shared/investment-portfolio';
 const base:PortfolioAccount={id:'institution',name:'Broker',institution:'Broker',type:'investment',currency:'PHP',balance:'1500'};
@@ -60,3 +61,18 @@ const statementHolding = { ...pdax, valuationAccountId: "statement-account", dat
 const statementHistory = [{accountId: "statement-account", currency: "PHP", date: "2026-06-01", value: 100}];
 assert.equal(holdingBalanceChange(portfolioInstitutions([statementHolding], statementHistory)[0].row), 30);
 assert.equal(holdingBalanceChange(portfolioInstitutions([statementHolding], [{...statementHistory[0], currency: "USD"}])[0].row), null);
+
+const coin = {name: "Bitcoin SegWit", institution: "PDAX", currency: "PHP", subtype: "crypto", symbol: "BTC", value: 60};
+const allocationHoldings = [
+  coin, {...coin, name: "Bitcoin", institution: " pdax ", value: 20},
+  {...coin, name: "Gold", subtype: "commodity", symbol: null, institution: null, value: 20},
+  {...coin, currency: "USD", value: 500}, {...coin, value: null}, {...coin, value: 0},
+];
+for (const view of ["Assets", "Institutions", "Asset Types", "Markets"] as const) {
+  const chart = investmentAllocation(allocationHoldings, "PHP", view);
+  assert.equal(chart.total, 100);
+  assert.deepEqual(chart.slices.map(slice => slice.percent), [80, 20]);
+}
+assert.equal(investmentAllocation(allocationHoldings, "PHP", "Assets").slices[0].name, "Bitcoin");
+assert.equal(investmentAllocation(allocationHoldings, "USD", "Assets").total, 500);
+assert.deepEqual(investmentAllocation(allocationHoldings, "EUR", "Assets").slices, []);
