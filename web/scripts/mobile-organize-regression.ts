@@ -182,6 +182,18 @@ check(
     assert.ok(r.overdue.some((p) => p.date === "2026-08-15"));
   },
 );
+check("Home links the schedule and completes the original due date of a rescheduled payment", () => {
+  const payment = { id:"rent", title:"Rent", kind:"planned_payment", status:"active", recurrence:"monthly",
+    currency:"PHP", amount:"100", dueDate:"2026-09-15", plannedPaymentDate:"2026-09-12",
+    tracking:null } as FinancialCommitmentSummary;
+  const row = mobileHomePayments([payment], new Map(), "2026-09-10").upcoming[0];
+  assert.equal(row.commitmentId, "rent");
+  assert.equal(row.date, "2026-09-12");
+  assert.equal(row.dueDate, "2026-09-15");
+  const completed = new Map([[row.commitmentId, new Set([row.dueDate])]]);
+  assert.ok(!mobileHomePayments([payment], completed, "2026-09-10").upcoming.some(item => item.id === row.id));
+  assert.equal(mobileHomePayments([payment], completed, "2026-10-10").upcoming[0].dueDate, "2026-10-15");
+});
 check("Home thirty-day horizon can cross two month boundaries", () => {
   const c = {
     id: "bill",

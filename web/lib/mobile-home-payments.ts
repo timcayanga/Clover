@@ -50,6 +50,8 @@ export function mobileHomePayments(
     )
     .map((o) => ({
       id: `${o.commitment.id}:${o.dateKey}`,
+      commitmentId: o.commitment.id,
+      dueDate: recurringCompletionDate(o.commitment, o.dateKey),
       title: o.commitment.title,
       categoryName: o.commitment.categoryName ?? o.commitment.transaction?.category?.name ?? "Other",
       currency: o.commitment.currency,

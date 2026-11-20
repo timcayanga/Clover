@@ -30,3 +30,10 @@ assert.deepEqual(summary.bills[1].avatars,[{name:'Tim Cayanga',avatarUrl:null,is
 assert.equal(homePendingSplitBills([{...bill('many',100),participants:Array.from({length:8},(_,i)=>({name:`Person ${i}`}))}],context).bills[0].avatars.length,5);
 assert.equal(JSON.stringify(attributed),attributionSnapshot,'Avatar projection must not alter bill participants or balances');
 console.log('PASS Home group photos, participant photos, self identity, missing photos and bounded avatar stacks');
+
+const withMarks = homePendingSplitBills([{...bill('Lunch',100), merchantName:'Grab', categoryName:'Transport'},bill('Mystery',50)],context,
+  mark => ({merchantLogoUrl:mark.merchantRaw === 'Grab' ? '/assets/grab.png' : null}));
+assert.equal(withMarks.bills[0].mark.merchantLogoUrl,'/assets/grab.png');
+assert.equal(withMarks.bills[0].mark.categoryName,'Transport');
+assert.equal(withMarks.bills[1].mark.merchantRaw,'Mystery');
+assert.equal(withMarks.bills[1].mark.merchantLogoUrl,null);

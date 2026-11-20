@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Text } from './app-text';
 import { useSession } from './session';
 import { registerScreenRefresh } from './screen-refresh';
+import { MerchantLogo } from './merchant-logo';
 import { PersonAvatar } from './person-avatar';
 import { useUser } from '@clerk/expo';
 import { Card, Icon, money, useTheme } from './ui';
@@ -45,14 +46,15 @@ export function HomePendingSplitBills({ hidden }: { hidden: boolean }) {
   if (!summary?.count) return null;
   return <Card><Text style={styles.sectionTitle}>Pending Split Bills</Text>
     {summary.bills.map(bill => <Pressable key={bill.id} accessibilityRole="button" onPress={() => router.navigate({pathname:'/split-bills',params:{billId:bill.id}})} style={{flexDirection:'row',alignItems:'center',gap:12,minHeight:52}}>
-      <PendingBillAvatars avatars={bill.avatars} /><View style={{flex:1,minWidth:0}}><Text style={{color:colors.ink,fontSize:14}}>{bill.title}</Text><Text style={{color:colors.muted,fontSize:12}}>{hidden ? "••••" : money(String(bill.remaining),bill.currency)} left to settle</Text></View><Icon line name="chevron-forward" size={18}/>
+      <MerchantLogo transaction={bill.mark ?? {merchantRaw:bill.title, merchantClean:null, categoryName:null}} /><View style={{flex:1,minWidth:0}}><Text style={{color:colors.ink,fontSize:14}}>{bill.title}</Text><Text style={{color:colors.muted,fontSize:12}}>{hidden ? "••••" : money(String(bill.remaining),bill.currency)} left to settle</Text></View><PendingBillAvatars avatars={bill.avatars} /><Icon line name="chevron-forward" size={18}/>
     </Pressable>)}
   </Card>;
 }
 
 function PendingBillAvatars({ avatars }: { avatars?: PendingSplitBillAvatar[] }) {
   const { user } = useUser();
-  const people: PendingSplitBillAvatar[] = avatars?.length ? avatars : [{ name: 'Shared bill', avatarUrl: null }];
+  if (!avatars?.length) return null;
+  const people = avatars;
   return <View accessibilityLabel={people.map(person => person.name).join(', ')} style={{flexDirection:'row',flexShrink:0}}>
     {people.map((person,index) => <View key={index} style={{marginLeft:index ? -8 : 0,borderWidth:2,borderColor:'white',borderRadius:16}}>
       <PersonAvatar name={person.name} imageUrl={person.isSelf ? user?.imageUrl ?? person.avatarUrl : person.avatarUrl} size={26}/>

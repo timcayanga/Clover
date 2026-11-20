@@ -1,3 +1,4 @@
+import { transactionMerchantLogo } from "@/lib/transaction-merchant-logo";
 import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { invalidateWorkspaceSummaryCache, invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
 import { createDirectBillExpense } from "@/lib/split-bill-direct-expense";
@@ -576,7 +577,7 @@ export async function GET(request: Request) {
       const { bills, groups, people } = await loadSplitBillWorkspaceData(user.id);
       code = "split_bills_response_failed";
       return NextResponse.json(surface === "home_split_bills_summary"
-        ? { pending: homePendingSplitBills(bills, { groups, people, currentUserName: getUserDisplayName(user) }) }
+        ? { pending: homePendingSplitBills(bills, { groups, people, currentUserId: user.id, currentUserName: getUserDisplayName(user) }, transactionMerchantLogo) }
         : { summary: splitBillBalanceSummary(bills, getUserDisplayName(user)) },
       { headers: { "Cache-Control": "private, no-store" } });
     }

@@ -1,13 +1,13 @@
 import { currencyMark } from "../../../shared/currency-mark";
 import { clearWidgetSnapshot, hiddenBalancesKey } from "../../src/widget-snapshot";
 import { HomePendingSplitBills } from "../../src/home-pending-split-bills";
-import { dateInTimeZone, paymentCountdown, shortPaymentDate } from "../../../shared/home-return";
+import { calendarDay, dateInTimeZone, paymentCountdown, shortPaymentDate } from "../../../shared/home-return";
 import { nativeStartup } from "../../src/startup-timing";
 import { FirstUseActivation } from "../../src/first-use-activation";
 import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveGrid } from "../../src/adaptive";
 import { mergeHomeDetails, type HomeDetails, type HomeSections } from "../../src/home-sections";
-import { registerScreenRefresh } from "../../src/screen-refresh";
+import { refreshScreen, registerScreenRefresh } from "../../src/screen-refresh";
 import { HomeAdviser } from "../../src/home-adviser";
 import type { HomeInsight } from "../../../shared/home-adviser-insights";
 import { homePeriodLabel } from "../../src/home-period-label";
@@ -61,27 +61,39 @@ type HomeData = HomeSections & {
   previousMonth: Totals;
   weekly: Totals & { previous?: Totals; days: (Totals & { date: string })[] };
   monthly: Totals & { previous?: Totals; days: (Totals & { date: string })[] };
-  overdue?: {
-    id: string;
-    title: string;
-    amount: string | null;
-    date: string;
-    currency?: string;
-  }[];
-  upcoming: {
-    id: string;
-    title: string;
-    amount: string | null;
-    date: string;
-    currency?: string;
-    categoryName?: string | null;
-  }[];
+  overdue?: HomePayment[];
+  upcoming: HomePayment[];
+};
+
+type HomePayment = {
+  id: string; commitmentId?: string; dueDate?: string; title: string;
+  amount: string | null; date: string; currency?: string; categoryName?: string | null;
 };
 
 export default function Home() {
-  const { colors, styles } = useTheme();
+  const { colors, styles, dark } = useTheme();
   const session = useSession();
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState<string | null>(null);
+  const savingRef = useRef(false);
+  const [paymentError, setPaymentError] = useState("");
+  async function markPaid(item: HomePayment) {
+    if (!item.commitmentId || !item.dueDate || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(item.id);
+    setPaymentError("");
+    try {
+      await session.request(`recurring/${encodeURIComponent(item.commitmentId)}/completion?workspaceId=${encodeURIComponent(session.profileId)}`, {
+        method: "PATCH", body: JSON.stringify({ dueDate: item.dueDate, completed: true }),
+      });
+      if (!await refreshScreen("/")) setPaymentError("Payment marked paid. Refresh Home to update the list.");
+    } catch {
+      setPaymentError("Couldn't confirm this payment. Refresh Home and try again.");
+    } finally {
+      savingRef.current = false;
+      setSaving(null);
+    }
+  }
   const [today, setToday] = useState(() => dateInTimeZone());
   useEffect(() => { const timer = setInterval(() => setToday(dateInTimeZone()), 60000); return () => clearInterval(timer); }, []);
   const [detailsError, setDetailsError] = useState(false);
@@ -457,25 +469,34 @@ export default function Home() {
           )}
           <Card>
             <Text style={styles.sectionTitle}>What's coming up</Text>
-            <Body muted={false}>Recurring payments</Body>
-            {data.upcoming.length ? (
-              data.upcoming.map((item) => (
-                <View
-                  key={item.id}
-                  style={{
-                    flexDirection: "row",
-                    gap: 8,
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <View style={{ paddingTop: 2, flexShrink: 0 }}><CategoryMark name={item.categoryName ?? "Other"} size={24} /></View>
-                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}><Text style={{ color: colors.ink, fontSize: 14 }}>{item.title}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{[shortPaymentDate(item.date), paymentCountdown(item.date, today)].filter(Boolean).join(" · ")}</Text></View>
-                  <Text style={{ flexShrink: 1, maxWidth: "48%", textAlign: "right", color: colors.muted, fontSize: 14 }}>{amount(item.amount, item.currency)}</Text>
-                </View>
-              ))
-            ) : (
-              <Body>No upcoming payments need attention.</Body>
-            )}
+            <View style={{flexDirection:"row", alignItems:"center", justifyContent:"space-between"}}>
+              <Body muted={false}>Recurring payments</Body>
+              <Text style={{width:44, textAlign:"center", color:colors.muted}}>Paid</Text>
+            </View>
+            {[...(data.overdue ?? []), ...data.upcoming].map(item => {
+              const days = ((calendarDay(item.date) ?? NaN) - (calendarDay(today) ?? NaN)) / 86400000;
+              const warning = days <= 0 ? (dark ? colors.danger : "#B42318") : days <= 7 ? (dark ? "#FFD166" : "#946200") : colors.muted;
+              const commitmentId = item.commitmentId ?? item.id.replace(/:\d{4}-\d{2}-\d{2}$/, "");
+              return <View key={item.id} style={{flexDirection:"row", alignItems:"center", gap:4}}>
+                <Pressable accessibilityRole="button" onPress={() => router.navigate({pathname:"/recurring",params:{commitmentId}})}
+                  style={{flex:1, minHeight:44, flexDirection:"row", alignItems:"center", gap:8}}>
+                  <CategoryMark name={item.categoryName ?? "Other"} size={24}/>
+                  <View style={{flex:1, gap:4}}>
+                    <Text style={{color:colors.ink, fontSize:14}}>{item.title}</Text>
+                    <Text style={{color:warning, fontSize:12}}>{[shortPaymentDate(item.date), paymentCountdown(item.date, today)].filter(Boolean).join(" · ")}</Text>
+                  </View>
+                  <Text style={{maxWidth:"40%", color:colors.ink, textAlign:"right"}}>{amount(item.amount, item.currency)}</Text>
+                </Pressable>
+                <Pressable accessibilityRole="checkbox" accessibilityLabel={`Mark ${item.title} paid for ${item.date}`}
+                  accessibilityState={{checked:false, busy:saving === item.id, disabled:!!saving || !item.dueDate || !item.commitmentId}}
+                  disabled={!!saving || !item.dueDate || !item.commitmentId} onPress={() => void markPaid(item)}
+                  style={{width:44, minHeight:44, alignItems:"center", justifyContent:"center"}}>
+                  <Icon line name={saving === item.id ? "time-outline" : "square-outline"} size={22} color={colors.teal}/>
+                </Pressable>
+              </View>;
+            })}
+            {!data.upcoming.length && !data.overdue?.length && <Body>No upcoming payments need attention.</Body>}
+            {!!paymentError && <Notice>{paymentError}</Notice>}
             <Button
               title="Open recurring"
               secondary
