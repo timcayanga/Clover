@@ -390,6 +390,16 @@ const linked = buildReportOutlook(
   ],
   "2026-02-01",
 );
+assert.equal(linked.forecast.movements[0].categoryName, "Rent");
+for (const [title, expected] of [
+  ["Payment to Globe Telecom One Click", "Bills & Utilities"],
+  ["OpenAI ChatGPT Subscription", "Subscriptions"],
+  ["Globe-Billspay Taguig City PH", "Bills & Utilities"],
+  ["Unrecognized vendor", "Other"],
+]) {
+  const forecast = run([{ ...base, title, counterparty: null, categoryName: null }]).forecast;
+  assert.equal(forecast.movements[0].categoryName, expected, title);
+}
 assert.equal(linked.recurringCosts.rows[0].latestPayment?.previous, 80);
 assert.equal(linked.recurringCosts.rows[0].latestPayment?.amount, 100);
 assert.ok(

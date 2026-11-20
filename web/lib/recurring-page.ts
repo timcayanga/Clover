@@ -1,3 +1,4 @@
+import { inferCommitmentCategory } from "./recurring-category";
 import { prisma } from "@/lib/prisma";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -89,18 +90,6 @@ const normalizeRecurringMatchText = (value: string | null | undefined) =>
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-
-const inferCommitmentCategory = (commitment: CommitmentForEnrichment) => {
-  const text = `${commitment.title} ${commitment.counterparty ?? ""}`.toLowerCase();
-  if (/subscription|membership|netflix|spotify|openai|chatgpt|icloud|youtube|adobe/.test(text)) return "Subscriptions";
-  if (/electric|water|utility|utilities|internet|broadband|phone|mobile|globe|smart|pldt|meralco|maynilad/.test(text)) return "Bills & Utilities";
-  if (/rent|lease|mortgage/.test(text)) return "Housing";
-  if (/tuition|school|education/.test(text)) return "Education";
-  if (/insurance|loan|credit|debt|installment|amortization/.test(text)) return "Financial";
-  if (commitment.kind === "receivable") return "Income";
-  if (commitment.kind === "debt" || commitment.kind === "reminder") return "Financial";
-  return "Other";
-};
 
 export const enrichRecurringCommitments = (params: {
   commitments: CommitmentForEnrichment[];

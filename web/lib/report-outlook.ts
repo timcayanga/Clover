@@ -1,3 +1,4 @@
+import { inferCommitmentCategory } from "./recurring-category";
 import { buildRecurringCalendarOccurrences } from "./recurring-calendar";
 import {
   recurringPaymentAmount,
@@ -167,10 +168,12 @@ export function buildReportOutlook(
       return name && !/^(other|uncategorized)$/i.test(name) ? name : null;
     };
     const primaryCategory = c.transactionId ? rowsById.get(c.transactionId)?.category : null;
-    const evidenceCategories = new Set(payments.map(p => specificCategory(p.category)).filter(Boolean));
+    const evidenceCategories = new Set(payments.map(p => specificCategory(p.category)).filter((name): name is string => name !== null));
+    // Conflicting linked categories should stay unresolved, even if the title suggests one.
+    const evidenceCategory = evidenceCategories.size > 1 ? "Other" : [...evidenceCategories][0];
     const categoryName = specificCategory(c.categoryName) ?? specificCategory(primaryCategory)
       ?? specificCategory(c.transaction?.category?.name)
-      ?? (evidenceCategories.size === 1 ? [...evidenceCategories][0] : null) ?? "Other";
+      ?? evidenceCategory ?? inferCommitmentCategory(c);
     const overdue = overdueById.get(c.id) ?? [];
     if (overdue.length)
       findings.push({

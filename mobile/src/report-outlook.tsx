@@ -206,7 +206,7 @@ export function ReportOutlook({
                         {m.title}
                       </Text>
                       <Text style={{ fontSize: 11, color: colors.muted }}>
-                        {m.date}
+                        {[m.date, m.categoryName].filter(Boolean).join(" · ")}
                       </Text>
                     </View>
                     <Text

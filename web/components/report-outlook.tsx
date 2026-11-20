@@ -150,7 +150,7 @@ export function ReportOutlook({
                   />
                   <span className="report-insight-row__label">
                     {m.title}
-                    <small>{m.date}</small>
+                    <small>{[m.date, m.categoryName].filter(Boolean).join(" · ")}</small>
                   </span>
                   <strong
                     className={m.direction === "in" ? "positive" : "negative"}
