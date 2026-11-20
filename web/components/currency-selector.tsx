@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { currencyMark } from "../../shared/currency-mark";
 import { createPortal } from "react-dom";
 import {
   getCurrencyCatalogOptions,
@@ -60,7 +61,7 @@ function CurrencySection({ label, options, selectedCode, optionClassName, onSele
               onClick={() => onSelect(option.code)}
             >
               <span className="currency-selector__option-text">
-                <strong>{option.symbol}</strong>
+                <strong><span aria-hidden="true">{currencyMark(option.code)} </span>{option.symbol}</strong>
                 <span>{option.name}</span>
               </span>
               {isSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
@@ -270,7 +271,7 @@ export function CurrencySelector({
                 onClick={() => selectCurrency(option.code)}
               >
                 <span className="currency-selector__option-text">
-                  <strong>{option.symbol}</strong>
+                  <strong><span aria-hidden="true">{currencyMark(option.code)} </span>{option.symbol}</strong>
                   <span>{option.name}</span>
                 </span>
                 {isSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
@@ -302,7 +303,7 @@ export function CurrencySelector({
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9" /><ellipse cx="12" cy="12" rx="4" ry="9" /><path d="M3 12h18" /></svg>
         ) : !isAllSelected ? (
           <span className="currency-selector__trigger-token" aria-hidden="true">
-            {showFullName ? `${selectedOption.name} (${selectedOption.code})` : showCurrencyCode ? selectedOption.code : selectedOption.symbol}
+            {currencyMark(selectedOption.code)} {showFullName ? `${selectedOption.name} (${selectedOption.code})` : showCurrencyCode ? selectedOption.code : selectedOption.symbol}
           </span>
         ) : (
           <span className="currency-selector__trigger-all" aria-hidden="true">

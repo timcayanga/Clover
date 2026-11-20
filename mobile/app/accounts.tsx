@@ -1,3 +1,4 @@
+import { currencyMark } from "../../shared/currency-mark";
 import { usePageAskScope } from "../src/page-ask-context";
 import { accountSectionType } from "../../shared/account-presentation";
 import { SwipeDeleteRow } from "../src/swipe-delete-row";
@@ -225,7 +226,7 @@ function AccountsContent() {
   });
   useLayoutEffect(() => {
     navigation.setOptions({ header: () => <AppHeader title="Accounts" leading={
-      <Pressable accessibilityRole="button" accessibilityLabel={`Select account currency: ${displayedCurrency ?? "none"}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}>{displayedCurrency === "ALL" || !displayedCurrency ? <Icon line name="globe-outline" size={24} /> : <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{displayedCurrency}</Text>}</Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Select account currency: ${displayedCurrency ?? "none"}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}>{displayedCurrency === "ALL" || !displayedCurrency ? <Icon line name="globe-outline" size={24} /> : <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{currencyMark(displayedCurrency)} {displayedCurrency}</Text>}</Pressable>
     } trailing={
       <Pressable accessibilityRole="button" accessibilityLabel="Add account" onPress={() => setAdding(true)} style={styles.iconButton}><AddNavigationMark size={32} /></Pressable>
     } /> });
@@ -322,7 +323,7 @@ function AccountsContent() {
           <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 440, alignSelf: "center", maxHeight: "90%", flexShrink: 1, backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
             <Heading>Account currency</Heading>
             <ScrollView style={{ flexShrink: 1 }}>
-            {ownedCurrencies.length ? ["ALL", ...ownedCurrencies].map(code => <Pressable key={code} accessibilityRole="button" accessibilityLabel={code === "ALL" ? "All Currencies" : code} accessibilityState={{ selected: displayedCurrency === code }} onPress={() => { setCurrencyFilter(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{code === "ALL" ? "All Currencies" : code}</Text>{displayedCurrency === code ? <Icon line name="checkmark" /> : null}</Pressable>) : <Body>Add an account to see its currency here.</Body>}
+            {ownedCurrencies.length ? ["ALL", ...ownedCurrencies].map(code => <Pressable key={code} accessibilityRole="button" accessibilityLabel={code === "ALL" ? "All Currencies" : code} accessibilityState={{ selected: displayedCurrency === code }} onPress={() => { setCurrencyFilter(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{currencyMark(code)} {code === "ALL" ? "All Currencies" : code}</Text>{displayedCurrency === code ? <Icon line name="checkmark" /> : null}</Pressable>) : <Body>Add an account to see its currency here.</Body>}
             </ScrollView>
             <Button secondary title="Close" onPress={() => setCurrencyOpen(false)} />
           </View>

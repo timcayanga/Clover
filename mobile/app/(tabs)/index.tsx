@@ -1,3 +1,4 @@
+import { currencyMark } from "../../../shared/currency-mark";
 import { clearWidgetSnapshot, hiddenBalancesKey } from "../../src/widget-snapshot";
 import { HomePendingSplitBills } from "../../src/home-pending-split-bills";
 import { dateInTimeZone, paymentCountdown, shortPaymentDate } from "../../../shared/home-return";
@@ -107,7 +108,7 @@ export default function Home() {
   const navigation = useNavigation();
   useEffect(() => { setCurrency(profileCurrency); setCurrencyOptions([profileCurrency]); }, [profileCurrency, session.profileId]);
   useLayoutEffect(() => {
-    navigation.setOptions({ header: () => <AppHeader title="Home" leading={<Pressable accessibilityRole="button" accessibilityLabel={`Home currency: ${currency === "ALL" ? "All Currencies" : currency}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}>{currency === "ALL" ? <Icon line name="globe-outline" size={24} /> : <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{currency}</Text>}</Pressable>} /> });
+    navigation.setOptions({ header: () => <AppHeader title="Home" leading={<Pressable accessibilityRole="button" accessibilityLabel={`Home currency: ${currency === "ALL" ? "All Currencies" : currency}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}>{currency === "ALL" ? <Icon line name="globe-outline" size={24} /> : <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{currencyMark(currency)} {currency}</Text>}</Pressable>} /> });
   }, [navigation, currency, colors.teal, styles.iconButton]);
   useEffect(() => {
     let active = true;
@@ -226,7 +227,7 @@ export default function Home() {
           <Pressable accessibilityLabel="Close currency selector" onPress={() => setCurrencyOpen(false)} style={{ position: "absolute", inset: 0 }} />
           <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 440, alignSelf: "center", maxHeight: "90%", flexShrink: 1, backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
             <Heading>Home currency</Heading>
-            <ScrollView>{["ALL", ...new Set([profileCurrency, ...currencyOptions])].map(code => <Pressable key={code} accessibilityRole="button" accessibilityState={{ selected: currency === code }} onPress={() => { setCurrency(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{code === "ALL" ? "All Currencies" : code}</Text>{currency === code ? <Icon line name="checkmark" /> : null}</Pressable>)}</ScrollView>
+            <ScrollView>{["ALL", ...new Set([profileCurrency, ...currencyOptions])].map(code => <Pressable key={code} accessibilityRole="button" accessibilityState={{ selected: currency === code }} onPress={() => { setCurrency(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{currencyMark(code)} {code === "ALL" ? "All Currencies" : code}</Text>{currency === code ? <Icon line name="checkmark" /> : null}</Pressable>)}</ScrollView>
             <>{currency === "ALL" ? <Body>Combined balance in {profileCurrency}. Reports remain separated by currency.</Body> : null}</>
             <Button title="Done" secondary onPress={() => setCurrencyOpen(false)} />
           </View>

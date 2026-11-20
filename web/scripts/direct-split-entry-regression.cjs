@@ -193,6 +193,7 @@ async function main() {
     const captured = {uri:"file:///cache/123.jpg",fileName:"receipt.jpg",mimeType:"image/jpeg"};
     let receiptPreviewed = false;
     const {BillEditor} = load("../mobile/src/direct-bill-editor.tsx", {
+      "../../shared/currency-mark": load("../shared/currency-mark.ts"),
       react: ui.h, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
       "@clerk/expo": {useUser:()=>({user:{fullName:"Personal profile name"}})},
       "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {},

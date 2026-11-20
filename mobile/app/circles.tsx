@@ -1,3 +1,4 @@
+import { currencyMark } from "../../shared/currency-mark";
 import { circleBillMembers, circleBillContextReady } from "../../shared/direct-bill-context";
 import { TogetherToolbar } from "../src/together-toolbar";
 import { BillEditor } from "../src/direct-bill-editor";
@@ -279,7 +280,7 @@ export default function Circles() {
       {addingBill&&selected?<EntryOverlay onClose={()=>setAddingBill(false)}><BillEditor context={{circleId:selected.id, currency:selected.currency,group:{id:selected.splitBillGroupId ?? "",name:selected.name,members:circleBillMembers(selected.members??[]), recorderName:selected.members?.find(m=>m.isMe)?.displayName}}} onClose={()=>setAddingBill(false)} onSaved={()=>{setAddingBill(false);setRevision(v=>v+1);reload();}}/></EntryOverlay>:null}
       <PlanHeader
         title={selected ? selected.name : "Circles"}
-        trailing={selected ? <View style={{flexDirection:"row",alignItems:"center"}}><Pressable accessibilityRole="button" accessibilityLabel={`Circle display currency: ${displayCurrency}`} onPress={()=>setCurrencyOpen(true)} style={{minHeight:44,minWidth:58,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:4}}><Text style={{color:colors.teal,fontFamily:'Poppins-Medium',fontSize:13}}>{displayCurrency}</Text></Pressable>{selected.role !== "participant" && <Pressable accessibilityRole="button" accessibilityLabel="Add Expense" onPress={openExpense} style={{padding:4}}><AddNavigationMark size={36}/></Pressable>}</View> : undefined}
+        trailing={selected ? <View style={{flexDirection:"row",alignItems:"center"}}><Pressable accessibilityRole="button" accessibilityLabel={`Circle display currency: ${displayCurrency}`} onPress={()=>setCurrencyOpen(true)} style={{minHeight:44,minWidth:58,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:4}}><Text style={{color:colors.teal,fontFamily:'Poppins-Medium',fontSize:13}}>{currencyMark(displayCurrency)} {displayCurrency}</Text></Pressable>{selected.role !== "participant" && <Pressable accessibilityRole="button" accessibilityLabel="Add Expense" onPress={openExpense} style={{padding:4}}><AddNavigationMark size={36}/></Pressable>}</View> : undefined}
         back={selected ? () => setSelected(null) : undefined}
         add={openExpense}
       />
@@ -287,7 +288,7 @@ export default function Circles() {
         <View style={{flex:1,justifyContent:'center',padding:24,backgroundColor:'#0007'}}>
           <Pressable accessibilityLabel="Close currency selector" onPress={()=>setCurrencyOpen(false)} style={{position:'absolute',top:0,bottom:0,left:0,right:0}}/>
           <View accessibilityViewIsModal style={{width:'100%',maxWidth:440,alignSelf:'center',maxHeight:'80%',backgroundColor:colors.white,borderRadius:20,padding:20,gap:12}}>
-            <Body>Display Currency</Body><ScrollView>{currencyOptions.map(code=><Pressable key={code} accessibilityRole="button" accessibilityLabel={code} accessibilityState={{selected:displayCurrency===code}} onPress={()=>{if(selected)setDisplayCurrencies(current=>({...current,[selected.id]:code}));setCurrencyOpen(false);}} style={{minHeight:48,flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><Text style={{color:colors.ink}}>{code}</Text>{displayCurrency===code?<Icon line name="checkmark"/>:null}</Pressable>)}</ScrollView><PlanAction title="Close" onPress={()=>setCurrencyOpen(false)}/>
+            <Body>Display Currency</Body><ScrollView>{currencyOptions.map(code=><Pressable key={code} accessibilityRole="button" accessibilityLabel={code} accessibilityState={{selected:displayCurrency===code}} onPress={()=>{if(selected)setDisplayCurrencies(current=>({...current,[selected.id]:code}));setCurrencyOpen(false);}} style={{minHeight:48,flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><Text style={{color:colors.ink}}>{currencyMark(code)} {code}</Text>{displayCurrency===code?<Icon line name="checkmark"/>:null}</Pressable>)}</ScrollView><PlanAction title="Close" onPress={()=>setCurrencyOpen(false)}/>
           </View>
         </View>
       </Modal>

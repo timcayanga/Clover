@@ -22,7 +22,7 @@ import { Text } from "./app-text";
 import { AccountTypeMark } from "./account-type-mark";
 import { ChoiceField } from "./transaction-entry";
 
-const currencyFlags: Record<string, string> = { PHP:"🇵🇭", USD:"🇺🇸", EUR:"🇪🇺", GBP:"🇬🇧", SGD:"🇸🇬", THB:"🇹🇭", JPY:"🇯🇵", IDR:"🇮🇩", MYR:"🇲🇾", HKD:"🇭🇰", AUD:"🇦🇺", CAD:"🇨🇦", CNY:"🇨🇳", KRW:"🇰🇷", VND:"🇻🇳", INR:"🇮🇳", CHF:"🇨🇭", NZD:"🇳🇿" };
+import { currencyMark } from "../../shared/currency-mark";
 
 type Bill = {
   id: string;
@@ -449,7 +449,7 @@ export function BillEditor({
             onChangeText={setTotal}
             keyboardType="decimal-pad"
           />
-          <Field label={`Currency  ${currencyFlags[currency] ?? "🌐"}`} value={currency}
+          <Field label={`Currency  ${currencyMark(currency)}`} value={currency}
             onChangeText={v => { setCurrency(v.toUpperCase()); setAccountId(""); }} maxLength={3} />
           <View style={{ borderWidth: 1, borderRadius: 16, borderColor: colors.line, padding: 12, gap: 8 }}>
             <Body muted={false}>{circleId ? "People" : "People or Group"}</Body>
