@@ -554,10 +554,10 @@ export async function GET(request: Request) {
     const user = await getSplitBillCurrentUser();
     if (surface === "home_split_bills_summary" || (native && surface === "split_bills_balance_summary")) {
       code = "split_bills_summary_load_failed";
-      const { bills } = await loadSplitBillWorkspaceData(user.id);
+      const { bills, groups, people } = await loadSplitBillWorkspaceData(user.id);
       code = "split_bills_response_failed";
       return NextResponse.json(surface === "home_split_bills_summary"
-        ? { pending: homePendingSplitBills(bills) }
+        ? { pending: homePendingSplitBills(bills, { groups, people, currentUserName: getUserDisplayName(user) }) }
         : { summary: splitBillBalanceSummary(bills, getUserDisplayName(user)) },
       { headers: { "Cache-Control": "private, no-store" } });
     }

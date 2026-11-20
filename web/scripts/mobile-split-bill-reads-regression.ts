@@ -62,7 +62,7 @@ async function main() {
     "@/lib/split-bill-loaders": { loadSplitBillWorkspaceData: async () => {
       calls.push("summary");
       if (fault === "summary") throw new Error("private query");
-      return { bills: [bill] };
+      return { bills: [bill], groups: [], people: [] };
     } },
     "@/lib/split-bill-balance-summary": { splitBillBalanceSummary: () => ({ youOwe: "₱125.00", owedToYou: "₱0.00" }) },
     "@/lib/user-display-name": { getUserDisplayName: () => "Fixture" },

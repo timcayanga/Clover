@@ -20,3 +20,13 @@ assert.equal(homePendingSplitBills([]).count,0);
 assert.equal(homePendingSplitBills(Array.from({length:10},(_,i)=>bill(String(i),100))).count,10);
 assert.equal(homePendingSplitBills(Array.from({length:10},(_,i)=>bill(String(i),100))).bills.length,3);
 console.log('PASS Home dates/countdowns, time zones, personalized greetings and pending/partial/settled Split Bill summaries');
+
+const context = { currentUserName: 'Tim Cayanga', groups: [{id:'group-1',name:'Our Household',avatarUrl:'/household.jpg'}], people:[{name:'Jeep',avatarUrl:'/jeep.jpg'}] };
+const attributed = [{...bill('group',100),groupId:'group-1',participants:[{name:'You'}]}, {...bill('people',80),participants:[{name:'You'},{name:'Jeep'},{name:'New person'}]}];
+const attributionSnapshot = JSON.stringify(attributed);
+const summary = homePendingSplitBills(attributed,context);
+assert.deepEqual(summary.bills[0].avatars,[{name:'Our Household',avatarUrl:'/household.jpg'}]);
+assert.deepEqual(summary.bills[1].avatars,[{name:'Tim Cayanga',avatarUrl:null,isSelf:true},{name:'Jeep',avatarUrl:'/jeep.jpg',isSelf:false},{name:'New person',avatarUrl:null,isSelf:false}]);
+assert.equal(homePendingSplitBills([{...bill('many',100),participants:Array.from({length:8},(_,i)=>({name:`Person ${i}`}))}],context).bills[0].avatars.length,5);
+assert.equal(JSON.stringify(attributed),attributionSnapshot,'Avatar projection must not alter bill participants or balances');
+console.log('PASS Home group photos, participant photos, self identity, missing photos and bounded avatar stacks');
