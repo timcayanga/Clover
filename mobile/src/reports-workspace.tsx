@@ -298,7 +298,7 @@ function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportVie
           setView((v) => ({ ...v, section: sections[names.indexOf(name)] }))
         }
       /> : null}
-      {!filters && data ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
+      {!filters && data && view.section !== "overview" ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
       {filters && data ? (
         <ReportCard title="Filter reports" compact>
           <DropdownFilter
@@ -542,7 +542,7 @@ function NativeReportPanels({
   onChanged?:()=>void|Promise<unknown>;
 }) {
   const askClover = usePageAskClover();
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const a = r.analysis,
     c = r.currency,
     format = (n: number) => money(String(n), c),
@@ -640,29 +640,18 @@ function NativeReportPanels({
       ) : null}
       {view.section === "overview" ? (
         <>
-          <AdaptiveGrid minItemWidth={150} maxColumns={4} gap={12}>
+          <View accessibilityLabel="Report summary" style={{flexDirection:"row",flexWrap:"wrap",borderWidth:1,borderColor:dark ? "#29384A" : "#D8E7E3",borderRadius:22,overflow:"hidden",backgroundColor:dark ? "#0E1725" : "#FCFEFC"}}>
             {[
-              ["Income", a.current.income, a.previous.income],
-              ["Expenses", a.current.expense, a.previous.expense],
-              ["Net income", net, a.previous.income - a.previous.expense],
-            ].map(([title, value, prior]) => (
-              <SummaryCard
-                key={String(title)}
-                title={String(title)}
-                value={format(Number(value))}
-                detail={`${format(Number(value) - Number(prior))} vs comparison period`}
-              />
-            ))}
-            <SummaryCard
-              title="Savings rate"
-              value={
-                a.current.income > 0
-                  ? `${savingsRate(a.current.income, a.current.expense)!.toFixed(1)}%`
-                  : "N/A"
-              }
-              detail="Income left after spending"
-            />
-          </AdaptiveGrid>
+              {title:"Income",value:format(a.current.income),delta:a.current.income-a.previous.income},
+              {title:"Expenses",value:format(a.current.expense),delta:a.current.expense-a.previous.expense},
+              {title:"Net income",value:format(net),delta:net-(a.previous.income-a.previous.expense)},
+              {title:"Savings rate",value:a.current.income > 0 ? `${savingsRate(a.current.income,a.current.expense)!.toFixed(1)}%` : "N/A",delta:null},
+            ].map((item,index) => <View key={item.title} style={{width:"50%",minHeight:81,padding:16,gap:5,borderRightWidth:index % 2 === 0 ? 1 : 0,borderTopWidth:index > 1 ? 1 : 0,borderColor:dark ? "#29384A" : "#E1ECE8",backgroundColor:index === 0 ? (dark ? "#15382F" : "#E9F8EF") : "transparent"}}>
+              <Text style={{fontSize:11,fontFamily:"Poppins-Medium",color:colors.muted}}>{item.title}</Text>
+              <Text style={{fontSize:18,fontFamily:"Poppins-SemiBold",color:index === 0 ? (dark ? "#86E9D1" : "#12614E") : colors.ink}}>{item.value}</Text>
+              {item.delta !== null ? <Text accessibilityLabel={`Change from previous period: ${format(item.delta)}`} style={{fontSize:11,color:colors.muted}}>{item.delta > 0 ? "+" : ""}{format(item.delta)}</Text> : null}
+            </View>)}
+          </View>
           <ReportCard title="Money over time">
             <ReportLineChart
               currency={c}

@@ -67587,3 +67587,27 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 .direct-bill-entry>header,.direct-bill-methods,.direct-bill-amount{display:flex;align-items:center;gap:12px}.direct-bill-entry>header{justify-content:space-between}.direct-bill-amount>input:first-child{flex:1;min-width:0}.direct-bill-amount>input:last-child{width:80px}
 .direct-bill-entry .settings-field,.direct-bill-entry details{margin-bottom:12px}.direct-bill-entry summary{cursor:pointer;padding:12px 0}
 @media(max-width:1100px){.direct-bill-backdrop{align-items:flex-end!important}.direct-bill-entry{border-radius:24px 24px 0 0!important;max-height:calc(100dvh - 90px);padding-bottom:100px}.split-bill-detail-tabs.clover-tabs>button:not([aria-selected="true"]) .animated-tabs__label{display:none!important}.split-bill-detail-tabs.clover-tabs{display:flex!important;flex-flow:row nowrap!important}.split-entry-toolbar{gap:8px}}
+
+/* Reports Overview uses the same joined summary treatment as Accounts. */
+.report-v2-summary--accounts{gap:0;border:1px solid #d8e7e3;border-radius:22px;overflow:hidden;background:#fcfefc}
+.report-v2-summary--accounts .report-v2-summary__cell{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:5px;min-width:0;min-height:100px;padding:20px;border-left:1px solid #e1ece8}
+.report-v2-summary--accounts .report-v2-summary__cell:first-child{border-left:0;background:#e9f8ef}
+.report-v2-summary--accounts .report-v2-summary__label{font-size:12px;font-weight:500;color:var(--muted)}
+.report-v2-summary--accounts strong{font-size:22px;line-height:1.4;overflow-wrap:anywhere;color:#1f2933;font-variant-numeric:tabular-nums}
+.report-v2-summary--accounts .report-v2-summary__cell:first-child strong{color:#12614e}
+.report-v2-summary--accounts small{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+html[data-theme="dark"] .report-v2-summary--accounts{border-color:#29384a;background:#0e1725}
+html[data-theme="dark"] .report-v2-summary--accounts .report-v2-summary__cell{border-color:#29384a}
+html[data-theme="dark"] .report-v2-summary--accounts strong{color:#e7eef7}
+html[data-theme="dark"] .report-v2-summary--accounts .report-v2-summary__cell:first-child{background:#15382f}
+html[data-theme="dark"] .report-v2-summary--accounts .report-v2-summary__cell:first-child strong{color:#86e9d1}
+@media(max-width:900px){
+  .report-v2-summary--accounts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .report-v2-summary--accounts .report-v2-summary__cell{min-height:81px;padding:16px}
+  .report-v2-summary--accounts .report-v2-summary__cell:nth-child(3){border-left:0}
+  .report-v2-summary--accounts .report-v2-summary__cell:nth-child(n+3){border-top:1px solid #e1ece8}
+  .report-v2-summary--accounts .report-v2-summary__label{font-size:11px}
+  .report-v2-summary--accounts strong{font-size:18px}
+}
+
+@media(max-width:767px){.report-v2[data-report-section="overview"] .report-v2-toolbar{display:none}}

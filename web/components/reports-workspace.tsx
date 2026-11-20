@@ -285,9 +285,9 @@ export function ReportsWorkspaceView({
     >
       <div className="report-v2" data-report-section={view.section} data-filters-open={filters} data-ask-page-context={JSON.stringify({reportParams:reportViewParams(data.view).toString(),currency:data.view.currency,from:data.period.from,to:data.period.to})}>
         <div className="report-v2-toolbar">
-          <p>
+          {view.section !== "overview" ? <p>
             {data.period.from} to {data.period.to} · {data.timeZone}
-          </p>
+          </p> : null}
           <button
             className="report-text-action"
             onClick={() => setSavedOpen(!savedOpen)}
@@ -676,31 +676,17 @@ export function ReportPanels({
       ) : null}
       {view.section === "overview" ? (
         <>
-          <div className="report-v2-summary">
+          <div className="report-v2-summary report-v2-summary--accounts" aria-label="Report summary">
             {[
-              ["Income", a.current.income, a.previous.income],
-              ["Expenses", a.current.expense, a.previous.expense],
-              ["Net income", net, a.previous.income - a.previous.expense],
-            ].map(([label, value, previous]) => (
-              <Panel key={String(label)} title={String(label)}>
-                <strong>{money(Number(value))}</strong>
-                <p>
-                  {money(Number(value) - Number(previous))} vs comparison period
-                </p>
-              </Panel>
-            ))}
-            <Panel title="Savings rate">
-              <strong>
-                {savingsRate(a.current.income, a.current.expense)?.toFixed(1) ??
-                  "N/A"}
-                {a.current.income > 0 ? "%" : ""}
-              </strong>
-              <p>
-                {a.current.income > 0
-                  ? "Income left after spending"
-                  : "Record income to calculate a rate."}
-              </p>
-            </Panel>
+              {label:"Income",value:money(a.current.income),delta:a.current.income-a.previous.income},
+              {label:"Expenses",value:money(a.current.expense),delta:a.current.expense-a.previous.expense},
+              {label:"Net income",value:money(net),delta:net-(a.previous.income-a.previous.expense)},
+              {label:"Savings rate",value:a.current.income > 0 ? `${savingsRate(a.current.income,a.current.expense)!.toFixed(1)}%` : "N/A",delta:null},
+            ].map(item => <div key={item.label} className="report-v2-summary__cell">
+              <span className="report-v2-summary__label">{item.label}</span>
+              <strong>{item.value}</strong>
+              {item.delta !== null ? <small aria-label={`Change from previous period: ${money(item.delta)}`}>{item.delta > 0 ? "+" : ""}{money(item.delta)}</small> : null}
+            </div>)}
           </div>
           <Panel title="Money over time">
             <ReportsMoneyOverTimeChart currency={c} points={r.balances} />
