@@ -30,6 +30,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
     makeScenario("savings", startingPrincipal, 2),
   ]);
   const [selectedId, setSelectedId] = useState(() => scenarios[0]?.id ?? "");
+  const [draft, setDraft] = useState<GrowthScenario | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
@@ -59,7 +60,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
     }
   }, [hydrated, scenarios]);
 
-  const selectedScenario = scenarios.find((scenario) => scenario.id === selectedId) ?? scenarios[0];
+  const selectedScenario = draft ?? scenarios.find((scenario) => scenario.id === selectedId) ?? scenarios[0];
   const results = useMemo(() => scenarios.map(getGrowthScenarioResult), [scenarios]);
   const selectedResult = results.find((result) => result.scenario.id === selectedScenario?.id) ?? results[0];
   const chart = growthComparison(scenarios);
@@ -67,20 +68,29 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
   const adviserHref = `/adviser?prompt=${encodeURIComponent(adviserPrompt)}`;
 
   const updateScenario = (patch: Partial<GrowthScenario>) => {
-    setScenarios((current) => current.map((scenario) => scenario.id === selectedScenario.id ? { ...normalizeGrowthScenario({ ...scenario, ...patch }), name: patch.name ?? scenario.name } : scenario));
+    const next = { ...normalizeGrowthScenario({ ...selectedScenario, ...patch }), name: patch.name ?? selectedScenario.name };
+    if (draft) setDraft(next);
+    else setScenarios(current => current.map(s => s.id === selectedScenario.id ? next : s));
   };
 
   const changeProduct = (productType: GrowthProductType) => {
     updateScenario({
       productType,
-      name: GROWTH_PRODUCT_LABELS[productType],
+      name: selectedScenario.name === GROWTH_PRODUCT_LABELS[selectedScenario.productType] ? GROWTH_PRODUCT_LABELS[productType] : selectedScenario.name,
       ...productDefaults[productType],
     });
   };
 
   const addScenario = () => {
     if (scenarios.length >= 4) return;
-    const next = makeScenario("custom", selectedScenario.principal, Date.now());
+    setAdvancedOpen(false);
+    setDraft(makeScenario("custom", selectedScenario.principal, Date.now()));
+  };
+
+  const createScenario = () => {
+    if (!draft || !draft.name.trim() || scenarios.length >= 4) return;
+    const next = normalizeGrowthScenario(draft);
+    setDraft(null);
     setScenarios((current) => [...current, next]);
     setSelectedId(next.id);
   };
@@ -104,10 +114,12 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
           <h2 className="reports-subtab-title" id="growth-planner-title">Scenario Planning</h2>
           <p>Compare potential outcomes without changing your recorded portfolio.</p>
         </div>
-        <button className="button button-secondary button-small" type="button" onClick={addScenario} disabled={scenarios.length >= 4}>+ Add scenario</button>
+        {!draft && (scenarios.length < 4
+          ? <button className="button button-secondary button-small" type="button" onClick={addScenario} disabled={!hydrated}>+ Add Scenario</button>
+          : <p>Comparing 4 of 4 scenarios. Remove a scenario to add another.</p>)}
       </header>
 
-      <div className="clover-tabs growth-planner__scenario-tabs" role="tablist" aria-label="Growth scenarios">
+      {!draft && <div className="clover-tabs growth-planner__scenario-tabs" role="tablist" aria-label="Growth scenarios">
         {results.map((result) => (
           <button
             key={result.scenario.id}
@@ -121,17 +133,17 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
             <strong>{formatCurrencyAmount(result.selectedProjection.endingValue, currency)}</strong>
           </button>
         ))}
-      </div>
+      </div>}
 
       <div className="growth-planner__workspace">
-        <form className="growth-planner__form" onSubmit={(event) => event.preventDefault()}>
+        <form className="growth-planner__form" onSubmit={(event) => { event.preventDefault(); createScenario(); }}>
           <div className="growth-planner__form-heading">
-            <div><h3 className="reports-subtab-title">Scenario Assumptions</h3><p className="growth-planner__scenario-name">{selectedScenario.name}</p></div>
-            {scenarios.length > 1 ? <button type="button" onClick={removeScenario}>Remove</button> : null}
+            <div><h3 className="reports-subtab-title">{draft ? "New Scenario" : "Scenario Assumptions"}</h3>{!draft && <p className="growth-planner__scenario-name">{selectedScenario.name}</p>}</div>
+            {!draft && scenarios.length > 1 ? <button type="button" onClick={removeScenario}>Remove</button> : null}
           </div>
           <label className="growth-planner__field growth-planner__field--wide">
             <span>Scenario name</span>
-            <input value={selectedScenario.name} onChange={(event) => updateScenario({ name: event.target.value })} />
+            <input key={selectedScenario.id} autoFocus={!!draft} value={selectedScenario.name} onChange={(event) => updateScenario({ name: event.target.value })} />
           </label>
           <label className="growth-planner__field">
             <span>Product</span>
@@ -141,7 +153,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
           </label>
           <label className="growth-planner__field">
             <span>Starting amount</span>
-            <input type="number" min="0" step="1000" inputMode="decimal" value={selectedScenario.principal} onChange={(event) => updateScenario({ principal: readNumber(event.target.value) })} />
+            <input type="number" min="0" step="any" inputMode="decimal" value={selectedScenario.principal} onChange={(event) => updateScenario({ principal: readNumber(event.target.value) })} />
           </label>
           <label className="growth-planner__field">
             <span>Annual rate</span>
@@ -169,9 +181,13 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
             </div>
           ) : null}
           <p className="growth-planner__assumption-note">Starter rates are illustrative only. Replace them with the terms you are considering; projections are not current offers or guaranteed returns.</p>
+          {draft && <div className="growth-planner__create-actions">
+            <button className="button button-secondary" type="button" onClick={() => setDraft(null)}>Cancel</button>
+            <button className="button button-primary" type="submit" disabled={!draft.name.trim()}>Create Scenario</button>
+          </div>}
         </form>
 
-        <article className="growth-planner__result glass">
+        {!draft && <article className="growth-planner__result glass">
           <h3 className="reports-subtab-title">Projected Value</h3>
           <strong className="growth-planner__result-value">{formatCurrencyAmount(selectedResult.selectedProjection.endingValue, currency)}</strong>
           <span>after {selectedScenario.years} year{selectedScenario.years === 1 ? "" : "s"}</span>
@@ -203,10 +219,10 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
             <div><dt>Early exit penalty</dt><dd>{selectedScenario.earlyWithdrawalPenalty}% (not deducted)</dd></div>
           </dl>
           <Link className="button button-primary" href={adviserHref}>Ask Clover</Link>
-        </article>
+        </article>}
       </div>
 
-      <section className="growth-planner__comparison glass" aria-labelledby="growth-comparison-title">
+      {!draft && <section className="growth-planner__comparison glass" aria-labelledby="growth-comparison-title">
         <div><h3 className="reports-subtab-title" id="growth-comparison-title">Compare Scenarios</h3></div>
         <div className="growth-planner__comparison-grid">
           {results.map((result) => (
@@ -217,7 +233,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
             </button>
           ))}
         </div>
-      </section>
+      </section>}
     </section>
   );
 }

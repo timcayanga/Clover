@@ -1,6 +1,6 @@
 import { usePageAskClover } from "./page-ask-context";
 import { useEffect, useRef, useState } from "react";
-import { View, ScrollView, Pressable, Switch } from "react-native";
+import { View, Pressable, Switch } from "react-native";
 import { router } from "expo-router";
 import Svg, { Defs, LinearGradient, Stop, Polygon, Line, Polyline } from "react-native-svg";
 import { Text } from "./app-text";
@@ -65,6 +65,7 @@ export function NativePlanner({
     ),
   );
   const [selectedId, setSelectedId] = useState(scenarios[0].id);
+  const [draft, setDraft] = useState<GrowthScenario | null>(null);
   const [advanced, setAdvanced] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const loading = useRef(true);
@@ -102,20 +103,21 @@ export function NativePlanner({
         .set(storageKey, scenarios)
         .catch(() => setStorageError(true));
   }, [hydrated, scenarios, session.offline, storageKey]);
-  const scenario = scenarios.find((s) => s.id === selectedId) ?? scenarios[0];
+  const scenario = draft ?? scenarios.find((s) => s.id === selectedId) ?? scenarios[0];
   const result = getGrowthScenarioResult(scenario);
   const chart = growthComparison(scenarios);
-  const update = (patch: Partial<GrowthScenario>) =>
-    setScenarios((current) =>
-      current.map((s) =>
-        s.id === scenario.id
-          ? {
-              ...normalizeGrowthScenario({ ...s, ...patch }),
-              name: patch.name ?? s.name,
-            }
-          : s,
-      ),
-    );
+  const update = (patch: Partial<GrowthScenario>) => {
+    const next = { ...normalizeGrowthScenario({ ...scenario, ...patch }), name: patch.name ?? scenario.name };
+    if (draft) setDraft(next);
+    else setScenarios(current => current.map(s => s.id === scenario.id ? next : s));
+  };
+  const createScenario = () => {
+    if (!draft || !draft.name.trim() || scenarios.length >= 4) return;
+    const next = normalizeGrowthScenario(draft);
+    setScenarios(current => [...current, next]);
+    setSelectedId(next.id);
+    setDraft(null);
+  };
   const amount = (n: number) => money(String(n), currency);
   const heading = {
     fontFamily: "Poppins-SemiBold",
@@ -171,20 +173,16 @@ export function NativePlanner({
       <Body>
         Compare potential outcomes without changing your recorded portfolio.
       </Body>
-      <PlanAction
-        title="+ Add scenario"
-        disabled={scenarios.length >= 4}
-        onPress={() => {
-          const next = makeScenario("custom", scenario.principal, Date.now());
-          setScenarios([...scenarios, next]);
-          setSelectedId(next.id);
-        }}
-      />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 12, padding: 3 }}
-      >
+      {!draft && <>
+        {scenarios.length < 4 ? <PlanAction
+          title="+ Add Scenario"
+          disabled={!hydrated}
+          onPress={() => {
+            setDraft(makeScenario("custom", scenario.principal, Date.now()));
+            setAdvanced(false);
+          }}
+        /> : <Body>Comparing 4 of 4 scenarios. Remove a scenario to add another.</Body>}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {scenarios.map((s) => (
           <Pressable
             key={s.id}
@@ -194,7 +192,7 @@ export function NativePlanner({
             style={{
               padding: 12,
               gap: 6,
-              width: 170,
+              width: "48%",
               borderRadius: 16,
               borderWidth: 1,
               borderColor: s.id === scenario.id ? colors.teal : colors.line,
@@ -209,9 +207,10 @@ export function NativePlanner({
             </Text>
           </Pressable>
         ))}
-      </ScrollView>
+        </View>
+      </>}
       <Card>
-        <Text style={heading}>Scenario assumptions</Text>
+        <Text accessibilityRole="header" style={heading}>{draft ? "New Scenario" : `Assumptions · ${scenario.name || "Scenario"}`}</Text>
         <Field
           label="Scenario name"
           value={scenario.name}
@@ -227,7 +226,7 @@ export function NativePlanner({
             const type = value as GrowthProductType;
             update({
               productType: type,
-              name: GROWTH_PRODUCT_LABELS[type],
+              name: scenario.name === GROWTH_PRODUCT_LABELS[scenario.productType] ? GROWTH_PRODUCT_LABELS[type] : scenario.name,
               ...productDefaults[type],
             });
           }}
@@ -297,7 +296,11 @@ export function NativePlanner({
             </View>
           </View>
         )}
-        {scenarios.length > 1 && (
+        {draft && <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <PlanAction title="Cancel" onPress={() => setDraft(null)} />
+          <PlanAction title="Create Scenario" tone="primary" disabled={!draft.name.trim()} onPress={createScenario} />
+        </View>}
+        {!draft && scenarios.length > 1 && (
           <PlanAction
             title="Remove scenario"
             tone="delete"
@@ -314,6 +317,7 @@ export function NativePlanner({
           returns.
         </Body>
       </Card>
+      {!draft && <>
       <Card>
         <Text style={heading}>Projected value</Text>
         <Text
@@ -452,6 +456,7 @@ export function NativePlanner({
           );
         })}
       </Card>
+      </>}
       <Body>
         {storageError
           ? "Scenarios could not be saved on this device. Calculations still work."

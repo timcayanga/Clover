@@ -2658,6 +2658,7 @@ html[data-theme="dark"] .recurring-calendar__event[data-kind="reminder"] {
 .growth-planner__advanced-toggle,
 .growth-planner__advanced,
 .growth-planner__assumption-note { grid-column: 1 / -1; }
+.growth-planner__create-actions { display: flex; justify-content: space-between; gap: 12px; grid-column: 1 / -1; }
 .growth-planner__form-heading h3 { margin: 2px 0 0; color: var(--text); }
 .growth-planner__form-heading button { border: 0; background: transparent; color: var(--bad); font: inherit; font-size: 0.72rem; cursor: pointer; }
 
@@ -2756,8 +2757,8 @@ html[data-theme="dark"] .recurring-calendar__event[data-kind="reminder"] {
   .spending-pace__actions .button { flex: 1 1 140px; }
   .growth-planner { gap: 14px; }
   .growth-planner__header .button { justify-self: start; }
-  .growth-planner__scenario-tabs { display: flex; overflow-x: auto; padding: 3px; margin-inline: -3px; scrollbar-width: none; }
-  .growth-planner__scenario-tabs button { flex: 0 0 158px; }
+  .growth-planner__scenario-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .growth-planner__scenario-tabs button { min-width: 0; }
   .growth-planner__form { grid-template-columns: 1fr; padding: 18px; }
   .growth-planner__field--wide { grid-column: 1 / -1; }
   .growth-planner__advanced { grid-template-columns: 1fr; }
