@@ -35,6 +35,8 @@ const shared = {
 };
 const { RecurringDashboard } = load('components/recurring-dashboard.tsx', {
   ...shared,
+  "./account-brand-mark": { AccountBrandMark: empty },
+  '@/lib/recurring-bank-brand': { recurringBankBrand: () => null },
   '@/lib/recurring-dashboard-summary': { recurringDashboardSummary: () => [['Due this month', 'PHP 100']] },
   '@/lib/commitments': { commitmentRecurrenceLabels: {}, commitmentStatusLabels: {} },
   '@/lib/recurring-calendar': { buildRecurringCalendarOccurrences: () => [], toRecurringCalendarDateKey: () => '2026-11-19' },
@@ -52,6 +54,8 @@ assert(html.indexOf('Due this month') < html.indexOf('Review suggestions'));
 
 const { SplitBillHome } = load('components/split-bill-home.tsx', {
   ...shared,
+  '../../shared/split-debts': load('../shared/split-debts.ts', {}),
+  '../../shared/split-group-cover': load('../shared/split-group-cover.ts', {}),
   '../../shared/split-bill-experience': { suggestBillCategory: () => ({ name: 'Food & Dining' }) },
   '@/components/interface-icon': { InterfaceIcon: empty },
   '@/lib/split-bill-balance-summary': { splitBillBalanceSummary: () => ({ youOwe: 'PHP 0', owedToYou: 'PHP 0' }), isSameSplitBillPerson: (a,b) => a.toLowerCase() === b.toLowerCase() },
