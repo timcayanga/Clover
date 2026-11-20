@@ -1,5 +1,4 @@
 import { useAccessibilityPreferences } from "./accessibility-preferences";
-import { usePageAskClover } from "./page-ask-context";
 import { useRef, useState } from "react";
 import { Pressable, ScrollView, type ScrollViewInstance, View } from "react-native";
 import { router, useNavigation, type Href } from "expo-router";
@@ -8,7 +7,6 @@ import { Card, Icon, useTheme } from "./ui";
 import { productPages } from "../../shared/circle-experience";
 import { FreeHomeBanners } from "./free-home-banners";
 export function HomeQuickAccess() {
-  const askClover = usePageAskClover();
   const navigation = useNavigation();
   const { reduceMotion } = useAccessibilityPreferences();
   const { colors, dark } = useTheme(),
@@ -17,7 +15,7 @@ export function HomeQuickAccess() {
     scroll = useRef<ScrollViewInstance>(null);
   const open = (path: string) => {
     switch (path) {
-      case "/adviser": return askClover({ page: "home", title: "Home" });
+      case "/adviser": return navigation.dispatch({ type: "JUMP_TO", payload: { name: "adviser" } });
       case "/transactions": return navigation.dispatch({ type: "JUMP_TO", payload: { name: "transactions" } });
       case "/split-bill": return router.push("/split-bills");
       default: return router.push(path as Href);

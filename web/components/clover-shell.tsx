@@ -52,8 +52,6 @@ import { FEATURE_NAVIGATION } from "@/lib/feature-navigation";
 import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 import { OnboardingMissions } from "@/components/onboarding-missions";
 import { RegionalPreferencesSync } from "@/components/regional-preferences-sync";
-import { ContextualAskClover } from "./contextual-ask-clover";
-import { askPageContext } from "../../shared/ask-clover-page";
 import { AdviserHeaderLink } from "@/components/adviser-header-link";
 import {
   getWorkspaceDataDomainForPath,
@@ -1972,7 +1970,6 @@ export function CloverShell({
     <CloverChromeContext.Provider value={{ closeChrome, setMobileOverlayChrome }}>
       <RegionalPreferencesSync />
       <MobileReturnGreeting />
-      <ContextualAskClover context={askPageContext(pathname || "/").page} captureLinks />
       <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
       <div
         className={`mobile-pull-refresh mobile-pull-refresh--${mobileRefreshState}`}
@@ -2538,10 +2535,10 @@ export function CloverShell({
         >
           <MenuIcon name="plus" />
         </button>
-        <ContextualAskClover context={askPageContext(pathname || "/").page} navigation={<>
+        <Link href="/adviser" className={`shell-bottom-nav__item${active === "adviser" ? " is-active" : ""}`} aria-current={active === "adviser" ? "page" : undefined} onClick={closeChrome}>
           <span className="shell-bottom-nav__icon" aria-hidden="true"><MenuIcon name="adviser" /></span>
           <span className="shell-bottom-nav__label">Ask Clover</span>
-        </>} />
+        </Link>
         <button
           type="button"
           className={`shell-bottom-nav__item shell-bottom-nav__item--account${isAccountNavActive ? " is-active" : ""}`}

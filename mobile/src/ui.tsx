@@ -527,7 +527,6 @@ export function AppHeader({
       "/settings": "/settings",
     };
     closePanel(() => {
-      if (href === "/adviser") { askClover(askPageContext(askPath, askParams, title)); return; }
       if (native[href]) router.navigate(native[href]);
       else if (href.startsWith("/") && !href.startsWith("//"))
         void Linking.openURL(`${apiBase()}${href}`);
@@ -1073,8 +1072,6 @@ export function DetailNavigation({
   const access = useAccess();
   const { colors, dark } = useTheme();
   const path = usePathname();
-  const params = useGlobalSearchParams();
-  const askClover = usePageAskClover();
   return (
     <NavigationBar dark={dark}>
       {(
@@ -1109,7 +1106,6 @@ export function DetailNavigation({
           selected={path === item.route.replace("/(tabs)", "") || (item.title === "Home" && path === "/")}
           onPress={() => {
             if(access.active&&item.title==="Add"&&(path==="/split-bills"||path==="/circles")){requestContextBillEntry(path==="/circles"?"circles":"split");return;}
-            if (access.active && item.title === "Ask Clover") { askClover(askPageContext(path, params)); return; }
             onNavigate?.();
             if (access.active) router.navigate(item.route);
             else void access.signIn();

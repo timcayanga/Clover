@@ -1,7 +1,4 @@
 import { useAccessibilityPreferences } from "../../src/accessibility-preferences";
-import { usePageAskClover } from "../../src/page-ask-context";
-import { askPageContext } from "../../../shared/ask-clover-page";
-import { usePathname, useGlobalSearchParams } from "expo-router";
 import {
   GlassContent,
   GlassNavigationProvider,
@@ -25,9 +22,6 @@ export const unstable_settings = { initialRouteName: "index" };
 export default function TabLayout() {
   const { colors, dark } = useTheme();
   const { reduceMotion } = useAccessibilityPreferences();
-  const askClover = usePageAskClover();
-  const path = usePathname();
-  const params = useGlobalSearchParams();
   const access = useAccess();
   const session = useSession();
   const coveredByEntry = !useIsFocused();
@@ -66,7 +60,6 @@ export default function TabLayout() {
                   return <NavigationItem key={route.key} label={route.name === "add" ? "Add" : String(options.title ?? route.name)}
                     selected={focused} add={route.name === "add"} color={color}
                     onPress={() => {
-                      if (route.name === "adviser") { askClover(askPageContext(path, params)); return; }
                       const event = emitter.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                       if (!focused && !event.defaultPrevented) navigateToTab(route.key);
                     }}

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { askPagePrompts, type AskPage, type AskPageContext } from "../../shared/ask-clover-page";
 import {askWebPageContext as askPageContext} from "@/lib/ask-clover-web-page";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 const AdviserChat = dynamic(() => import("@/components/adviser-chat").then(module => module.AdviserChat), {loading: () => <p role="status">Opening Ask Clover…</p>});
@@ -19,8 +19,6 @@ type PlanTier = "free" | "pro" | "premium" | "unknown";
 type ContextualAskCloverProps = {
   context: AskCloverContext;
   planTier?: PlanTier;
-  navigation?: ReactNode;
-  captureLinks?: boolean;
 };
 
 const contextCopy = {
@@ -31,7 +29,7 @@ const contextCopy = {
   goals: { label: "Plan a goal with Ask Clover" },
 };
 
-export function ContextualAskClover({ context, planTier = "unknown", navigation, captureLinks = false }: ContextualAskCloverProps) {
+export function ContextualAskClover({ context, planTier = "unknown" }: ContextualAskCloverProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [resolvedPlanTier, setResolvedPlanTier] = useState<PlanTier>(planTier);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -49,19 +47,6 @@ export function ContextualAskClover({ context, planTier = "unknown", navigation,
     setPageContext({...askPageContext(pathname || `/${context}`, hints, scope?.dataset.askPageTitle), ...(prompt ? {prompt:prompt.slice(0,4000)} : {})});
     setIsOpen(true);
   };
-  useEffect(() => {
-    if (!captureLinks) return;
-    const intercept = (event: MouseEvent) => {
-      if (window.innerWidth > 1100 || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !(event.target instanceof Element)) return;
-      const link = event.target.closest<HTMLAnchorElement>("a[href]");
-      if (!link || link.target === "_blank" || link.closest(".contextual-ask-clover__panel")) return;
-      const target = new URL(link.href,window.location.href);
-      if (target.origin !== window.location.origin || target.pathname !== "/adviser") return;
-      event.preventDefault(); event.stopPropagation(); openPanel(target.searchParams.get("prompt") || undefined);
-    };
-    document.addEventListener("click",intercept,true);
-    return () => document.removeEventListener("click",intercept,true);
-  }, [captureLinks, pathname, context]);
   useEffect(() => { setIsOpen(false); }, [pathname]);
   useEffect(() => { const close = () => setIsOpen(false); window.addEventListener(selectedWorkspaceEventName, close); return () => window.removeEventListener(selectedWorkspaceEventName, close); }, []);
   useEffect(() => {
@@ -138,24 +123,24 @@ export function ContextualAskClover({ context, planTier = "unknown", navigation,
   }, [isOpen]);
 
   return (
-    <span hidden={captureLinks} className={navigation ? "contextual-ask-clover contextual-ask-clover--navigation" : "contextual-ask-clover"}>
+    <span className="contextual-ask-clover">
       <button
         ref={triggerRef}
         type="button"
-        className={navigation ? "shell-bottom-nav__item contextual-ask-clover__nav-trigger" : "contextual-ask-clover__trigger"}
+        className="contextual-ask-clover__trigger"
         aria-label={copy.label}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         onClick={() => { if (isOpen) closePanel(); else openPanel(); }}
       >
-        {navigation || <Image
+        <Image
           src={getNavigationIconSrc("adviser")}
           alt=""
           width={96}
           height={96}
           className="contextual-ask-clover__icon"
           aria-hidden="true"
-        />}
+        />
         <span className="contextual-ask-clover__tooltip" role="tooltip">
           {copy.label}
         </span>

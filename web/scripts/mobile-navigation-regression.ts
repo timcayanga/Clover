@@ -17,6 +17,13 @@ async function main() {
     readSource("app/transactions/page.tsx"),
   ]);
 
+  const contextualAsk = await readSource("components/contextual-ask-clover.tsx");
+  assert.doesNotMatch(contextualAsk, /captureLinks|document\.addEventListener\("click"/, "Contextual Clover must never hijack navigation links to the main Ask Clover page.");
+  assert.doesNotMatch(shell, /<ContextualAskClover/, "Global shell navigation must not open a contextual sheet.");
+  assert.match(shell, /<Link href="\/adviser" className=\{`shell-bottom-nav__item/, "The global bottom menu opens the Ask Clover page.");
+  assert.match(await readSource("components/adviser-header-link.tsx"), /return <ContextualAskClover context=\{askPageContext\(pathname/, "Header Clover stays scoped to the current page.");
+  assert.match(await readSource("components/home-feature-grid.tsx"), /<Link href=\{item.href\}/, "Quick Access keeps ordinary route navigation.");
+
   assert.match(recurringPage, /className="recurring-desktop-adviser"><ContextualAskClover/, "Recurring's desktop Adviser needs a separately hidden mobile wrapper.");
   assert.match(styles, /\.recurring-desktop-adviser \{ display: none !important; \}/);
   assert.match(styles, /\.split-bill-home > \.split-bill-pulse \{ display: none; \}/, "Split Bills summaries must be hidden on mobile.");
