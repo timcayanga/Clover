@@ -499,9 +499,8 @@ export function CircleResourceEditor({
       ) : null}
       {isShare ? (
         <>
-          <Body>Paid by</Body>
-          <Choices value={memberId} onChange={setMemberId}
-            options={members.filter(member => member.status === "active").map(member => ({ value: member.id, label: member.isMe ? "Me" : member.displayName }))} />
+          <ChoiceField label="Paid By" value={memberId} onChange={setMemberId}
+            options={members.filter(member => member.status === "active").map(member => ({ value: member.id, label: member.isMe ? "Me" : member.displayName, icon: <PersonAvatar name={member.displayName} imageUrl={member.avatarUrl} size={28}/> }))} />
           <PlanAction
             title="+ Add Transaction"
             tone="primary"

@@ -20,11 +20,12 @@ export async function createDirectBillExpense(
   },
   expense: DirectBillExpense,
   items: { description: string; amount: string }[],
+  minimumParticipants: 1 | 2 = 2,
 ) {
   const count = await tx.splitBillParticipant.count({
     where: { billId: bill.id },
   });
-  if (count < 2) throw Error("Add at least two people to the bill.");
+  if (count < minimumParticipants) throw Error(minimumParticipants === 1 ? "Choose a Circle member." : "Add at least two people to the bill.");
   const itemTotal = items.reduce((sum, item) => {
     const amount = new Prisma.Decimal(item.amount);
     if (!amount.isFinite() || amount.lte(0))

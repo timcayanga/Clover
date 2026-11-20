@@ -1,33 +1,36 @@
 import { circleExpensePayerTotals } from "../../shared/circle-expense-payers";
+import { circleSplitRevision, validateCircleExpenseSplit } from "../../shared/circle-expense-split";
+import { MerchantLogo } from "./merchant-logo";
+import { Modal } from "./adaptive-modal";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useExchangeRates } from "./use-exchange-rates";
 import {
   circleActivityEmoji,
   circleConvertedTotal,
   circleCategoryTotals,
 } from "../../shared/circle-overview";
-import { useEffect, useState } from "react";
-import { Pressable, View, Alert } from "react-native";
+import { useState } from "react";
+import { Pressable, View, Alert, ScrollView } from "react-native";
 import { router } from "expo-router";
 import { Text } from "./app-text";
-import { Body, Card, Notice, money, useTheme, CategoryMark, Icon } from "./ui";
+import { Body, Card, Notice, money, useTheme, CategoryMark, Icon, SectionTitle } from "./ui";
 import { PersonAvatar } from "./person-avatar";
 import { SpendingDonut } from "./spending-donut";
 import { CloverEmptyState } from "./clover-mascot";
-import { Choices } from "./transaction-entry";
+import { ChoiceField } from "./transaction-entry";
 import {
   PlanAction,
   Progress,
-  SummaryCard,
+
   PlanDirectoryCard,
 } from "./plan-ui";
 import { SplitItemGrid } from "./split-item-grid";
 import { useSession } from "./session";
 import { useCircleDateFormat } from "./circle-dates";
 import { displayDate } from "../../shared/localized-date";
-import { properLabel, currencyTotals } from "../../shared/circle-experience";
+import { properLabel } from "../../shared/circle-experience";
 import type { CircleAction } from "./circle-resource-editor";
 import {
-  splitItemTotals,
   type SplitItem,
 } from "../../shared/split-bill-experience";
 export type CircleDetail = {
@@ -61,6 +64,7 @@ export type CircleDetail = {
     categoryName?: string | null;
     canEditSplit?: boolean;
     paidByMemberId?: string | null;
+    merchantLogoUrl?: string | null;
     paidByName?: string | null;
     canUnshare?: boolean;
     lineItems?: { description: string; amount: string | null }[];
@@ -111,6 +115,7 @@ export type CircleDetail = {
   }[];
   activities?: {
     id: string;
+    expenseId?: string | null;
     action?: string;
     summary: string;
     createdAt: string;
@@ -120,6 +125,8 @@ export function CircleDetailPanels({
   circle,
   tab,
   onEdit,
+  onCategory,
+  onAddExpense,
   onInvite,
   onRefresh,
   onArchive,
@@ -129,18 +136,18 @@ export function CircleDetailPanels({
   displayCurrency?: string;
   circle: CircleDetail;
   tab: string;
+  onAddExpense: () => void;
+  onCategory: (category: string) => void;
   onEdit: (action: CircleAction) => void;
   onInvite: () => void;
   onRefresh: () => void;
   onArchive: () => void;
   onMember: (name: string) => void;
 }) {
-  const { colors } = useTheme(),
+  const { colors, dark } = useTheme(),
     format = useCircleDateFormat(),
     session = useSession(),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [customExpense, setCustomExpense] = useState<string | null>(null);
+    [detail, setDetail] = useState<{id: string; index?: number} | null>(null);
   const targetCurrency = displayCurrency ?? circle.currency;
   const expenseTotals = circle.expenseCurrencyTotals ?? {
     [circle.currency]: circle.expenseTotalThisMonth,
@@ -172,22 +179,6 @@ export function CircleDetailPanels({
       name: m.isMe ? "Me" : m.displayName,
       avatarUrl: m.avatarUrl,
     }));
-  const run = async (body: unknown) => {
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      await session.request(
-        `circles/${circle.id}/resources?workspaceId=${encodeURIComponent(session.profileId)}`,
-        { method: "POST", body: JSON.stringify(body) },
-      );
-      onRefresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
   const action = (title: string, press: () => void) => (
     <Pressable
       accessibilityRole="button"
@@ -277,23 +268,22 @@ export function CircleDetailPanels({
         null;
     return (
       <>
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <SummaryCard
-            alignTop
-            title="Shared Expenses"
-            value={convertedValue(expenseTotals)}
-          />
-          <SummaryCard
-            alignTop
-            title="Contributions"
-            value={convertedValue(contributionTotals)}
-          />
+        <View style={{ flexDirection: "row", borderWidth: 1, borderColor: colors.line, borderRadius: 22, overflow: "hidden", backgroundColor: colors.white }}>
+          {[["Shared Expenses", convertedValue(expenseTotals)], ["Contributions", convertedValue(contributionTotals)]].map(([label, value], index) =>
+            <View key={label} style={{ flex: 1, minHeight: 81, padding: 16, gap: 5, borderRightWidth: index === 0 ? 1 : 0, borderColor: colors.line, backgroundColor: index === 0 ? (dark ? "#15382F" : "#E9F8EF") : colors.white }}>
+              <Text style={{ fontFamily: "Poppins-Medium", color: colors.muted, fontSize: 11 }}>{label}</Text>
+              <Text style={{ fontFamily: "Poppins-SemiBold", color: index === 0 ? (dark ? "#86E9D1" : "#12614E") : colors.ink, fontSize: 18 }}>{value}</Text>
+            </View>)}
         </View>
+        {canEdit && <View style={{flexDirection:"row", flexWrap:"wrap", gap:8}}>
+          <PlanAction title="Add Expense" tone="primary" onPress={onAddExpense}/>
+          <PlanAction title="Add Contribution" onPress={() => onEdit({action:"add_contribution"})}/>
+        </View>}
         {unavailable && !fx.loading ? (
           <PlanAction title="Retry Conversion" onPress={fx.retry} />
         ) : null}
         <Card>
-          <Body muted={false}>Where It Went</Body>
+          <SectionTitle>Where It Went</SectionTitle>
           {entries === null ? (
             <Body>{fx.loading ? "Converting…" : "Conversion unavailable"}</Body>
           ) : !entries.length ? (
@@ -304,11 +294,12 @@ export function CircleDetailPanels({
             <>
               <SpendingDonut
                 variant="category"
+                onCategoryPress={onCategory}
                 currency={targetCurrency}
                 categories={entries.map(([name, amount]) => ({ name, amount }))}
               />
               {entries.map(([name, amount]) => (
-                <View
+                <Pressable accessibilityRole="button" onPress={() => onCategory(name)}
                   key={name}
                   style={{
                     flexDirection: "row",
@@ -326,19 +317,19 @@ export function CircleDetailPanels({
                   <Text style={{ fontSize: 13, color: colors.ink }}>
                     {money(String(amount), targetCurrency)}
                   </Text>
-                </View>
+                </Pressable>
               ))}
             </>
           )}
         </Card>
-        <Body muted={false}>Budget Tracking</Body>
+        <SectionTitle>Budgets</SectionTitle>
         {!circle.budgets?.length ? (
           <CloverEmptyState pose="budget">
             No shared budgets yet
           </CloverEmptyState>
         ) : (
           (circle.budgets ?? []).slice(0, 2).map((e) => (
-            <PlanDirectoryCard
+            <PlanDirectoryCard compact
               key={e.id}
               color={
                 e.progressPercent >= 100
@@ -349,7 +340,7 @@ export function CircleDetailPanels({
               }
             >
               <Icon name="wallet-outline" size={32} />
-              <Body muted={false}>{e.name}</Body>
+              <SectionTitle>{e.name}</SectionTitle>
               <Body>
                 {money(String(e.spentAmount), e.currency)} of{" "}
                 {money(String(e.targetAmount), e.currency)}
@@ -358,16 +349,16 @@ export function CircleDetailPanels({
             </PlanDirectoryCard>
           ))
         )}
-        <Body muted={false}>Goal Tracking</Body>
+        <SectionTitle>Goals</SectionTitle>
         {!circle.goals?.length ? (
           <CloverEmptyState pose="savings">
             No shared goals yet
           </CloverEmptyState>
         ) : (
           (circle.goals ?? []).slice(0, 2).map((e) => (
-            <PlanDirectoryCard key={e.id} color="#35b875">
+            <PlanDirectoryCard compact key={e.id} color="#35b875">
               <Icon name="flag-outline" size={32} />
-              <Body muted={false}>{e.name}</Body>
+              <SectionTitle>{e.name}</SectionTitle>
               <Body>
                 {money(String(e.currentAmount), e.currency)} saved of{" "}
                 {money(String(e.targetAmount), e.currency)}
@@ -386,100 +377,41 @@ export function CircleDetailPanels({
       </>
     );
   }
+  const expenses = circle.expenses ?? [];
+  const openExpense = (expense: Expense, index?: number) => {
+    setDetail({id: expense.id, index});
+  };
+  const current = expenses.find(expense => expense.id === detail?.id);
+  const sheet = current && detail ? <ExpenseSheet key={current.id} expense={current} index={detail.index}
+    people={people} editable={current.kind === "shared_transaction" && canEdit && current.canEditSplit !== false} format={format}
+    onClose={() => setDetail(null)} onUpdate={async (action, values) => {
+      try { await session.request(`circles/${circle.id}/resources?workspaceId=${encodeURIComponent(session.profileId)}`, {
+        method: "POST", body: JSON.stringify({action, id: current.id, ...values})
+      }); } finally { onRefresh(); }
+    }}/> : null;
   if (tab === "Expenses") {
-    const payerTotals = circleExpensePayerTotals(circle.expenses ?? []);
-    return (
-      <>
-        <View>
-          {(circle.expenses ?? []).map((e) => (
-            <CircleExpenseRow
-              key={e.id}
-              expense={e}
-              people={people}
-              editable={canEdit && e.canEditSplit !== false}
-              format={format}
-              forceOpen={customExpense === e.id}
-              onSave={(items) =>
-                run({ action: "update_expense_split", id: e.id, items })
-              }
-              onPayerChange={(paidByMemberId) => run({ action: "update_expense_payer", id: e.id, paidByMemberId })}
-              onRemove={() =>
-                void run({ action: "unshare_transaction", id: e.id })
-              }
-            />
-          ))}
-          {payerTotals.length ? (
-            <View>
-              <Body muted={false}>Paid by member · recent shared expenses</Body>
-              {payerTotals.map(total => <Body key={total.id}>{total.name} · {money(String(total.amount), total.currency)}</Body>)}
-            </View>
-          ) : null}
-          {!circle.expenses?.length ? (
-            <CloverEmptyState pose="circles">
-              No shared expenses yet
-            </CloverEmptyState>
-          ) : null}
-        </View>
-        {canEdit
-          ? action("+ Share Transaction", () =>
-              onEdit({ action: "share_transaction" }),
-            )
-          : null}
-        {canEdit && circle.expenses?.some((e) => e.kind !== "split_bill") ? (
-          <>
-            {true
-              ? [
-                  ...new Set(
-                    circle.expenses
-                      .filter(
-                        (e) =>
-                          e.kind !== "split_bill" && e.visibility !== "summary",
-                      )
-                      .map((e) => e.currency),
-                  ),
-                ].map((currency) => (
-                  <CircleWholeSplit
-                    key={
-                      currency +
-                      JSON.stringify(
-                        circle.expenses
-                          ?.filter((e) => e.currency === currency)
-                          .map((e) => [e.id, e.amount, e.splitItems]),
-                      )
-                    }
-                    currency={currency}
-                    onCustom={setCustomExpense}
-                    expenses={circle.expenses!.filter(
-                      (e) =>
-                        e.kind !== "split_bill" &&
-                        e.visibility !== "summary" &&
-                        e.canEditSplit !== false &&
-                        e.currency === currency,
-                    )}
-                    people={people}
-                    onSave={async (items) => {
-                      for (const item of items)
-                        await session.request(
-                          `circles/${circle.id}/resources?workspaceId=${encodeURIComponent(session.profileId)}`,
-                          {
-                            method: "POST",
-                            body: JSON.stringify({
-                              action: "update_expense_split",
-                              id: item.id,
-                              items: [item],
-                            }),
-                          },
-                        );
-                      onRefresh();
-                    }}
-                  />
-                ))
-              : null}
-          </>
-        ) : null}
-        {error ? <Notice>{error}</Notice> : null}
-      </>
-    );
+    const totals = circleExpensePayerTotals(expenses);
+    const splittable = expenses.filter(e => e.kind === "shared_transaction" && e.visibility !== "summary" && canEdit && e.canEditSplit !== false);
+    return <>
+      {expenses.map(e => <Pressable key={e.id} accessibilityRole="button" onPress={() => openExpense(e)}
+        style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.line }}>
+        <ExpenseMark expense={e}/>
+        <View style={{flex: 1}}><Body muted={false}>{e.title}</Body>
+          <Text style={{color: colors.muted, fontSize: 11}}>{displayDate(e.date, format)}{e.paidByName ? ` · Paid by ${e.paidByName}` : ""}</Text></View>
+        <Text style={{color: colors.ink}}>{money(String(e.amount), e.currency)}</Text>
+      </Pressable>)}
+      {!expenses.length && <CloverEmptyState pose="circles">No matching expenses</CloverEmptyState>}
+      {canEdit && action("+ Share Transaction", () => onEdit({action: "share_transaction"}))}
+      {!!totals.length && <Card><SectionTitle>Paid by Member</SectionTitle>{totals.map(t => <Body key={t.id}>{t.name} · {money(String(t.amount), t.currency)}</Body>)}</Card>}
+      {!!splittable.length && <Card><SectionTitle>Split Together</SectionTitle>
+        {splittable.flatMap(e => expenseItems(e, people).map((item, index) =>
+          <Pressable key={e.id + ":" + index} accessibilityRole="button" accessibilityLabel={`Split ${item.description}`} onPress={() => openExpense(e, index)}
+            style={{flexDirection: "row", alignItems: "center", minHeight: 48, gap: 8}}>
+            <View style={{flex: 1}}><Body muted={false}>{item.description}</Body></View><Body>{money(item.amount, e.currency)}</Body><Icon line name="ellipsis-horizontal" size={20}/>
+          </Pressable>))}
+      </Card>}
+      {sheet}
+    </>;
   }
   if (tab === "People")
     return (
@@ -511,17 +443,12 @@ export function CircleDetailPanels({
   if (tab === "Activity")
     return (
       <View>
-        {(circle.activities ?? []).map((e) =>
-          row(
-            e.id,
-            e.summary,
-            displayDate(e.createdAt, format),
-            undefined,
-            undefined,
-            undefined,
-            e.action ?? "activity",
-          ),
-        )}
+        {(circle.activities ?? []).map(event => {
+          const expense = expenses.find(e => e.id === event.expenseId);
+          const content = row(event.id, expense ? event.summary + " · " + expense.title : event.summary, displayDate(event.createdAt, format), undefined, undefined, undefined, event.action || "activity");
+          return expense ? <Pressable key={event.id} accessibilityRole="button" onPress={() => openExpense(expense)}>{content}</Pressable> : content;
+        })}
+        {sheet}
         {!circle.activities?.length ? (
           <CloverEmptyState pose="circles">
             No Circle activity yet
@@ -626,7 +553,7 @@ export function CircleDetailPanels({
         </CloverEmptyState>
       ) : null}
       {list.map((e) => (
-        <PlanDirectoryCard
+        <PlanDirectoryCard compact
           key={e.id}
           color={
             budgets
@@ -641,7 +568,7 @@ export function CircleDetailPanels({
           <Icon name={budgets ? "wallet-outline" : "flag-outline"} size={32} />
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View style={{ flex: 1 }}>
-              <Body muted={false}>{e.name}</Body>
+              <SectionTitle>{e.name}</SectionTitle>
             </View>
             {canEdit
               ? menu(budgets ? "Edit Budget" : "Edit Goal", () =>
@@ -691,217 +618,96 @@ export function CircleDetailPanels({
     </>
   );
 }
-function CircleExpenseRow({
-  expense: e,
-  people,
-  editable,
-  format,
-  onSave,
-  onRemove,
-  onPayerChange,
-  forceOpen,
-}: {
-  expense: NonNullable<CircleDetail["expenses"]>[number];
-  people: { id: string; name: string; avatarUrl?: string | null }[];
-  editable: boolean;
-  format: string;
-  onSave: (items: SplitItem[]) => Promise<void>;
-  onRemove: () => void;
-  onPayerChange: (id: string) => Promise<void>;
-  forceOpen?: boolean;
-}) {
-  const { colors } = useTheme(),
-    [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (forceOpen) setOpen(true);
-  }, [forceOpen]);
-  const initial = e.splitItems?.length
-    ? e.splitItems
-    : e.lineItems?.length
-      ? e.lineItems.map((i) => ({
-          description: i.description,
-          amount: i.amount ?? "0",
-          participantIds: people.map((p) => p.id),
-        }))
-      : [
-          {
-            description: e.title,
-            amount: String(e.amount),
-            participantIds: people.map((p) => p.id),
-          },
-        ];
-  const sum = initial.reduce((n, i) => n + Number(i.amount), 0);
-  const [items, setItems] = useState<SplitItem[]>(() =>
-    sum <= e.amount && Math.abs(sum - e.amount) > 0.005
-      ? [
-          ...initial,
-          {
-            description: "Other Charges",
-            amount: String(Math.round((e.amount - sum) * 100) / 100),
-            participantIds: people.map((p) => p.id),
-          },
-        ]
-      : initial,
-  );
-  return (
-    <View
-      style={{
-        borderBottomWidth: 1,
-        borderColor: colors.line,
-        paddingVertical: 12,
-        gap: 8,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <CategoryMark name={e.categoryName ?? "Shared Expenses"} />
-        <Pressable
-          style={{ flex: 1 }}
-          accessibilityRole="button"
-          onPress={() =>
-            e.kind === "split_bill"
-              ? router.push({
-                  pathname: "/split-bills",
-                  params: { billId: e.id },
-                })
-              : setOpen((v) => !v)
-          }
-        >
-          <Body muted={false}>{e.title}</Body>
-          <Text style={{ color: colors.muted, fontSize: 11 }}>
-            {displayDate(e.date, format)}{e.kind === "shared_transaction" && ` · Paid by ${e.paidByName ?? "not recorded"}`}
-          </Text>
-        </Pressable>
-        <Text style={{ fontSize: 12, color: colors.ink }}>
-          {money(String(e.amount), e.currency)}
-        </Text>
-        {editable && e.canUnshare !== false && e.kind !== "split_bill" ? (
-          <Pressable
-            accessibilityLabel={`Remove ${e.title} From Circle`}
-            onPress={onRemove}
-            style={{ padding: 10 }}
-          >
-            <Text style={{ color: colors.danger }}>×</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      {open && editable && e.kind === "shared_transaction" ? (
-        <>
-          <Body>Paid by</Body>
-          <Choices value={e.paidByMemberId ?? ""} options={people.map(person => ({ value: person.id, label: person.name }))}
-            onChange={id => void onPayerChange(id)} />
-        </>
-      ) : null}
-      {open && e.visibility !== "summary" ? (
-        <>
-          <Body muted={false}>
-            Transaction Details · Line Items & Custom Split
-          </Body>
-          <SplitItemGrid
-            fixedItems
-            people={people}
-            items={items}
-            currency={e.currency}
-            onChange={setItems}
-          />
-          {editable ? (
-            <PlanAction
-              title="Save"
-              tone="primary"
-              onPress={() => void onSave(items)}
-            />
-          ) : null}
-        </>
-      ) : null}
-    </View>
-  );
+type Expense = NonNullable<CircleDetail["expenses"]>[number];
+type Member = {id: string; name: string; avatarUrl?: string | null};
+
+function ExpenseMark({expense}: {expense: Expense}) {
+  return <MerchantLogo transaction={{merchantRaw: expense.title, merchantClean: null, merchantLogoUrl: expense.merchantLogoUrl,
+    merchantLogoNameKey: JSON.stringify([expense.title, null]), categoryName: expense.categoryName ?? null}}/>;
 }
-function CircleWholeSplit({
-  expenses,
-  people,
-  currency,
-  onSave,
-  onCustom,
-}: {
-  onCustom: (id: string) => void;
-  expenses: NonNullable<CircleDetail["expenses"]>;
-  people: { id: string; name: string; avatarUrl?: string | null }[];
-  currency: string;
-  onSave: (items: SplitItem[]) => Promise<void>;
+
+function expenseItems(expense: Expense, members: Member[]): SplitItem[] {
+  const participantIds = members.map(member => member.id);
+  if (expense.splitItems?.length) return expense.splitItems;
+  if (!expense.lineItems?.length) return [{description: expense.title, amount: String(expense.amount), participantIds}];
+  const items = expense.lineItems.map(item => ({description: item.description, amount: item.amount ?? "", participantIds}));
+  const difference = Math.round((expense.amount - items.reduce((sum, item) => sum + Number(item.amount), 0)) * 100);
+  if (difference > 0) items.push({description: "Other Charges", amount: String(difference / 100), participantIds});
+  return items;
+}
+
+function ExpenseSheet({expense, index, people, editable, format, onClose, onUpdate}: {
+  expense: Expense; index?: number; people: Member[]; editable: boolean; format: string; onClose: () => void;
+  onUpdate: (action: string, values: Record<string, unknown>) => Promise<void>;
 }) {
-  const [items, setItems] = useState<SplitItem[]>(() =>
-      expenses.map((e) => {
-        if (e.splitItems?.length) {
-          const totals = splitItemTotals(people, e.splitItems);
-          return {
-            id: e.id,
-            description: e.title,
-            amount: String(e.amount),
-            participantIds: people
-              .filter((p) => totals[p.id] > 0)
-              .map((p) => p.id),
-            splitMethod: "exact" as const,
-            allocations: people
-              .filter((p) => totals[p.id] > 0)
-              .map((p) => ({
-                participantId: p.id,
-                value: String(totals[p.id]),
-              })),
-          };
-        }
-        return {
-          id: e.id,
-          description: e.title,
-          amount: String(e.amount),
-          participantIds: people.map((p) => p.id),
-        };
-      }),
-    ),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [method, setMethod] = useState("transactions");
-  return (
-    <View style={{ gap: 12 }}>
-      <Body>Split Together · {currency}</Body>
-      {method === "custom" ? (
-        expenses.map((e) => (
-          <PlanAction
-            key={e.id}
-            title={`Custom Split · ${e.title}`}
-            onPress={() => onCustom(e.id)}
-          />
-        ))
-      ) : (
-        <>
-          <SplitItemGrid
-            fixedItems
-            people={people}
-            items={items}
-            currency={currency}
-            onChange={setItems}
-          />
-          <PlanAction
-            title="Save"
-            disabled={busy}
-            tone="primary"
-            onPress={() => {
+  const {colors} = useTheme();
+  const insets = useSafeAreaInsets();
+  const [items, setItems] = useState(() => expenseItems(expense, people));
+  const [revision, setRevision] = useState(() => circleSplitRevision(expense.splitItems ?? []));
+  const [scope, setScope] = useState(index === undefined ? "all" : String(index));
+  const [payer, setPayer] = useState(expense.paidByMemberId ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [failed, setFailed] = useState(false);
+  function close() {
+    if (busy) return;
+    if (dirty) Alert.alert("Discard unsaved split?", error, [{text: "Keep Editing"}, {text: "Discard", style: "destructive", onPress: onClose}]);
+    else onClose();
+  }
+  async function save(next: SplitItem[]) {
+    setItems(next);
+    setDirty(true);
+    setFailed(false);
+    try { validateCircleExpenseSplit(people.map(p => ({id: p.id, displayName: p.name})), next, expense.amount); }
+    catch (reason) { setError((reason as Error).message); return; }
+    setBusy(true);
+    setError("");
+    try { await onUpdate("update_expense_split", {items: next, previousRevision: revision}); setRevision(circleSplitRevision(next)); setDirty(false); }
+    catch (reason) {setError((reason as Error).message); setFailed(true);}
+    finally {setBusy(false);}
+  }
+  const selection = scope === "all" ? items : [items[Number(scope)]];
+  const splitBy = <ChoiceField label="Split By" value={scope} onChange={setScope}
+    options={[{value: "all", label: "All Line Items"}, ...items.map((item, i) => ({value: String(i), label: item.description}))]}/>;
+  return <Modal transparent visible animationType="slide" onRequestClose={close}>
+    <View style={{flex: 1, justifyContent: "flex-end", paddingTop: insets.top, backgroundColor: "#0006"}}>
+      <Pressable accessibilityLabel="Close expense details" onPress={close} style={{flex: 1}}/>
+      <View accessibilityViewIsModal style={{maxHeight: "90%", backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: Math.max(16, insets.bottom)}}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding: 16, gap: 12}}>
+          <View style={{flexDirection: "row", alignItems: "center", gap: 8}}><ExpenseMark expense={expense}/>
+            <View style={{flex: 1}}><SectionTitle>{expense.title}</SectionTitle></View>
+            <Pressable accessibilityLabel="Close" onPress={close} style={{padding: 10}}><Icon line name="close"/></Pressable>
+          </View>
+          <Body>{money(String(expense.amount), expense.currency)} · {displayDate(expense.date, format)}{expense.categoryName ? " · " + expense.categoryName : ""}</Body>
+          {editable ? <ChoiceField label="Paid By" value={payer} disabled={busy || dirty}
+            options={people.map(person => ({value: person.id, label: person.name, icon: <PersonAvatar name={person.name} imageUrl={person.avatarUrl} size={28}/>}))}
+            onChange={async id => {
+              if (id === payer) return;
+              setBusy(true); setError("");
+              try {await onUpdate("update_expense_payer", {paidByMemberId: id}); setPayer(id);}
+              catch (reason) {setError((reason as Error).message);}
+              finally {setBusy(false);}
+            }}/> : expense.paidByName ? <Body>Paid by {expense.paidByName}</Body> : null}
+          {expense.visibility !== "summary" && (editable ?
+            <View pointerEvents={busy ? "none" : "auto"} style={{gap: 12}}>
+              <SplitItemGrid circleSplitControls={splitBy} fixedItems people={people} items={selection} currency={expense.currency}
+                onChange={next => void save(scope === "all" ? next : items.map((item, i) => i === Number(scope) ? next[0] : item))}/>
+            </View> : items.map((item, i) => <Body key={i}>{item.description} · {money(item.amount, expense.currency)}</Body>))}
+          {expense.kind === "split_bill" && <PlanAction title="Open Bill Details" onPress={() => {onClose(); router.push({pathname: "/split-bills", params: {billId: expense.id}});}}/>}
+          {error ? <Notice>{error}</Notice> : null}
+          {failed && <PlanAction title="Retry" disabled={busy} onPress={() => void save(items)}/>}
+          {busy && <Body>Saving…</Body>}
+          {editable && expense.canUnshare && <PlanAction title="Remove From Circle" disabled={busy} onPress={() => Alert.alert("Remove this expense from the Circle?", undefined, [
+            {text: "Cancel"}, {text: "Remove", style: "destructive", onPress: async () => {
               setBusy(true);
-              void onSave(items)
-                .catch((e) => setError(e.message))
-                .finally(() => setBusy(false));
+              try {await onUpdate("unshare_transaction", {}); onClose();}
+              catch (reason) {setError((reason as Error).message);}
+              finally {setBusy(false);}
             }}
-          />
-        </>
-      )}
-      <Body>Split By</Body>
-      <Choices
-        value={method}
-        onChange={setMethod}
-        options={[
-          { value: "transactions", label: "Per Transaction" },
-          { value: "custom", label: "Custom Line Items" },
-        ]}
-      />
-      {error ? <Notice>{error}</Notice> : null}
+          ])}/>}
+        </ScrollView>
+      </View>
     </View>
-  );
+  </Modal>;
 }

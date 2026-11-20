@@ -144,6 +144,114 @@ assert.equal(supportsReceiptCapture(null), false);
 for (const browser of [{userAgent:"Mozilla/5.0 (Macintosh; Intel Mac OS X)",platform:"MacIntel",maxTouchPoints:0},{userAgent:"Mozilla/5.0 (Windows NT 10.0)",platform:"Win32",maxTouchPoints:10}]) assert.equal(supportsReceiptCapture(browser),false,"Desktop, including touch laptops, uses files");
 for (const browser of [{userAgent:"Mozilla/5.0 (iPhone)"},{userAgent:"Mozilla/5.0 (Linux; Android 16)"},{userAgent:"Mozilla/5.0 (Macintosh)",platform:"MacIntel",maxTouchPoints:5}]) assert.equal(supportsReceiptCapture(browser),true,"Phones and iPads retain photo capture");
 async function main() {
+  // Exercise the installed Expo FormData patch and fetch encoder, including its native bytes() path.
+  const {installFormDataPatch} = load("../mobile/node_modules/expo/src/winter/FormData.ts", {}, {Blob});
+  const NativeForm = installFormDataPatch(class {constructor(){this._parts=[];}});
+  const {convertFormDataAsync} = load("../mobile/node_modules/expo/src/winter/fetch/convertFormData.ts",
+    {"../../utils/blobUtils": {blobToArrayBufferAsync:blob => blob.arrayBuffer()}}, {Blob, TextEncoder});
+  const photoBytes = Uint8Array.from([255,216,255,224,0,1,254,255,217]);
+  const loadPhotoUpload = platform => load("../mobile/src/upload.ts", {
+      "expo-file-system": {Paths:{cache:{uri:"file:///cache/"}}, File: class {get size(){return photoBytes.length;} async bytes(){return photoBytes;}}},
+      "../../shared/native-upload": {uploadSizeProblem:()=>null}, "react-native": {Platform:{OS:platform}}
+    }, {FormData:platform === "web" ? FormData : NativeForm, fetch:async()=>new Response(photoBytes,{headers:{"content-type":"image/jpeg"}})});
+  for (const platform of ["ios","android","web"]) {
+    const form = await loadPhotoUpload(platform).receiptPhotoForm({uri:"file:///cache/123.jpg",name:"receipt.jpg",mimeType:"image/jpeg"});
+    let request;
+    if (platform === "web") request = new Request("https://example.invalid", {method:"POST",body:form});
+    else {
+      const {body,boundary} = await convertFormDataAsync(form);
+      request = new Request("https://example.invalid", {method:"POST",body,headers:{"content-type":"multipart/form-data; boundary="+boundary}});
+    }
+    const file = (await request.formData()).get("file");
+    assert.equal(file.name,"receipt.jpg");
+    assert.equal(file.type,"image/jpeg");
+    assert.deepEqual(new Uint8Array(await file.arrayBuffer()),photoBytes);
+  }
+  {
+    const deps = {"react/jsx-runtime": jsx, "react-native":{Pressable:"Button",View:"View"},
+      "./app-text":{Text:"Text"},"./ui":{Field:"Field",useTheme:()=>({colors:{}})}};
+    const {SplitPeopleField,PeopleSuggestions} = load("../mobile/src/split-people-field.tsx",deps);
+    let selected=[],draft="";
+    const saved=[{name:"Pabs"},{name:"Joby"}];
+    const render=()=>nodes(SplitPeopleField({selected,draft,saved,onChange:n=>selected=n,onDraft:n=>draft=n,disabled:false}));
+    const field=()=>render().find(n=>n.type==="Field").props;
+    field().onChangeText("pabs,Jo");
+    assert.deepEqual(Array.from(selected),["Pabs"]);
+    const suggestion=render().find(n=>n.type===PeopleSuggestions);
+    nodes(PeopleSuggestions(suggestion.props)).find(n=>n.props.accessibilityLabel==="Use Joby").props.onPress();
+    field().onSubmitEditing({nativeEvent:{text:"Bea"}});
+    field().onChangeText("Carlo");
+    field().trailing.props.onPress();
+    field().onChangeText("PABS,");
+    assert.deepEqual(Array.from(selected),["Pabs","Joby","Bea","Carlo"]);
+    render().find(n=>n.props.accessibilityLabel==="Remove Bea").props.onPress();
+    assert.deepEqual(Array.from(selected),["Pabs","Joby","Carlo"]);
+  }
+  for (const platform of ["ios","android"]) {
+    const ui = hooks();
+    const saved = [];
+    const captured = {uri:"file:///cache/123.jpg",fileName:"receipt.jpg",mimeType:"image/jpeg"};
+    let receiptPreviewed = false;
+    const {BillEditor} = load("../mobile/src/direct-bill-editor.tsx", {
+      react: ui.h, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
+      "@clerk/expo": {useUser:()=>({user:{fullName:"Personal profile name"}})},
+      "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {},
+      "./split-people-field": {PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": {suggestBillCategory:()=>null},
+      "./add-entry-methods": {AddEntryMethods:"Methods"}, "./upload": loadPhotoUpload(platform),
+      "./session": {useSession:()=>({profileId:"profile",request:async (_path, opts)=>{if (_path.startsWith("split-bill-receipts/preview")) {
+          const {body,boundary} = await convertFormDataAsync(opts.body);
+          const req = new Request("https://example.invalid", {method:"POST",body,headers:{"content-type":"multipart/form-data; boundary="+boundary}});
+          const file = (await req.formData()).get("file");
+          assert.equal(file.name,"receipt.jpg");
+          assert.deepEqual(new Uint8Array(await file.arrayBuffer()), photoBytes);
+          receiptPreviewed=true;
+          return {receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:"2026-11-20",currency:"PHP",items:[{description:"Bread",amount:"12.00"}]}};
+        }
+        saved.push(JSON.parse(opts.body)); return {bill:{id:"saved"}};}})},
+      "./ui": {useTheme:()=>({colors:{}}),Field:"Field",Screen:"Screen",Body:"Body",CategoryMark:"CategoryMark"},
+      "./plan-ui": {PlanHeader:"Header",PlanAction:"Action",usePlanData:()=>({})}, "./app-text":{Text:"Text"},
+      "./account-type-mark": {AccountTypeMark:"Account"}, "./transaction-entry":{ChoiceField:"Choice"},
+    });
+    const context = {circleId:"trip",currency:"PHP",group:{id:"group",name:"Trip",recorderName:"Alex",members:[
+      {id:"m1",name:"Bea"},{id:"m2",name:"Alex"},{id:"m3",name:"Carlo"}]}};
+    const render = () => nodes(ui.render(() => BillEditor({context, onSaved:()=>{}, onClose:()=>{}})));
+    const control = (key,value) => render().find(n=>n.props[key]===value);
+    assert.ok(control("title","Add Expense"));
+    assert.ok(control("accessibilityLabel","Remove Bea"));
+    assert.ok(control("accessibilityLabel","Remove Alex"));
+    assert.equal(control("title","Choose Group"),undefined);
+    control("accessibilityLabel","Remove Bea").props.onPress();
+    control("title","+").props.onPress();
+    assert.deepEqual(Array.from(control("label","Add Circle Member").props.options, o=>o.value),["Bea"]);
+    control("label","Add Circle Member").props.onChange("Bea");
+    control("accessibilityLabel","Remove Carlo").props.onPress();
+    control("title","More Details").props.onPress();
+    assert.equal(control("label","Paid By").props.value,"Alex");
+    assert.ok(control("label","Note (Optional)"));
+    const fields = render().filter(n=>n.type==="Choice").map(n=>n.props.label);
+    assert.deepEqual(fields.slice(-2),["Account (Optional)","Category (Optional)"]);
+    control("label","Name").props.onChangeText("Taxi");
+    control("label","Amount").props.onChangeText("120");
+    control("title","Save Expense").props.onPress();
+    await flush();
+    assert.equal(saved.length,1);
+    assert.equal(saved[0].circleId,"trip");
+    assert.deepEqual(saved[0].participants.map(p=>p.name),["Alex","Bea"]);
+    assert.equal(saved[0].paidByIndex,0);
+    render().find(n=>n.type==="Methods").props.onUploadSource("camera");
+    await flush();
+    assert.ok(receiptPreviewed);
+    assert.equal(control("label","Name").props.value,"Bakery");
+    assert.equal(control("label","Amount").props.value,"12.00");
+    control("title","Save Expense").props.onPress();
+    await flush();
+    assert.equal(saved[1].circleId,context.circleId);
+    assert.equal(saved[1].groupId,context.group.id);
+    assert.deepEqual(saved[1].participants,saved[0].participants);
+    assert.equal(saved[1].receipt.storageKey,"receipt");
+    assert.equal(saved[1].paidByIndex,0);
+    ui.stop();
+  }
   for (const capture of [false, true]) {
     const h = hooks(), selected = [];
     const { UploadSourceButtons } = load("components/upload-source-buttons.tsx", {

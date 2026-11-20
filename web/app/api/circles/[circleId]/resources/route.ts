@@ -1,5 +1,5 @@
 import { invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
-import { validateCircleExpenseSplit } from "@/lib/circle-expense-split";
+import { validateCircleExpenseSplit, circleSplitRevision } from "@/lib/circle-expense-split";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -168,6 +168,7 @@ const resourceSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("unshare_transaction"), id: z.string().min(1) }),
   z.object({
     action: z.literal("update_expense_split"),
+    previousRevision: z.string().optional(),
     id: z.string().min(1),
     items: z
       .array(
@@ -267,6 +268,7 @@ export async function POST(
 
     const result = await prisma.$transaction(async (tx) => {
       let value: unknown;
+      let activityDetail = "";
       let entityType: string = body.action;
       let entityId: string | null = null;
 
@@ -700,9 +702,10 @@ export async function POST(
           if (access.role !== "organizer" && share.sharedByUserId !== user.id)
             throw new CircleAccessError("Only the sharer or an Organizer can change who paid.", 403);
           const payer = await tx.circleMembership.findFirst({
-            where: { id: body.paidByMemberId, circleId, status: "active" }, select: { id: true },
+            where: { id: body.paidByMemberId, circleId, status: "active" }, select: { id: true, displayName: true },
           });
           if (!payer) throw new CircleAccessError("Choose an active Circle member.", 400);
+          activityDetail = "set the payer to " + payer.displayName;
           value = await tx.circleSharedTransaction.update({ where: { id: share.id }, data: { paidByMemberId: payer.id } });
           entityType = "shared_transaction";
           entityId = share.id;
@@ -729,10 +732,28 @@ export async function POST(
             body.items,
             Math.abs(Number(share.sharedAmount ?? share.transaction.amount)),
           );
-          value = await tx.circleSharedTransaction.update({
-            where: { id: share.id },
-            data: { splitConfig: { items: body.items } },
+          const prior = share.splitConfig as {items?: typeof body.items} | null;
+          if (body.previousRevision !== undefined && body.previousRevision !== circleSplitRevision(prior?.items ?? []))
+            throw new CircleAccessError("Another member changed this split. Close and reopen the expense before editing.", 409);
+          const changes = body.items.flatMap((item, index) => {
+            const old = prior?.items?.[index];
+            if (old && circleSplitRevision([old]) === circleSplitRevision([item])) return [];
+            const method = item.splitMethod ?? "equal";
+            const names = item.participantIds.map(id => {
+              const name = members.find(member => member.id === id)?.displayName ?? "Member";
+              const allocation = item.allocations?.find(a => a.participantId === id);
+              if (!allocation || method === "equal") return name;
+              return name + " " + allocation.value + (method === "percentage" ? "%" : method === "shares" ? " shares" : " " + share.transaction.currency);
+            });
+            return item.description + " (" + method + ", " + names.join(", ") + ")";
           });
+          activityDetail = changes.length ? "updated the split for " + changes.join("; ") : "";
+          const changed = await tx.circleSharedTransaction.updateMany({
+            where: {id: share.id, updatedAt: share.updatedAt},
+            data: {splitConfig: {items: body.items}},
+          });
+          if (!changed.count) throw new CircleAccessError("This expense changed. Reopen it and try again.", 409);
+          value = await tx.circleSharedTransaction.findUniqueOrThrow({where: {id: share.id}});
           entityType = "shared_transaction";
           entityId = share.id;
           break;
@@ -813,7 +834,7 @@ export async function POST(
           entityType,
           entityId,
           summary: `${access.membership?.displayName || user.firstName || "A member"} ${activityCopy[body.action]}.`,
-          metadata: { role: access.role },
+          metadata: { role: access.role, ...(activityDetail ? { detail: activityDetail } : {}) },
         },
       });
       return value;

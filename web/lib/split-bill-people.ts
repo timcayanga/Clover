@@ -16,9 +16,13 @@ export const upsertSplitBillPeopleFromNames = async (
   const people: SplitBillPersonRecord[] = [];
   const seen = new Set<string>();
 
+  if (!names.length) return people;
+  // Serialize contact discovery across concurrent bill and group saves for this user.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"split-bill-people:" + userId}))`;
+
   for (const rawName of names) {
     const name = rawName.trim();
-    if (!name) {
+    if (!name || /^(you|me)$/i.test(name)) {
       continue;
     }
 

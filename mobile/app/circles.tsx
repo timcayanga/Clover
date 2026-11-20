@@ -10,7 +10,7 @@ import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import { ChoiceField } from "../src/transaction-entry";
 import { CreateDirectoryCard } from "../src/create-directory-card";
-import { Icon } from "../src/ui";
+import { AddNavigationMark, Icon } from "../src/ui";
 import { CircleInvitations } from "../src/circle-invitations";
 import { Text } from "../src/app-text";
 import {
@@ -106,6 +106,7 @@ type Circle = {
     progressPercent: number;
   }[];
   expenses?: {
+    categoryName?: string | null;
     id: string;
     title: string;
     amount: number;
@@ -133,6 +134,7 @@ export default function Circles() {
   const displayCurrency = selected ? displayCurrencies[selected.id] ?? selected.currency : 'PHP';
   const currencyOptions = [...new Set([displayCurrency, ...(session.data?.currencyChoices ?? []).map(c => c.code), ...(selected?.expenses ?? []).map(e => e.currency), 'PHP','USD','IDR'])].sort();
   const [tab, setTab] = useState("Overview");
+  const [expenseCategory, setExpenseCategory] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<{
     circle: Circle | null;
@@ -162,9 +164,19 @@ export default function Circles() {
   const [billCirclePicker,setBillCirclePicker]=useState(false),[pendingBillCircle,setPendingBillCircle]=useState<string|null>(null);
   useEffect(()=>{if(pendingBillCircle===selected?.id&&circleBillContextReady(selected,loading)){setPendingBillCircle(null);setAddingBill(true);}},[pendingBillCircle,selected,loading]);
   const [addingBill,setAddingBill]=useState(false),[expenseSearch,setExpenseSearch]=useState("");
-  useEffect(()=>onContextBillEntry(()=>{if(!selected)setBillCirclePicker(true);else if(!memberDetail&&selected.role!=="participant")setPendingBillCircle(selected.id);},"circles"),[selected,memberDetail]);
+  function openExpense() {
+    if (selected) {
+      if (selected.role !== "participant") setPendingBillCircle(selected.id);
+      return;
+    }
+    const choices = data?.circles.filter(c => c.role !== "participant") ?? [];
+    if (choices.length === 1) { setSelected(choices[0]); setPendingBillCircle(choices[0].id); }
+    else setBillCirclePicker(true);
+  }
+  useEffect(()=>onContextBillEntry(()=>{if(!memberDetail) openExpense();},"circles"),[selected,memberDetail,data]);
   usePageAskScope({page:"circles", title:selected?.name || "Circles", circleId:selected?.id, currency:displayCurrency});
   const selectedId = selected?.id;
+  useEffect(() => {setExpenseCategory(null); setExpenseSearch("");}, [selectedId]);
   useEffect(() => {
     if (!selectedId || session.demo) return;
     let active = true;
@@ -222,11 +234,12 @@ export default function Circles() {
     );
   if (memberDetail && selected?.splitBillGroupId)
     return (
-      <SplitGroupDetails entryScope="circles"
+      <SplitGroupDetails entryScope="circles" circleId={selected.id} circleCurrency={selected.currency}
         group={{
           id: selected.splitBillGroupId,
           name: selected.name,
-          members: [],
+          members: circleBillMembers(selected.members ?? []),
+          recorderName: selected.members?.find(m => m.isMe)?.displayName,
         }}
         person={memberDetail}
         onClose={() => setMemberDetail(null)}
@@ -263,12 +276,12 @@ export default function Circles() {
     <Screen layout="dashboard" gap={20}>
       {entryOverlay}
       {billCirclePicker?<EntryOverlay onClose={()=>setBillCirclePicker(false)}><Screen sheet><PlanHeader title="Choose a Circle" back={()=>setBillCirclePicker(false)}/>{data?.circles.filter(c=>c.role!=="participant").map(c=><PlanAction key={c.id} title={c.name} onPress={()=>{setBillCirclePicker(false);setSelected(c);setPendingBillCircle(c.id);}}/>)}<PlanAction title="Add Circle" onPress={()=>{setBillCirclePicker(false);setEditor({circle:null});}}/></Screen></EntryOverlay>:null}
-      {addingBill&&selected?.splitBillGroupId?<EntryOverlay onClose={()=>setAddingBill(false)}><BillEditor context={{currency:selected.currency,group:{id:selected.splitBillGroupId,name:selected.name,members:circleBillMembers(selected.members??[])}}} onClose={()=>setAddingBill(false)} onSaved={()=>{setAddingBill(false);setRevision(v=>v+1);reload();}}/></EntryOverlay>:null}
+      {addingBill&&selected?<EntryOverlay onClose={()=>setAddingBill(false)}><BillEditor context={{circleId:selected.id, currency:selected.currency,group:{id:selected.splitBillGroupId ?? "",name:selected.name,members:circleBillMembers(selected.members??[]), recorderName:selected.members?.find(m=>m.isMe)?.displayName}}} onClose={()=>setAddingBill(false)} onSaved={()=>{setAddingBill(false);setRevision(v=>v+1);reload();}}/></EntryOverlay>:null}
       <PlanHeader
         title={selected ? selected.name : "Circles"}
-        trailing={selected ? <Pressable accessibilityRole="button" accessibilityLabel={`Circle display currency: ${displayCurrency}`} onPress={()=>setCurrencyOpen(true)} style={{minHeight:44,minWidth:58,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:4}}><Text style={{color:colors.teal,fontFamily:'Poppins-Medium',fontSize:13}}>{displayCurrency}</Text></Pressable> : undefined}
+        trailing={selected ? <View style={{flexDirection:"row",alignItems:"center"}}><Pressable accessibilityRole="button" accessibilityLabel={`Circle display currency: ${displayCurrency}`} onPress={()=>setCurrencyOpen(true)} style={{minHeight:44,minWidth:58,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:4}}><Text style={{color:colors.teal,fontFamily:'Poppins-Medium',fontSize:13}}>{displayCurrency}</Text></Pressable>{selected.role !== "participant" && <Pressable accessibilityRole="button" accessibilityLabel="Add Expense" onPress={openExpense} style={{padding:4}}><AddNavigationMark size={36}/></Pressable>}</View> : undefined}
         back={selected ? () => setSelected(null) : undefined}
-        add={()=>selected?setPendingBillCircle(selected.id):setEditor({circle:null})}
+        add={openExpense}
       />
       <Modal visible={currencyOpen && !!selected} transparent animationType="fade" onRequestClose={()=>setCurrencyOpen(false)}>
         <View style={{flex:1,justifyContent:'center',padding:24,backgroundColor:'#0007'}}>
@@ -300,10 +313,11 @@ export default function Circles() {
               "People",
             ]}
             value={tab}
-            onChange={setTab}
+            onChange={next => {setExpenseCategory(null); setTab(next);}}
           />
-          {tab==="Expenses"?<TogetherToolbar search={expenseSearch} onSearch={setExpenseSearch} placeholder="Search expenses" onAdd={selected.role!=="participant"?()=>setPendingBillCircle(selected.id):undefined}/>:null}
-          {loading ? (
+          {tab === "Expenses" && expenseCategory ? <PlanAction title={expenseCategory + " ×"} onPress={() => setExpenseCategory(null)} /> : null}
+          {tab==="Expenses"?<TogetherToolbar action="Add Expense" search={expenseSearch} onSearch={setExpenseSearch} placeholder="Search expenses" onAdd={selected.role!=="participant"?()=>setPendingBillCircle(selected.id):undefined}/>:null}
+          {loading && !selected.detailsLoaded ? (
             <Body>Loading Circle details…</Body>
           ) : detailError ? (
             <>
@@ -313,7 +327,7 @@ export default function Circles() {
                 onPress={() => setRevision((v) => v + 1)}
               />
             </>
-          ) : <CircleDetailPanels displayCurrency={displayCurrency} circle={tab==="Expenses"?{...selected,expenses:selected.expenses?.filter(e=>e.title.toLowerCase().includes(expenseSearch.toLowerCase()))}:selected} tab={tab} onEdit={setResource} onInvite={()=>setInvitations(true)} onRefresh={()=>{setRevision(v=>v+1);reload();}} onArchive={()=>{setDeleteConfirm(true);}} onMember={setMemberDetail}/>}
+          ) : <CircleDetailPanels onAddExpense={openExpense} key={selected.id} onCategory={category => {setExpenseSearch(""); setExpenseCategory(category); setTab("Expenses");}} displayCurrency={displayCurrency} circle={tab==="Expenses"?{...selected,expenses:selected.expenses?.filter(e=>(!expenseCategory || (e.categoryName || "Other") === expenseCategory) && e.title.toLowerCase().includes(expenseSearch.toLowerCase()))}:selected} tab={tab} onEdit={setResource} onInvite={()=>setInvitations(true)} onRefresh={()=>setRevision(v=>v+1)} onArchive={()=>{setDeleteConfirm(true);}} onMember={setMemberDetail}/>}
           {deleteConfirm&&selected.isOwner?<Card><Body>Archive this Circle? Shared history and personal transactions are preserved.</Body><PlanAction title="Archive Circle" tone="delete" disabled={loading} onPress={()=>{setLoading(true);void session.request(`circles/${selected.id}/archive?workspaceId=${encodeURIComponent(session.profileId)}`,{method:'POST'}).then(()=>{setSelected(null);setDeleteConfirm(false);reload();}).catch(e=>setDetailError(e.message)).finally(()=>setLoading(false));}}/><PlanAction title="Keep Circle" onPress={()=>setDeleteConfirm(false)}/></Card>:null}
         </>
       ) : (
@@ -325,7 +339,7 @@ export default function Circles() {
             private.
           </Body> : null}
           <Field
-            label="Find a Circle"
+            placeholder="Search" accessibilityLabel="Search circles"
             value={search}
             onChangeText={setSearch}
           />

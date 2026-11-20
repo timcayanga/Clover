@@ -1,3 +1,4 @@
+import { transactionMerchantLogo } from "./transaction-merchant-logo";
 import { parseReceiptLineItemsFromPayload } from "@/lib/receipt-line-items";
 import {
   currencyTotals,
@@ -86,6 +87,8 @@ export const loadCirclesWorkspaceData = async (
         include: {
           bills: {
             orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
+            include: {payments: {select: {amount: true, participant: {select: {name: true}}}},
+              items: {orderBy: {sortOrder: "asc"}, select: {description: true, amount: true}}},
             take: 100,
           },
         },
@@ -159,6 +162,9 @@ export const loadCirclesWorkspaceData = async (
     ).map((bill) => ({
       id: bill.id,
       kind: "split_bill",
+      merchantLogoUrl: transactionMerchantLogo({merchantRaw: bill.merchantName || bill.title, currency: bill.currency}).merchantLogoUrl,
+      paidByName: [...new Set(bill.payments.filter(p => Number(p.amount) > 0).map(p => p.participant.name))].join(", ") || null,
+      lineItems: bill.items.map(item => ({description: item.description, amount: item.amount.toString()})),
       title: bill.title,
       amount: Math.abs(numberValue(bill.total)),
       currency: bill.currency,
@@ -175,7 +181,9 @@ export const loadCirclesWorkspaceData = async (
             ? Math.abs(numberValue(transaction.amount))
             : Math.abs(numberValue(entry.sharedAmount));
         const canSeeItem = entry.visibility !== "summary";
-        const payer = entry.paidBy;
+        const payer = entry.paidBy ?? circle.memberships.find(member => member.userId === entry.sharedByUserId);
+        const title = canSeeItem ? entry.sharedTitle || transaction.merchantClean || transaction.merchantRaw || "Shared transaction" : "Shared expense";
+        const logo = canSeeItem ? transactionMerchantLogo(entry.sharedTitle ? {merchantRaw: title, currency: transaction.currency} : {...transaction, categoryName: transaction.category?.name}) : null;
         return {
           id: entry.id,
           kind: "shared_transaction",
@@ -209,12 +217,8 @@ export const loadCirclesWorkspaceData = async (
                   }
                 ).items ?? [])
               : [],
-          title: canSeeItem
-            ? entry.sharedTitle ||
-              transaction.merchantClean ||
-              transaction.merchantRaw ||
-              "Shared transaction"
-            : "Shared expense",
+          title,
+          merchantLogoUrl: logo?.merchantLogoUrl ?? null,
           amount,
           currency: transaction.currency,
           date: transaction.date.toISOString(),
@@ -430,7 +434,14 @@ export const loadCirclesWorkspaceData = async (
       activities: circle.activities.map((activity) => ({
         id: activity.id,
         action: activity.action,
-        summary: activity.summary,
+        expenseId: activity.entityType === "shared_transaction" ? activity.entityId : null,
+        summary: (() => {
+          const detail = (activity.metadata as {detail?: unknown} | null)?.detail;
+          const expense = sharedExpenses.find(e => e.id === activity.entityId);
+          return expense && expense.visibility !== "summary" && typeof detail === "string"
+            ? (activity.actor ? getUserDisplayName(activity.actor) : "A member") + " " + detail
+            : activity.summary;
+        })(),
         actorName: activity.actor ? getUserDisplayName(activity.actor) : null,
         createdAt: activity.createdAt.toISOString(),
       })),

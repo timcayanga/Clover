@@ -1,3 +1,4 @@
+import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -144,13 +145,7 @@ export const ensureImportedSplitBill = async (params: {
         sortOrder: index,
       })),
     });
-    for (const participant of participantRows) {
-      await tx.splitBillPerson.upsert({
-        where: { userId_name: { userId: workspace.userId, name: participant.name } },
-        update: {},
-        create: { userId: workspace.userId, name: participant.name },
-      });
-    }
+    await upsertSplitBillPeopleFromNames(tx, workspace.userId, participantRows.map(person => person.name));
 
     const lineItemSummary = params.lineItems
       .filter((item) => item.description.trim())

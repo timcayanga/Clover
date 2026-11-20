@@ -68,9 +68,9 @@ const circleSummary = (value: unknown) => {
     goals: rows(circle.goals, ["id", "name", "targetAmount", "currentAmount", "currency", "targetDate", "progressPercent", "status", "estimateConfidence", "estimateReason", "estimatedCompletionDate"]),
     commitments: rows(circle.commitments, ["id", "title", "amount", "currency", "recurrence", "nextDueDate", "assignedMemberId", "assignedMemberIds", "assignedMemberName", "notes", "isActive"]),
     contributions: rows(circle.contributions, ["id", "memberId", "memberName", "goalId", "amount", "currency", "contributionDate", "destinationLabel", "note"]),
-    expenses: rows(circle.expenses, ["id", "kind", "title", "amount", "currency", "date", "visibility", "transactionId", "categoryName", "lineItems", "splitItems", "canEditSplit", "canUnshare"]),
+    expenses: rows(circle.expenses, ["id", "kind", "title", "amount", "currency", "date", "visibility", "transactionId", "categoryName", "lineItems", "splitItems", "canEditSplit", "canUnshare", "paidByName", "paidByMemberId", "merchantLogoUrl"]),
     investmentShares: rows(circle.investmentShares, ["id", "name", "institution", "balance", "currency", "visibility"]),
-    activities: rows(circle.activities, ["id", "action", "summary", "createdAt"]),
+    activities: rows(circle.activities, ["expenseId", "id", "action", "summary", "createdAt"]),
     insights: rows(circle.insights, ["id", "title", "detail", "confidence", "reason"]),
   };
 };

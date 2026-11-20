@@ -13,7 +13,7 @@ import { InterfaceIcon } from "@/components/interface-icon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { previewSplitBillItems } from "@/lib/split-bill";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatedTabs } from "@/components/animated-tabs";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
@@ -357,13 +357,16 @@ export function SplitBillWorkspace({
   currentUserName,
 }: SplitBillWorkspaceProps) {
   const {user}=useUser();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [homeTab, setHomeTab] = useState("Bills");
   const [bills, setBills] = useState(initialBills);
   const [groups, setGroups] = useState(initialGroups);
   const [people, setPeople] = useState(initialPeople);
   const [selected, setSelected] = useState<DetailSelection>(null);
-  useEffect(() => { if (!selected) { setBills(initialBills); setGroups(initialGroups); setPeople(initialPeople); } }, [initialBills, initialGroups, initialPeople, selected]);
+  useEffect(() => setBills(initialBills), [initialBills]);
+  useEffect(() => setGroups(initialGroups), [initialGroups]);
+  useEffect(() => setPeople(initialPeople), [initialPeople]);
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [transferSettlementDrafts, setTransferSettlementDrafts] = useState<Record<string, string>>({});
   const [transferSettlementNotes, setTransferSettlementNotes] = useState<Record<string, string>>({});
@@ -420,6 +423,7 @@ export function SplitBillWorkspace({
         item_count: bill.items.length,
       });
     }
+    router.refresh();
     // Stay in the originating list, group or person after creating a bill.
   };
 
@@ -1033,6 +1037,7 @@ export function SplitBillWorkspace({
       }
 
       setBills((current) => current.map((entry) => (entry.id === selectedBill.id ? payload.bill! : entry)));
+      router.refresh();
       setSelectedBillDraft(buildBillEditorDraft(payload.bill));
       setIsEditingBill(true);
       setSelected({ kind: "bill", id: payload.bill.id });

@@ -1,3 +1,4 @@
+import {SplitPeopleField, mergePeople, type SavedPerson} from "./split-people-field";
 import { TogetherToolbar } from "./together-toolbar";
 import { BillEditor } from "./direct-bill-editor";
 import { EntryOverlay } from "./entry-overlay";
@@ -21,18 +22,22 @@ import { outstandingSplitBalances } from "./split-balances";
 export type SplitGroup = {
   id: string;
   name: string;
+  recorderName?: string;
   members: { id: string; name: string }[];
 };
 const sample = { bills: [] as EditableBill[], hasMore: false };
 export function SplitGroupDetails({
   group,
-  entryScope="split",
+  savedPeople = [],
+  entryScope="split", circleId, circleCurrency,
   person,
   onClose,
   onBill,
   onChanged,
 }: {
   group?: SplitGroup;
+  circleId?: string; circleCurrency?: string;
+  savedPeople?: SavedPerson[];
   entryScope?: "split"|"circles";
   person?: string;
   onClose: () => void;
@@ -48,8 +53,9 @@ export function SplitGroupDetails({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(group?.name ?? "");
   const [members, setMembers] = useState(
-    group?.members.map((m) => m.name).join("\n") ?? "",
+    group?.members.map((m) => m.name) ?? [],
   );
+  const [memberDraft,setMemberDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -75,11 +81,7 @@ export function SplitGroupDetails({
             ? {
                 body: JSON.stringify({
                   name,
-                  members: members
-                    .split("\n")
-                    .map((s) => s.trim())
-                    .filter(Boolean)
-                    .map((name) => ({ name })),
+                  members: mergePeople(members,[memberDraft],savedPeople).map(name => ({name})),
                 }),
               }
             : {}),
@@ -95,7 +97,7 @@ export function SplitGroupDetails({
   }
   return (
     <Screen>
-      {adding?<EntryOverlay onClose={()=>setAdding(false)}><BillEditor context={{group,person}} onClose={()=>setAdding(false)} onSaved={()=>{setAdding(false);reload();onChanged();}}/></EntryOverlay>:null}
+      {adding?<EntryOverlay onClose={()=>setAdding(false)}><BillEditor context={{group,person,circleId,currency:circleCurrency}} onClose={()=>setAdding(false)} onSaved={()=>{setAdding(false);reload();onChanged();}}/></EntryOverlay>:null}
       <PlanHeader title={person ?? group?.name ?? "Group"} back={onClose} add={()=>setAdding(true)} />
       {group ? (
         <PlanTabs
@@ -104,18 +106,13 @@ export function SplitGroupDetails({
           onChange={setTab}
         />
       ) : null}
-      <TogetherToolbar search={search} onSearch={setSearch} onAdd={()=>setAdding(true)}/>
+      <TogetherToolbar action={circleId ? "Add Expense" : "Add Bill"} search={search} onSearch={setSearch} onAdd={()=>setAdding(true)}/>
       {loadError ? <Notice>{loadError}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}
       {editing ? (
         <Card>
           <Field label="Group name" value={name} onChangeText={setName} />
-          <Field
-            label="People (one name per line)"
-            value={members}
-            multiline
-            onChangeText={setMembers}
-          />
+          <SplitPeopleField selected={members} onChange={setMembers} draft={memberDraft} onDraft={setMemberDraft} saved={savedPeople} disabled={busy}/>
           <PlanAction
             title="Cancel edit"
             disabled={busy}

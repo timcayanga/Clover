@@ -16,10 +16,12 @@ export function SpendingDonut({
   currency,
   variant = "default",
   totalLabel = "Total spending",
+  onCategoryPress,
 }: {
   categories: { name: string; amount: number }[];
   currency: string;
   totalLabel?: string;
+  onCategoryPress?: (name: string) => void;
   variant?: "default" | "category";
 }) {
   const { colors } = useTheme();
@@ -70,6 +72,21 @@ export function SpendingDonut({
           );
         })}
       </Svg>
+      {onCategoryPress && <View accessible={false} style={{position: "absolute", inset: 0}}
+        onStartShouldSetResponder={event => {
+          const {locationX, locationY} = event.nativeEvent;
+          return Math.abs(Math.hypot(locationX - 105, locationY - 105) - radius) <= strokeWidth / 2;
+        }}
+        onResponderTerminationRequest={() => true}
+        onResponderRelease={event => {
+          const {locationX, locationY} = event.nativeEvent;
+          if (Math.abs(Math.hypot(locationX - 105, locationY - 105) - radius) > strokeWidth / 2) return;
+          const turn = (Math.atan2(locationX - 105, 105 - locationY) / (2 * Math.PI) + 1) % 1;
+          let boundary = 0;
+          const category = values.find(value => {boundary += value.amount; return turn * total < boundary;});
+          if (category) onCategoryPress(category.name);
+        }}/>}
+
       <View
         pointerEvents="none"
         style={{

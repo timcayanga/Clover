@@ -1,3 +1,4 @@
+import {receiptPhotoForm} from "./upload";
 import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, validManualTransactionDate } from "../../shared/manual-transaction-defaults";
 import { entryExample } from "../../shared/entry-examples";
 import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
@@ -17,7 +18,7 @@ import { ApiError } from "./api";
 import * as Crypto from "expo-crypto";
 import type { EntryAccount, EntryDraft, EntryFormContext } from "./adviser-entry-types";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Platform, Pressable, View, useWindowDimensions } from "react-native";
+import { Pressable, View, useWindowDimensions } from "react-native";
 import { useSession } from "./session";
 import { Body, Button, Card, Field, Notice, Icon, CategoryMark, useTheme } from "./ui";
 
@@ -587,19 +588,7 @@ export function TransactionChat({
         setError("Choose a photo smaller than 3.5 MB.");
         return;
       }
-      const form = new FormData();
-      if (Platform.OS === "web")
-        form.append(
-          "file",
-          await (await fetch(asset.uri)).blob(),
-          "receipt.jpg",
-        );
-      else
-        form.append("file", {
-          uri: asset.uri,
-          name: "receipt.jpg",
-          type: asset.mimeType ?? "image/jpeg",
-        } as unknown as Blob);
+      const form = await receiptPhotoForm({uri:asset.uri, name:asset.fileName || "receipt.jpg", mimeType:asset.mimeType || "image/jpeg"});
       const response = await session.request<{
         attachment: { id: string; name: string };
       }>(

@@ -12,6 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { MerchantLogo } from "@/components/merchant-logo";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { FinancialAccountCard } from "@/components/financial-account-card";
@@ -4714,12 +4715,12 @@ function AccountDetailPageContent() {
                           />
                         </label>
                         <div className="transaction-category-icon-cell" aria-hidden="true">
-                          <CategoryBrandMark
+                          <MerchantLogo transaction={transaction} size={24} fallback={<CategoryBrandMark
                             categoryName={categoryLabel}
                             size={24}
                             radius={8}
                             className="transaction-category-icon"
-                          />
+                          />} />
                         </div>
                         <div className="transaction-name-cell">
                           <InlineEditableCell
@@ -4825,12 +4826,12 @@ function AccountDetailPageContent() {
                                   <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
                                     <AccountBrandMark accountBrand={accountBrand} label={account?.name ?? "Account"} />
                                   </span>
-                                  <CategoryBrandMark
+                                  <MerchantLogo transaction={transaction} size={20} fallback={<CategoryBrandMark
                                     categoryName={categoryLabel}
                                     size={20}
                                     radius={7}
                                     className="transactions-mobile-simple-row__category-icon"
-                                  />
+                                  />} />
                                   <span className="transactions-mobile-simple-row__name-main">{normalizedName}</span>
                                 </div>
                                 <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>

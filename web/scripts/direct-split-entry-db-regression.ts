@@ -131,6 +131,16 @@ async function main() {
       second = (await b.json()).bill;
     assert.equal(first.id, second.id);
     assert.equal(first.group.id, group.id);
+    const savedPeople = () => db.splitBillPerson.findMany({ where: { userId: user.id }, orderBy: { name: "asc" }, select: { name: true } });
+    assert.deepEqual(await savedPeople(), [{ name: "Alex" }, { name: "Bea" }]);
+    const { POST: createGroup } = await import("../app/api/split-bill-groups/route");
+    const savedGroup = await createGroup(new Request("https://staging.clover.ph/api/split-bill-groups", {
+      method: "POST", headers: { origin: "https://staging.clover.ph", "content-type": "application/json" },
+      body: JSON.stringify({ name: "Weekend", members: [{ name: "bea" }, { name: "Carlo" }] }),
+    }));
+    assert.equal(savedGroup.status, 201);
+    assert.deepEqual(await savedPeople(), [{ name: "Alex" }, { name: "Bea" }, { name: "Carlo" }]);
+
     assert.equal(await db.splitBill.count({ where: { userId: user.id } }), 1);
     assert.equal(
       await db.transaction.count({ where: { workspaceId: workspace.id } }),
@@ -193,6 +203,23 @@ async function main() {
       3,
       "Legacy callers do not silently create transactions",
     );
+    const circle = await db.circle.create({data: {ownerUserId:user.id, name:"Circle QA", memberships:{create:[
+      {userId:user.id,displayName:"Alex",role:"organizer",status:"active"},
+      {displayName:"Bea",role:"member",status:"invited"},
+    ]}}});
+    await db.splitBillGroup.update({where:{id:group.id},data:{circleId:circle.id}});
+    const {mobileSplitBillInput, mobileSplitBillPayload} = await import("../lib/mobile-together-input");
+    const draft = {expense:body().expense, circleId:circle.id, groupId:group.id, title:"Taxi", total:"80.00", note:"",
+      currency:"PHP", billDate:"2026-11-20", participants:[{name:"Alex"}], paidByIndex:0};
+    assert.equal(mobileSplitBillInput.safeParse({...draft,circleId:undefined}).success,false);
+    const saveCircle = (value: typeof draft) => post(mobileSplitBillPayload(mobileSplitBillInput.parse(value)));
+    const outside = await saveCircle({...draft, participants:[{name:"Outside Circle"}]});
+    assert.equal(outside.status,400);
+    const circleResponse = await saveCircle(draft);
+    assert.equal(circleResponse.status,201,JSON.stringify(await circleResponse.clone().json()));
+    const savedExpense = (await circleResponse.json()).bill;
+    assert.deepEqual(savedExpense.participants.map((person:{name:string})=>person.name),["Alex"]);
+    assert.equal(savedExpense.group.id,group.id);
     assert.equal(
       await snapshot(),
       before,

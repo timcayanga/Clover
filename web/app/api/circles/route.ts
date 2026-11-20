@@ -1,3 +1,4 @@
+import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { randomBytes } from "node:crypto";
 import { after, NextResponse } from "next/server";
@@ -124,6 +125,7 @@ export async function POST(request: Request) {
         },
       });
 
+      await upsertSplitBillPeopleFromNames(tx, user.id, invitationDrafts.map(member => member.displayName));
       await tx.splitBillGroup.create({
         data: {
           userId: user.id,

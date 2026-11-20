@@ -173,6 +173,7 @@ export type CircleContributionSummary = {
 };
 
 export type CircleExpenseSummary = {
+  merchantLogoUrl?: string | null;
   paidByMemberId?: string | null;
   paidByName?: string | null;
   canEditSplit?: boolean;
@@ -204,6 +205,7 @@ export type CircleInvestmentSummary = {
 };
 
 export type CircleActivitySummary = {
+  expenseId?: string | null;
   id: string;
   action: string;
   summary: string;

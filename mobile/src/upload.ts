@@ -40,3 +40,22 @@ export function fileProblem(file: SelectedFile) {
     return "Choose a supported financial document, spreadsheet, or image.";
   return null;
 }
+
+// Expo fetch serializes a File's bytes. Picker URI descriptors alone have no file body.
+export async function receiptPhotoForm(file: SelectedFile) {
+  const form = new FormData();
+  if (Platform.OS === "web") {
+    const response = await fetch(file.uri);
+    const blob = await response.blob();
+    form.append("file", blob, file.name);
+  } else {
+    const source = new File(file.uri);
+    // A cache copy can have a different filename or no detected media type.
+    Object.defineProperties(source, {
+      name: {value: file.name},
+      type: {value: file.mimeType || source.type || "application/octet-stream"},
+    });
+    form.append("file", source);
+  }
+  return form;
+}

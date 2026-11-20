@@ -49821,7 +49821,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   --qr-accent: #e4fffb;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 82px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   min-height: 152px;
   padding: 16px;
@@ -49920,7 +49920,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 
 .split-bill-qr-card__copy p,
 .split-bill-qr-card__copy > span {
-  margin: 16px 0 0;
+  margin: 6px 0 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -49940,25 +49940,10 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 .split-bill-qr-card__image {
-  position: relative;
-  z-index: 1;
-  align-self: center;
-  display: grid;
-  place-items: center;
-  width: 82px;
-  height: 82px;
-  padding: 6px;
-  border: 0;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
-  cursor: pointer;
-}
-
-.split-bill-qr-card__image img {
-  width: 100%;
-  height: 100%;
-  border-radius: 11px;
+  justify-self: center;
+  align-self: end;
+  width: min(160px, 100%);
+  height: 160px;
   object-fit: contain;
 }
 
@@ -65337,7 +65322,7 @@ html[data-theme="dark"]:has(.app-shell) { --bg:#0d171d; --surface:#15252d; --sur
 .transaction-creation-tabs button { display:flex; align-items:center; justify-content:center; gap:8px; border:0!important; border-radius:999px!important; min-height:44px; margin:0!important; background:transparent!important; color:var(--text)!important; box-shadow:none!important; }
 .transaction-creation-tabs button[aria-selected="true"] { background:linear-gradient(100deg,#03a8c0,#28cfca)!important; color:white!important; }
 .transaction-creation-tabs img { flex:none; object-fit:contain; }
-.transaction-creation-tabs button[aria-selected="true"] img { filter:brightness(0) invert(1); }
+.transaction-creation-tabs button[aria-selected="true"] img { filter: drop-shadow(0 1px 2px white); }
 .transaction-creation-tabs button:not([aria-selected="true"]) img { filter:none; }
 .organize-upload-choices { grid-template-columns:minmax(0,1fr); gap:10px!important; }
 .organize-upload-choices .button { flex-direction:row; justify-content:flex-start; text-align:left; min-height:80px; padding:12px 14px; gap:14px; background:var(--surface)!important; color:var(--text)!important; border:1px solid var(--stroke); font-size:15px; font-weight:500; }
@@ -65780,7 +65765,7 @@ html[data-theme=dark] .notifications-filters button[aria-pressed=true] { backgro
 .split-bill-group-card > .button { margin-top:auto; flex:none; }
 .split-bill-row-chevron { font-size:26px; line-height:1; margin-left:10px; flex:none; }
 .split-bill-list-toolbar input { min-height:40px; height:40px; box-sizing:border-box; }
-.split-bill-qr-card { border-radius:20px; padding:20px; min-height:220px; font-family:var(--font-poppins),sans-serif; background:linear-gradient(24deg,transparent 48%,#ffffff14 48%,#ffffff14 67%,transparent 67%),linear-gradient(110deg,var(--qr-start),var(--qr-end)); }
+.split-bill-qr-card { border-radius:20px; padding:20px; min-height:auto; font-family:var(--font-poppins),sans-serif; background:linear-gradient(24deg,transparent 48%,#ffffff14 48%,#ffffff14 67%,transparent 67%),linear-gradient(110deg,var(--qr-start),var(--qr-end)); }
 .financial-account-card__name,.financial-account-card__number,.financial-account-card__amount { font-family:var(--font-poppins),sans-serif; }
 .accounts-brand-mark:has(.accounts-brand-mark__fallback) { background:transparent!important; box-shadow:none!important; }
 .accounts-brand-mark__fallback { width:100%!important;height:100%!important;object-fit:contain;filter:none!important; }
@@ -67279,7 +67264,7 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 .adviser-header-link:hover, .adviser-header-link:focus-visible, html[data-theme="dark"] .adviser-header-link {background:transparent;border:0;box-shadow:none;}
 .split-contribution-total {display:flex;justify-content:space-between;gap:16px;padding:12px 0;}
 .transaction-creation-tabs button img[src*="/organize/method-"] {filter:none!important;width:26px;height:26px;}
-.transaction-creation-tabs button[aria-selected="true"] img {filter:brightness(0) invert(1)!important;}
+.transaction-creation-tabs button[aria-selected="true"] img {filter: drop-shadow(0 1px 2px white)!important;}
 
 .split-bill-payment-tools__request-form {align-items:start;}
 .split-payment-dropdown summary::marker {font-size:0;}

@@ -1,5 +1,6 @@
+import { MerchantLogo } from "../src/merchant-logo";
 import { SwipeDeleteRow } from "../src/swipe-delete-row";
-import { AdaptiveGrid } from "../src/adaptive";
+
 import { CloverEmptyState } from "../src/clover-mascot";
 import { createScreenDataLoader, registerScreenRefresh } from "../src/screen-refresh";
 import { InlineDetailRow } from "../src/inline-detail-row";
@@ -29,9 +30,10 @@ import {
 } from "../src/ui";
 import {
   RecurringEditor,
-  type RecurringItem as Item,
+  type RecurringItem,
   type Suggestion,
 } from "../src/recurring-editor";
+type Item = RecurringItem & { merchantLogoUrl?: string | null; merchantLogoNameKey?: string };
 type Occurrence = Pick<
   Item,
   "id" | "title" | "kind" | "amount" | "currency"
@@ -67,12 +69,15 @@ function Recurring() {
     return ()=>{active=false;};
   },[session.demo,session.profileId,session.request]);
   const [data, setData] = useState<Data | null>(null);
+  const year = month.getFullYear();
+  const monthKey = year + "-" + String(month.getMonth() + 1).padStart(2, "0");
   const loadedPath = useRef<string | null>(null);
   const [kind, setKind] = useState("");
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState(false);
   const [account, setAccount] = useState("");
   const [day, setDay] = useState<string | null>(null);
+  useEffect(() => setDay(null), [monthKey]);
   const [selected, setSelected] = useState<Item | null>(null);
   const [editor, setEditor] = useState(false);
   const { add, commitmentId } = useLocalSearchParams<{
@@ -109,9 +114,10 @@ function Recurring() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      const path = `recurring?workspaceId=${encodeURIComponent(session.profileId)}&year=${month.getFullYear()}&month=${month.getMonth()}`;
+      const path = `recurring?workspaceId=${encodeURIComponent(session.profileId)}&year=${year}&calendar=year`;
       if (!session.demo && loadedPath.current !== path) {
-        setData(session.cached<Data>(path) ?? null);
+        const cached = session.cached<Data>(path);
+        if (cached) setData(cached);
       }
       setError("");
       setDay(null);
@@ -134,16 +140,16 @@ function Recurring() {
       return () => {
         active = false; unregister();
       };
-    }, [session.demo, session.profileId, session.request, session.cached, month, revision]),
+    }, [session.demo, session.profileId, session.request, session.cached, year, revision]),
   );
   const matches = (item: Item) =>
     (!kind || item.kind === kind) &&
     (!account || item.accountName === account) &&
     item.title.toLowerCase().includes(query.toLowerCase());
   const items = data?.items.filter(matches) ?? [];
-  const ids = new Set(items.map((item) => item.id));
+  const itemsById = new Map(items.map(item => [item.id, item]));
   const occurrences =
-    data?.occurrences.filter((item) => ids.has(item.id)) ?? [];
+    data?.occurrences.filter((item) => itemsById.has(item.id) && item.date.startsWith(monthKey)) ?? [];
   const monthlyAmounts = recurringSummaryAmounts(items, occurrences, kind === "receivable");
   const dueLabel = monthlyAmounts.length
     ? monthlyAmounts.map(([currency, value]) => money(String(value), currency)).join(" · ")
@@ -153,6 +159,17 @@ function Recurring() {
     item.amount === null
       ? "Variable amount"
       : money(String(item.amount), item.currency);
+  const renderRow = (item: Item, subtitle: string, value: string, key: string) => (
+    <Pressable key={key} accessibilityRole="button" onPress={() => setSelected(item)} style={{ minHeight: 60, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <MerchantLogo transaction={{ merchantRaw: item.title, merchantClean: item.title, categoryName: item.categoryName, merchantLogoUrl: item.merchantLogoUrl, merchantLogoNameKey: item.merchantLogoNameKey }} size={24} />
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+        <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 14 }}>{item.title}</Text>
+        <Text style={{ color: colors.muted, fontSize: 12 }}>{subtitle}</Text>
+      </View>
+      <Text style={{ color: colors.ink, fontSize: 13, maxWidth: "40%", textAlign: "right" }}>{value}</Text>
+      <Icon line name="chevron-forward" size={14} />
+    </Pressable>
+  );
   const navigateMonth = (offset: number) =>
     setMonth(
       (value) => new Date(value.getFullYear(), value.getMonth() + offset, 1),
@@ -396,11 +413,12 @@ function Recurring() {
                   minWidth: 0,
                   flexDirection: "row",
                   alignItems: "center",
+                  justifyContent: "center",
                   gap: 3,
                 }}
               >
                 <Icon line name="calendar-outline" size={14} />
-                <Text style={{ flex: 1, color: colors.ink, fontSize: 12 }}>
+                <Text style={{ flexShrink: 1, color: colors.ink, fontSize: 12 }}>
                   {month.toLocaleDateString(undefined, {
                     month: "long",
                     year: "numeric",
@@ -518,14 +536,26 @@ function Recurring() {
               </View>
             ) : null}
           </Card>
-          <AdaptiveGrid minItemWidth={kind ? 100 : 10000} maxColumns={kind ? 3 : 1} gap={8}>
-            {(data.summaries?.[({ planned_payment: "planned", debt: "debt", receivable: "owed", reminder: "installments" } as Record<string, string>)[kind] ?? "overview"]?.slice(0, kind ? 3 : 1) ?? [["Due this month", dueLabel]]).map(([label, value]) => (
-              <Card key={label} style={{ flex: 1, backgroundColor: colors.pale, alignItems: "center", padding: kind ? 10 : 16 }}>
-                <Text style={[styles.sectionTitle, { fontSize: kind ? 11 : 16, textAlign: "center" }]}>{label}</Text>
-                <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: kind ? 16 : 18, textAlign: "center" }}>{value}</Text>
-              </Card>
-            ))}
-          </AdaptiveGrid>
+          {kind ? (
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {data.summaries?.[({ planned_payment: "planned", debt: "debt", receivable: "owed", reminder: "installments" } as Record<string, string>)[kind]]?.slice(0, 2).map(([label, value]) => (
+                <Card key={label} style={{ flex: 1, minWidth: 0, backgroundColor: colors.pale, alignItems: "center", padding: 10 }}>
+                  <Text style={[styles.sectionTitle, { fontSize: 12, textAlign: "center" }]}>{label}</Text>
+                  <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", textAlign: "center" }}>{/^(due this month|this month)$/i.test(label) ? dueLabel : value}</Text>
+                </Card>
+              ))}
+            </View>
+          ) : (
+            <Card>
+              <Text style={styles.sectionTitle}>Due This Month</Text>
+              <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: 18 }}>{dueLabel}</Text>
+              {occurrences.filter(o => o.kind !== "receivable").map(o => {
+                const item = itemsById.get(o.id);
+                return item && renderRow(item, o.date, amount(o), o.id + o.date);
+              })}
+              {!occurrences.some(o => o.kind !== "receivable") && <Body>No payments scheduled.</Body>}
+            </Card>
+          )}
           {data.suggestions?.length ? (
             <Card>
               <Text
@@ -579,15 +609,7 @@ function Recurring() {
             </Text>
             {items.length ? (
               items.map((item) => (
-                <SwipeDeleteRow key={item.id} label={item.title} disabled={session.demo} message={`Delete "${item.title}" and its completion history? Existing transactions stay unchanged.`} onOpen={() => setSelected(item)} onDelete={() => deleteRow(item.id)}><Pressable accessibilityRole="button" onPress={() => setSelected(item)} style={{ minHeight: 72, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                    <Text style={{ color: colors.ink, fontFamily: "Poppins-Medium", fontSize: 14 }}>{item.title}</Text>
-                    <Text style={{ color: colors.teal, fontSize: 12 }}>{kinds.find(option => option.value === item.kind)?.label ?? "Recurring"}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12 }}>{[item.accountName, recurringDueLabel(item, data.occurrences)].filter(Boolean).join(" · ")}</Text>
-                  </View>
-                  <Text style={{ color: colors.ink, fontSize: 13, maxWidth: "40%", textAlign: "right" }}>{amount(item)}</Text>
-                  <Icon line name="chevron-forward" size={14} />
-                </Pressable></SwipeDeleteRow>
+                <SwipeDeleteRow key={item.id} label={item.title} disabled={session.demo} message={`Delete "${item.title}" and its completion history? Existing transactions stay unchanged.`} onOpen={() => setSelected(item)} onDelete={() => deleteRow(item.id)}>{renderRow(item, [item.accountName, recurringDueLabel(item, occurrences)].filter(Boolean).join(" · "), amount(item), item.id)}</SwipeDeleteRow>
               ))
             ) : (
               <CloverEmptyState pose="calendar">No recurring items yet. Add a bill or regular payment to get started.</CloverEmptyState>

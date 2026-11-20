@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { AccountBrandMark } from "@/components/account-brand-mark";
+import { paymentLines } from "../../shared/payment-display";
 import { useCloverChrome } from "@/components/clover-shell";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import {
@@ -10,7 +10,6 @@ import {
   getPaymentQrTheme,
 } from "@/lib/payment-qr";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
-import { getAccountBrand } from "@/lib/account-brand";
 
 type PaymentProfile = {
   id: string;
@@ -456,16 +455,6 @@ export function SplitBillQrLibrary() {
     return `${account.name}${suffix} · ${account.currency}`;
   };
 
-  const getVisibleAccountName = (profile: PaymentProfile) => {
-    const accountName = profile.accountName?.trim();
-    if (!accountName) return null;
-    const normalizedName = accountName.toLowerCase();
-    if (normalizedName === profile.label.trim().toLowerCase() || normalizedName === profile.provider.trim().toLowerCase()) {
-      return null;
-    }
-    return accountName;
-  };
-
   const readImage = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     const source = "chooser";
@@ -620,8 +609,6 @@ export function SplitBillQrLibrary() {
         <div className="split-bill-qr-library__grid">
           {profiles.filter(profile=>`${profile.label} ${profile.provider}`.toLowerCase().includes(search.toLowerCase())).map((profile) => {
             const theme = getPaymentQrTheme(profile.provider);
-            const accountBrand = getAccountBrand({ institution: profile.provider, name: profile.label, type: "bank" });
-            const visibleAccountName = getVisibleAccountName(profile);
             return (
               <button
                 type="button"
@@ -633,19 +620,14 @@ export function SplitBillQrLibrary() {
               >
                 <div className="split-bill-qr-card__copy">
                   <div className="split-bill-qr-card__provider">
-                    <AccountBrandMark accountBrand={accountBrand} label={profile.provider} />
                     <strong>{profile.label}</strong>
                     {profile.isDefault ? <small>Default</small> : null}
                     <span className="split-bill-qr-card__chevron" aria-hidden="true">›</span>
                   </div>
-                  {visibleAccountName ? <p>{visibleAccountName}</p> : null}
-                  {profile.accountNumber ? <span>{profile.accountNumber}</span> : null}
-                  {profile.routingCode ? <span>{profile.routingCode}</span> : null}
+                  {paymentLines(profile).map(({ key, value }) => <p key={key}>{value}</p>)}
                 </div>
                 {profile.qrImageData ? (
-                  <span className="split-bill-qr-card__image" aria-hidden="true">
-                    <img src={profile.qrImageData} alt={`${profile.provider} payment QR code`} />
-                  </span>
+                  <img className="split-bill-qr-card__image" src={profile.qrImageData} alt={`${profile.label} QR code`} />
                 ) : null}
               </button>
             );

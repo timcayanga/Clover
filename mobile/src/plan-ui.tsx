@@ -12,9 +12,11 @@ import { AppHeader, AddNavigationMark, Icon, useTheme } from "./ui";
 export function PlanDirectoryCard({
   children,
   color,
+  compact = false,
   onPress,
 }: {
   children: ReactNode;
+  compact?: boolean;
   onPress?: () => void;
   color: string;
 }) {
@@ -27,11 +29,11 @@ export function PlanDirectoryCard({
       colors={dark ? [colors.white, `${tint}24`] : [`${tint}38`, `${tint}0a`]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0 }}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      onLayout={compact ? undefined : (event) => setWidth(event.nativeEvent.layout.width)}
       style={{
-        minHeight: Math.min(width, 360),
-        padding: 20,
-        gap: 16,
+        minHeight: compact ? undefined : Math.min(width, 360),
+        padding: compact ? 14 : 20,
+        gap: compact ? 4 : 16,
         justifyContent: "space-between",
         borderRadius: 24,
         borderWidth: 1,

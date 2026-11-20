@@ -1,3 +1,4 @@
+import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -280,19 +281,22 @@ return tx.budget.create({
       const total = numberValue(payload.total);
       if (total <= 0) return NextResponse.json({ error: "A split bill total must be greater than zero." }, { status: 400 });
       if (participantNames.length === 0) return NextResponse.json({ error: "Add at least one person to the split bill before confirming." }, { status: 400 });
-      const bill = await prisma.splitBill.create({
-        data: {
-          userId: user.id,
-          transactionId,
-          title: stringValue(payload.title, "Shared bill"),
-          billDate: new Date(stringValue(payload.billDate, new Date().toISOString())),
-          currency: stringValue(payload.currency, "PHP").toUpperCase(),
-          merchantName: stringValue(payload.merchantName) || null,
-          total: new Prisma.Decimal(total),
-          sourceType: "manual",
-          participants: { create: participantNames.map((name) => ({ name })) },
-        },
-        select: { id: true, title: true, total: true },
+      const bill = await prisma.$transaction(async tx => {
+        await upsertSplitBillPeopleFromNames(tx, user.id, participantNames);
+        return tx.splitBill.create({
+          data: {
+            userId: user.id,
+            transactionId,
+            title: stringValue(payload.title, "Shared bill"),
+            billDate: new Date(stringValue(payload.billDate, new Date().toISOString())),
+            currency: stringValue(payload.currency, "PHP").toUpperCase(),
+            merchantName: stringValue(payload.merchantName) || null,
+            total: new Prisma.Decimal(total),
+            sourceType: "manual",
+            participants: { create: participantNames.map((name) => ({ name })) },
+          },
+          select: { id: true, title: true, total: true },
+        });
       });
       result = { splitBill: { ...bill, total: bill.total?.toString() ?? null } };
     }

@@ -137,10 +137,12 @@ const view = mobileApiResponse("circle", {
       ],
       commitments: [{ id: "r", assignedMemberIds: ["me", "mia"] }],
       expenseCurrencyTotals: { IDR: 75440, PHP: 1500 },
+      activities: [{id: "event", expenseId: "e"}],
       expenses: [
         {
           id: "e",
           transactionId: "t",
+          paidByMemberId: "mia", paidByName: "Mia", merchantLogoUrl: "/assets/shop.png",
           lineItems: items,
           splitItems: items,
           rawPayload: "PRIVATE",
@@ -149,6 +151,10 @@ const view = mobileApiResponse("circle", {
     },
   ],
 }) as any;
+assert.equal(view.circle.expenses[0].paidByMemberId, "mia");
+assert.equal(view.circle.expenses[0].paidByName, "Mia");
+assert.equal(view.circle.expenses[0].merchantLogoUrl, "/assets/shop.png");
+assert.equal(view.circle.activities[0].expenseId, "e");
 assert.equal(view.circle.members[0].isMe, true);
 assert.match(view.circle.members[0].avatarUrl, /me.png/);
 assert.deepEqual(view.circle.commitments[0].assignedMemberIds, ["me", "mia"]);

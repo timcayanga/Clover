@@ -605,7 +605,7 @@ async function handle(
       const now = new Date();
       const year = z.coerce.number().int().min(2000).max(2200).parse(url.searchParams.get("year") ?? now.getFullYear());
       const month = z.coerce.number().int().min(0).max(11).parse(url.searchParams.get("month") ?? now.getMonth());
-      return reply(await (await import("@/lib/mobile-recurring")).mobileRecurring(workspaceId, year, month));
+      return reply(await (await import("@/lib/mobile-recurring")).mobileRecurring(workspaceId, year, month, url.searchParams.get("calendar") === "year"));
     }
     if (operation === "home") {
       const currency = z.string().regex(/^(ALL|[A-Z]{3})$/).parse(url.searchParams.get("currency") ?? normalizeRegionalPreferences(user.regionalPreferences).baseCurrency);

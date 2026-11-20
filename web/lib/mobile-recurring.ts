@@ -1,3 +1,4 @@
+import { transactionMerchantLogo } from "./transaction-merchant-logo";
 import { recurringDashboardSummary, type RecurringSummaryTab } from "./recurring-dashboard-summary";
 import { getPlannedPaymentSuggestions } from "./planned-payment-suggestions";
 import { prisma } from "./prisma";
@@ -13,6 +14,7 @@ export async function mobileRecurring(
   workspaceId: string,
   year: number,
   month: number,
+  calendarYear = false,
 ) {
   const records = await prisma.financialCommitment.findMany({
     where: { workspaceId },
@@ -26,6 +28,7 @@ export async function mobileRecurring(
   });
   const commitments = records.map(serializeFinancialCommitment);
   const suggestions = await getPlannedPaymentSuggestions(workspaceId);
+  const completions = new Map(records.map(record => [record.id, new Set(record.occurrences.map(o => o.dueDate.toISOString().slice(0, 10)))]));
   return {
     summaries: Object.fromEntries((["overview", "planned", "debt", "owed", "installments"] as RecurringSummaryTab[]).map(tab => [tab, recurringDashboardSummary(commitments, tab, suggestions.length)])),
     suggestions: suggestions.map((s) => ({
@@ -45,6 +48,7 @@ export async function mobileRecurring(
       statementCheckpointId: s.statementCheckpointId,
     })),
     items: commitments.map((c) => ({
+      ...transactionMerchantLogo({ merchantRaw: c.title, merchantClean: c.title, categoryName: c.categoryName, currency: c.currency }),
       principalAmount: c.amount,
       accountId: c.accountId,
       dueDate: c.dueDate,
@@ -68,22 +72,17 @@ export async function mobileRecurring(
       categoryName: c.categoryName,
       notes: c.notes,
     })),
-    occurrences: buildRecurringCalendarOccurrences(
-      commitments,
-      year,
-      month,
+    occurrences: (calendarYear
+      ? Array.from({ length: 14 }, (_, index) => {
+          const date = new Date(year, index - 1, 1);
+          return buildRecurringCalendarOccurrences(commitments, date.getFullYear(), date.getMonth());
+        }).flat()
+      : buildRecurringCalendarOccurrences(commitments, year, month)
     ).map((o) => ({
       id: o.commitment.id,
       date: o.dateKey,
       dueDate: recurringCompletionDate(o.commitment, o.dateKey),
-      completed:
-        records
-          .find((r) => r.id === o.commitment.id)
-          ?.occurrences.some(
-            (c) =>
-              c.dueDate.toISOString().slice(0, 10) ===
-              recurringCompletionDate(o.commitment, o.dateKey),
-          ) ?? false,
+      completed: completions.get(o.commitment.id)?.has(recurringCompletionDate(o.commitment, o.dateKey)) ?? false,
       title: o.commitment.title,
       kind: o.commitment.kind,
       amount: recurringPaymentAmount(o.commitment, o.dateKey),

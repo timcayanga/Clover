@@ -1,3 +1,4 @@
+import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { invalidateWorkspaceSummaryCache, invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
 import { createDirectBillExpense } from "@/lib/split-bill-direct-expense";
 import { splitBillReadSurface, type SplitBillReadErrorCode } from "../../../../shared/split-bill-read";
@@ -63,6 +64,7 @@ const billSchema = z.object({
   discount: z.union([z.string(), z.number(), z.null()]).optional(),
   total: z.union([z.string(), z.number(), z.null()]).optional(),
   groupId: z.string().nullable().optional(),
+  circleId: z.string().min(1).max(128).optional(),
   rawPayload: z.record(z.string(), z.unknown()).nullable().optional(),
   participants: z.array(participantSchema).default([]),
   items: z.array(itemSchema).default([]),
@@ -279,7 +281,7 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
     name: participant.name.trim(),
   }));
 
-  if (groupMembers) {
+  if (groupMembers && !input.circleId) {
     const existingNames = new Set(participantEntries.map((participant) => participant.name.trim().toLowerCase()));
     for (const member of groupMembers.members) {
       const memberName = member.name.trim();
@@ -392,6 +394,22 @@ const persistSplitBill = async (
       const prior=await tx.splitBill.findFirst({where:{userId,rawPayload:{path:["directEntryAttemptId"],equals:input.expense.attemptId}},include:getBillInclude});
       if(prior){if((prior.rawPayload as Record<string,unknown>|null)?.directEntryWorkspaceId!==input.expense.workspaceId)throw Error("This save attempt belongs to another Profile.");return prior;}
       payload.billData.rawPayload={...(payload.billData.rawPayload as object),directEntryAttemptId:input.expense.attemptId,directEntryWorkspaceId:input.expense.workspaceId};
+    }
+    if (input.circleId) {
+      const circle = await tx.circle.findFirst({
+        where: { id: input.circleId, archivedAt: null, memberships: { some: { userId, status: "active", role: { in: ["organizer", "member"] } } } },
+        select: { ownerUserId:true, name:true, avatarUrl:true, splitBillGroup: {select: {id: true}}, memberships: {where: {status: {in: ["active", "invited"]}}, select: {displayName: true}} },
+      });
+      if (!input.expense || !circle || (input.groupId && circle.splitBillGroup?.id !== input.groupId)) throw Error("Choose an available Circle for this expense.");
+      const allowed = new Set(circle.memberships.map(member => member.displayName.trim()));
+      if (!payload.participants.length || payload.participants.some(person => !allowed.has(person.name))) throw Error("Choose people from this Circle.");
+      const group = circle.splitBillGroup ?? await tx.splitBillGroup.upsert({
+        where:{circleId:input.circleId}, update:{},
+        create:{circleId:input.circleId,userId:circle.ownerUserId,name:circle.name,avatarUrl:circle.avatarUrl,
+          members:{create:[...allowed].map((name,sortOrder)=>({name,sortOrder}))}},
+        select:{id:true},
+      });
+      payload.groupId = group.id;
     }
     const sourceIds = bulkSourceIds ?? (payload.transactionId ? [payload.transactionId] : []);
     if (mode === "create" && sourceIds.length) {
@@ -537,7 +555,8 @@ const persistSplitBill = async (
       });
     }
 
-    if(mode === "create" && input.expense)await createDirectBillExpense(tx,userId,bill,input.expense,payload.items.map(i=>({description:i.description,amount:String(i.amount)})));
+    await upsertSplitBillPeopleFromNames(tx, userId, payload.participants.map(person => person.name));
+    if(mode === "create" && input.expense)await createDirectBillExpense(tx,userId,bill,input.expense,payload.items.map(i=>({description:i.description,amount:String(i.amount)})), input.circleId ? 1 : 2);
     return tx.splitBill.findUniqueOrThrow({
       where: { id: bill.id },
       include: getBillInclude,

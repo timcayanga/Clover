@@ -10,6 +10,7 @@ const amount = z
   .refine((v) => Number(v) > 0 && Number(v) <= 1_000_000_000);
 export const mobileBillEdit = z
   .object({
+    currency: z.string().regex(/^[A-Z]{3,8}$/).optional(),
     title: z.string().trim().min(1).max(100),
     addedParticipants: z
       .array(
@@ -53,6 +54,9 @@ export function mergeMobileBillEdit(
   input: unknown,
 ) {
   const body = mobileBillEdit.parse(input);
+  if (body.currency && body.currency !== bill.currency && (bill.transferSettlements?.length || bill.paymentRequests?.length)) {
+    throw new Error("This bill already has a payment request or settlement. Choose a currency when requesting payment instead.");
+  }
   const participants = [
     ...bill.participants,
     ...(body.addedParticipants ?? []),
@@ -105,6 +109,7 @@ export function mergeMobileBillEdit(
   return {
     ...bill,
     title: body.title,
+    currency: body.currency ?? bill.currency,
     participants,
     total: total.toFixed(2),
     subtotal: newItems.toFixed(2),

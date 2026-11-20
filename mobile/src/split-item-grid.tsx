@@ -1,8 +1,8 @@
 import { ScrollView, View, Pressable, TextInput } from "react-native";
 import { Text } from "./app-text";
 import { PersonAvatar } from "./person-avatar";
-import { Body, Card, Field, money, useTheme } from "./ui";
-import { PlanAction } from "./plan-ui";
+import { Body, Card, Field, SectionTitle, money, useTheme } from "./ui";
+import { useState } from "react";
 import {
   splitItemTotals,
   splitMethods,
@@ -18,8 +18,14 @@ export function SplitItemGrid({
   adjustment = 0,
   onAddPerson,
   fixedItems = false,
+  circleSplitControls,
+  equalLabel = "Equally",
+  wholeItem,
 }: {
   fixedItems?: boolean;
+  wholeItem?: {description:string; amount:string};
+  equalLabel?: "Equal" | "Equally";
+  circleSplitControls?: React.ReactNode;
   adjustment?: number;
   onAddPerson?: () => void;
   people: SplitPerson[];
@@ -28,6 +34,7 @@ export function SplitItemGrid({
   onChange: (items: SplitItem[]) => void;
 }) {
   const { colors } = useTheme();
+  const [editingAmount, setEditingAmount] = useState<string | number | null>(null);
   const totals = splitItemTotals(people, items, adjustment);
   const update = (index: number, patch: Partial<SplitItem>) =>
     onChange(
@@ -41,10 +48,10 @@ export function SplitItemGrid({
   return (
     <>
       <Card>
-        <Body muted={false}>Choose who shares each item</Body>
+        <SectionTitle>Line Items</SectionTitle>
         <ScrollView
           horizontal
-          showsHorizontalScrollIndicator={people.length > 2}
+          showsHorizontalScrollIndicator
         >
           <View style={{ width }}>
             <View
@@ -63,7 +70,7 @@ export function SplitItemGrid({
                   style={{ width: 116, alignItems: "center", gap: 4 }}
                 >
                   <PersonAvatar
-                    name={p.name}
+                    name={p.name.trim().split(/\s+/)[0]}
                     imageUrl={p.avatarUrl}
                     size={32}
                   />
@@ -75,7 +82,7 @@ export function SplitItemGrid({
                       textAlign: "center",
                     }}
                   >
-                    {p.name}
+                    {p.name.trim().split(/\s+/)[0]}
                   </Text>
                 </View>
               ))}
@@ -105,7 +112,10 @@ export function SplitItemGrid({
                   <TextInput
                     accessibilityLabel={`Item ${index + 1}`}
                     editable={!fixedItems}
-                    placeholder="Item name"
+                    multiline
+                    scrollEnabled={false}
+                    placeholder="Item Name"
+                    placeholderTextColor={colors.muted}
                     value={item.description}
                     onChangeText={(description) =>
                       update(index, { description })
@@ -114,21 +124,24 @@ export function SplitItemGrid({
                       color: colors.ink,
                       fontFamily: "Poppins-Medium",
                       fontSize: 14,
-                      minHeight: 32,
+                      minHeight: 32, borderBottomWidth: 1, borderBottomColor: colors.line,
                     }}
                   />
                   <TextInput
                     accessibilityLabel={`Amount ${index + 1}`}
                     editable={!fixedItems}
-                    placeholder="0.00"
-                    value={item.amount}
+                    placeholder="Amount"
+                    placeholderTextColor={colors.muted}
+                    onFocus={() => setEditingAmount(item.id ?? index)}
+                    onBlur={() => setEditingAmount(null)}
+                    value={editingAmount === (item.id ?? index) || !item.amount ? item.amount : money(item.amount, currency)}
                     keyboardType="decimal-pad"
                     onChangeText={(amount) => update(index, { amount })}
                     style={{
                       color: colors.muted,
                       fontFamily: "Poppins-Regular",
                       fontSize: 12,
-                      minHeight: 28,
+                      minHeight: 28, borderBottomWidth: 1, borderBottomColor: colors.line,
                     }}
                   />
                 </View>
@@ -221,7 +234,7 @@ export function SplitItemGrid({
                 ) : null}
               </View>
             ))}
-            <View
+            {!circleSplitControls && <View
               style={{
                 flexDirection: "row",
                 paddingVertical: 14,
@@ -230,7 +243,7 @@ export function SplitItemGrid({
               }}
             >
               <View style={{ width: 142 }}>
-                <Body muted={false}>To pay</Body>
+                <Body muted={false}>To Pay</Body>
               </View>
               {people.map((p) => (
                 <View key={p.id} style={{ width: 116 }}>
@@ -249,7 +262,7 @@ export function SplitItemGrid({
                   </Text>
                 </View>
               ))}
-            </View>
+            </View>}
           </View>
         </ScrollView>
         {!fixedItems ? (
@@ -277,13 +290,12 @@ export function SplitItemGrid({
         ) : null}
       </Card>
       <Card>
-        <Body muted={false}>Split Method</Body>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {circleSplitControls}
+        <SectionTitle>Split Method</SectionTitle>
+        <View style={{ flexDirection: "row", gap: 4 }}>
           {splitMethods.map((m) => (
-            <PlanAction
-              key={m.value}
-              title={`${m.icon} ${m.label}`}
-              tone={method === m.value ? "primary" : "view"}
+            <Pressable key={m.value} accessibilityRole="button" accessibilityState={{ selected: method === m.value }}
+              style={{ flex: 1, minHeight: 44, justifyContent: "center", alignItems: "center", borderRadius: 22, backgroundColor: method === m.value ? colors.teal : colors.pale }}
               onPress={() =>
                 onChange(
                   items.length
@@ -295,8 +307,8 @@ export function SplitItemGrid({
                     : [
                         {
                           id: `new-${Date.now()}`,
-                          description: "",
-                          amount: "",
+                          description: wholeItem?.description ?? "",
+                          amount: wholeItem?.amount ?? "",
                           participantIds: people.map((p) => p.id),
                           splitMethod: m.value,
                           allocations: [],
@@ -304,7 +316,11 @@ export function SplitItemGrid({
                       ],
                 )
               }
-            />
+            >
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: method === m.value ? "white" : colors.ink, fontSize: 13 }}>
+                {m.icon} {{ equal: circleSplitControls ? "Equal" : equalLabel, exact: "Amount", percentage: "Percent" }[m.value]}
+              </Text>
+            </Pressable>
           ))}
         </View>
       </Card>

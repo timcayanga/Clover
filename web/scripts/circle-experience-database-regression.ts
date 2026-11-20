@@ -350,7 +350,11 @@ async function main() {
     ).status,
     404,
   );
+  const stale = await call({action: "update_expense_split", id: share.id, previousRevision: "[]",
+    items: [{description: "Lunch", amount: "1200", participantIds: ["me"]}]});
+  assert.equal(stale.status, 409);
   const data = await loadCirclesWorkspaceData(user, "circle");
+  assert.ok(data.circles[0].activities.some(activity => activity.expenseId === share.id && activity.summary.includes("Lunch") && activity.summary.includes("Mia")));
   assert.equal(data.circles[0].expenseTotalThisMonth, 1200);
   assert.equal(data.circles[0].expenses.find(e => e.transactionId === "meal")?.paidByName, "Mia");
   assert.deepEqual(data.circles[0].expenseCurrencyTotals, {

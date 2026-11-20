@@ -80,7 +80,13 @@ export function EntrySelector({
             backgroundColor: wrapped && value === method ? colors.teal : "transparent",
           }}
         >
-          {methodIcons[method] ? <Image source={methodIcons[method]} tintColor={value === method ? "#ffffff" : undefined} style={{ width: 26, height: 26, tintColor: value === method ? "#fff" : undefined }} fadeDuration={0} resizeMode="contain" accessible={false} /> : null}
+          {methodIcons[method] ? (
+            <View style={{ width: 26, height: 26 }}>
+              {value === method && <Image source={methodIcons[method]} accessible={false} resizeMode="contain" fadeDuration={0}
+                style={{ position: "absolute", left: -1, top: 0, width: 28, height: 28, tintColor: "white", opacity: 0.85 }} />}
+              <Image source={methodIcons[method]} accessible={false} resizeMode="contain" fadeDuration={0} style={{ width: 26, height: 26 }} />
+            </View>
+          ) : null}
           <Text
             style={{
               fontSize: 12,

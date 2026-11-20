@@ -14,7 +14,7 @@ import { apiBase } from "./api";
 import { Pressable, View, Share } from "react-native";
 import { useSession } from "./session";
 import { Body, Card, Field, Notice, useTheme, money } from "./ui";
-import { PlanAction, SummaryCard } from "./plan-ui";
+import { PlanAction } from "./plan-ui";
 export type BillItem = {
   id: string;
   description: string;
@@ -106,31 +106,6 @@ export function BillDetails({
   const { colors } = useTheme();
   const [shareUrl, setShareUrl] = useState("");
   const [shareMessage, setShareMessage] = useState("");
-  const [savedRequests, setSavedRequests] = useState<
-    {
-      id: string;
-      shareUrl: string;
-      amount: string;
-      currency: string;
-      recipientName: string;
-      note?: string | null;
-    }[]
-  >([]);
-  useEffect(() => {
-    if (session.demo) return;
-    let active = true;
-    session
-      .request<{ requests: typeof savedRequests }>(
-        `split-bills/${bill.id}/payment-requests?workspaceId=${encodeURIComponent(session.profileId)}`,
-      )
-      .then((r) => {
-        if (active) setSavedRequests(r.requests ?? []);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [bill.id, session.demo, session.profileId, session.request]);
   const [requestCurrency, setRequestCurrency] = useState(bill.currency);
   const [billAmount, setBillAmount] = useState("");
   const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
@@ -138,6 +113,7 @@ export function BillDetails({
   const availableProfiles = paymentProfiles.filter(
     (profile) => profile.currency === requestCurrency,
   );
+  const [currency, setCurrency] = useState(bill.currency);
   const [title, setTitle] = useState(bill.title);
   const [items, setItems] = useState(() =>
     (bill.items ?? []).map((i) => ({
@@ -161,7 +137,7 @@ export function BillDetails({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<
-    "delete" | "resolve" | Transfer | null
+    "delete" | Transfer | null
   >(null);
   const [request, setRequest] = useState<Transfer | null>(null);
   const [requestAmount, setRequestAmount] = useState("");
@@ -257,11 +233,13 @@ export function BillDetails({
   const [message, setMessage] = useState("");
   const payload = JSON.stringify({
     title,
+    ...(currency !== bill.currency ? { currency } : {}),
     items,
     ...(addedParticipants.length ? { addedParticipants } : {}),
   });
   const changed =
     addedParticipants.length > 0 ||
+    currency !== bill.currency ||
     title !== bill.title ||
     JSON.stringify(items) !==
       JSON.stringify(
@@ -369,12 +347,14 @@ export function BillDetails({
   const people = [...(bill.participants ?? []), ...addedParticipants];
   return (
     <>
-      <SummaryCard
-        title="Bill total"
-        value={money(bill.total, bill.currency)}
-        detail={`${bill.billDate.slice(0, 10)} · ${bill.resolved ? "Resolved" : bill.settlementStatus}`}
-      />
-      <Field label="Bill name" value={title} onChangeText={setTitle} />
+      <Card>
+        <Field label="Bill name" value={title} onChangeText={setTitle} />
+        <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 22 }}>{money(bill.total, currency)}</Text>
+        <Body>{bill.billDate.slice(0, 10)}</Body>
+        <ChoiceField label="Bill currency" value={currency} onChange={setCurrency}
+          options={[...new Set([bill.currency, ...(session.data?.currencyChoices ?? []).map(c => c.code), "PHP", "USD", "EUR", "SGD", "THB", "JPY", "GBP", "IDR"])].map(code => ({ value: code, label: code }))} />
+        {currency !== bill.currency ? <Body>Saving changes the bill currency and keeps the amounts you entered.</Body> : null}
+      </Card>
       {addingPerson ? (
         <Card>
           <Field
@@ -418,7 +398,7 @@ export function BillDetails({
         onAddPerson={() => setAddingPerson(true)}
         items={items}
         adjustment={adjustment}
-        currency={bill.currency}
+        currency={currency}
         onChange={(next) =>
           setItems(
             next.map((item, index) => ({
@@ -432,28 +412,6 @@ export function BillDetails({
       />
       {error ? <Notice>{error}</Notice> : null}
       {message ? <Body>{message}</Body> : null}
-      {savedRequests.map((entry) => (
-        <PlanAction
-          key={entry.id}
-          title={`Share request to ${entry.recipientName}`}
-          onPress={() =>
-            void Share.share({
-              message: paymentRequestMessage(entry.recipientName, [
-                {
-                  title: bill.title,
-                  amount: entry.amount,
-                  currency: entry.currency,
-                  date: bill.billDate,
-                  url: `${apiBase()}${entry.shareUrl}`,
-                  note: entry.note,
-                },
-              ]),
-            }).catch(() =>
-              setError("Unable to open sharing. Please try again."),
-            )
-          }
-        />
-      ))}
       {shareUrl ? (
         <PlanAction
           title="Share payment request"
@@ -526,11 +484,11 @@ export function BillDetails({
                     <Text style={{ flex: 1, color: colors.ink }}>{p.name}</Text>
                   </View>
                   {[
-                    money(String(paid), bill.currency),
-                    money(String(share), bill.currency),
+                    money(String(paid), currency),
+                    money(String(share), currency),
                     Math.abs(balance) < 0.005
                       ? "Settled"
-                      : `${balance > 0 ? "Is owed" : "Owes"} ${money(String(Math.abs(balance)), bill.currency)}`,
+                      : `${balance > 0 ? "Is owed" : "Owes"} ${money(String(Math.abs(balance)), currency)}`,
                   ].map((v, i) => (
                     <Text key={i} style={{ width: 112, color: colors.ink }}>
                       {v}
@@ -542,44 +500,6 @@ export function BillDetails({
           )}
         </View>
       </ScrollView>
-      <Card>
-        <Body muted={false}>Total Contributions</Body>
-        <Body>
-          {money(
-            String(
-              (bill.payments ?? []).reduce(
-                (sum, p) => sum + Number(p.amount),
-                0,
-              ),
-            ),
-            bill.currency,
-          )}
-        </Body>
-      </Card>
-      <Card>
-        <Body muted={false}>Contributions</Body>
-        {(bill.payments ?? []).map((p) => (
-          <Body key={p.id}>
-            {bill.participants?.find((person) => person.id === p.participantId)
-              ?.name ?? "Participant"}{" "}
-            contributed {money(p.amount, bill.currency)}
-            {p.note ? ` · ${p.note}` : ""}
-          </Body>
-        ))}
-        {!bill.payments?.length ? <Body>No contributions recorded</Body> : null}
-      </Card>
-      <Card>
-        <Body muted={false}>Settlement</Body>
-        {(bill.transferSettlements ?? []).map((t) => (
-          <Body key={t.id}>
-            {t.fromParticipantName} paid {t.toParticipantName}{" "}
-            {money(t.amount, bill.currency)}
-          </Body>
-        ))}
-        {!bill.transferSettlements?.length ? (
-          <Body>No settlements recorded</Body>
-        ) : null}
-      </Card>
       <PlanAction
         title={busy ? "Saving…" : "Save changes"}
         tone="primary"
@@ -600,12 +520,10 @@ export function BillDetails({
         <>
           {bill.settlement?.transfers.map((t) => (
             <Card key={`${t.fromParticipantId}-${t.toParticipantId}`}>
-              <Body>
-                {t.fromParticipantName} owes {t.toParticipantName}{" "}
-                {money(String(t.amount), bill.currency)}
-              </Body>
+              <Body>{t.fromParticipantName} → {t.toParticipantName}</Body>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <PlanAction
-                title="Request payment"
+                title="Request Payment"
                 tone="primary"
                 onPress={() => {
                   setPaymentProfileId(
@@ -629,9 +547,10 @@ export function BillDetails({
                 }}
               />
               <PlanAction
-                title="Record payment received"
+                title="Paid"
                 onPress={() => setConfirm(t)}
               />
+              </View>
             </Card>
           ))}
         </>
@@ -804,13 +723,6 @@ export function BillDetails({
           />
         </Card>
       ) : null}
-      {!bill.resolved ? (
-        <PlanAction
-          title="Mark as resolved"
-          disabled={busy}
-          onPress={() => setConfirm("resolve")}
-        />
-      ) : null}
       <PlanAction
         title="Delete bill"
         tone="delete"
@@ -822,9 +734,7 @@ export function BillDetails({
           <Body>
             {confirm === "delete"
               ? "Delete this split bill?"
-              : confirm === "resolve"
-                ? "Resolve this bill and stop payment reminders? This will not record a payment."
-                : "Confirm this payment has been received."}
+              : `Confirm receipt of ${money(String(confirm.amount), bill.currency)} from ${confirm.fromParticipantName} for ${confirm.toParticipantName}?`}
           </Body>
           <PlanAction
             title="Cancel"
@@ -838,9 +748,7 @@ export function BillDetails({
             onPress={() =>
               confirm === "delete"
                 ? action(`split-bills/${bill.id}`, "DELETE")
-                : confirm === "resolve"
-                  ? action(`split-bills/${bill.id}/resolution`, "POST")
-                  : action(
+                : action(
                       `split-bills/${bill.id}/transfer-settlements`,
                       "POST",
                       confirm,

@@ -1,3 +1,4 @@
+import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -243,10 +244,11 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
     ? await prisma.splitBillGroup.findFirst({
         where: {
           id: groupId,
-          userId,
+          OR: [{userId}, {circle: {memberships: {some: {userId, status: "active", role: {in: ["organizer", "member"]}}}}}],
         },
         select: {
           id: true,
+          circleId: true,
           members: {
             orderBy: splitBillGroupMemberOrderBy,
             select: {
@@ -267,7 +269,7 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
     name: participant.name.trim(),
   }));
 
-  if (groupMembers) {
+  if (groupMembers && !groupMembers.circleId) {
     const existingNames = new Set(participantEntries.map((participant) => participant.name.trim().toLowerCase()));
     for (const member of groupMembers.members) {
       const memberName = member.name.trim();
@@ -407,11 +409,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bi
     const updated = await prisma.$transaction(async (tx) => {
       const existing = await tx.splitBill.findFirst({
         where: { id: billId, userId: user.id },
-        select: { id: true },
+        select: { id: true, currency: true },
       });
 
       if (!existing) {
         throw new Error("Bill not found.");
+      }
+
+      if (existing.currency !== bill.billData.currency) {
+        const changed = await tx.splitBill.updateMany({
+          where: { id: billId, userId: user.id, currency: existing.currency, paymentRequests: { none: {} }, transferSettlements: { none: {} } },
+          data: { currency: bill.billData.currency },
+        });
+        if (!changed.count) throw new Error("The bill currency cannot change after a payment request or settlement.");
       }
 
       await tx.splitBill.update({
@@ -440,6 +450,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bi
         where: { billId },
       });
 
+      await upsertSplitBillPeopleFromNames(tx, user.id, bill.participants.map(person => person.name));
       await tx.splitBillParticipant.createMany({
         data: bill.participants.map((participant) => ({
           id: participant.sourceId,

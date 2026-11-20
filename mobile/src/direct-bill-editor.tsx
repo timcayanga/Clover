@@ -1,9 +1,10 @@
+import { PeopleSuggestions, type SavedPerson } from "./split-people-field";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import { useUser } from "@clerk/expo";
 import { useEffect, useRef, useState } from "react";
-import { Platform, View } from "react-native";
+import { Platform, View, TextInput, Pressable } from "react-native";
 import { SplitItemGrid } from "./split-item-grid";
 import {
   suggestBillCategory,
@@ -13,10 +14,16 @@ import type { Transaction } from "./types";
 import type { SplitGroup } from "./split-group-details";
 import type { BillItem } from "./bill-details";
 import { AddEntryMethods } from "./add-entry-methods";
-import { fileProblem, removeUploadCopy } from "./upload";
+import { fileProblem, receiptPhotoForm, resolveSelectedFile, removeUploadCopy } from "./upload";
 import { useSession } from "./session";
-import { Body, Field, Notice, Screen } from "./ui";
+import { Body, Field, Notice, Screen, CategoryMark, useTheme } from "./ui";
 import { PlanAction, PlanHeader, usePlanData } from "./plan-ui";
+import { Text } from "./app-text";
+import { AccountTypeMark } from "./account-type-mark";
+import { ChoiceField } from "./transaction-entry";
+
+const currencyFlags: Record<string, string> = { PHP:"🇵🇭", USD:"🇺🇸", EUR:"🇪🇺", GBP:"🇬🇧", SGD:"🇸🇬", THB:"🇹🇭", JPY:"🇯🇵", IDR:"🇮🇩", MYR:"🇲🇾", HKD:"🇭🇰", AUD:"🇦🇺", CAD:"🇨🇦", CNY:"🇨🇳", KRW:"🇰🇷", VND:"🇻🇳", INR:"🇮🇳", CHF:"🇨🇭", NZD:"🇳🇿" };
+
 type Bill = {
   id: string;
   title: string;
@@ -47,6 +54,12 @@ type Bill = {
     }[];
   };
 };
+const emptyEntryOptions = {
+  accounts: [] as {id: string; name: string; currency: string; type: string}[],
+  categories: [] as {id: string; name: string}[],
+};
+const emptyGroupOptions = {groups: [] as SplitGroup[], people: [] as SavedPerson[]};
+
 export function BillEditor({
   sourceTransaction,
   context,
@@ -56,9 +69,13 @@ export function BillEditor({
   onClose: () => void;
   onSaved: (bill: Bill) => void;
   sourceTransaction?: Transaction | null;
-  context?: { group?: SplitGroup; person?: string; currency?: string };
+  context?: { circleId?: string; group?: SplitGroup; person?: string; currency?: string };
 }) {
   const session = useSession();
+  const circleId = context?.circleId;
+  const circleMembers = context?.group?.members ?? [];
+  const recorder = context?.group?.recorderName;
+  const { colors } = useTheme();
   const [entryMode, setEntryMode] = useState(
       sourceTransaction ? "manual" : "upload",
     ),
@@ -67,18 +84,8 @@ export function BillEditor({
     [categoryId, setCategoryId] = useState(""),
     [groupPicker, setGroupPicker] = useState(false);
   const [attemptId] = useState(() => Crypto.randomUUID());
-  const entryOptions = usePlanData("options", {
-    accounts: [] as {
-      id: string;
-      name: string;
-      currency: string;
-      type: string;
-    }[],
-    categories: [] as { id: string; name: string }[],
-  });
-  const savedGroups = usePlanData("together-options", {
-    groups: [] as SplitGroup[],
-  });
+  const entryOptions = usePlanData("options", emptyEntryOptions);
+  const savedGroups = usePlanData("together-options", emptyGroupOptions);
   const [groupId, setGroupId] = useState(context?.group?.id || "");
   const [title, setTitle] = useState(
     sourceTransaction?.merchantClean || sourceTransaction?.merchantRaw || "",
@@ -93,7 +100,10 @@ export function BillEditor({
   );
   const { user } = useUser();
   const [addingPerson, setAddingPerson] = useState(false);
+  const [pickerAtItems, setPickerAtItems] = useState(false);
   const [personName, setPersonName] = useState("");
+  const peopleInput = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const linePeopleInput = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [reviewedItems, setReviewedItems] = useState<
     (Omit<SplitItem, "participantIds"> & { participantIds?: string[] })[]
   >(() => {
@@ -172,17 +182,9 @@ export function BillEditor({
         file = picked.assets[0];
       }
       copiedUri = file.uri;
-      const problem = fileProblem(file);
+      const problem = fileProblem(Platform.OS === "web" ? file : resolveSelectedFile(file));
       if (problem) throw new Error(problem);
-      const form = new FormData();
-      if (Platform.OS === "web")
-        form.append("file", await (await fetch(file.uri)).blob(), file.name);
-      else
-        form.append("file", {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType ?? "application/octet-stream",
-        } as unknown as Blob);
+      const form = await receiptPhotoForm(file);
       const result = await session.request<{
         receiptStorageKey: string;
         preview: {
@@ -234,7 +236,7 @@ export function BillEditor({
       if (alive.current) setBusy(false);
     }
   };
-  const [names, setNames] = useState(() =>
+  const [names, setNames] = useState(() => circleId ? circleMembers.map(m => m.name).join("\n") :
     Array.from(
       new Set(
         [
@@ -248,7 +250,7 @@ export function BillEditor({
       ),
     ).join("\n"),
   );
-  const [payer, setPayer] = useState<number | null>(0);
+  const [payer, setPayer] = useState<number | null>(() => {if (!circleId) return 0; const i = circleMembers.findIndex(m => m.name === recorder); return i < 0 ? null : i;});
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -257,22 +259,55 @@ export function BillEditor({
     .split("\n")
     .map((name) => ({ name: name.trim() }))
     .filter((p) => p.name);
+  function addNames(values: string[]) {
+    setNames(current => {
+      const unique = new Map<string, string>();
+      for (const entry of [...current.split("\n"), ...values]) {
+        const name = entry.trim();
+        if (name && !unique.has(name.toLowerCase())) unique.set(name.toLowerCase(), name);
+      }
+      return [...unique.values()].join("\n");
+    });
+  }
+  const availableMembers = circleMembers.filter(m => !participants.some(p => p.name === m.name));
+  const memberPicker = <ChoiceField label="Add Circle Member" initiallyOpen value="" options={availableMembers.map(m => ({value:m.name,label:m.name}))}
+    onChange={name => {addNames([name]);setAddingPerson(false);}}/>;
+  const nameInput = (autoFocus = false) => (
+    <>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <TextInput ref={autoFocus ? linePeopleInput : peopleInput} autoFocus={autoFocus} accessibilityLabel="Person Name" placeholder="Person Name" placeholderTextColor={colors.muted}
+        style={{ flex: 1, minHeight: 44, color: colors.ink, borderBottomWidth: 1, borderColor: colors.line }}
+        value={personName} returnKeyType="done" onChangeText={text => {
+          const parts = text.split(/[,\n]/);
+          setPersonName(parts.pop() ?? "");
+          if (parts.length) addNames(parts);
+        }} onSubmitEditing={() => { addNames([personName]); setPersonName(""); setAddingPerson(false); }} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Add Person" onPress={() => {
+        if (!personName.trim()) { (autoFocus ? linePeopleInput : peopleInput).current?.focus(); return; }
+        addNames([personName]); setPersonName(""); setAddingPerson(false);
+      }} style={{ padding: 10 }}><Text style={{ fontSize: 22, color: colors.teal }}>+</Text></Pressable>
+    </View>
+    <PeopleSuggestions draft={personName} selected={participants.map(p => p.name)} saved={savedGroups.data?.people ?? []}
+      choose={name => {addNames([name]); setPersonName(""); setAddingPerson(false);}}/>
+    </>
+  );
   const save = async () => {
     if (inFlight.current) return;
+    if (personName.trim()) { setError("Tap + to add the name before creating the bill."); return; }
     const parsedDate = new Date(`${date}T00:00:00Z`);
     if (
       !title.trim() ||
       !/^\d+(\.\d{1,2})?$/.test(total) ||
       Number(total) <= 0 ||
       !/^[A-Z]{3}$/.test(currency) ||
-      participants.length < 2 ||
+      participants.length < (circleId ? 1 : 2) ||
       new Set(participants.map((p) => p.name.toLowerCase())).size !==
         participants.length ||
       !Number.isFinite(+parsedDate) ||
       parsedDate.toISOString().slice(0, 10) !== date
     ) {
       setError(
-        "Enter a title, positive amount, valid date/currency and at least two distinct people.",
+        circleId ? "Enter a name, a positive amount, a valid date and currency, and at least one Circle member." : "Enter a title, positive amount, valid date/currency and at least two distinct people.",
       );
       return;
     }
@@ -310,6 +345,7 @@ export function BillEditor({
                 categoryId: categoryId || null,
               },
             }),
+        ...(circleId ? {circleId} : {}),
         ...(groupId ? { groupId } : {}),
         title: title.trim(),
         note,
@@ -372,7 +408,7 @@ export function BillEditor({
       }}
     >
       <PlanHeader
-        title="Add Split Bill"
+        title={circleId ? "Add Expense" : "Add Split Bill"}
         back={() => {
           if (!busy) onClose();
         }}
@@ -392,7 +428,7 @@ export function BillEditor({
             if (f.amount !== undefined) setTotal(f.amount);
             if (f.currency !== undefined) setCurrency(f.currency);
             if (f.date !== undefined) setDate(f.date);
-            if (f.people !== undefined) {
+            if (!circleId && f.people !== undefined) {
               setNames(f.people);
               setPayer(0);
             }
@@ -401,111 +437,51 @@ export function BillEditor({
         >
           <Field
             label="Name"
+            placeholder="Name" style={{borderBottomWidth:2,borderBottomColor:colors.muted}}
             value={title}
             onChangeText={setTitle}
             maxLength={100}
           />
           <Field
             label="Amount"
+            placeholder="0.00" style={{borderBottomWidth:2,borderBottomColor:colors.muted}}
             value={total}
             onChangeText={setTotal}
             keyboardType="decimal-pad"
           />
-          <Field
-            label="Currency"
-            value={currency}
-            onChangeText={(v) => setCurrency(v.toUpperCase())}
-            maxLength={3}
-          />
-          <Field
-            label="Group"
-            value={
-              savedGroups.data?.groups.find((g) => g.id === groupId)?.name ||
-              context?.group?.name ||
-              ""
-            }
-            editable={false}
-          />
-          {!context?.group ? (
-            <PlanAction
-              title="Choose Group"
-              onPress={() => setGroupPicker((v) => !v)}
-            />
-          ) : null}
-          {!context?.group && groupPicker
-            ? savedGroups.data?.groups.map((g) => (
-                <PlanAction
-                  key={g.id}
-                  title={g.name}
+          <Field label={`Currency  ${currencyFlags[currency] ?? "🌐"}`} value={currency}
+            onChangeText={v => { setCurrency(v.toUpperCase()); setAccountId(""); }} maxLength={3} />
+          <View style={{ borderWidth: 1, borderRadius: 16, borderColor: colors.line, padding: 12, gap: 8 }}>
+            <Body muted={false}>{circleId ? "People" : "People or Group"}</Body>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {!circleId && (context?.group || groupId) && <Body>{context?.group?.name ?? savedGroups.data?.groups.find(g => g.id === groupId)?.name}</Body>}
+              {participants.map(({name}, index) => (
+                <Pressable key={name} disabled={!circleId && index === 0} accessibilityLabel={circleId || index ? `Remove ${name}` : name}
                   onPress={() => {
-                    setGroupId(g.id);
-                    setNames(
-                      Array.from(
-                        new Set(
-                          [
-                            user?.fullName || "You",
-                            ...g.members.map((m) => m.name),
-                          ].filter(
-                            (n, i) =>
-                              i === 0 ||
-                              (!/^(you|me)$/i.test(n) && n !== user?.fullName),
-                          ),
-                        ),
-                      ).join("\n"),
-                    );
-                    setGroupPicker(false);
-                  }}
-                />
-              ))
-            : null}
-          <Field
-            label="People (one name per line)"
-            value={names}
-            onChangeText={(value) => {
-              setNames(value);
-              setPayer(0);
-            }}
-            multiline
-          />
+                    setNames(participants.filter(p => p.name !== name).map(p => p.name).join("\n"));
+                    setPayer(old => old === null ? null : old === index ? (circleId ? null : 0) : old > index ? old - 1 : old);
+                    setReviewedItems(rows => rows.map(row => ({...row, participantIds: row.participantIds?.filter(id => id !== name), allocations: row.allocations?.filter(a => a.participantId !== name)})));
+                  }} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, backgroundColor: ["#cff4ed","#dbeafb","#f5e2f1"][index % 3] }}>
+                  <Text style={{color:"#17373c"}}>{name}{circleId || index ? " ×" : ""}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {circleId ? <>
+              <PlanAction title="+" disabled={!availableMembers.length} onPress={() => {setPickerAtItems(false);setAddingPerson(v => !v || pickerAtItems);}}/>
+              {addingPerson && !pickerAtItems && availableMembers.length > 0 && memberPicker}
+            </> : nameInput()}
+            {!context?.group && savedGroups.data?.groups.length ? <PlanAction title={groupPicker ? "Hide Groups" : "Choose Group"} onPress={() => setGroupPicker(!groupPicker)} /> : null}
+            {!context?.group && groupPicker && savedGroups.data?.groups.map(g => <PlanAction key={g.id} title={g.name} onPress={() => {
+              setGroupId(g.id); addNames(g.members.map(m => m.name).filter(n => !/^(you|me)$/i.test(n))); setGroupPicker(false);
+            }} />)}
+          </View>
           <PlanAction
             title={moreDetails ? "Less Details" : "More Details"}
             onPress={() => setMoreDetails((v) => !v)}
           />
           {moreDetails ? (
             <>
-              <Field
-                label="Date (YYYY-MM-DD)"
-                value={date}
-                onChangeText={setDate}
-              />
-              <Body>Account · optional</Body>
-              <PlanAction title="Cash" onPress={() => setAccountId("")} />
-              {entryOptions.data?.accounts
-                .filter(
-                  (a) => a.currency === currency && a.type !== "investment",
-                )
-                .map((a) => (
-                  <PlanAction
-                    key={a.id}
-                    title={`${a.name}${a.id === accountId ? " ✓" : ""}`}
-                    onPress={() => setAccountId(a.id)}
-                  />
-                ))}
-              <Body>Category · optional</Body>
-              {entryOptions.data?.categories.map((c) => (
-                <PlanAction
-                  key={c.id}
-                  title={`${c.name}${c.id === categoryId ? " ✓" : ""}`}
-                  onPress={() => setCategoryId(c.id)}
-                />
-              ))}
-              {receipt ? (
-                <Body>
-                  {receipt.fileName} · Check the extracted items and total
-                  before saving.
-                </Body>
-              ) : null}
-              <SplitItemGrid
+              <SplitItemGrid wholeItem={circleId ? {description:title, amount:total} : undefined} equalLabel={circleId ? "Equal" : "Equally"}
                 people={participants.map((p) => ({
                   id: p.name,
                   name: p.name,
@@ -515,7 +491,7 @@ export function BillEditor({
                       : null,
                 }))}
                 currency={currency}
-                onAddPerson={() => setAddingPerson(true)}
+                onAddPerson={circleId && !availableMembers.length ? undefined : () => {setPickerAtItems(true);setAddingPerson(true);}}
                 items={reviewedItems.map((item, index) => ({
                   ...item,
                   id: item.id ?? `new-${index}`,
@@ -534,38 +510,15 @@ export function BillEditor({
                   );
                 }}
               />
-              {addingPerson ? (
-                <View>
-                  <Field
-                    label="Person Name"
-                    value={personName}
-                    onChangeText={setPersonName}
-                  />
-                  <PlanAction
-                    title="Add Person"
-                    onPress={() => {
-                      if (
-                        personName.trim() &&
-                        !participants.some(
-                          (p) =>
-                            p.name.toLowerCase() ===
-                            personName.trim().toLowerCase(),
-                        )
-                      ) {
-                        setNames((v) => v.trim() + "\n" + personName.trim());
-                        setPersonName("");
-                        setAddingPerson(false);
-                      }
-                    }}
-                  />
-                </View>
-              ) : null}
+              {addingPerson && (circleId ? pickerAtItems && availableMembers.length > 0 && memberPicker : nameInput(true))}
+              <Field label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
+              {receipt ? <Body>{receipt.fileName}</Body> : null}
               {suggestBillCategory(
                 title,
                 reviewedItems.map((item) => item.description),
               ) ? (
                 <Body>
-                  Suggested category:{" "}
+                  Suggested Category:{" "}
                   {
                     suggestBillCategory(
                       title,
@@ -574,11 +527,12 @@ export function BillEditor({
                   }
                 </Body>
               ) : null}
-              {sourceTransaction ? (
+              {circleId ? <ChoiceField label="Paid By" value={payer === null ? "" : participants[payer]?.name ?? ""} options={[{value:"",label:"Not Paid Yet"}, ...participants.map(p => ({value:p.name,label:p.name}))]}
+                onChange={name => setPayer(name ? participants.findIndex(p => p.name === name) : null)}/> : sourceTransaction ? (
                 <>
-                  <Body>Who paid?</Body>
+                  <Body>Who Paid?</Body>
                   <PlanAction
-                    title={payer === null ? "Not paid yet ✓" : "Not paid yet"}
+                    title={payer === null ? "Not Paid Yet ✓" : "Not Paid Yet"}
                     onPress={() => setPayer(null)}
                   />
                   {participants.map((person, index) => (
@@ -590,23 +544,31 @@ export function BillEditor({
                   ))}
                 </>
               ) : (
-                <Body>You paid · split equally.</Body>
+                <Body>You Paid</Body>
               )}
               <Field
-                label="Note"
+                label="Note (Optional)"
                 value={note}
                 onChangeText={setNote}
                 maxLength={1000}
               />
+              <ChoiceField label="Account (Optional)" value={accountId} onChange={setAccountId}
+                options={[{ value: "", label: "Default (Cash)", icon: <AccountTypeMark type="cash" size={24} /> },
+                  ...(entryOptions.data?.accounts ?? []).filter(a => a.currency === currency && a.type !== "investment").map(a => ({value:a.id, label:a.name, icon:<AccountTypeMark type={a.type} size={24} />}))]} />
+              <ChoiceField label="Category (Optional)" value={categoryId} onChange={setCategoryId}
+                options={[{ value:"", label:"Automatic", icon:<CategoryMark name="Other" size={24} /> },
+                  ...(entryOptions.data?.categories ?? []).map(c => ({value:c.id,label:c.name,icon:<CategoryMark name={c.name} size={24} />}))]} />
             </>
           ) : null}
+          <View style={{flexDirection:"row", justifyContent:"space-between", alignItems:"center"}}>
           <PlanAction title="Cancel" disabled={busy} onPress={onClose} />
           <PlanAction
-            title={busy ? "Creating…" : "Create bill"}
+            title={circleId ? (busy ? "Saving…" : "Save Expense") : busy ? "Creating…" : "Create Bill"}
             tone="primary"
             disabled={busy}
             onPress={() => void save()}
           />
+          </View>
         </AddEntryMethods>
     </Screen>
   );

@@ -1,3 +1,4 @@
+import { MerchantLogo } from "./merchant-logo";
 import { SwipeDeleteRow } from "./swipe-delete-row";
 import { Text } from "./app-text";
 import { TradeLedger } from "./trade-ledger";
@@ -18,7 +19,7 @@ import {
 } from "./ui";
 import { PlanAction } from "./plan-ui";
 import { Choices } from "./transaction-entry";
-import type { TransactionPage } from "./types";
+import type { Transaction, TransactionPage } from "./types";
 export type HistoryItem = {
   id: string;
   date: string;
@@ -28,6 +29,7 @@ export type HistoryItem = {
   note?: string | null;
   quantity?: string | null;
   transactionId?: string;
+  merchant?: Pick<Transaction, "merchantRaw" | "merchantClean" | "merchantLogoUrl" | "merchantLogoNameKey" | "categoryName">;
   categoryName?: string | null;
   type?: string;
 };
@@ -92,6 +94,7 @@ export function AccountHistory({
                       .map((r) => ({
                         id: r.id,
                         transactionId: r.id,
+                        merchant: r,
                         date: r.date,
                         amount: r.amount,
                         currency: r.currency,
@@ -118,6 +121,7 @@ export function AccountHistory({
                 data.transactions?.map((r) => ({
                   id: r.id,
                   transactionId: r.id,
+                  merchant: r,
                   date: r.date,
                   amount: r.amount,
                   currency: r.currency,
@@ -383,7 +387,9 @@ export function AccountHistory({
               onPress={() => router.push(`/transaction/${item.transactionId}`)}
               style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
             >
-              {item.transactionId ? (
+              {item.merchant ? (
+                <MerchantLogo transaction={item.merchant} size={28} />
+              ) : item.transactionId ? (
                 <CategoryMark name={item.categoryName} size={28} />
               ) : null}
               <View style={{ flex: 1, minWidth: 0, gap: 4 }}>

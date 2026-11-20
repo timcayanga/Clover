@@ -6,7 +6,7 @@ import { usePageAskScope } from "../src/page-ask-context";
 import { useUser } from "@clerk/expo";
 import { type AccountCardPalette, accountCardPalette } from "../../shared/visual-identity";
 import { SplitItemGrid } from "../src/split-item-grid";
-import { PaymentOptionMark } from "../src/payment-option-mark";
+import { paymentLines } from "../../shared/payment-display";
 import { suggestBillCategory, type SplitItem } from "../../shared/split-bill-experience";
 import { SwipeDeleteRow } from "../src/swipe-delete-row";
 import { AdaptiveGrid } from "../src/adaptive";
@@ -213,6 +213,7 @@ export default function SplitBills() {
       <SplitGroupDetails
         key={session.profileId}
         {...entity}
+        savedPeople={options.data?.people ?? []}
         onClose={() => setEntity(null)}
         onChanged={() => { options.reload(); reload(); }}
         onBill={(id) => {
@@ -243,7 +244,7 @@ export default function SplitBills() {
               ...sample,
               bills: [bill, ...(current?.bills ?? [])],
             }));
-          else reload();
+          else { reload(); options.reload(); }
         }}
       />
     </EntryOverlay>
@@ -259,12 +260,8 @@ export default function SplitBills() {
           }}
         />
         <Card>
-          <PaymentOptionMark provider={paymentDetail.provider} label={paymentDetail.label} identity={paymentDetail} />
-          <Body>
-            {paymentDetail.provider} · {paymentDetail.currency}
-          </Body>
-          <Body>{paymentDetail.accountName}</Body>
-          <Body>{paymentDetail.accountNumber}</Body>
+          <Body muted={false}>{paymentDetail.label}{paymentDetail.isDefault ? " · Default" : ""}</Body>
+          {paymentLines(paymentDetail).map(({ key, value }) => <Body key={key}>{value}</Body>)}
           {paymentDetail.qrImageData ? (
             <Image
               source={{ uri: paymentDetail.qrImageData }}
@@ -319,7 +316,7 @@ export default function SplitBills() {
   return (
     <Screen layout="dashboard">
       {entryOverlay}
-      {creating?<EntryOverlay onClose={()=>setCreating(null)}><TogetherEntry kind={creating} onClose={()=>setCreating(null)} onSaved={options.reload}/></EntryOverlay>:null}
+      {creating?<EntryOverlay onClose={()=>setCreating(null)}><TogetherEntry savedPeople={options.data?.people ?? []} kind={creating} onClose={()=>setCreating(null)} onSaved={options.reload}/></EntryOverlay>:null}
       <PlanHeader
         title={selected ? "Bill Details" : "Split Bills"}
         back={selected ? () => setSelected(null) : undefined}
@@ -341,6 +338,7 @@ export default function SplitBills() {
               onManagePaymentOptions={() => { setSelected(null); setTab("Payments"); }}
               onSaved={(bill) => {
                 setSelected(bill as Bill);
+                options.reload();
                 reload();
               }}
               onDeleted={() => {
@@ -654,57 +652,23 @@ export default function SplitBills() {
             <>
               {options.data.profiles.length ? (
                 options.data.profiles.filter(p=>`${p.label} ${p.provider}`.toLowerCase().includes(search.toLowerCase())).map((profile) => (
-                  <LinearGradient
-                    key={profile.id}
-                    colors={accountCardPalette({type:"bank",institution:profile.provider,brandPalette:profile.brandPalette}).colors}
-                    style={{ padding: 20, gap: 16, borderRadius: 20 }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: "Poppins-SemiBold",
-                        color: "white",
-                        fontSize: 16,
-                      }}
+                  <Pressable key={profile.id} accessibilityRole="button" accessibilityLabel={`Open ${profile.label} payment details`} onPress={() => setPaymentDetail(profile)}>
+                    <LinearGradient
+                      colors={accountCardPalette({type:"bank",institution:profile.provider,brandPalette:profile.brandPalette}).colors}
+                      style={{ padding: 20, gap: 6, borderRadius: 20 }}
                     >
-                      {profile.label}
-                      {profile.isDefault ? " · Default" : ""}
-                    </Text>
-                    <Text
-                      style={{ fontFamily: "Poppins-Regular", color: "white" }}
-                    >
-                      {profile.provider} · {profile.currency}
-                    </Text>
-                    <Text
-                      style={{ fontFamily: "Poppins-Regular", color: "white" }}
-                    >
-                      {profile.accountName}
-                    </Text>
-                    <Text
-                      style={{ fontFamily: "Poppins-Regular", color: "white" }}
-                    >
-                      {profile.accountNumber}
-                    </Text>
-                    <PaymentOptionMark provider={profile.provider} label={profile.label} identity={profile} />
-                    {profile.qrImageData ? (
-                      <Image
-                        source={{ uri: profile.qrImageData }}
-                        accessibilityLabel={`${profile.label} QR code`}
-                        style={{
-                          width: 128,
-                          height: 128,
-                          backgroundColor: "white",
-                          borderWidth: 8,
-                          borderColor: "white",
-                          borderRadius: 8,
-                        }}
-                        resizeMode="contain"
-                      />
-                    ) : null}
-                    <PlanAction
-                      title="View payment option"
-                      onPress={() => setPaymentDetail(profile)}
-                    />
-                  </LinearGradient>
+                      <Text style={{ fontFamily: "Poppins-SemiBold", color: "white", fontSize: 16 }}>
+                        {profile.label}{profile.isDefault ? " · Default" : ""}
+                      </Text>
+                      {paymentLines(profile).map(({ key, value }) => (
+                        <Text key={key} style={{ color: "white" }}>{value}</Text>
+                      ))}
+                      {profile.qrImageData ? (
+                        <Image source={{ uri: profile.qrImageData }} accessibilityLabel={`${profile.label} QR code`}
+                          style={{ width: 160, height: 160, maxWidth: "100%", alignSelf: "center", marginTop: 6 }} resizeMode="contain" />
+                      ) : null}
+                    </LinearGradient>
+                  </Pressable>
                 ))
               ) : (
                 <Notice>No payment options saved yet.</Notice>
