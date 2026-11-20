@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { supportsReceiptCapture } from "@/lib/receipt-capture-platform";
 import { AddEntryMethods } from "./add-entry-methods";
 import { requestAiConsent } from "./ai-consent";
 import { mergeSplitBillItemSplitMetadata } from "@/lib/split-bill";
@@ -36,7 +37,7 @@ export function SplitBillEntry({
   onClose: () => void;
   onSaved: (bill: SplitBillSerializedBill) => void;
 }) {
-  const [mode, setMode] = useState<"upload" | "manual">("upload"),
+  const [mode, setMode] = useState<"upload" | "manual">(() => supportsReceiptCapture() ? "upload" : "manual"),
     [title, setTitle] = useState(""),
     [amount, setAmount] = useState(""),
     [currency, setCurrency] = useState(context.currency || "PHP"),

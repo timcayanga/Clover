@@ -662,11 +662,6 @@ function NativeReportPanels({
                 ),
               ]}
             />
-            <Body>
-              Estimated from current balances and recorded account movements.{" "}
-              {r.knownAccounts} of {r.accountCount} accounts have known
-              balances.
-            </Body>
             <PlanAction
               title="View balance details"
               onPress={() => router.push("/accounts")}
@@ -682,10 +677,6 @@ function NativeReportPanels({
                 ),
               ]}
             />
-            <Body>
-              Assets minus liabilities. Only complete dated account history is
-              shown.
-            </Body>
           </ReportCard>
           <ReportCard title="Income sources">
             {list(a.incomeSources, "merchant", "income")}

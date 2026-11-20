@@ -1,4 +1,5 @@
 "use client";
+import { UploadSourceButtons } from "./upload-source-buttons";
 import { requestAiConsent } from "./ai-consent";
 
 import { InterfaceIcon } from "@/components/interface-icon";
@@ -377,17 +378,7 @@ export function SplitBillImportModal({ open, initialFile, currentUserName, onClo
           />
           <strong>Drop a receipt here</strong>
           <span>or choose how you want to add it.</span>
-          <div className="split-bill-import-modal__source-actions">
-            <button className="button button-primary button-small" type="button" onClick={openCamera}>
-              Take photo
-            </button>
-            <button className="button button-secondary button-small" type="button" onClick={openPhotoLibrary}>
-              Choose photo
-            </button>
-            <button className="button button-secondary button-small split-bill-choose-file" type="button" onClick={openFilePicker}>
-              Upload file
-            </button>
-          </div>
+          <UploadSourceButtons onFiles={openFilePicker} onCamera={openCamera} onLibrary={openPhotoLibrary} cameraFirst />
         </div>
 
         {isUploading ? (

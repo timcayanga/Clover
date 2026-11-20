@@ -690,11 +690,6 @@ export function ReportPanels({
           </div>
           <Panel title="Money over time">
             <ReportsMoneyOverTimeChart currency={c} points={r.balances} />
-            <p>
-              Estimated from current balances and recorded account movements.{" "}
-              {r.knownAccounts} of {r.accountCount} accounts have known
-              balances.
-            </p>
             <Link href="/accounts">View balance details</Link>
           </Panel>
           <Panel title="Net worth over time">
@@ -703,10 +698,6 @@ export function ReportPanels({
               currency={c}
               points={r.netWorth}
             />
-            <p>
-              Assets minus liabilities. Only complete dated account history is
-              shown.
-            </p>
           </Panel>
           <Panel title="Income sources">
             {list(a.incomeSources, "merchant", "income")}

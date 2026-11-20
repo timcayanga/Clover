@@ -139,8 +139,27 @@ assert.equal(
   contextRules.circleBillContextReady({ detailsLoaded: true }, false),
   true,
 );
+const { supportsReceiptCapture } = load("lib/receipt-capture-platform.ts");
+assert.equal(supportsReceiptCapture(null), false);
+for (const browser of [{userAgent:"Mozilla/5.0 (Macintosh; Intel Mac OS X)",platform:"MacIntel",maxTouchPoints:0},{userAgent:"Mozilla/5.0 (Windows NT 10.0)",platform:"Win32",maxTouchPoints:10}]) assert.equal(supportsReceiptCapture(browser),false,"Desktop, including touch laptops, uses files");
+for (const browser of [{userAgent:"Mozilla/5.0 (iPhone)"},{userAgent:"Mozilla/5.0 (Linux; Android 16)"},{userAgent:"Mozilla/5.0 (Macintosh)",platform:"MacIntel",maxTouchPoints:5}]) assert.equal(supportsReceiptCapture(browser),true,"Phones and iPads retain photo capture");
 async function main() {
-  for (const context of [
+  for (const capture of [false, true]) {
+    const h = hooks(), selected = [];
+    const { UploadSourceButtons } = load("components/upload-source-buttons.tsx", {
+      react: h.h, "react/jsx-runtime": jsx,
+      "@/lib/import-format-policies": { PUBLIC_IMPORT_ACCEPT: "image/*,application/pdf" },
+      "@/lib/receipt-capture-platform": { supportsReceiptCapture: () => capture },
+    });
+    const render = () => h.render(() => UploadSourceButtons({cameraFirst:true,onFiles:()=>selected.push("files"),onCamera:()=>selected.push("camera"),onLibrary:()=>selected.push("library")}));
+    render(); const tree = render();
+    const buttons = nodes(tree).filter(n => n.type === "button");
+    assert.deepEqual(buttons.map(text),capture ? ["Take photo","Photo library","Choose files"] : ["Choose files"],"Desktop offers one file picker; mobile retains distinct receipt sources");
+    for (const button of buttons) button.props.onClick();
+    assert.deepEqual(selected,capture ? ["camera","library","files"] : ["files"]);
+    h.stop();
+  }
+  for (const capture of [false, true]) for (const context of [
     { person: "Bea" },
     {
       group: {
@@ -194,6 +213,7 @@ async function main() {
         "react/jsx-runtime": jsx,
         "react-dom": { createPortal: (n) => n },
         "./add-entry-methods": { AddEntryMethods: "Methods" },
+        "@/lib/receipt-capture-platform": { supportsReceiptCapture: () => capture },
         "./upload-source-buttons": { UploadSourcePicker: "Upload" },
         "./split-item-grid": { SplitItemGrid: "Items" },
         "@/lib/workspace-selection": {
@@ -236,7 +256,7 @@ async function main() {
     assert(nodes(t).some(n => n.props?.role === "dialog" && /\bglass\b/.test(n.props.className)), "Bill entry retains Clover's card surface");
     assert(!text(t).includes("Add Manually"), "No preliminary chooser before the shared selector");
     const methods = nodes(t).find(n => n.type === "Methods");
-    assert.equal(methods.props.initialMethod, "upload", "Receipt capture is the initial selector tab");
+    assert.equal(methods.props.initialMethod, capture ? "upload" : "manual", "Mobile starts at receipt capture; desktop starts at the manual form");
     assert.equal(methods.props.kind, "split", "No bank Sync method for split entry");
     methods.props.onUploadFiles([new File(["receipt"], "receipt.jpg", { type: "image/jpeg" })]);
     await flush();
@@ -345,7 +365,7 @@ async function main() {
   assert.equal(opens, 11);
   stopCircle();
   console.log(
-    "PASS actual direct bill form: default photo, manual input, group/person context, equal split, one save, linked expense contract, origin retained and native event cleanup",
+    "PASS actual direct bill form: desktop manual/mobile photo defaults, manual input, group/person context, equal split, one save, linked expense contract, origin retained and native event cleanup",
   );
 }
 main().catch((e) => {

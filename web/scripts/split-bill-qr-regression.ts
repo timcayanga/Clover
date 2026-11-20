@@ -1,3 +1,4 @@
+import { paymentMessageLink } from "../../shared/payment-request-links";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -35,6 +36,7 @@ const splitBillHomeSource = readFileSync(resolve(process.cwd(), "components/spli
 const splitBillActionsSource = readFileSync(resolve(process.cwd(), "components/split-bill-page-actions.tsx"), "utf8");
 const cloverShellSource = readFileSync(resolve(process.cwd(), "components/clover-shell.tsx"), "utf8");
 const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+const shareDialogSource = readFileSync(resolve(process.cwd(), "components/payment-request-share-dialog.tsx"), "utf8");
 const paymentToolsSource = readFileSync(resolve(process.cwd(), "components/split-bill-payment-tools.tsx"), "utf8");
 const paymentRequestRoute = readFileSync(resolve(process.cwd(), "app/api/split-bills/[billId]/payment-requests/route.ts"), "utf8");
 const paymentAccountsRoute = readFileSync(resolve(process.cwd(), "app/api/split-bill-payment-accounts/route.ts"), "utf8");
@@ -56,7 +58,7 @@ assert.match(paymentOptionsSource, /split-bill-qr-editor__close-mobile/, "The mo
 assert.match(paymentOptionsSource, /setMobileOverlayChrome/, "The mobile payment-option editor must retain Clover's shared page chrome.");
 assert.match(cloverShellSource, /mobileOverlayChrome\?\.title \?\? title/, "The shared mobile header must support contextual editor titles.");
 assert.match(splitBillHomeSource, /clover:open-split-bill-group[\s\S]{0,100}Add Group/, "Groups must retain a labeled Add action.");
-assert.match(splitBillHomeSource, /clover:open-split-bill-people[\s\S]{0,100}Add People/, "People must retain a labeled Add action.");
+assert.match(splitBillHomeSource, /clover:open-split-bill-people[\s\S]{0,100}Add Person/, "People must retain a labeled Add action.");
 assert.match(splitBillActionsSource, /title: isPersonModalOpen \? "Add Person" : editingGroupId \? "Edit Group" : "Add Group"/, "Mobile People and Group editors must use Clover's shared page header.");
 assert.match(globalStyles, /split-bill-mobile-home__footer \.split-bill-mobile-add-button[\s\S]*?width: auto !important/, "Mobile People and Groups Add actions must not collapse into icon-only buttons.");
 assert.match(globalStyles, /\.split-bill-simple-entry-modal\s*\{[\s\S]*?inset: 72px 0 calc\(86px \+ env\(safe-area-inset-bottom\)\)/, "Mobile People and Group editors must render as full pages between Clover's shared navigation bars.");
@@ -74,9 +76,11 @@ assert.match(paymentAccountsRoute, /where: \{ id: workspaceId, userId: user\.id 
 assert.match(receiptImportSource, /void handleUpload\(nextFile\)/, "Receipt selection must start parsing automatically.");
 assert.doesNotMatch(receiptImportSource, /Preview receipt|>Remove</, "Receipt import must not wait for a second preview action.");
 assert.match(receiptImportSource, /string did not match\|expected pattern\|invalid url/, "Raw mobile URL-pattern errors must be converted into a friendly import error.");
-assert.match(paymentToolsSource, /typeof navigator\.share === "function"/, "Payment requests must prefer native device sharing.");
-assert.match(paymentToolsSource, /mailto:/, "Desktop payment requests must retain an email fallback.");
-assert.match(paymentToolsSource, /navigator\.clipboard\.writeText/, "Payment requests must retain a copy-link fallback.");
+assert.match(paymentToolsSource, /<PaymentRequestShareDialog/, "Payment requests must open the shared recipient and sharing choices.");
+assert.match(shareDialogSource, /await navigator\.share/, "Payment requests must retain native device sharing.");
+assert.match(shareDialogSource, /paymentMessageLink\("email"/, "Desktop payment requests must retain an email fallback.");
+assert.match(paymentMessageLink("email", "fixture@example.com", "Your bill")!, /^mailto:/);
+assert.match(shareDialogSource, /navigator\.clipboard\.writeText/, "Payment requests must retain a copy-link fallback.");
 assert.match(
   paymentRequestRoute,
   /where: \{ id: body\.paymentProfileId, userId: user\.id \}/,

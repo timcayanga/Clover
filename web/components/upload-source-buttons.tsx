@@ -1,5 +1,6 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { supportsReceiptCapture } from "@/lib/receipt-capture-platform";
 import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
 
 export function UploadSourceButtons({
@@ -14,6 +15,8 @@ export function UploadSourceButtons({
   cameraFirst?: boolean;
 }) {
   const [cameraHelp, setCameraHelp] = useState(false);
+  const [mobileSources, setMobileSources] = useState(false);
+  useEffect(() => { setMobileSources(supportsReceiptCapture()); }, []);
   return (
     <>
       {cameraHelp ? (
@@ -26,7 +29,7 @@ export function UploadSourceButtons({
     <div className="organize-upload-choices">
       {(
         [
-          ...(cameraFirst ? [["camera", "Take photo", onCamera], ["library", "Photo library", onLibrary]] as const : [["library", "Photo library", onLibrary], ["camera", "Take photo", onCamera]] as const),
+          ...(mobileSources ? (cameraFirst ? [["camera", "Take photo", onCamera], ["library", "Photo library", onLibrary]] as const : [["library", "Photo library", onLibrary], ["camera", "Take photo", onCamera]] as const) : []),
           ["files", "Choose files", onFiles],
         ] as const
       ).map(([key, label, onClick]) => (
