@@ -89,12 +89,10 @@ assert.match(
   /const persistedTotals = deriveSplitBillDraftTotals\(\{[\s\S]{0,120}items,/,
   "The inline split-bill editor must derive missing persisted totals from its item rows."
 );
-assert.match(
-  workspaceSource,
-  /clover:open-split-bill-group/,
-  "Existing Split Bill groups must expose their member editor."
-);
-assert.match(workspaceSource, />\s*Edit people\s*</, "The existing group member editor must have a visible action.");
+const groupPeopleSource = fs.readFileSync(path.join(process.cwd(), "components/split-group-people.tsx"), "utf8");
+assert.match(workspaceSource, /detailTab==="people"\?<SplitGroupPeople[^>]+group=\{selectedGroup\}/, "The People tab must expose the current group's inline member editor.");
+assert.match(groupPeopleSource, /onBlur=[\s\S]{0,180}void save\(/, "Edited fields must save inline.");
+assert.match(groupPeopleSource, /save\(group.name, \[\.\.\.names, newMember\]\)/, "Adding a person must preserve existing members.");
 assert.match(
   pageActionsSource,
   /group\?\.members\.map\(\(member\) => member\.name\)/,
