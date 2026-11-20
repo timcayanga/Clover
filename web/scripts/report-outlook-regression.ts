@@ -647,6 +647,7 @@ assert.equal(
   ).recurringCosts.rows[0].categoryName,
   "Bills & Utilities",
 );
+assert.equal(linked.recurringCosts.rows[0].categoryName, "Rent", "Reports uses categorized evidence even when the schedule has no category");
 assert.notEqual(spendingPaceComparisonColor.toLowerCase(), "#00abc0");
 console.log(
   "Trends presentation passed: linked-payment changes, unknown/zero baselines, cents, category artwork metadata and distinct comparison color.",

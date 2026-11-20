@@ -67645,3 +67645,8 @@ html[data-theme="dark"] .report-v2-summary--accounts .report-v2-summary__cell:fi
 .report-budget-plot { position: relative; display: flex; justify-content: center; align-items: end; height: 60px; width: 42px; }
 .report-budget-plot i { width: 24px; background: #00a6aa; }
 .report-budget-plot b { position: absolute; width: 40px; height: 2px; background: currentColor; }
+
+.report-recurring-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 8px; }
+.report-recurring-summary > div { display: grid; gap: 4px; padding: 14px; border: 1px solid var(--stroke); border-radius: 16px; text-align: center; }
+.report-recurring-summary strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.report-recurring-summary small { color: var(--muted); }

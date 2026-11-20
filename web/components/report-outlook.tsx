@@ -29,72 +29,15 @@ export function ReportOutlook({
       {section === "trends" && costs ? (
         <section className="report-card glass report-v2-panel">
           <h2>Recurring costs</h2>
-          <div className="report-v2-metrics">
-            <p>
-              Scheduled out · next 30 days{" "}
-              <strong>{money(costs.outgoing30)}</strong>
-            </p>
-            <p>
-              Scheduled in · next 30 days{" "}
-              <strong>{money(costs.incoming30)}</strong>
-            </p>
-            <p>
-              Next 12 months <strong>{money(costs.outgoingYear)}</strong>
-            </p>
-            <p>
-              Monthly equivalent{" "}
-              <strong>{money(costs.monthlyEquivalent)}</strong>
-            </p>
+          <div className="report-recurring-summary">
+            {[
+              {title:"Scheduled Out", value:costs.outgoing30, detail:"Next 30 days"},
+              {title:"Scheduled In", value:costs.incoming30, detail:"Next 30 days"},
+              {title:"Next 12 Months", value:costs.outgoingYear, detail:"Scheduled out"},
+            ].map(metric => <div key={metric.title}>
+              <span>{metric.title}</span><strong>{money(metric.value)}</strong><small>{metric.detail}</small>
+            </div>)}
           </div>
-          {costs.overdueCount ? (
-            <p>
-              {costs.overdueCount} uncompleted occurrences in the past 30 days
-              are not included in upcoming totals.{" "}
-              <Link href="/recurring">Review recurring payments</Link>
-            </p>
-          ) : null}
-          {costs.findings?.length ? (
-            <details className="report-v2-findings">
-              <summary>
-                {costs.findings.length} recurring findings to check
-              </summary>
-              {costs.findings.map((f) => (
-                <article key={f.id} className="report-v2-outlook-row">
-                  <h3>{f.title}</h3>
-                  <p>{f.explanation}</p>
-                  {f.dates.length ? (
-                    <p>Due dates: {f.dates.join(", ")}</p>
-                  ) : null}
-                  {f.scheduleEvidence?.map((s, i) => (
-                    <p key={i}>
-                      {s.title} · {s.account} · {s.cadence} · {s.nextDate} ·{" "}
-                      {money(s.amount)}
-                    </p>
-                  ))}
-                  {f.transactions.map((t) => (
-                    <p key={t.id}>
-                      <Link
-                        href={`/transactions?detail=${encodeURIComponent(t.id)}`}
-                      >
-                        View payment · {t.date} · {money(t.amount)}
-                      </Link>
-                    </p>
-                  ))}
-                  <p>
-                    Schedules:{" "}
-                    {f.scheduleIds
-                      .map(
-                        (id) =>
-                          costs.rows.find((row) => row.id === id)?.title ??
-                          "Saved schedule",
-                      )
-                      .join(" · ")}
-                  </p>
-                  <Link href="/recurring">Manage saved schedules</Link>
-                </article>
-              ))}
-            </details>
-          ) : null}
           <div className="report-recurring-list">
             <div className="report-recurring-heading" aria-hidden="true">
               <span />

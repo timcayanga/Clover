@@ -4,7 +4,7 @@ import { PremiumPreview } from "./contextual-upgrade";
 import { ReportDirectory } from "./report-directory";
 import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
-import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
+import { ReportSpendingDetails } from "./report-details";
 import { exportReport } from "@/lib/report-export-client";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
 import {
@@ -695,12 +695,6 @@ export function ReportPanels({
   return (
     <div className="report-v2-currency" data-report-currency={c}>
       {w.view.currency === "ALL" ? <h2>{c}</h2> : null}
-      {view.section === "trends" ? (
-        <ReportCoverageDetails
-          report={r}
-          href={href({ reviewFilter: "pending" })}
-        />
-      ) : null}
       {view.transfers !== "exclude" ? (
         <Panel title="Transfer activity">
           <p>

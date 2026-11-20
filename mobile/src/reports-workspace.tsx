@@ -8,7 +8,7 @@ import {
 } from "./report-navigation";
 import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
-import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
+import { ReportSpendingDetails } from "./report-details";
 import { exportReport } from "./report-export";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
 import { useEffect, useState, useRef, type ReactNode } from "react";
@@ -701,12 +701,6 @@ function NativeReportPanels({
   return (
     <View style={{ gap: 20 }}>
       {w.view.currency === "ALL" ? <SectionTitle>{c}</SectionTitle> : null}
-      {view.section === "trends" ? (
-        <ReportCoverageDetails
-          report={r}
-          onReview={() => open({ reviewFilter: "pending" })}
-        />
-      ) : null}
       {view.transfers !== "exclude" ? (
         <ReportCard title="Transfer activity">
           <Body>

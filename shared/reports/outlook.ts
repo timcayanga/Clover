@@ -158,7 +158,7 @@ export function cashForecast(
   };
 }
 
-export const spendingPaceComparisonColor = "#8771BB";
+export const spendingPaceComparisonColor = "#95DCC2";
 /** Differences between explicit linked payments, never an inferred contract price change. */
 export function recurringCostPaymentChange(
   row: Pick<RecurringCosts["rows"][number], "latestPayment">,

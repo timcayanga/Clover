@@ -7,7 +7,7 @@ import type { ReportCurrencyData } from "../../shared/reports/workspace";
 import { recurringCostPaymentChange } from "../../shared/reports/outlook";
 import { Text } from "./app-text";
 import { Body, Card, CategoryMark, SectionTitle, money, useTheme } from "./ui";
-import { PlanAction } from "./plan-ui";
+import { PlanAction, SummaryCard } from "./plan-ui";
 import { ReportLineChart } from "./report-line-chart";
 export function ReportOutlook({
   report: r,
@@ -18,8 +18,7 @@ export function ReportOutlook({
 }) {
   const [days, setDays] = useState(30),
     [expanded, setExpanded] = useState(false),
-    [accountLimit, setAccountLimit] = useState(5),
-    [showFindings, setShowFindings] = useState(false);
+    [accountLimit, setAccountLimit] = useState(5);
   const { colors } = useTheme(),
     format = (n: number | null) =>
       n === null ? "—" : money(String(n), r.currency);
@@ -33,82 +32,15 @@ export function ReportOutlook({
         <ReportJumpTarget title="Recurring costs">
           <Card>
             <SectionTitle>Recurring costs</SectionTitle>
-            <Body muted={false}>
-              Scheduled out · next 30 days: {format(costs.outgoing30)}
-            </Body>
-            <Body muted={false}>
-              Scheduled in · next 30 days: {format(costs.incoming30)}
-            </Body>
-            <Body muted={false}>
-              Next 12 months: {format(costs.outgoingYear)}
-            </Body>
-            <Body muted={false}>
-              Monthly equivalent: {format(costs.monthlyEquivalent)}
-            </Body>
-            {costs.overdueCount ? (
-              <Body>
-                {costs.overdueCount} uncompleted occurrences in the past 30 days
-                are not included in upcoming totals.
-              </Body>
-            ) : null}
-            {costs.findings?.length ? (
-              <>
-                <PlanAction
-                  title={`${showFindings ? "Hide" : "Show"} ${costs.findings.length} recurring findings to check`}
-                  onPress={() => setShowFindings(!showFindings)}
-                />
-                {showFindings
-                  ? costs.findings.map((f) => (
-                      <View
-                        key={f.id}
-                        style={{
-                          gap: 8,
-                          borderTopWidth: 1,
-                          borderColor: colors.line,
-                          paddingTop: 12,
-                        }}
-                      >
-                        <Body muted={false}>{f.title}</Body>
-                        <Body>{f.explanation}</Body>
-                        {f.dates.length ? (
-                          <Body>Due dates: {f.dates.join(", ")}</Body>
-                        ) : null}
-                        {f.scheduleEvidence?.map((s, i) => (
-                          <Body key={i}>
-                            {s.title} · {s.account} · {s.cadence} · {s.nextDate}{" "}
-                            · {format(s.amount)}
-                          </Body>
-                        ))}
-                        {f.transactions.map((t) => (
-                          <PlanAction
-                            key={t.id}
-                            title={`View payment · ${t.date} · ${format(t.amount)}`}
-                            onPress={() =>
-                              router.push(
-                                `/transaction/${encodeURIComponent(t.id)}`,
-                              )
-                            }
-                          />
-                        ))}
-                        <Body>
-                          Schedules:{" "}
-                          {f.scheduleIds
-                            .map(
-                              (id) =>
-                                costs.rows.find((row) => row.id === id)
-                                  ?.title ?? "Saved schedule",
-                            )
-                            .join(" · ")}
-                        </Body>
-                        <PlanAction
-                          title="Manage saved schedules"
-                          onPress={() => router.push("/recurring")}
-                        />
-                      </View>
-                    ))
-                  : null}
-              </>
-            ) : null}
+            <View style={{gap:8}}>
+              <View style={{flexDirection:"row",gap:8}}>
+                <SummaryCard title="Scheduled Out" value={format(costs.outgoing30)} detail="Next 30 days"/>
+                <SummaryCard title="Scheduled In" value={format(costs.incoming30)} detail="Next 30 days"/>
+              </View>
+              <View style={{flexDirection:"row"}}>
+                <SummaryCard title="Next 12 Months" value={format(costs.outgoingYear)} detail="Scheduled out"/>
+              </View>
+            </View>
             {costs.rows.map((row) => {
               const delta = recurringCostPaymentChange(row);
               const changeLabel = delta

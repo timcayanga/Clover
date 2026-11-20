@@ -161,6 +161,16 @@ export function buildReportOutlook(
         dates: [],
       });
     }
+    // Reports already resolved each transaction's category, including imported and user-edited labels.
+    const specificCategory = (value?: string | null) => {
+      const name = value?.trim();
+      return name && !/^(other|uncategorized)$/i.test(name) ? name : null;
+    };
+    const primaryCategory = c.transactionId ? rowsById.get(c.transactionId)?.category : null;
+    const evidenceCategories = new Set(payments.map(p => specificCategory(p.category)).filter(Boolean));
+    const categoryName = specificCategory(c.categoryName) ?? specificCategory(primaryCategory)
+      ?? specificCategory(c.transaction?.category?.name)
+      ?? (evidenceCategories.size === 1 ? [...evidenceCategories][0] : null) ?? "Other";
     const overdue = overdueById.get(c.id) ?? [];
     if (overdue.length)
       findings.push({
@@ -176,7 +186,7 @@ export function buildReportOutlook(
     return {
       id: c.id,
       title: c.title,
-      categoryName: c.categoryName ?? c.transaction?.category?.name ?? "Other",
+      categoryName,
       cadence: c.recurrence,
       direction: c.kind === "receivable" ? ("in" as const) : ("out" as const),
       nextDate: dates[0]?.dateKey ?? null,
