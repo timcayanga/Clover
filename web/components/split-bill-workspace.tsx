@@ -460,9 +460,9 @@ export function SplitBillWorkspace({
     }
   };
 
-  const removeBill = async (billId: string, confirmed = false) => {
+  const removeBill = async (billId: string, fromSwipe = false) => {
     const bill = bills.find((entry) => entry.id === billId);
-    if (!bill || (!confirmed && !window.confirm(`Delete ${bill.title}?`))) {
+    if (!bill) {
       return;
     }
 
@@ -471,7 +471,7 @@ export function SplitBillWorkspace({
     });
     if (!response.ok) {
       const message = "Unable to delete this split bill. Please try again.";
-      if (confirmed) throw new Error(message);
+      if (fromSwipe) throw new Error(message);
       window.alert(message);
       return;
     }
@@ -1065,7 +1065,7 @@ export function SplitBillWorkspace({
     </div>
   );
 
-  const renderBillRows = (targetBills: SplitBillSerializedBill[], participantName?: string) => <div className="split-bill-table-scroll"><div className="split-bill-swipe-list">{targetBills.map(bill => <MobileSwipeDelete key={bill.id} deleteLabel={`Delete ${bill.title}`} confirmationMessage={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`} onDelete={() => removeBill(bill.id, true)}><button type="button" className="split-bill-swipe-row" onClick={() => openBill(bill.id)}><span><strong>{bill.title}</strong><small>{new Date(bill.billDate).toLocaleDateString("en-PH")} · {formatSplitBillSettlementStatus(bill.settlementStatus)}</small><small>{participantName ? formatParticipantShare(bill, participantName) : formatPaymentContributions(bill)}</small></span><strong>{formatSplitBillAmount(Number(bill.total),bill.currency)}</strong><span aria-hidden="true">›</span></button></MobileSwipeDelete>)}{!targetBills.length ? <p>No bills here yet.</p> : null}</div><table aria-label="Related bills"><thead><tr><th>Bill</th><th>Date</th><th>Total</th><th>{participantName ? "Your share" : "Paid by"}</th><th>Status</th></tr></thead><tbody>{targetBills.map(bill=><tr key={bill.id}><td><button onClick={()=>openBill(bill.id)}>{bill.title}</button></td><td>{new Date(bill.billDate).toLocaleDateString("en-PH")}</td><td>{formatSplitBillAmount(Number(bill.total),bill.currency)}</td><td>{participantName?formatParticipantShare(bill,participantName):formatPaymentContributions(bill)}</td><td>{formatSplitBillSettlementStatus(bill.settlementStatus)}</td></tr>)}{!targetBills.length?<tr><td colSpan={5}>No bills here yet.</td></tr>:null}</tbody></table></div>;
+  const renderBillRows = (targetBills: SplitBillSerializedBill[], participantName?: string) => <div className="split-bill-table-scroll"><div className="split-bill-swipe-list">{targetBills.map(bill => <MobileSwipeDelete key={bill.id} deleteLabel={`Delete ${bill.title}`} immediate onDelete={() => removeBill(bill.id, true)}><button type="button" className="split-bill-swipe-row" onClick={() => openBill(bill.id)}><span><strong>{bill.title}</strong><small>{new Date(bill.billDate).toLocaleDateString("en-PH")} · {formatSplitBillSettlementStatus(bill.settlementStatus)}</small><small>{participantName ? formatParticipantShare(bill, participantName) : formatPaymentContributions(bill)}</small></span><strong>{formatSplitBillAmount(Number(bill.total),bill.currency)}</strong><span aria-hidden="true">›</span></button></MobileSwipeDelete>)}{!targetBills.length ? <p>No bills here yet.</p> : null}</div><table aria-label="Related bills"><thead><tr><th>Bill</th><th>Date</th><th>Total</th><th>{participantName ? "Your share" : "Paid by"}</th><th>Status</th></tr></thead><tbody>{targetBills.map(bill=><tr key={bill.id}><td><button onClick={()=>openBill(bill.id)}>{bill.title}</button></td><td>{new Date(bill.billDate).toLocaleDateString("en-PH")}</td><td>{formatSplitBillAmount(Number(bill.total),bill.currency)}</td><td>{participantName?formatParticipantShare(bill,participantName):formatPaymentContributions(bill)}</td><td>{formatSplitBillSettlementStatus(bill.settlementStatus)}</td></tr>)}{!targetBills.length?<tr><td colSpan={5}>No bills here yet.</td></tr>:null}</tbody></table></div>;
 
   const renderSettlementBoard = (targetBills: SplitBillSerializedBill[], participantName?: string) => {
     const openBills = targetBills.filter((bill) =>

@@ -436,7 +436,7 @@ export default function SplitBills() {
                                   b.settlementStatus !== "settled"))),
                       )
                       .map((bill) => (
-                        <SwipeDeleteRow key={bill.id} label={bill.title} disabled={session.demo} message={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`} onOpen={() => setSelected(bill)} onDelete={async () => {
+                        <SwipeDeleteRow key={bill.id} label={bill.title} disabled={session.demo} immediate onOpen={() => setSelected(bill)} onDelete={async () => {
                           await session.request(`split-bills/${bill.id}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
                           setData(current => current ? { ...current, bills: current.bills.filter(row => row.id !== bill.id) } : current);
                           reload();

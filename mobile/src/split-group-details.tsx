@@ -295,7 +295,7 @@ export function SplitGroupDetails({
                 key={bill.id}
                 label={bill.title}
                 disabled={session.demo}
-                message={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`}
+                immediate
                 onOpen={() => onBill(bill.id)}
                 onDelete={async () => {
                   await session.request(

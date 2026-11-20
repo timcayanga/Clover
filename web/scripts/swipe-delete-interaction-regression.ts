@@ -71,7 +71,18 @@ export async function runSwipeDeleteInteractions() {
     await new Promise(resolve => setTimeout(resolve, 0)); h.render();
     assert(h.all().some(n => n.props.role === "alert" || n.props.accessibilityRole === "alert"), "Server failure stays inline");
     assert(!h.button("Confirm deletion").props.disabled, "Failed deletion can be retried");
-    h.press("Cancel"); h.render(); h.props.disabled = true; h.render();
+    h.press("Cancel"); h.render();
+    h.props.immediate = true; h.render();
+    const before = calls;
+    h.press("Delete");
+    await new Promise(resolve => setTimeout(resolve, 0)); h.render();
+    assert.equal(calls, before + 1);
+    assert(h.all().some(n => n.props.role === "alert" || n.props.accessibilityRole === "alert"));
+    fail = false;
+    h.press("Delete"); h.press("Delete");
+    assert.equal(calls, before + 2, "Retry works and double tapping sends only one delete");
+    release(); await new Promise(resolve => setTimeout(resolve, 0)); h.render();
+    h.props.disabled = true; h.render();
     if (native) assert.equal(h.find(n => !!n.props.onMoveShouldSetPanResponderCapture).props.onMoveShouldSetPanResponderCapture(null, { dx: -100, dy: 0 }), false);
     else assert(h.button("Delete").props.disabled);
   }

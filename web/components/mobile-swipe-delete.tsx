@@ -27,6 +27,7 @@ type MobileSwipeDeleteProps = {
   children: ReactNode;
   deleteLabel: string;
   confirmationMessage?: string;
+  immediate?: boolean;
   onDelete: () => void | Promise<void>;
   disabled?: boolean;
   className?: string;
@@ -46,6 +47,7 @@ export function MobileSwipeDelete({
   deleteLabel,
   onDelete,
   confirmationMessage,
+  immediate = false,
   disabled = false,
   className = "",
 }: MobileSwipeDeleteProps) {
@@ -163,7 +165,7 @@ export function MobileSwipeDelete({
   };
 
   const handleDelete = async () => {
-    if (disabled || deletingRef.current || !confirming) return;
+    if (disabled || deletingRef.current || (!immediate && !confirming)) return;
     deletingRef.current = true;
     setIsDeleting(true);
     setError("");
@@ -196,7 +198,7 @@ export function MobileSwipeDelete({
         tabIndex={disabled || confirming ? -1 : 0}
         onFocus={() => { if (!confirming) updateOffset(-ACTION_WIDTH); }}
         disabled={disabled || isDeleting}
-        onClick={() => { setConfirming(true); updateOffset(0); }}
+        onClick={() => { if (immediate) { void handleDelete(); return; } setConfirming(true); updateOffset(0); }}
       >
         <svg
           viewBox="0 0 24 24"
@@ -230,6 +232,7 @@ export function MobileSwipeDelete({
       >
         {children}
       </div>
+      {immediate && error ? <p role="alert">{error}</p> : null}
       {confirming ? <div className="mobile-swipe-delete__confirmation" role="group" aria-label={deleteLabel}>
         <p>{confirmationMessage ?? `${deleteLabel}? This cannot be undone.`}</p>
         {error ? <p role="alert">{error}</p> : null}

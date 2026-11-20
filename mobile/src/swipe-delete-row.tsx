@@ -6,10 +6,11 @@ import { useTheme } from "./ui";
 import { useAccessibilityPreferences } from "./accessibility-preferences";
 
 const WIDTH = 88;
-export function SwipeDeleteRow({ children, label, message, onDelete, onOpen, onSelect, onReview, disabled = false, wallet = false, expanded = false }: {
+export function SwipeDeleteRow({ children, label, message, immediate = false, onDelete, onOpen, onSelect, onReview, disabled = false, wallet = false, expanded = false }: {
   children: ReactNode;
   label: string;
   message?: string;
+  immediate?: boolean;
   onDelete: () => Promise<void>;
   onOpen?: () => void;
   onSelect?: () => void;
@@ -43,9 +44,9 @@ export function SwipeDeleteRow({ children, label, message, onDelete, onOpen, onS
     onPanResponderTerminate: () => settle(0),
     onPanResponderTerminationRequest: () => true,
   })).current;
-  function confirm() { if (pending.current || disabled) return; settle(0); setConfirming(true); setError(""); }
+  function confirm() { if (pending.current || disabled) return; if (immediate) { void remove(); return; } settle(0); setConfirming(true); setError(""); }
   async function remove() {
-    if (!confirming || pending.current || disabled) return;
+    if ((!immediate && !confirming) || pending.current || disabled) return;
     pending.current = true; setBusy(true); setError("");
     try { await onDelete(); setConfirming(false); settle(0); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to delete. Please try again."); }
@@ -62,6 +63,7 @@ export function SwipeDeleteRow({ children, label, message, onDelete, onOpen, onS
         {open ? <Pressable accessibilityLabel="Close delete action" onPress={() => settle(0)} style={{ position: "absolute", inset: 0 }} /> : null}
       </Animated.View>
     </View>
+    {immediate && error ? <Text accessibilityRole="alert" style={{color:colors.danger}}>{error}</Text> : null}
     {confirming ? <View style={{ borderWidth: 1, borderColor: colors.danger, borderRadius: 12, padding: 14, gap: 12, backgroundColor: colors.white }}>
       <Text style={{ color: colors.ink }}>{message ?? `Delete ${label}? This cannot be undone.`}</Text>
       {error ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text> : null}

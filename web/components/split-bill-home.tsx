@@ -415,7 +415,7 @@ export function SplitBillHome({
               <div className="split-bill-swipe-list">
                 {recentBills.map(bill => {
                   const balance = bill.settlement.transfers.reduce((sum, t) => sum + (isSamePersonName(t.toParticipantName, currentUserName) ? t.amount : 0) - (isSamePersonName(t.fromParticipantName, currentUserName) ? t.amount : 0), 0);
-                  return <MobileSwipeDelete key={bill.id} deleteLabel={`Delete ${bill.title}`} confirmationMessage={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`} onDelete={() => onDeleteBill(bill.id)}>
+                  return <MobileSwipeDelete key={bill.id} deleteLabel={`Delete ${bill.title}`} immediate onDelete={() => onDeleteBill(bill.id)}>
                   <button type="button" className="split-bill-swipe-row" aria-label={`${bill.title}. Your balance: ${formatSplitBillAmount(balance, bill.currency)}`} onClick={() => onOpenBill(bill.id)}>
                     <CategoryBrandMark categoryName={bill.transaction?.category?.name ?? suggestBillCategory(bill.title,bill.items.map(item=>item.description))?.name ?? "Uncategorized"} size={32} />
                     <span className="split-bill-swipe-row__copy"><strong>{bill.title}</strong><span className="split-bill-mobile-context"><small>{formatDate(bill.billDate)}</small>{sharedWith(bill, true)}</span>{bill.resolved || bill.settlementStatus !== "open" ? <small>{bill.resolved ? "Resolved" : formatSplitBillSettlementStatus(bill.settlementStatus)}</small> : null}</span>

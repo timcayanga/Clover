@@ -137,7 +137,7 @@ export function BillDetails({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<
-    "delete" | Transfer | null
+    Transfer | null
   >(null);
   const [request, setRequest] = useState<Transfer | null>(null);
   const [requestAmount, setRequestAmount] = useState("");
@@ -288,8 +288,10 @@ export function BillDetails({
     session.profileId,
     session.request,
   ]);
+  const actionPending = useRef(false);
   async function action(path: string, method: string, body?: unknown) {
-    if (busy) return;
+    if (busy || actionPending.current) return;
+    actionPending.current = true;
     setBusy(true);
     setError("");
     setMessage("");
@@ -337,6 +339,7 @@ export function BillDetails({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to update bill.");
     } finally {
+      actionPending.current = false;
       setBusy(false);
     }
   }
@@ -727,14 +730,12 @@ export function BillDetails({
         title="Delete bill"
         tone="delete"
         disabled={busy}
-        onPress={() => setConfirm("delete")}
+        onPress={() => void action(`split-bills/${bill.id}`, "DELETE")}
       />
       {confirm ? (
         <Card>
           <Body>
-            {confirm === "delete"
-              ? "Delete this split bill?"
-              : `Confirm receipt of ${money(String(confirm.amount), bill.currency)} from ${confirm.fromParticipantName} for ${confirm.toParticipantName}?`}
+            {`Confirm receipt of ${money(String(confirm.amount), bill.currency)} from ${confirm.fromParticipantName} for ${confirm.toParticipantName}?`}
           </Body>
           <PlanAction
             title="Cancel"
@@ -743,12 +744,10 @@ export function BillDetails({
           />
           <PlanAction
             title="Confirm"
-            tone={confirm === "delete" ? "delete" : "primary"}
+            tone="primary"
             disabled={busy}
             onPress={() =>
-              confirm === "delete"
-                ? action(`split-bills/${bill.id}`, "DELETE")
-                : action(
+              action(
                       `split-bills/${bill.id}/transfer-settlements`,
                       "POST",
                       confirm,
