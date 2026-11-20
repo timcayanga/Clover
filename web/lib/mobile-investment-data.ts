@@ -1,4 +1,5 @@
 import { getCanonicalPdaxHoldingIdentity } from "./pdax-portfolio-accounts";
+import { getAccountBrand } from "./account-brand";
 import { listInvestmentPositions } from "./investment-position-store";
 import { getInvestmentAssetBrand } from "./investment-assets";
 import type { InvestmentSubtype } from "./investments";
@@ -144,6 +145,8 @@ export async function loadMobileInvestments(workspaceId: string) {
   ` : [];
   const openings = new Map(firstValuations.map(r => [r.positionId, r.value]));
   for(const p of positions)holdings.push({id:p.id,positionId:p.id,positionRevision:p.revision,accountId:p.accountId,accountType:"investment",source:"snapshot",name:p.assetName,institution:p.institution??null,subtype:p.subtype,symbol:p.symbol,currency:p.currency,quantity:p.quantity,cost:p.costBasis,startingValue:openings.get(p.id) ?? null,value:p.value,date:p.valueDate});
+  const institutionLogos = new Map([...new Set(holdings.map(h => h.institution))].map(name =>
+    [name, getAccountBrand({ institution: name, type: "investment" }).logoSrc] as const));
   return {
     accounts,
     holdings: holdings.map(holding => {
@@ -153,7 +156,7 @@ export async function loadMobileInvestments(workspaceId: string) {
       const symbol = identity?.assetSymbol ?? holding.symbol;
       const subtype = identity?.assetType ?? holding.subtype;
       const brand = getInvestmentAssetBrand({...holding, symbol, subtype: subtype as InvestmentSubtype});
-      return {...holding, symbol, subtype, logoUrl: brand.logoSrcs[0] ?? null};
+      return {...holding, symbol, subtype, institutionLogoUrl: institutionLogos.get(holding.institution), logoUrl: brand.logoSrcs[0] ?? null};
     }),
     history,
     limited: rows.length > 1000 || snapshots.length > 200,

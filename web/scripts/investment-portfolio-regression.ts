@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { portfolioAssetGroups, holdingBalanceChange, projectPortfolio, recordedNumber, recordedPortfolioSeries, type PortfolioAccount, type PortfolioSnapshot } from '../../shared/investment-portfolio';
+import { portfolioInstitutions, portfolioAssetGroups, holdingBalanceChange, projectPortfolio, recordedNumber, recordedPortfolioSeries, type PortfolioAccount, type PortfolioSnapshot } from '../../shared/investment-portfolio';
 const base:PortfolioAccount={id:'institution',name:'Broker',institution:'Broker',type:'investment',currency:'PHP',balance:'1500'};
 const individual={...base,id:'asset',name:'Fund',investmentSymbol:'FUND',balance:'1000'};
 const foreign={...individual,id:'usd',currency:'USD',balance:'20'};
@@ -42,3 +42,21 @@ assert.equal(xrpGroup.members.length, 2);
 assert.equal(Number(xrpGroup.holding.value), 8264.90);
 assert.equal(holdingBalanceChange(xrpGroup.holding), null);
 assert.equal(projectPortfolio([base], [snapshot], false)[0].startingValue, null);
+
+const pdax = { ...btc, institution: "PDAX", institutionLogoUrl: "/assets/banks/philippines/pdax.png" };
+const [phpInstitution, usdInstitution] = portfolioInstitutions([
+  pdax, { ...pdax, id: "another", institution: " pdax ", startingValue: "300", value: "310" }, { ...pdax, currency: "USD" },
+]);
+assert.equal(phpInstitution.count, 2);
+assert.equal(phpInstitution.row.logoUrl, pdax.institutionLogoUrl);
+assert.equal(holdingBalanceChange(phpInstitution.row), 10);
+assert.equal(usdInstitution.count, 1);
+for (const incomplete of [{ startingValue: null }, { value: null }]) {
+  assert.equal(holdingBalanceChange(portfolioInstitutions([pdax, { ...pdax, ...incomplete }])[0].row), null);
+}
+assert.equal(holdingBalanceChange(portfolioInstitutions([{ ...pdax, startingValue: "0" }])[0].row), null);
+
+const statementHolding = { ...pdax, valuationAccountId: "statement-account", date: "2026-08-01", startingValue: null };
+const statementHistory = [{accountId: "statement-account", currency: "PHP", date: "2026-06-01", value: 100}];
+assert.equal(holdingBalanceChange(portfolioInstitutions([statementHolding], statementHistory)[0].row), 30);
+assert.equal(holdingBalanceChange(portfolioInstitutions([statementHolding], [{...statementHistory[0], currency: "USD"}])[0].row), null);

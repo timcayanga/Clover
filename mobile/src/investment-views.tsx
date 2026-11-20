@@ -36,8 +36,7 @@ export function HoldingRow({
 }) {
   const { colors } = useTheme();
   const change = holdingBalanceChange(holding);
-  return (
-    <SwipeDeleteRow label={holding.name} disabled={!onDelete} onOpen={onPress} onDelete={onDelete ?? (async () => {})} message={holding.positionId ? `Delete "${holding.name}" and its trading and valuation history? The institution account and other assets stay unchanged.` : holding.source === "snapshot" ? `Delete "${holding.name}"? Its source import stays in Clover.` : `Delete "${holding.name}" and its investment account and linked transactions?`}>
+  const row = (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`View ${holding.name}`}
@@ -80,8 +79,9 @@ export function HoldingRow({
       {change !== null && <Text style={{fontSize: 12, color: change > 0 ? colors.positive : change < 0 ? colors.danger : colors.ink}}>{change > 0 ? "+" : ""}{change}%</Text>}
       <Text style={{color: colors.teal}}>›</Text>
     </Pressable>
-    </SwipeDeleteRow>
   );
+  if (!onDelete) return row;
+  return <SwipeDeleteRow label={holding.name} onOpen={onPress} onDelete={onDelete} message={holding.positionId ? `Delete "${holding.name}" and its trading and valuation history? The institution account and other assets stay unchanged.` : holding.source === "snapshot" ? `Delete "${holding.name}"? Its source import stays in Clover.` : `Delete "${holding.name}" and its investment account and linked transactions?`}>{row}</SwipeDeleteRow>;
 }
 export function ValuationHistory({
   history,

@@ -1,5 +1,5 @@
 "use client";
-import { balanceChangePercent, portfolioAssetKey } from "../../../shared/investment-portfolio";
+import { balanceChangePercent, portfolioAssetKey, portfolioInstitutionKey } from "../../../shared/investment-portfolio";
 import { investmentNameLabel, investmentTickerMatches, investmentTickerHint } from "../../../shared/investment-entry";
 import { registerPullRefresh, usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
@@ -16,6 +16,7 @@ import { useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
+import { getAccountBrand } from "@/lib/account-brand";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { AnimatedTabs } from "@/components/animated-tabs";
 import { AdviserChat } from "@/components/adviser-chat";
@@ -1746,9 +1747,6 @@ export default function InvestmentsPage() {
       if (portfolioView === "assets" && row.source === "account") {
         return false;
       }
-      if (portfolioView === "institutions" && row.source !== "account") {
-        return false;
-      }
 
       if (!search) {
         return true;
@@ -1970,7 +1968,7 @@ export default function InvestmentsPage() {
   const portfolioGroups = useMemo(() => {
     const groups = new Map<string, PortfolioDisplayRow[]>();
     for (const row of visiblePortfolioRows) {
-      const id = portfolioView === "assets" ? portfolioAssetKey(row) : row.key;
+      const id = portfolioView === "institutions" ? portfolioInstitutionKey(row) : portfolioView === "assets" ? portfolioAssetKey(row) : row.key;
       const members = groups.get(id);
       if (members) members.push(row);
       else groups.set(id, [row]);
@@ -3184,6 +3182,9 @@ export default function InvestmentsPage() {
                 <div className="investments-portfolio-table__table" role="table" aria-label="Portfolio assets">
                   {portfolioGroups.map(([id, members]) => {
                     const row = members[0];
+                    const institution = portfolioView === "institutions";
+                    const title = institution ? row.institution?.trim() || "Other investments" : row.name;
+                    const brand = institution ? getAccountBrand({institution: row.institution, type: "investment"}) : getInvestmentAssetBrand(row);
                     const expanded = expandedPortfolioGroup === id;
                     const value = members.every(item => item.currentValue !== null)
                       ? members.reduce((sum, item) => sum + item.currentValue!, 0) : null;
@@ -3193,8 +3194,8 @@ export default function InvestmentsPage() {
                     return <div key={id} role="rowgroup">
                       <button className={overviewStyles.assetGroup} aria-expanded={expanded} type="button"
                         onClick={() => setExpandedPortfolioGroup(expanded ? null : id)}>
-                        <AccountBrandMark accountBrand={getInvestmentAssetBrand(row)} label={row.name} />
-                        <span><strong>{row.name}</strong><small>{members.length > 1 ? `${members.length} holdings` : [row.symbol, row.institution].filter(Boolean).join(" · ")}</small></span>
+                        <AccountBrandMark accountBrand={brand} label={title} />
+                        <span><strong>{title}</strong><small>{institution ? `${members.length} ${members.length === 1 ? "holding" : "holdings"} · ${row.currency}` : members.length > 1 ? `${members.length} holdings` : [row.symbol, row.institution].filter(Boolean).join(" · ")}</small></span>
                         <strong>{value === null ? "Not recorded" : formatInvestmentAmount(value, row.currency)}</strong>
                         {change !== null && <small>{change > 0 ? "+" : ""}{change}%</small>}
                         <span aria-hidden="true">{expanded ? "⌄" : "›"}</span>

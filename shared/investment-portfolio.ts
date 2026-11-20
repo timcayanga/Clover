@@ -35,6 +35,7 @@ export type PortfolioSnapshot = {
 };
 export type PortfolioHolding = {
   startingValue?: string | null;
+  institutionLogoUrl?: string | null;
   logoUrl?:string|null;
   positionId?:string;
   positionRevision?:number;
@@ -206,6 +207,51 @@ export function portfolioAssetKey(h: { currency: string; name: string; subtype: 
   return JSON.stringify([h.currency, h.subtype, identity]);
 }
 
+function holdingTotal(holdings: PortfolioHolding[], field: "value" | "startingValue") {
+  let sum = 0;
+  for (const h of holdings) {
+    const n = recordedNumber(h[field]);
+    if (n === null) return null;
+    sum += n;
+  }
+  return String(sum);
+}
+
+export function portfolioInstitutionKey(row: {institution: string | null; currency: string}) {
+  return JSON.stringify([key(row.institution), row.currency]);
+}
+
+export function portfolioInstitutions(holdings: PortfolioHolding[], completeHistory: RecordedValuation[] = []) {
+  const groups = new Map<string, PortfolioHolding[]>();
+  for (const holding of holdings) {
+    const id = portfolioInstitutionKey(holding);
+    const group = groups.get(id);
+    if (group) group.push(holding);
+    else groups.set(id, [holding]);
+  }
+  return Array.from(groups, ([id, members]) => {
+    const first = members[0];
+    const name = first.institution?.trim() || "Other investments";
+    // A statement total covers the whole account. Only use it when the displayed
+    // holdings all come from that account, in the statement currency.
+    let startingValue = holdingTotal(members, "startingValue");
+    if (startingValue === null && first.valuationAccountId && first.date &&
+        members.every(h => h.valuationAccountId === first.valuationAccountId && h.date === first.date)) {
+      const opening = completeHistory.filter(v => v.accountId === first.valuationAccountId &&
+        v.currency === first.currency && v.date.slice(0, 10) < first.date!.slice(0, 10))
+        .sort((a, b) => a.date.localeCompare(b.date))[0];
+      if (opening) startingValue = String(opening.value);
+    }
+    const row: PortfolioHolding = {
+      id, accountId: first.accountId, source: "account", name, institution: first.institution,
+      subtype: "institution", symbol: null, currency: first.currency, quantity: null, cost: null, date: null,
+      logoUrl: members.find(h => h.institutionLogoUrl)?.institutionLogoUrl,
+      value: holdingTotal(members, "value"), startingValue,
+    };
+    return { row, count: members.length };
+  });
+}
+
 /** Combine positions only for display. Each source keeps its own details and actions. */
 export function portfolioAssetGroups(holdings: PortfolioHolding[]) {
   const groups = new Map<string, PortfolioHolding[]>();
@@ -217,18 +263,9 @@ export function portfolioAssetGroups(holdings: PortfolioHolding[]) {
   }
   return Array.from(groups, ([id, members]) => {
     const first = members[0];
-    const total = (field: "value" | "startingValue") => {
-      let sum = 0;
-      for (const h of members) {
-        const n = recordedNumber(h[field]);
-        if (n === null) return null;
-        sum += n;
-      }
-      return String(sum);
-    };
     const holding = members.length === 1 ? first : {
       ...first, name: first.subtype === "crypto" && key(first.symbol) === "btc" ? "Bitcoin" : first.name,
-      value: total("value"), startingValue: total("startingValue"),
+      value: holdingTotal(members, "value"), startingValue: holdingTotal(members, "startingValue"),
     };
     return { id, holding, members };
   });

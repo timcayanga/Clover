@@ -37,6 +37,8 @@ import { sampleInvestments as sample } from "../src/investment-sample";
 import {
   projectPortfolio,
   portfolioAssetGroups,
+  portfolioInstitutions,
+  portfolioInstitutionKey,
   type PortfolioHolding,
   recordedNumber,
 } from "../../shared/investment-portfolio";
@@ -104,6 +106,11 @@ export default function Investments() {
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  const otherCurrencyAccounts = new Set(holdings.filter(h => h.currency !== selectedCurrency)
+    .map(h => h.valuationAccountId ?? h.accountId));
+  const institutionHistory = type === "all" && !search.trim() && !institutionFilter && !data?.limited
+    ? data?.history.filter(v => !otherCurrencyAccounts.has(v.accountId))
+    : undefined;
   const valuation = recordedSummary(visibleHoldings.map(h => h.value));
   const total = valuation.value ?? 0;
   const known = visibleHoldings.filter(
@@ -180,11 +187,11 @@ export default function Investments() {
   if (institution)
     return (
       <InstitutionDetails
-        name={institution}
+        name={holdings.find(h => portfolioInstitutionKey(h) === institution)?.institution?.trim() || "Other investments"}
         currency={selectedCurrency}
         holdings={holdings.filter(
           (h) =>
-            (h.institution || "Other investments") === institution &&
+            portfolioInstitutionKey(h) === institution &&
             h.currency === selectedCurrency,
         )}
         history={data?.history ?? []}
@@ -364,42 +371,11 @@ export default function Investments() {
                   </View>}
                 </View>;
               })}</View>
-            : [
-                ...new Set(
-                  visibleHoldings.map(
-                    (h) => h.institution || "Other investments",
-                  ),
-                ),
-              ].map((name) => {
-                const members = visibleHoldings.filter(
-                  (h) => (h.institution || "Other investments") === name,
-                );
-                const value = members.every(
-                  (h) => recordedNumber(h.value) !== null,
-                )
-                  ? String(members.reduce((n, h) => n + Number(h.value), 0))
-                  : null;
-                return (
-                  <HoldingRow
-                    key={name}
-                    onPress={() => setInstitution(name)}
-                    holding={{
-                      id: name,
-                      accountId: members[0].accountId,
-                      source: "account",
-                      name,
-                      institution: name,
-                      subtype: "institution",
-                      symbol: `${members.length} holdings · ${selectedCurrency}`,
-                      currency: selectedCurrency,
-                      quantity: null,
-                      value,
-                      cost: null,
-                      date: null,
-                    }}
-                  />
-                );
-              })}
+            : portfolioInstitutions(visibleHoldings, institutionHistory).map(({ row, count }) => (
+                <HoldingRow key={row.id} holding={row}
+                  subtitle={`${count} ${count === 1 ? "holding" : "holdings"} · ${row.currency}`}
+                  onPress={() => setInstitution(row.id)} />
+              ))}
           </View>
           {!visibleHoldings.length ? (
             <CloverEmptyState pose="investments">No matching holdings.</CloverEmptyState>
