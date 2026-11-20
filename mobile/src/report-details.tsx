@@ -110,7 +110,7 @@ export function ReportSpendingDetails({
         {merchants.slice(0,limit).map(m => <Pressable key={m.name} accessibilityRole="link" onPress={() => open({merchant:m.name,type:"expense"})} style={{flexDirection:"row",alignItems:"center",gap:12,paddingVertical:12,minHeight:56,borderBottomWidth:1,borderColor:colors.line}}>
           <MerchantLogo transaction={{merchantRaw:m.name,merchantClean:null,merchantLogoUrl:m.merchantLogoUrl,merchantLogoNameKey:JSON.stringify([m.name,null]),categoryName:m.categoryName ?? "Other"}} size={28} />
           <Text style={{flex:1,minWidth:0,fontSize:14,color:colors.ink}}>{m.name}</Text>
-          <View style={{alignItems:"flex-end",maxWidth:"45%",gap:3}}><Text style={{fontSize:14,color:colors.ink}}>{format(m.amount)}</Text><Text accessibilityLabel="Change from comparison period" style={{fontSize:12,color:colors.muted}}>{merchantSpendingChange(m)}</Text></View>
+          <View style={{alignItems:"flex-end",maxWidth:"45%",gap:3}}><Text style={{fontSize:14,color:colors.ink}}>{format(m.amount)}</Text><Text accessibilityLabel={`Change from comparison period: ${merchantSpendingChange(m)}`} style={{fontSize:12,color:colors.muted}}>{merchantSpendingChange(m)}</Text></View>
         </Pressable>)}
         {!merchants.length ? <Body>No matching merchants.</Body> : null}
         {merchants.length > limit ? (

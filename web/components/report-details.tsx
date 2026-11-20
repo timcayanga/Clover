@@ -104,7 +104,7 @@ export function ReportSpendingDetails({
           {merchants.slice(0,limit).map(m => <Link key={m.name} className="report-detail-row" href={href({merchant:m.name,type:"expense"})}>
             <MerchantLogo transaction={{merchantRaw:m.name,merchantClean:null,merchantLogoUrl:m.merchantLogoUrl,merchantLogoNameKey:JSON.stringify([m.name,null])}} size={28} fallback={<CategoryBrandMark categoryName={m.categoryName ?? "Other"} size={28} />} />
             <span className="report-detail-row__name">{m.name}</span>
-            <span className="report-detail-row__figures"><strong>{money(m.amount)}</strong><small aria-label="Change from comparison period">{merchantSpendingChange(m)}</small></span>
+            <span className="report-detail-row__figures"><strong>{money(m.amount)}</strong><small aria-label={`Change from comparison period: ${merchantSpendingChange(m)}`}>{merchantSpendingChange(m)}</small></span>
           </Link>)}
         </div>
         {!merchants.length ? <p>No matching merchants.</p> : null}
