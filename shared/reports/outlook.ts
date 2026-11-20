@@ -50,6 +50,7 @@ export type RecurringCosts = {
   rows: {
     id: string;
     title: string;
+    categoryName?: string | null;
     cadence: string;
     direction: "in" | "out";
     nextDate: string | null;
@@ -150,4 +151,13 @@ export function cashForecast(
       };
     }),
   };
+}
+
+export const spendingPaceComparisonColor = "#8771BB";
+/** Differences between explicit linked payments, never an inferred contract price change. */
+export function recurringCostPaymentChange(row: Pick<RecurringCosts["rows"][number], "latestPayment">): { amount: number; percent: number | null } | null {
+  const latest = row.latestPayment;
+  if (!latest || latest.previous === null || !Number.isFinite(latest.amount) || !Number.isFinite(latest.previous)) return null;
+  const amount = Math.round((latest.amount - latest.previous) * 100) / 100 || 0;
+  return { amount, percent: latest.previous > 0 ? Math.round(amount / latest.previous * 100) : null };
 }

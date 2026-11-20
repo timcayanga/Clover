@@ -2,7 +2,7 @@ import { accountSectionType } from "../../shared/account-presentation";
 import { forecastScenario } from "../../shared/reports/scenarios";
 import assert from "node:assert/strict";
 import { consolidatedAccountSummary } from "../../shared/account-summary";
-import { cashForecast } from "../../shared/reports/outlook";
+import { recurringCostPaymentChange, spendingPaceComparisonColor, cashForecast } from "../../shared/reports/outlook";
 import { buildReportOutlook, buildNetWorthChange } from "../lib/report-outlook";
 import type { FinancialCommitmentSummary } from "../lib/commitments";
 import { parseRecurringTracking } from "../lib/recurring-tracking";
@@ -594,3 +594,14 @@ assert.equal(
 console.log(
   `Report outlook workload: 500 schedules and 20,000 transactions in ${Math.round(performance.now() - started)}ms.`,
 );
+
+const paymentChange = (amount: number, previous: number | null) => recurringCostPaymentChange({latestPayment:{date:"2026-02-01",amount,previous}});
+assert.deepEqual(paymentChange(110,100),{amount:10,percent:10});
+assert.deepEqual(paymentChange(90,100),{amount:-10,percent:-10});
+assert.deepEqual(paymentChange(100,0),{amount:100,percent:null});
+assert.equal(paymentChange(110,null),null);
+assert.equal(recurringCostPaymentChange({latestPayment:null}),null);
+assert.deepEqual(paymentChange(9.999,10),{amount:0,percent:0});
+assert.equal(buildReportOutlook([{...base,categoryName:"Bills & Utilities"}],[bank],[],"2026-02-01").recurringCosts.rows[0].categoryName,"Bills & Utilities");
+assert.notEqual(spendingPaceComparisonColor.toLowerCase(),"#00abc0");
+console.log("Trends presentation passed: linked-payment changes, unknown/zero baselines, cents, category artwork metadata and distinct comparison color.");

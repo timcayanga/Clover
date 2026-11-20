@@ -1,16 +1,17 @@
 import { ReportJumpTarget } from "./report-navigation";
 import { ReportScenario } from "./report-scenario";
 import { useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { router } from "expo-router";
 import type { ReportCurrencyData } from "../../shared/reports/workspace";
 import {
   forecastNote,
   netWorthChangeNote,
   outlookScopeNote,
-  recurringNote,
+  recurringCostPaymentChange,
 } from "../../shared/reports/outlook";
-import { Body, Card, SectionTitle, money, useTheme } from "./ui";
+import { Text } from "./app-text";
+import { Body, Card, CategoryMark, SectionTitle, money, useTheme } from "./ui";
 import { PlanAction, PlanTabs } from "./plan-ui";
 import { ReportLineChart } from "./report-line-chart";
 export function ReportOutlook({
@@ -37,7 +38,6 @@ export function ReportOutlook({
         <ReportJumpTarget title="Recurring costs">
           <Card>
             <SectionTitle>Recurring costs</SectionTitle>
-            <Body>{outlookScopeNote}</Body>
             <Body muted={false}>
               Scheduled out · next 30 days: {format(costs.outgoing30)}
             </Body>
@@ -49,9 +49,6 @@ export function ReportOutlook({
             </Body>
             <Body muted={false}>
               Monthly equivalent: {format(costs.monthlyEquivalent)}
-            </Body>
-            <Body>
-              {costs.from} to {costs.to}. {recurringNote}
             </Body>
             {costs.overdueCount ? (
               <Body>
@@ -117,43 +114,15 @@ export function ReportOutlook({
                   : null}
               </>
             ) : null}
-            {costs.rows.map((row) => (
-              <View
-                key={row.id}
-                style={{
-                  gap: 6,
-                  borderTopWidth: 1,
-                  borderColor: colors.line,
-                  paddingTop: 12,
-                }}
-              >
-                <Body muted={false}>{row.title}</Body>
-                <Body>
-                  {row.cadence.charAt(0).toUpperCase() + row.cadence.slice(1)} ·
-                  Money {row.direction === "in" ? "in" : "out"} ·{" "}
-                  {row.nextDate
-                    ? `Next ${row.nextDate}`
-                    : "No upcoming date in the next 12 months"}
-                </Body>
-                {row.excludedReason ? (
-                  <Body>{row.excludedReason}; not included in totals.</Body>
-                ) : (
-                  <Body>
-                    Next payment {format(row.nextAmount)} · Next 30 days{" "}
-                    {format(row.cost30)} · Next 12 months {format(row.costYear)}
-                  </Body>
-                )}
-                {row.latestPayment ? (
-                  <Body>
-                    Latest linked payment: {format(row.latestPayment.amount)} ·{" "}
-                    {row.latestPayment.date}
-                    {row.latestPayment.previous !== null
-                      ? `. Previous ${format(row.latestPayment.previous)}; change ${format(row.latestPayment.amount - row.latestPayment.previous)}.`
-                      : ""}
-                  </Body>
-                ) : null}
-              </View>
-            ))}
+            {costs.rows.map(row => {
+              const delta = recurringCostPaymentChange(row);
+              const changeLabel = delta ? `${delta.amount > 0 ? "+" : ""}${format(delta.amount)}${delta.percent !== null ? ` · ${delta.percent > 0 ? "+" : ""}${delta.percent}%` : ""}` : "—";
+              return <Pressable key={row.id} accessibilityRole="link" onPress={() => router.push({pathname:"/recurring",params:{commitmentId:row.id}})} style={{flexDirection:"row",alignItems:"center",gap:12,paddingVertical:12,minHeight:64,borderTopWidth:1,borderColor:colors.line}}>
+                <CategoryMark name={row.categoryName ?? "Other"} size={28}/>
+                <View style={{flex:1,minWidth:0,gap:4}}><Text style={{fontSize:14,color:colors.ink}}>{row.title}</Text><Text style={{fontSize:11,color:colors.muted}}>Next due · {row.nextDate ?? "No upcoming date"}</Text><Text style={{fontSize:11,color:colors.muted}}>{row.categoryName ?? "Other"}</Text>{row.excludedReason ? <Text style={{fontSize:11,color:colors.muted}}>{row.excludedReason}</Text> : null}</View>
+                <View style={{alignItems:"flex-end",maxWidth:"43%",gap:4}}><Text style={{fontSize:14,color:colors.ink}}>{format(row.nextAmount)}</Text><Text accessibilityLabel={`Change between recorded payments: ${changeLabel}`} style={{fontSize:11,color:colors.muted,textAlign:"right"}}>{changeLabel}</Text></View>
+              </Pressable>;
+            })}
             {!costs.rows.length ? (
               <Body>
                 No active saved schedules in this currency and account

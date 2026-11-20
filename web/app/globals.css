@@ -67622,3 +67622,26 @@ html[data-theme="dark"] .report-v2-summary--accounts .report-v2-summary__cell:fi
 .report-detail-row__figures strong{font-size:14px;font-weight:500}
 .report-detail-row__figures small{font-size:12px;color:var(--muted)}
 @media(max-width:767px){.report-v2[data-report-section="spending"] .report-v2-toolbar{display:none}}
+
+.report-recurring-list{min-width:0}
+.report-recurring-heading,.report-recurring-row{display:grid;grid-template-columns:28px minmax(120px,1.3fr) minmax(80px,auto) minmax(95px,auto) minmax(90px,1fr) minmax(110px,auto);align-items:center;gap:12px;min-width:0;padding:12px 0;border-bottom:1px solid var(--stroke)}
+.report-recurring-heading{font-size:11px;color:var(--muted)}
+.report-recurring-row{color:inherit;text-decoration:none;font-size:13px}
+.report-recurring-row>span{min-width:0;overflow-wrap:anywhere}
+.report-recurring-row__name small{display:block;font-size:11px;color:var(--muted);margin-top:4px}
+.report-recurring-row__amount,.report-recurring-row__change{text-align:right;font-variant-numeric:tabular-nums}
+.report-recurring-row__change{font-size:12px;color:var(--muted)}
+@media(max-width:1100px){
+ .report-recurring-heading{display:none}
+ .report-recurring-row{grid-template-columns:28px minmax(0,1fr) minmax(85px,43%);gap:4px 12px}
+ .report-recurring-row>img,.report-recurring-row>span:first-child{grid-column:1;grid-row:1/4}
+ .report-recurring-row__name{grid-column:2;grid-row:1;font-size:14px}
+ .report-recurring-row__amount{grid-column:3;grid-row:1}
+ .report-recurring-row__due{grid-column:2;grid-row:2;font-size:11px;color:var(--muted)}
+ .report-recurring-row__category{grid-column:2;grid-row:3;font-size:11px;color:var(--muted)}
+ .report-recurring-row__change{grid-column:3;grid-row:2/4}
+}
+@media(max-width:767px){.report-v2[data-report-section="trends"] .report-v2-toolbar{display:none}}
+
+.report-recurring-row__due-label{display:none}
+@media(max-width:1100px){.report-recurring-row__due-label{display:inline}}

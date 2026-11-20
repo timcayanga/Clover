@@ -176,6 +176,7 @@ export function buildReportOutlook(
     return {
       id: c.id,
       title: c.title,
+      categoryName: c.categoryName ?? c.transaction?.category?.name ?? "Other",
       cadence: c.recurrence,
       direction: c.kind === "receivable" ? ("in" as const) : ("out" as const),
       nextDate: dates[0]?.dateKey ?? null,

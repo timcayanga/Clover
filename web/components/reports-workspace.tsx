@@ -1,4 +1,5 @@
 "use client";
+import { spendingPaceComparisonColor } from "../../shared/reports/outlook";
 import { PremiumPreview } from "./contextual-upgrade";
 import { ReportDirectory } from "./report-directory";
 import { ReportOutlook } from "./report-outlook";
@@ -285,7 +286,7 @@ export function ReportsWorkspaceView({
     >
       <div className="report-v2" data-report-section={view.section} data-filters-open={filters} data-ask-page-context={JSON.stringify({reportParams:reportViewParams(data.view).toString(),currency:data.view.currency,from:data.period.from,to:data.period.to})}>
         <div className="report-v2-toolbar">
-          {(view.section === "trends" || view.section === "advanced") ? <p>
+          {view.section === "advanced" ? <p>
             {data.period.from} to {data.period.to} · {data.timeZone}
           </p> : null}
           <button
@@ -839,7 +840,7 @@ export function ReportPanels({
                 },
                 {
                   name: "Comparison period",
-                  color: palette[2],
+                  color: spendingPaceComparisonColor,
                   points: a.pace.map((p) => ({
                     date: p.date,
                     value: p.previous,

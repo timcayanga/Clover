@@ -1,4 +1,5 @@
 "use client";
+import { CategoryBrandMark } from "./category-brand-mark";
 import { ReportScenario } from "./report-scenario";
 import { useState } from "react";
 import Link from "next/link";
@@ -7,7 +8,7 @@ import {
   forecastNote,
   netWorthChangeNote,
   outlookScopeNote,
-  recurringNote,
+  recurringCostPaymentChange,
 } from "../../shared/reports/outlook";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { ReportsMoneyOverTimeChart } from "./reports-money-over-time-chart";
@@ -31,7 +32,6 @@ export function ReportOutlook({
       {section === "trends" && costs ? (
         <section className="report-card glass report-v2-panel">
           <h2>Recurring costs</h2>
-          <p>{outlookScopeNote}</p>
           <div className="report-v2-metrics">
             <p>
               Scheduled out · next 30 days{" "}
@@ -49,9 +49,6 @@ export function ReportOutlook({
               <strong>{money(costs.monthlyEquivalent)}</strong>
             </p>
           </div>
-          <p>
-            {costs.from} to {costs.to}. {recurringNote}
-          </p>
           {costs.overdueCount ? (
             <p>
               {costs.overdueCount} uncompleted occurrences in the past 30 days
@@ -101,35 +98,21 @@ export function ReportOutlook({
               ))}
             </details>
           ) : null}
-          {costs.rows.map((row) => (
-            <article key={row.id} className="report-v2-outlook-row">
-              <h3>{row.title}</h3>
-              <p>
-                {row.cadence.charAt(0).toUpperCase() + row.cadence.slice(1)} ·
-                Money {row.direction === "in" ? "in" : "out"} ·{" "}
-                {row.nextDate
-                  ? `Next ${row.nextDate}`
-                  : "No upcoming date in the next 12 months"}
-              </p>
-              {row.excludedReason ? (
-                <p>{row.excludedReason}; not included in totals.</p>
-              ) : (
-                <p>
-                  Next payment {money(row.nextAmount)} · Next 30 days{" "}
-                  {money(row.cost30)} · Next 12 months {money(row.costYear)}
-                </p>
-              )}
-              {row.latestPayment ? (
-                <p>
-                  Latest linked payment: {money(row.latestPayment.amount)} ·{" "}
-                  {row.latestPayment.date}
-                  {row.latestPayment.previous !== null
-                    ? `. Previous ${money(row.latestPayment.previous)}; change ${money(row.latestPayment.amount - row.latestPayment.previous)}.`
-                    : ""}
-                </p>
-              ) : null}
-            </article>
-          ))}
+          <div className="report-recurring-list">
+            <div className="report-recurring-heading" aria-hidden="true"><span/><span>Recurring payment</span><span>Amount</span><span>Next due</span><span>Category</span><span>Payment change</span></div>
+            {costs.rows.map(row => {
+              const delta = recurringCostPaymentChange(row);
+              const changeLabel = delta ? `${delta.amount > 0 ? "+" : ""}${money(delta.amount)}${delta.percent !== null ? ` · ${delta.percent > 0 ? "+" : ""}${delta.percent}%` : ""}` : "—";
+              return <Link key={row.id} className="report-recurring-row" href={`/recurring?commitment=${encodeURIComponent(row.id)}`}>
+                <CategoryBrandMark categoryName={row.categoryName ?? "Other"} size={28} />
+                <span className="report-recurring-row__name">{row.title}{row.excludedReason ? <small>{row.excludedReason}</small> : null}</span>
+                <span className="report-recurring-row__amount">{money(row.nextAmount)}</span>
+                <span className="report-recurring-row__due"><span className="report-recurring-row__due-label">Next due · </span>{row.nextDate ?? "No upcoming date"}</span>
+                <span className="report-recurring-row__category">{row.categoryName ?? "Other"}</span>
+                <span className="report-recurring-row__change" aria-label={`Change between recorded payments: ${changeLabel}`} title="Change between the latest two linked payments">{changeLabel}</span>
+              </Link>;
+            })}
+          </div>
           {!costs.rows.length ? (
             <p>
               No active saved schedules in this currency and account selection.{" "}

@@ -1,3 +1,4 @@
+import { spendingPaceComparisonColor } from "../../shared/reports/outlook";
 import { usePageAskScope, usePageAskClover } from "./page-ask-context";
 import { ContextualUpgrade } from "./contextual-upgrade";
 import { ReportNavigation, ReportJumpTarget, ReportCurrencyScope } from "./report-navigation";
@@ -298,7 +299,7 @@ function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportVie
           setView((v) => ({ ...v, section: sections[names.indexOf(name)] }))
         }
       /> : null}
-      {!filters && data && (view.section === "trends" || view.section === "advanced") ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
+      {!filters && data && view.section === "advanced" ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
       {filters && data ? (
         <ReportCard title="Filter reports" compact>
           <DropdownFilter
@@ -798,7 +799,7 @@ function NativeReportPanels({
                     "Comparison period",
                     a.pace.map((p) => ({ date: p.date, value: p.previous })),
                   ),
-                  color: colors.muted,
+                  color: spendingPaceComparisonColor,
                 },
               ]}
             />
