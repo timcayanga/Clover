@@ -6,6 +6,8 @@ import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 
 export const dynamic = "force-dynamic";
 
+class AccountMergeConflict extends Error {}
+
 const resolveAccountRouteUserId = async () => {
   if (await isLocalDevHost()) {
     return "local-admin";
@@ -129,6 +131,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
     }
 
     await prisma.$transaction(async (tx) => {
+      // Lock both identities before moving history; concurrent linking must not
+      // attach a new relationship to an account that is about to disappear.
+      const locked=await tx.$queryRaw<Array<{id:string}>>`SELECT "id" FROM "Account" WHERE "workspaceId"=${workspaceId} AND "id" IN (${sourceAccountId},${targetAccountId}) ORDER BY "id" FOR UPDATE`;
+      if(locked.length!==2)throw new AccountMergeConflict("The accounts changed. Refresh before merging.");
+      const source=await tx.account.findUniqueOrThrow({where:{id:sourceAccountId},select:{finverseAccountLink:{select:{id:true}},lunchFlowAccountLink:{select:{id:true}},_count:{select:{investmentPositions:true,investmentTrades:true,budgets:true,circleInvestmentShares:true}}}});
+      // These relationships are not transferred by this merge flow. Preserve
+      // them instead of letting foreign-key deletion detach or erase them.
+      if(source.finverseAccountLink||source.lunchFlowAccountLink||Object.values(source._count).some(count=>count>0))throw new AccountMergeConflict("Keep this account because it has a bank connection, investment positions or linked settings. To merge safely, open the other account and choose this one as the account to keep.");
       await tx.transaction.updateMany({
         where: { accountId: sourceAccountId },
         data: { accountId: targetAccountId },
@@ -200,7 +210,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
       {
         error: error instanceof Error ? error.message : "Unable to merge accounts.",
       },
-      { status: 400 }
+      { status: error instanceof AccountMergeConflict ? 409 : 400 }
     );
   }
 }
