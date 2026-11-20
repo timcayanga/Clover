@@ -224,6 +224,7 @@ export const splitBillItemOrderBy: Prisma.SplitBillItemOrderByWithRelationInput[
 ];
 
 export type SplitBillSerializedBill = {
+  recorder?:string;
   categoryName?: string | null;
   resolved?: boolean;
   id: string;
@@ -252,7 +253,7 @@ export type SplitBillSerializedBill = {
   group: {
     id: string;
     name: string;
-    members: Array<{ id: string; name: string; sortOrder: number }>;
+    members: Array<{ id: string; name: string; sortOrder: number; previousNames?:string[] }>;
   } | null;
   participants: Array<{ id: string; name: string }>;
   items: Array<{
@@ -3570,7 +3571,7 @@ export const serializeSplitBillRecord = (bill: {
   group: {
     id: string;
     name: string;
-    members: Array<{ id: string; name: string; sortOrder: number }>;
+    members: Array<{ id: string; name: string; sortOrder: number; previousNames?:string[] }>;
   } | null;
   participants: Array<{ id: string; name: string }>;
   items: Array<{

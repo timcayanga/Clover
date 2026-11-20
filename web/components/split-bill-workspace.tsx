@@ -1,4 +1,7 @@
 "use client";
+import {SplitGroupPeople} from "./split-group-people";
+import {remainingDebts,simplifyDebts} from "../../shared/split-debts";
+import {groupCoverUrl} from "../../shared/split-group-cover";
 import {useUser} from "@clerk/nextjs";
 import { SplitItemGrid } from "./split-item-grid";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
@@ -49,7 +52,7 @@ type DetailSelection =
   | { kind: "person"; id: string }
   | null;
 
-type DetailTab = "overview" | "bills" | "settle" | "insights" | "receipts" | "activity";
+type DetailTab = "people" | "overview" | "bills" | "settle" | "insights" | "receipts" | "activity";
 
 const getParticipantName = (bill: SplitBillSerializedBill, participantId: string) =>
   bill.participants.find((participant) => participant.id === participantId)?.name ?? "Unknown";
@@ -231,57 +234,7 @@ const getPersonBalanceSummary = (bills: SplitBillSerializedBill[], personName: s
 };
 
 const buildAggregateTransfers = (bills: SplitBillSerializedBill[]) => {
-  const balancesByCurrency = new Map<string, Map<string, number>>();
-
-  for (const bill of bills) {
-    const currencyBalances = balancesByCurrency.get(bill.currency) ?? new Map<string, number>();
-    for (const transfer of bill.settlement.transfers) {
-      currencyBalances.set(transfer.fromParticipantName, (currencyBalances.get(transfer.fromParticipantName) ?? 0) - transfer.amount);
-      currencyBalances.set(transfer.toParticipantName, (currencyBalances.get(transfer.toParticipantName) ?? 0) + transfer.amount);
-    }
-    balancesByCurrency.set(bill.currency, currencyBalances);
-  }
-
-  return Array.from(balancesByCurrency.entries()).flatMap(([currency, balances]) => {
-    const creditors = Array.from(balances.entries())
-      .filter(([, balance]) => balance > 0.01)
-      .map(([name, balance]) => ({ name, balance }))
-      .sort((left, right) => right.balance - left.balance);
-    const debtors = Array.from(balances.entries())
-      .filter(([, balance]) => balance < -0.01)
-      .map(([name, balance]) => ({ name, balance }))
-      .sort((left, right) => left.balance - right.balance);
-    const transfers: Array<{ fromName: string; toName: string; amount: number; currency: string }> = [];
-    let creditorIndex = 0;
-    let debtorIndex = 0;
-
-    while (creditorIndex < creditors.length && debtorIndex < debtors.length) {
-      const creditor = creditors[creditorIndex];
-      const debtor = debtors[debtorIndex];
-      const amount = Math.min(creditor.balance, Math.abs(debtor.balance));
-
-      if (amount > 0.01) {
-        transfers.push({
-          fromName: debtor.name,
-          toName: creditor.name,
-          amount: Number(amount.toFixed(2)),
-          currency,
-        });
-      }
-
-      creditor.balance -= amount;
-      debtor.balance += amount;
-
-      if (creditor.balance <= 0.01) {
-        creditorIndex += 1;
-      }
-      if (debtor.balance >= -0.01) {
-        debtorIndex += 1;
-      }
-    }
-
-    return transfers;
-  });
+  return simplifyDebts(remainingDebts(bills)).map(d=>({fromName:d.from,toName:d.to,amount:d.cents/100,currency:d.currency}));
 };
 
 const formatActivityTime = (value: string) =>
@@ -791,7 +744,7 @@ export function SplitBillWorkspace({
   };
 
   useEffect(() => {
-    setDetailTab("overview");
+    setDetailTab(selected?.kind==="group"?"bills":"overview");
   }, [selected?.kind, selected?.id]);
 
   useEffect(() => {
@@ -1058,11 +1011,12 @@ export function SplitBillWorkspace({
     }
 
     const splitDetailIcons = {
-      overview: "home", bills: "splitBills", settle: "transactions",
+      people: "splitBills", overview: "home", bills: "splitBills", settle: "transactions",
       insights: "reports", receipts: "accounts", activity: "recurring",
     } as const;
     const tabs: Array<{ id: DetailTab; label: string }> = [
       { id: "overview", label: "Overview" },
+      ...(selectedGroup ? [{ id:"people" as const,label:"People" }] : []),
       { id: "bills", label: "Bills" },
       { id: "settle", label: "Settle" },
       { id: "insights", label: "Insights" },
@@ -1572,30 +1526,13 @@ export function SplitBillWorkspace({
             {selectedGroup ? (
               <div className="split-bill-detail-modal__body">
                 <div className="split-bill-detail-modal__identity">
-                  <SplitBillEntityAvatar name={selectedGroup.name} avatarUrl={selectedGroup.avatarUrl} sizeClass="split-bill-person-avatar--medium" />
+                  <SplitBillEntityAvatar name={selectedGroup.name} avatarUrl={selectedGroup.avatarUrl||groupCoverUrl(selectedGroup.id)} sizeClass="split-bill-person-avatar--medium" />
                   <div>
                     <strong>{selectedGroup.name}</strong>
                   </div>
                 </div>
-                {renderDetailTabs()}{renderDetailToolbar()}
-                {detailTab === "overview" ? (
-                  <>
-                    <div className="split-bill-detail-modal__section-head split-bill-detail-modal__section-head--members">
-                      <div>
-                        <strong>People</strong>
-                        <div className="split-bill-group-members">{selectedGroup.members.map((member) => <span key={member.id}><SplitBillEntityAvatar name={member.name} avatarUrl={people.find((person) => person.name === member.name)?.avatarUrl ?? null} />{member.name}</span>)}{!selectedGroup.members.length ? "No people added yet" : null}</div>
-                      </div>
-                      <button
-                        className="button button-secondary button-small"
-                        type="button"
-                        onClick={() => {
-                          window.dispatchEvent(new CustomEvent("clover:open-split-bill-group", { detail: { groupId: selectedGroup.id } }));
-                          setSelected(null);
-                        }}
-                      >
-                        Edit people
-                      </button>
-                    </div>
+                {renderDetailTabs()}{detailTab==="bills"?renderDetailToolbar():null}
+                {detailTab==="overview"?(<>
                     <div className="split-bill-balance-dashboard">
                       <article>
                         <span>You owe</span>
@@ -1636,13 +1573,13 @@ export function SplitBillWorkspace({
                     ))}
                   </>
                 ) : null}
-                {detailTab === "bills" ? renderBillRows(selectedGroupBills.filter(b=>b.title.toLowerCase().includes(detailSearch.toLowerCase()))) : null}
+                {detailTab==="people"?<SplitGroupPeople key={selectedGroup.id} group={selectedGroup} bills={selectedGroupBills} viewer={currentUserName} currentUserId={currentUserId} onSaved={handleGroupSaved} onBill={openBill}/>:null}
+                {detailTab==="bills"?<>{renderBillRows(selectedGroupBills.filter(b=>b.title.toLowerCase().includes(detailSearch.toLowerCase())))}<details><summary>Simplify Debts</summary>{selectedGroupSimplifiedTransfers.length?selectedGroupSimplifiedTransfers.map(t=><p key={JSON.stringify(t)}>{t.fromName} → {t.toName} · {formatSplitBillAmount(t.amount,t.currency)}</p>):<p>No outstanding debt.</p>}</details></>:null}
                 {detailTab === "settle" ? renderSettlementBoard(selectedGroupBills) : null}
                 {detailTab === "insights" ? <SplitBillDetailTools bills={selectedGroupBills} label={selectedGroup.name} view="insights" /> : null}
                 {detailTab === "receipts" ? <SplitBillDetailTools bills={selectedGroupBills} label={selectedGroup.name} view="receipts" /> : null}
                 {detailTab === "activity" ? renderActivityList(selectedGroupActivity) : null}
-                <div className="split-bill-detail-modal__actions">
-                  <button className="button button-secondary button-small" type="button" onClick={() => {window.dispatchEvent(new CustomEvent("clover:open-split-bill-group",{detail:{groupId:selectedGroup.id}}));setSelected(null);}}>Edit group</button>
+                {detailTab==="people" && selectedGroup.canEdit!==false?<div className="split-bill-detail-modal__actions">
                   <button className="button button-secondary button-small" type="button" onClick={() => void archiveGroup(selectedGroup.id)}>
                     Archive group
                   </button>
@@ -1650,6 +1587,7 @@ export function SplitBillWorkspace({
                     Delete group
                   </button>
                 </div>
+                :null}
                 {groupShareUrl ? <p className="split-bill-share-status">Group link copied. Share it with another Clover account to join.</p> : null}
               </div>
             ) : null}

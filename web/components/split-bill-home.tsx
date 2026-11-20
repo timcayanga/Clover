@@ -1,4 +1,6 @@
 "use client";
+import {remainingDebts,simplifyDebts} from "../../shared/split-debts";
+import { groupCoverUrl } from "../../shared/split-group-cover";
 import { suggestBillCategory } from "../../shared/split-bill-experience";
 import { CloverMascot } from "@/components/clover-mascot";
 
@@ -106,6 +108,7 @@ export function SplitBillHome({
     () => readAccountIdentityCache()?.imageUrl ?? null,
   );
   const [showAllBills, setShowAllBills] = useState(false);
+  const [showDebts,setShowDebts]=useState(false);
   const [showAllPeople, setShowAllPeople] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "settled" | "resolved">(
     "all",
@@ -298,7 +301,7 @@ export function SplitBillHome({
       {names.slice(0, 5).map((name, index) => <SplitBillEntityAvatar key={`${name}-${index}`} name={avatarName(name)} avatarUrl={personPhoto(name)} />)}
     </span>;
     return <span className="split-bill-shared-with">
-      {bill.group ? <SplitBillEntityAvatar name={bill.group.name} avatarUrl={group?.avatarUrl || "/assets/split-bills/group-default.jpg"} /> :
+      {bill.group ? <SplitBillEntityAvatar name={bill.group.name} avatarUrl={group?.avatarUrl || groupCoverUrl(bill.group.id)} /> :
         <span className="split-bill-avatar-stack">{names.slice(0, 3).map((name, index) => <SplitBillEntityAvatar key={`${name}-${index}`} name={name} avatarUrl={personPhoto(name)} />)}</span>}
       <span>{bill.group?.name ?? (names.slice(0, 2).join(", ") + (names.length > 2 ? ` +${names.length - 2}` : ""))}</span>
     </span>;
@@ -515,6 +518,11 @@ export function SplitBillHome({
               {billToggleLabel}
             </button>
           ) : null}
+          <details onToggle={event=>setShowDebts(event.currentTarget.open)}><summary>Simplify Debts</summary>{showDebts?Array.from(new Set(bills.map(b=>b.groupId))).map(id=>{
+            const scoped=bills.filter(b=>b.groupId===id);
+            const plan=simplifyDebts(remainingDebts(scoped));
+            return <section key={id??"personal"}><strong>{scoped[0]?.group?.name??"Personal Bills"}</strong>{plan.length?plan.map(d=><p key={JSON.stringify(d)}>{d.from} → {d.to} · {formatSplitBillAmount(d.cents/100,d.currency)}</p>):<p>No outstanding debt.</p>}</section>;
+          }):null}{showDebts&&!bills.length?<p>No outstanding debt.</p>:null}</details>
         </>
       ) : tab === "Groups" ? (
         <>
@@ -523,7 +531,7 @@ export function SplitBillHome({
             {visibleGroups.map((group) => (
               <article className="split-bill-group-card" key={group.id} onClick={() => onOpenGroup(group.id)}>
                 <div className="split-bill-group-identity">
-                  <SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl || "/assets/split-bills/group-default.jpg"} sizeClass="split-bill-group-photo" />
+                  <SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl || groupCoverUrl(group.id)} sizeClass="split-bill-group-photo" />
                   <strong>{group.name}</strong>
                 </div>
                 <div className="split-bill-avatars">

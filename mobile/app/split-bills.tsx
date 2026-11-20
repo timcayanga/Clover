@@ -1,3 +1,5 @@
+import {PaymentDetailsEditor} from "../src/payment-details-editor";
+import {SimplifyAction} from "../src/simplified-debts";
 import { TogetherToolbar } from "../src/together-toolbar";
 import { TogetherEntry } from "../src/together-entry";
 import { onContextBillEntry } from "../src/bill-entry-events";
@@ -45,6 +47,17 @@ import {
   SummaryCard,
   usePlanData,
 } from "../src/plan-ui";
+import { groupCoverIndex } from "../../shared/split-group-cover";
+const groupCovers = [
+  require("../assets/split-group-covers/cover-0.jpg"),
+  require("../assets/split-group-covers/cover-1.jpg"),
+  require("../assets/split-group-covers/cover-2.jpg"),
+  require("../assets/split-group-covers/cover-3.jpg"),
+  require("../assets/split-group-covers/cover-4.jpg"),
+  require("../assets/split-group-covers/cover-5.jpg"),
+  require("../assets/split-group-covers/cover-6.jpg"),
+  require("../assets/split-group-covers/cover-7.jpg"),
+];
 type Bill = {
   id: string;
   title: string;
@@ -208,16 +221,16 @@ export default function SplitBills() {
       active = false;
     };
   }, [selectedId, session.demo, session.profileId, session.request]);
-  if (entity)
+  if (entity && !selected)
     return (
       <SplitGroupDetails
         key={session.profileId}
         {...entity}
+        group={options.data?.groups.find(g=>g.id===entity.group?.id)??entity.group}
         savedPeople={options.data?.people ?? []}
         onClose={() => setEntity(null)}
         onChanged={() => { options.reload(); reload(); }}
         onBill={(id) => {
-          setEntity(null);
           setSelected({
             id,
             title: "Bill",
@@ -259,18 +272,7 @@ export default function SplitBills() {
             setDeletePayment(false);
           }}
         />
-        <Card>
-          <Body muted={false}>{paymentDetail.label}{paymentDetail.isDefault ? " · Default" : ""}</Body>
-          {paymentLines(paymentDetail).map(({ key, value }) => <Body key={key}>{value}</Body>)}
-          {paymentDetail.qrImageData ? (
-            <Image
-              source={{ uri: paymentDetail.qrImageData }}
-              accessibilityLabel="Payment QR code"
-              style={{ width: 200, height: 200, alignSelf: "center" }}
-              resizeMode="contain"
-            />
-          ) : null}
-        </Card>
+        <PaymentDetailsEditor key={paymentDetail.id} profile={paymentDetail} onSaved={p=>{setPaymentDetail(p);options.reload();}}/>
         {paymentError ? <Notice>{paymentError}</Notice> : null}
         {deletePayment ? (
           <>
@@ -335,7 +337,7 @@ export default function SplitBills() {
               peopleProfiles={options.data?.people ?? []}
               relatedBills={data?.bills ?? []}
               paymentProfiles={options.data?.profiles ?? []}
-              onManagePaymentOptions={() => { setSelected(null); setTab("Payments"); }}
+              onManagePaymentOptions={() => { setEntity(null); setSelected(null); setTab("Payments"); }}
               onSaved={(bill) => {
                 setSelected(bill as Bill);
                 options.reload();
@@ -547,6 +549,7 @@ export default function SplitBills() {
                     />
                   ) : null}
                   {page > 1 || data.hasMore ? <Body>Page {page}</Body> : null}
+                  <SimplifyAction/>
                 </>
               )}
             </>
@@ -585,7 +588,7 @@ export default function SplitBills() {
                         source={
                           group.avatarUrl
                             ? { uri: group.avatarUrl }
-                            : require("../assets/split-bills/group-default.jpg")
+                            : groupCovers[groupCoverIndex(group.id)]
                         }
                         style={{ width: 72, height: 72, borderRadius: 12 }}
                       />

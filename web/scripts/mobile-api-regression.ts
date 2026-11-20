@@ -1,3 +1,4 @@
+import { mobilePaymentProfilePatch } from "../lib/split-bill-payment-profile-schema";
 import { transactionReviewDisplayFields } from "../lib/actionable-transaction-review";
 import assert from "node:assert/strict";
 import { mock } from "node:test";
@@ -115,6 +116,9 @@ async function main() {
   for (const extra of [{ rawPayload: { tampered: true } }, { sourceType: "receipt" }, { paidByIndex: 2 }, { billDate: "2026-02-30" }, { total: "NaN" }, { participants: [{ name: "Alex", id: "foreign" }, { name: "Mia" }] }]) assert.equal(mobileSplitBillInput.safeParse({ ...splitInput, ...extra }).success, false);
   assert.equal(mobileSplitBillPayload(mobileSplitBillInput.parse({...splitInput,groupId:"selected-group",expense:{workspaceId:"active",attemptId:"00000000-0000-4000-8000-000000000001"}})).groupId,"selected-group","Group authorization is checked by the shared route, not guessed by the client schema");
   assert.equal(mobileOperation("POST",["split-bill-people"]),"split-person-create");
+  assert.deepEqual(mobilePaymentProfilePatch.parse({label:"Updated"}),{label:"Updated"});
+  assert(!mobilePaymentProfilePatch.safeParse({userId:"other"}).success);
+  assert.equal(mobileOperation("PATCH",["split-bill-payment-profiles","test"]),"payment-profile-edit");
   assert.equal(mobileOperation("POST",["split-bill-payment-profiles"]),"split-payment-create");
   assert.equal(mobileSplitBillPayload(mobileSplitBillInput.parse({ ...splitInput, transactionId: "owned-transaction" })).transactionId, "owned-transaction");
   assert.equal(mobileOperation("GET", ["billing", "usage"]), "billing-usage");

@@ -581,6 +581,7 @@ export async function GET(request: Request) {
         : { summary: splitBillBalanceSummary(bills, getUserDisplayName(user)) },
       { headers: { "Cache-Control": "private, no-store" } });
     }
+    const ledger = native && query.get("view") === "ledger";
     const requestedPage = native ? Number(query.get("page") ?? 1) : 1;
     const groupFilter = native ? query.get("groupId") : null;
     const personFilter = native ? query.get("person") : null;
@@ -597,21 +598,22 @@ export async function GET(request: Request) {
         ],
       },
       orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
-      ...(native ? { skip: (page - 1) * 30, take: 31 } : {}),
-      include: getBillInclude,
+      ...(native && !ledger ? { skip: (page - 1) * 30, take: 31 } : {}),
+      include: {...getBillInclude, user: ledger ? {select:{firstName:true,lastName:true}} : false},
     });
     code = "split_bills_settlement_load_failed";
     const transferSettlementsByBillId = await loadSplitBillTransferSettlementsForBills(bills.map((bill) => bill.id));
 
     code = "split_bills_response_failed";
     return NextResponse.json({
-      ...(native ? { page, hasMore: bills.length > 30 } : {}),
-      bills: (native ? bills.slice(0, 30) : bills).map((bill) =>
-        serializeSplitBillRecord({
+      ...(native ? { page, hasMore: !ledger && bills.length > 30, ...(ledger ? {viewerName:getUserDisplayName(user)} : {}) } : {}),
+      bills: (native && !ledger ? bills.slice(0, 30) : bills).map((bill) => ({
+        ...serializeSplitBillRecord({
           ...bill,
           transferSettlements: transferSettlementsByBillId.get(bill.id) ?? [],
-        } as Parameters<typeof serializeSplitBillRecord>[0])
-      ),
+        } as Parameters<typeof serializeSplitBillRecord>[0]),
+        ...(ledger ? {recorder: bill.userId===user.id ? getUserDisplayName(user) : [bill.user?.firstName,bill.user?.lastName].filter(Boolean).join(" ") || undefined} : {}),
+      })),
     });
   } catch (error) {
     const reason = code === "split_bills_user_context_failed" && error instanceof Error ? error.message : "";

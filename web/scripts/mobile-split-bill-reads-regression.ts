@@ -33,7 +33,7 @@ async function main() {
   const logs = { warn: recordLog, info: recordLog };
   let fault = "";
   let ownsProfile = true;
-  const bill = { id: "bill", title: "Fixture lunch", currency: "PHP", settlement: { transfers: [{ amount: 125 }] } };
+  const bill = { userId:"owner", id: "bill", title: "Fixture lunch", currency: "PHP", settlement: { transfers: [{ amount: 125 }] } };
   const prisma = {
     user: { findUnique: async () => ({ id: "owner" }) },
     workspace: { findFirst: async ({ where }: { where: { userId: string } }) => {
@@ -44,7 +44,7 @@ async function main() {
     splitBill: { findMany: async ({ skip, take }: { skip: number; take: number }) => {
       calls.push(`list:${skip}:${take}`);
       if (fault === "list") throw new Error("private query");
-      return [bill];
+      return take===undefined ? Array.from({length:35},(_,i)=>({...bill,id:"bill-"+i})) : [bill];
     } },
   };
   const route = load<{ GET(request: Request): Promise<Response> }>("../app/api/split-bills/route.ts", {
@@ -157,6 +157,11 @@ async function main() {
   assert.equal(splitBillRead.splitBillReadRequiresAction(409), true);
   assert.equal(splitBillRead.splitBillReadRequiresAction(503), false);
   assert.equal(splitBillRead.splitBillReadRequiresAction(429), false);
+  const ledger=await request<{hasMore:boolean;viewerName:string;bills:{recorder:string}[]}>("view=ledger&groupId=test&workspaceId=profile");
+  assert.equal(ledger.bills.length,35);
+  assert.equal(ledger.hasMore,false);
+  assert.equal(ledger.viewerName,"Fixture");
+  assert.equal(ledger.bills[0].recorder,"Fixture");
   const beforeMutation = calls.length;
   const mutation = await gateway.POST(new Request("https://fixture.test/api/mobile/v1/split-bills", {
     method: "POST", headers: { authorization: "Bearer fixture-token" },

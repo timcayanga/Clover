@@ -1888,6 +1888,7 @@ model SplitBillPerson {
 }
 
 model SplitBillGroupMember {
+  previousNames String[] @default([])
   id        String         @id @default(cuid())
   groupId   String
   name      String

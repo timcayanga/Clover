@@ -43,3 +43,24 @@ assert.equal(detail.bill.payments[0].private,undefined);
 assert.equal(detail.bill.transferSettlements[0].amount,'450');
 assert.equal(detail.bill.transferSettlements[0].private,undefined);
 console.log('Native bill details include recorded contribution and settlement rows while withholding private fields.');
+
+import { simplifyDebts, remainingDebts } from '../../shared/split-debts';
+import { groupCoverIndex } from '../../shared/split-group-cover';
+const edges=[
+  {from:"A",to:"B",currency:"PHP",cents:500},
+  {from:"B",to:"C",currency:"PHP",cents:500},
+  {from:"C",to:"A",currency:"PHP",cents:499},
+  {from:"B",to:"A",currency:"USD",cents:500},
+];
+assert.deepEqual(simplifyDebts(edges),[
+  {from:"A",to:"C",currency:"PHP",cents:1},
+  {from:"B",to:"A",currency:"USD",cents:500},
+]);
+assert.deepEqual(remainingDebts([{...partial,resolved:true}]),[]);
+assert.deepEqual(remainingDebts([settled]),[]);
+assert.equal(remainingDebts([partial])[0].cents,12500);
+assert.equal(new Set(Array.from({length:100},(_,i)=>groupCoverIndex("group-"+i))).size,8);
+console.log("Group debts preserve residual cents, partial payments, and currencies. All eight covers are reachable.");
+const renamed = {...partial,group:{members:[{name:"Bee",previousNames:["B"]}]}};
+assert.equal(remainingDebts([renamed])[0].from,"Bee");
+assert.equal(renamed.settlement.transfers[0].fromParticipantName,"B");

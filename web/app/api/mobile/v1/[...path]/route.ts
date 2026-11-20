@@ -443,14 +443,25 @@ async function handle(
       const [data, netWorth, balances] = await Promise.all([mobileHome(workspaceId,currency),loadReportNetWorth(workspaceId,currency,window.start,window.end),mobileReportBalances(workspaceId,currency,now,window)]);
       return reply({...data,currencies:selection.currencies,netWorth,balances,details});
     }
+    if (operation === "payment-profile-edit") {
+      const {mobilePaymentProfilePatch} = await import("@/lib/split-bill-payment-profile-schema");
+      const text=await request.text();
+      if(new TextEncoder().encode(text).length>1510000)return reply({error:"Payment details are too large."},413);
+      const patch = mobilePaymentProfilePatch.parse(JSON.parse(text));
+      await prisma.$transaction(async tx => {
+        const saved = await tx.splitBillPaymentProfile.update({where:{id:path[1],userId:user.id},data:{...patch,currency:patch.currency?.toUpperCase(),...(patch.qrImageData!==undefined?{qrPayload:null}:{})}});
+        if (patch.isDefault) await tx.splitBillPaymentProfile.updateMany({where:{userId:user.id,id:{not:saved.id},isDefault:true},data:{isDefault:false}});
+      });
+      return reply({ok:true});
+    }
     if (operation === "together-options") {
       const [groups, people, profiles] = await Promise.all([
-        prisma.splitBillGroup.findMany({ where:{ OR:[{userId:user.id},{collaborators:{some:{userId:user.id}}}], archivedAt:null }, select:{id:true,name:true,avatarUrl:true,members:{select:{id:true,name:true}},_count:{select:{bills:true}}} }),
+        prisma.splitBillGroup.findMany({ where:{ OR:[{userId:user.id},{collaborators:{some:{userId:user.id}}}], archivedAt:null }, select:{id:true,userId:true,name:true,avatarUrl:true,members:{select:{id:true,name:true,previousNames:true}},_count:{select:{bills:true}}} }),
         prisma.splitBillPerson.findMany({where:{userId:user.id},select:{id:true,name:true,avatarUrl:true}}),
         prisma.splitBillPaymentProfile.findMany({where:{userId:user.id},select:{id:true,label:true,provider:true,currency:true,accountName:true,accountNumber:true,qrImageData:true,isDefault:true}}),
       ]);
       const {paymentOptionBrand}=await import("@/lib/payment-option-brand");
-      return reply({groups,people,profiles:profiles.map(profile=>({...profile,...paymentOptionBrand(profile.provider,profile.label)}))});
+      return reply({groups:groups.map(({userId,...g})=>({...g,canEdit:userId===user.id})),people,profiles:profiles.map(profile=>({...profile,...paymentOptionBrand(profile.provider,profile.label)}))});
     }
     if (operation === "investments") {
       return reply(await (await import("@/lib/mobile-investment-data")).loadMobileInvestments(workspaceId));
@@ -827,7 +838,7 @@ async function handle(
       const text = await request.text();
       if (new TextEncoder().encode(text).length > 10000) return reply({error:"Group details are too large."},413);
       const { mobileGroupInput } = await import("@/lib/mobile-together-input");
-      const body = mobileGroupInput.parse(JSON.parse(text));
+      const body = (operation === "split-group-edit" ? mobileGroupInput.extend({members:z.array(z.object({id:z.string().optional(),name:z.string().trim().min(1).max(80)})).max(30)}) : mobileGroupInput).parse(JSON.parse(text));
       forwarded = new Request(request.url,{method:request.method,headers:request.headers,body:JSON.stringify(body)});
     }
     const response = await withMobileRequestContext(

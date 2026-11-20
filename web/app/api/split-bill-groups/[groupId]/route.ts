@@ -33,7 +33,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
         userId: user.id,
       },
       include: {
-        members: { select: { name: true } },
+        members: { select: { id:true, name: true, previousNames:true } },
       },
     });
 
@@ -52,17 +52,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
         },
       });
 
-      await tx.splitBillGroupMember.deleteMany({
-        where: { groupId },
-      });
-
-      await tx.splitBillGroupMember.createMany({
-        data: body.members.map((member, index) => ({
-          groupId,
-          name: member.name,
-          sortOrder: member.sortOrder ?? index,
-        })),
-      });
+      const previous = await tx.splitBillGroupMember.findMany({where:{groupId},select:{id:true,name:true,previousNames:true}});
+      if(new Set(body.members.map(m=>m.name.toLowerCase())).size!==body.members.length)throw new Error("Group members must have distinct names.");
+      const retained = new Set<string>();
+      for (const [index, member] of body.members.entries()) {
+        const prior = member.id ? previous.find(m=>m.id===member.id) : previous.find(m=>m.name.toLowerCase()===member.name.toLowerCase());
+        if (member.id && !prior) throw new Error("Group membership changed. Reopen the group and try again.");
+        const other = previous.find(m=>m.id!==prior?.id && [m.name,...m.previousNames].some(n=>n.toLowerCase()===member.name.toLowerCase()));
+        if(other || (prior && retained.has(prior.id))) throw new Error("This name already belongs to another group member.");
+        if(prior){
+          const aliases=prior.name===member.name?prior.previousNames:[...new Set([...prior.previousNames,prior.name])];
+          await tx.splitBillGroupMember.update({where:{id:prior.id},data:{name:member.name,sortOrder:index,previousNames:aliases}});
+          retained.add(prior.id);
+        } else {
+          await tx.splitBillGroupMember.create({data:{groupId,name:member.name,sortOrder:index}});
+        }
+      }
+      await tx.splitBillGroupMember.deleteMany({where:{groupId,id:{in:previous.filter(m=>!retained.has(m.id)).map(m=>m.id)}}});
 
       if (existing.circleId) {
         await tx.circle.update({
@@ -81,12 +87,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
         );
         const retainedGuestIds = new Set<string>();
         for (const member of body.members) {
+          const priorName=previous.find(m=>m.id===member.id)?.name;
           const matched = guestMemberships.find(
-            (entry) => entry.displayName.trim().toLowerCase() === member.name.trim().toLowerCase()
+            (entry) => [priorName,member.name].some(n=>n && entry.displayName.trim().toLowerCase() === n.trim().toLowerCase())
           );
           if (matched) {
             retainedGuestIds.add(matched.id);
-            await tx.circleMembership.update({ where: { id: matched.id }, data: { status: "invited" } });
+            await tx.circleMembership.update({ where: { id: matched.id }, data: { displayName:member.name, status: "invited" } });
           } else {
             const created = await tx.circleMembership.create({
               data: { circleId: existing.circleId, displayName: member.name, role: "participant", status: "invited" },

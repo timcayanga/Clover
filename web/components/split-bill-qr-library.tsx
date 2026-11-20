@@ -660,7 +660,8 @@ export function SplitBillQrLibrary() {
               </button>
             </div>
 
-            <div className="split-bill-qr-editor__fields">
+            <div className="split-bill-qr-editor__fields" data-editing={editingId ? "true" : undefined}>
+              {editingId?<><label><span>Default</span><input type="checkbox" checked={draft.isDefault} onChange={e=>setDraft(d=>({...d,isDefault:e.target.checked}))}/></label><label><span>Currency</span><input required minLength={3} maxLength={8} value={draft.currency} onChange={e=>setDraft(d=>({...d,currency:e.target.value.toUpperCase()}))}/></label></>:null}
               <label>
                 <span>Name</span>
                 <input ref={editorNameInputRef} value={draft.label} maxLength={80} required placeholder="My GCash" onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} />
@@ -702,6 +703,7 @@ export function SplitBillQrLibrary() {
               ) : null}
             </div>
 
+            <style>{'.split-bill-qr-editor__fields[data-editing="true"]{display:flex;flex-direction:column}.split-bill-qr-editor__fields[data-editing="true"] label{display:grid;grid-template-columns:minmax(5rem,1fr) minmax(0,1.7fr);align-items:center;gap:12px}'}</style>
             <div className="split-bill-qr-editor__upload-block">
               <div>
                 <strong>QR Code <small>Optional</small></strong>

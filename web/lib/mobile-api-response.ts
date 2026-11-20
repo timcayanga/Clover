@@ -77,8 +77,8 @@ const circleSummary = (value: unknown) => {
 const splitSummary = (value: unknown) => pick(value, ["id", "title", "note", "billDate", "currency", "sourceType", "total", "settlementStatus", "resolved"]);
 const splitDetail = (value: unknown) => {
   const bill = record(value), settlement = record(bill.settlement);
-  return { ...splitSummary(bill),
-    group: bill.group ? pick(bill.group, ["id", "name"]) : null,
+  return { ...splitSummary(bill), ...pick(bill, ["recorder"]),
+    group: bill.group ? {...pick(bill.group, ["id","name"]),...("recorder" in bill ? {members:rows(record(bill.group).members,["name","previousNames"])}:{})} : null,
     categoryName: typeof record(record(bill.transaction).category).name === "string" ? record(record(bill.transaction).category).name : suggestBillCategory(String(bill.title??""))?.name ?? null,
     payments: rows(bill.payments, ["id", "participantId", "amount", "note"]),
     transferSettlements: rows(bill.transferSettlements,["id","fromParticipantId","toParticipantId","fromParticipantName","toParticipantName","amount","createdAt"]),
@@ -99,7 +99,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
     return { ...pick(data, ["error"]), ...(code ? { code } : {}) };
   }
   if (operation === "activation") return { activation: data.activation };
-  if (operation === "split-group-create" || operation === "split-group-edit") return {group:pick(data.group,["id","name"]),...pick(data,["ok"])};
+  if (operation === "split-group-create" || operation === "split-group-edit") return {group:{...pick(data.group,["id","name"]),members:rows(record(data.group).members,["id","name","previousNames"])},...pick(data,["ok"])};
   if (operation === "preview") return pick(data,["settlement"]);
   if (operation === "split-receipt-preview") return { receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "items"]) };
   if (operation === "adviser-chat") return {
@@ -123,7 +123,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   }
   if (operation === "split-bills" && data.pending) return { pending: { ...pick(data.pending, ["count"]), bills: rows(record(data.pending).bills, ["id", "title", "currency", "remaining"]) } };
   if (operation === "split-bills" && data.summary) return { summary: pick(data.summary, ["youOwe", "owedToYou"]) };
-  if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore"]), bills: Array.isArray(data.bills) ? data.bills.map(splitDetail) : [] };
+  if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore", "viewerName"]), bills: Array.isArray(data.bills) ? data.bills.map(splitDetail) : [] };
   if (operation === "split-bill" || operation === "transfer-settlements" || operation === "resolution") return data.bill ? { bill: splitDetail(data.bill) } : pick(data,["deleted","ok"]);
   if (operation === "payment-profile-delete") return pick(data,["deleted","ok"]);
   if (operation === "payment-requests") return { ...pick(data,["shareUrl"]), request: pick(data.request,["id","amount","currency","billAmount","billCurrency","status","shareUrl"]), requests: rows(data.requests,["id","amount","currency","status","shareUrl","recipientName","note"]) };

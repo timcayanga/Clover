@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { serializeSplitBillRecord, splitBillGroupMemberOrderBy, splitBillItemOrderBy } from "@/lib/split-bill";
-import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
+import type { SplitBillPersonSummary } from "@/lib/split-bill-entities";
 import { loadSplitBillTransferSettlementsForBills } from "@/lib/split-bill-transfer-settlements";
 
 const billInclude = {
@@ -37,6 +37,7 @@ const billInclude = {
 };
 
 const workspaceBillSelect = {
+  user:{select:{firstName:true,lastName:true}},
   id: true,
   userId: true,
   transactionId: true,
@@ -84,6 +85,7 @@ const workspaceBillSelect = {
           id: true,
           name: true,
           sortOrder: true,
+          previousNames:true,
         },
       },
     },
@@ -138,10 +140,11 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
         id: true,
         name: true,
         avatarUrl: true,
+        userId:true,
         archivedAt: true,
         members: {
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-          select: { id: true, name: true, sortOrder: true },
+          select: { id: true, name: true, sortOrder: true, previousNames:true },
         },
         _count: { select: { bills: true } },
       },
@@ -173,6 +176,7 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
       } as Parameters<typeof serializeSplitBillRecord>[0]);
       return {
         ...serializedBill,
+        recorder:[bill.user.firstName,bill.user.lastName].filter(Boolean).join(" ") || undefined,
         categoryName: bill.userId === userId ? bill.transaction?.category?.name ?? null : null,
         paymentRequests: bill.paymentRequests.map((request) => ({
           id: request.id,
@@ -185,7 +189,7 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
         })),
       };
     }),
-    groups: groups as unknown as SplitBillGroupSummary[],
+    groups: groups.map(({userId:ownerId,...g})=>({...g,archivedAt:g.archivedAt?.toISOString()??null,canEdit:ownerId===userId})),
     people: people as unknown as SplitBillPersonSummary[],
   };
 };

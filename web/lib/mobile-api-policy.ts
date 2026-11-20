@@ -60,6 +60,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (segments.length === 3 && segments[0] === "circles" && segments[2] === "resources" && method === "POST") return "circle-resource";
   if (path === "circles" && ["GET", "POST"].includes(method)) return "circles";
   if (segments.length === 2 && segments[0] === "circles" && ["GET", "PATCH"].includes(method)) return "circle";
+  if (segments.length === 2 && segments[0] === "split-bill-payment-profiles" && method === "PATCH") return "payment-profile-edit";
   if (segments.length === 2 && segments[0] === "split-bill-payment-profiles" && method === "DELETE") return "payment-profile-delete";
   if (segments.length===3 && segments[0]==="split-bills" && segments[2]==="payment-requests" && method==="GET") return "payment-requests";
   if (segments.length === 3 && segments[0] === "split-bills" && ["payment-requests", "transfer-settlements", "preview", "resolution"].includes(segments[2]) && method === "POST") return segments[2];
