@@ -18,9 +18,11 @@ import { Body, money, useTheme } from "./ui";
 export function ReportLineChart({
   series,
   currency,
+  minimal = false,
 }: {
   series: { name: string; color: string; points: ChartPoint[] }[];
   currency: string;
+  minimal?: boolean;
 }) {
   const { colors } = useTheme();
   const gradient = useId().replace(/[^a-z0-9]/gi, "");
@@ -38,12 +40,19 @@ export function ReportLineChart({
       timeZone: "UTC",
     });
   return (
-    <View onLayout={event => setChartWidth(event.nativeEvent.layout.width)} style={{ gap: 12, minWidth: 0 }}>
+    <View
+      onLayout={(event) => setChartWidth(event.nativeEvent.layout.width)}
+      style={{ gap: 12, minWidth: 0 }}
+    >
       <View
         accessibilityRole="image"
-        accessibilityLabel={`${series.map((item) => item.name).join(" and ")} in ${currency}, ${date(chart.first)} to ${date(chart.last)}. Expand values for exact amounts.`}
+        accessibilityLabel={`${series.map((item) => item.name).join(" and ")} in ${currency}, ${date(chart.first)} to ${date(chart.last)}. ${minimal ? "" : "Expand values for exact amounts."}`}
       >
-        <Svg width="100%" height={210} viewBox={`0 0 ${Math.max(180, chartWidth)} 210`}>
+        <Svg
+          width="100%"
+          height={210}
+          viewBox={`0 0 ${Math.max(180, chartWidth)} 210`}
+        >
           <Defs>
             {series.map((item, index) => (
               <LinearGradient
@@ -126,60 +135,65 @@ export function ReportLineChart({
           </SvgText>
         </Svg>
       </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
-        {series.map((item) => (
-          <View
-            key={item.name}
-            style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+      {!minimal ? (
+        <>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+            {series.map((item) => (
+              <View
+                key={item.name}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <View
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: item.color,
+                  }}
+                />
+                <Text
+                  style={{
+                    color: colors.ink,
+                    fontFamily: "Poppins-Regular",
+                    fontSize: 13,
+                  }}
+                >
+                  {item.name}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showValues }}
+            onPress={() => setShowValues(!showValues)}
+            style={{ minHeight: 40, justifyContent: "center" }}
           >
-            <View
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 5,
-                backgroundColor: item.color,
-              }}
-            />
             <Text
               style={{
-                color: colors.ink,
-                fontFamily: "Poppins-Regular",
-                fontSize: 13,
+                fontFamily: "Poppins-Medium",
+                fontSize: 15,
+                color: colors.teal,
               }}
             >
-              {item.name}
+              {showValues ? "Hide values" : "View values"}
             </Text>
-          </View>
-        ))}
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: showValues }}
-        onPress={() => setShowValues(!showValues)}
-        style={{ minHeight: 40, justifyContent: "center" }}
-      >
-        <Text
-          style={{
-            fontFamily: "Poppins-Medium",
-            fontSize: 15,
-            color: colors.teal,
-          }}
-        >
-          {showValues ? "Hide values" : "View values"}
-        </Text>
-      </Pressable>
-      {showValues
-        ? chart.series.map((item) => (
-            <View key={item.name} style={{ gap: 8 }}>
-              <Body muted={false}>{item.name}</Body>
-              {item.points.map((point, index) => (
-                <Body key={`${point.date}-${index}`}>
-                  {date(point.time)} · {money(String(point.value), currency)}
-                </Body>
-              ))}
-            </View>
-          ))
-        : null}
+          </Pressable>
+          {showValues
+            ? chart.series.map((item) => (
+                <View key={item.name} style={{ gap: 8 }}>
+                  <Body muted={false}>{item.name}</Body>
+                  {item.points.map((point, index) => (
+                    <Body key={`${point.date}-${index}`}>
+                      {date(point.time)} ·{" "}
+                      {money(String(point.value), currency)}
+                    </Body>
+                  ))}
+                </View>
+              ))
+            : null}
+        </>
+      ) : null}
     </View>
   );
 }

@@ -15,9 +15,11 @@ export function SpendingDonut({
   categories,
   currency,
   variant = "default",
+  totalLabel = "Total spending",
 }: {
   categories: { name: string; amount: number }[];
   currency: string;
+  totalLabel?: string;
   variant?: "default" | "category";
 }) {
   const { colors } = useTheme();
@@ -34,7 +36,7 @@ export function SpendingDonut({
   return (
     <View
       accessibilityRole="image"
-      accessibilityLabel={`Spending mix: ${money(String(total), currency)}. ${values.map((c) => `${c.name}: ${money(String(c.amount), currency)}`).join(". ")}`}
+      accessibilityLabel={`${totalLabel}: ${money(String(total), currency)}. ${values.map((c) => `${c.name}: ${money(String(c.amount), currency)}`).join(". ")}`}
       style={{
         alignSelf: "center",
         width: 210,
@@ -54,7 +56,11 @@ export function SpendingDonut({
               cy={105}
               r={radius}
               fill="none"
-              stroke={useCategoryColors ? categoryIconColor(c.name) : palette[index % palette.length]}
+              stroke={
+                useCategoryColors
+                  ? categoryIconColor(c.name)
+                  : palette[index % palette.length]
+              }
               strokeWidth={strokeWidth}
               strokeDasharray={`${length} ${circumference}`}
               strokeDashoffset={-start}
@@ -89,7 +95,7 @@ export function SpendingDonut({
             color: colors.muted,
           }}
         >
-          Total spending
+          {totalLabel}
         </Text>
       </View>
     </View>

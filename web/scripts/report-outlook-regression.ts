@@ -2,7 +2,11 @@ import { accountSectionType } from "../../shared/account-presentation";
 import { forecastScenario } from "../../shared/reports/scenarios";
 import assert from "node:assert/strict";
 import { consolidatedAccountSummary } from "../../shared/account-summary";
-import { recurringCostPaymentChange, spendingPaceComparisonColor, cashForecast } from "../../shared/reports/outlook";
+import {
+  recurringCostPaymentChange,
+  spendingPaceComparisonColor,
+  cashForecast,
+} from "../../shared/reports/outlook";
 import { buildReportOutlook, buildNetWorthChange } from "../lib/report-outlook";
 import type { FinancialCommitmentSummary } from "../lib/commitments";
 import { parseRecurringTracking } from "../lib/recurring-tracking";
@@ -37,20 +41,49 @@ assert.deepEqual(
   [0, 0, 0, 0],
 );
 assert.deepEqual(
-  consolidatedAccountSummary([...accounts, { type: "bank", currency: "PHP", balance: null }], "PHP", { USD: 50 }).values,
+  consolidatedAccountSummary(
+    [...accounts, { type: "bank", currency: "PHP", balance: null }],
+    "PHP",
+    { USD: 50 },
+  ).values,
   [5000, 1000, 6000, 1000],
 );
 
 for (const name of ["GSave UNO", "GSave CIMB", "#UNOboost@GCash"]) {
   const account = { name, type: "bank", institution: null };
   assert.equal(accountSectionType(account), "investment");
-  assert.equal(account.type, "bank", "Presentation must not overwrite stored classification");
+  assert.equal(
+    account.type,
+    "bank",
+    "Presentation must not overwrite stored classification",
+  );
 }
-assert.equal(accountSectionType({type: "bank", name: "BPI", investmentSubtype: "time_deposit"}), "investment");
-assert.equal(accountSectionType({type: "bank", name: "CIMB UpSave"}), "bank");
-assert.deepEqual(consolidatedAccountSummary([{type:"bank",currency:"PHP",balance:null}, {type:"wallet",currency:"USD",balance:0}], "PHP", {}).values, [0,0,0,0]);
+assert.equal(
+  accountSectionType({
+    type: "bank",
+    name: "BPI",
+    investmentSubtype: "time_deposit",
+  }),
+  "investment",
+);
+assert.equal(accountSectionType({ type: "bank", name: "CIMB UpSave" }), "bank");
+assert.deepEqual(
+  consolidatedAccountSummary(
+    [
+      { type: "bank", currency: "PHP", balance: null },
+      { type: "wallet", currency: "USD", balance: 0 },
+    ],
+    "PHP",
+    {},
+  ).values,
+  [0, 0, 0, 0],
+);
 for (const type of ["credit_card", "loan", "cash", "wallet"]) {
-  assert.equal(accountSectionType({type, name:"GSave payment", institution:"GCash"}), type, "A name must not move debt, cash or wallets into investments");
+  assert.equal(
+    accountSectionType({ type, name: "GSave payment", institution: "GCash" }),
+    type,
+    "A name must not move debt, cash or wallets into investments",
+  );
 }
 const base: FinancialCommitmentSummary = {
   id: "rent",
@@ -595,13 +628,73 @@ console.log(
   `Report outlook workload: 500 schedules and 20,000 transactions in ${Math.round(performance.now() - started)}ms.`,
 );
 
-const paymentChange = (amount: number, previous: number | null) => recurringCostPaymentChange({latestPayment:{date:"2026-02-01",amount,previous}});
-assert.deepEqual(paymentChange(110,100),{amount:10,percent:10});
-assert.deepEqual(paymentChange(90,100),{amount:-10,percent:-10});
-assert.deepEqual(paymentChange(100,0),{amount:100,percent:null});
-assert.equal(paymentChange(110,null),null);
-assert.equal(recurringCostPaymentChange({latestPayment:null}),null);
-assert.deepEqual(paymentChange(9.999,10),{amount:0,percent:0});
-assert.equal(buildReportOutlook([{...base,categoryName:"Bills & Utilities"}],[bank],[],"2026-02-01").recurringCosts.rows[0].categoryName,"Bills & Utilities");
-assert.notEqual(spendingPaceComparisonColor.toLowerCase(),"#00abc0");
-console.log("Trends presentation passed: linked-payment changes, unknown/zero baselines, cents, category artwork metadata and distinct comparison color.");
+const paymentChange = (amount: number, previous: number | null) =>
+  recurringCostPaymentChange({
+    latestPayment: { date: "2026-02-01", amount, previous },
+  });
+assert.deepEqual(paymentChange(110, 100), { amount: 10, percent: 10 });
+assert.deepEqual(paymentChange(90, 100), { amount: -10, percent: -10 });
+assert.deepEqual(paymentChange(100, 0), { amount: 100, percent: null });
+assert.equal(paymentChange(110, null), null);
+assert.equal(recurringCostPaymentChange({ latestPayment: null }), null);
+assert.deepEqual(paymentChange(9.999, 10), { amount: 0, percent: 0 });
+assert.equal(
+  buildReportOutlook(
+    [{ ...base, categoryName: "Bills & Utilities" }],
+    [bank],
+    [],
+    "2026-02-01",
+  ).recurringCosts.rows[0].categoryName,
+  "Bills & Utilities",
+);
+assert.notEqual(spendingPaceComparisonColor.toLowerCase(), "#00abc0");
+console.log(
+  "Trends presentation passed: linked-payment changes, unknown/zero baselines, cents, category artwork metadata and distinct comparison color.",
+);
+
+const originalHistory = structuredClone(history);
+const tracked = buildNetWorthChange(
+  [
+    {
+      ...history[0],
+      trackedOpening: { date: "2026-10-02", balance: 50 },
+      statementCheckpoints: [point("2026-10-05", 200)],
+    },
+  ],
+  "2026-10-01",
+  "2026-10-31",
+);
+assert.equal(tracked.accounts[0].opening?.balance, 50);
+assert.equal(tracked.accounts[0].change, 150);
+const firstBalance = buildNetWorthChange(
+  [
+    {
+      ...history[0],
+      statementCheckpoints: [
+        point("2026-10-05", 100),
+        point("2026-10-10", 125),
+      ],
+    },
+  ],
+  "2026-10-01",
+  "2026-10-31",
+);
+assert.equal(firstBalance.accounts[0].opening?.date, "2026-10-05");
+assert.equal(firstBalance.accounts[0].change, 25);
+const assets = buildNetWorthChange(
+  [
+    { ...history[0], investmentSubtype: "stock", investmentSymbol: "ABC" },
+    { ...history[1], investmentSubtype: null },
+  ],
+  "2026-10-01",
+  "2026-10-31",
+);
+assert.equal(
+  assets.accounts.length,
+  1,
+  "Individual holdings must not appear as account balance changes",
+);
+assert.deepEqual(history, originalHistory, "Insight baselines are read-only");
+console.log(
+  "Insights: first recorded opening, tracked opening, asset exclusion and read-only evidence passed.",
+);

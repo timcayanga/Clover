@@ -278,17 +278,29 @@ export function ReportsWorkspaceView({
             }}
             aria-expanded={filters}
           >
-            <img src="/assets/organize/filter.svg" alt="" width={20} height={20} />
+            <img
+              src="/assets/organize/filter.svg"
+              alt=""
+              width={20}
+              height={20}
+            />
             <span>Filters</span>
           </button>
         </>
       }
     >
-      <div className="report-v2" data-report-section={view.section} data-filters-open={filters} data-ask-page-context={JSON.stringify({reportParams:reportViewParams(data.view).toString(),currency:data.view.currency,from:data.period.from,to:data.period.to})}>
+      <div
+        className="report-v2"
+        data-report-section={view.section}
+        data-filters-open={filters}
+        data-ask-page-context={JSON.stringify({
+          reportParams: reportViewParams(data.view).toString(),
+          currency: data.view.currency,
+          from: data.period.from,
+          to: data.period.to,
+        })}
+      >
         <div className="report-v2-toolbar">
-          {view.section === "advanced" ? <p>
-            {data.period.from} to {data.period.to} · {data.timeZone}
-          </p> : null}
           <button
             className="report-text-action"
             onClick={() => setSavedOpen(!savedOpen)}
@@ -431,8 +443,27 @@ export function ReportsWorkspaceView({
             </p>
             <div className="report-v2-actions">
               <div className="report-mobile-export">
-                <label>Export<select aria-label="Export type" value={exportType} onChange={event => setExportType(event.target.value as "csv" | "pdf")}><option value="csv">CSV</option><option value="pdf">PDF</option></select></label>
-                <button type="button" className="button button-secondary" disabled={busy || exporting} onClick={() => void download(exportType)}>{exporting ? "Preparing…" : "Download"}</button>
+                <label>
+                  Export
+                  <select
+                    aria-label="Export type"
+                    value={exportType}
+                    onChange={(event) =>
+                      setExportType(event.target.value as "csv" | "pdf")
+                    }
+                  >
+                    <option value="csv">CSV</option>
+                    <option value="pdf">PDF</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  disabled={busy || exporting}
+                  onClick={() => void download(exportType)}
+                >
+                  {exporting ? "Preparing…" : "Download"}
+                </button>
               </div>
               <button
                 className="button button-secondary"
@@ -644,7 +675,9 @@ export function ReportPanels({
                 : href({ merchant: x.name, type })
             }
           >
-            {kind === "category" ? <CategoryBrandMark categoryName={x.name} /> : null}
+            {kind === "category" ? (
+              <CategoryBrandMark categoryName={x.name} />
+            ) : null}
             <span>
               {x.name}
               {x.count !== undefined ? (
@@ -662,10 +695,12 @@ export function ReportPanels({
   return (
     <div className="report-v2-currency" data-report-currency={c}>
       {w.view.currency === "ALL" ? <h2>{c}</h2> : null}
-      {(view.section === "trends" || view.section === "advanced") ? <ReportCoverageDetails
-        report={r}
-        href={href({ reviewFilter: "pending" })}
-      /> : null}
+      {view.section === "trends" ? (
+        <ReportCoverageDetails
+          report={r}
+          href={href({ reviewFilter: "pending" })}
+        />
+      ) : null}
       {view.transfers !== "exclude" ? (
         <Panel title="Transfer activity">
           <p>
@@ -677,17 +712,48 @@ export function ReportPanels({
       ) : null}
       {view.section === "overview" ? (
         <>
-          <div className="report-v2-summary report-v2-summary--accounts" aria-label="Report summary">
+          <div
+            className="report-v2-summary report-v2-summary--accounts"
+            aria-label="Report summary"
+          >
             {[
-              {label:"Income",value:money(a.current.income),delta:a.current.income-a.previous.income},
-              {label:"Expenses",value:money(a.current.expense),delta:a.current.expense-a.previous.expense},
-              {label:"Net income",value:money(net),delta:net-(a.previous.income-a.previous.expense)},
-              {label:"Savings rate",value:a.current.income > 0 ? `${savingsRate(a.current.income,a.current.expense)!.toFixed(1)}%` : "N/A",delta:null},
-            ].map(item => <div key={item.label} className="report-v2-summary__cell">
-              <span className="report-v2-summary__label">{item.label}</span>
-              <strong>{item.value}</strong>
-              {item.delta !== null ? <small aria-label={`Change from previous period: ${money(item.delta)}`}>{item.delta > 0 ? "+" : ""}{money(item.delta)}</small> : null}
-            </div>)}
+              {
+                label: "Income",
+                value: money(a.current.income),
+                delta: a.current.income - a.previous.income,
+              },
+              {
+                label: "Expenses",
+                value: money(a.current.expense),
+                delta: a.current.expense - a.previous.expense,
+              },
+              {
+                label: "Net income",
+                value: money(net),
+                delta: net - (a.previous.income - a.previous.expense),
+              },
+              {
+                label: "Savings rate",
+                value:
+                  a.current.income > 0
+                    ? `${savingsRate(a.current.income, a.current.expense)!.toFixed(1)}%`
+                    : "N/A",
+                delta: null,
+              },
+            ].map((item) => (
+              <div key={item.label} className="report-v2-summary__cell">
+                <span className="report-v2-summary__label">{item.label}</span>
+                <strong>{item.value}</strong>
+                {item.delta !== null ? (
+                  <small
+                    aria-label={`Change from previous period: ${money(item.delta)}`}
+                  >
+                    {item.delta > 0 ? "+" : ""}
+                    {money(item.delta)}
+                  </small>
+                ) : null}
+              </div>
+            ))}
           </div>
           <Panel title="Money over time">
             <ReportsMoneyOverTimeChart currency={c} points={r.balances} />
@@ -770,7 +836,13 @@ export function ReportPanels({
                     {a.categories.map((x) => (
                       <tr key={x.name}>
                         <th>
-                          <Link className="report-category-label" href={categoryHref(x.name)}><CategoryBrandMark categoryName={x.name} /><span>{x.name}</span></Link>
+                          <Link
+                            className="report-category-label"
+                            href={categoryHref(x.name)}
+                          >
+                            <CategoryBrandMark categoryName={x.name} />
+                            <span>{x.name}</span>
+                          </Link>
                         </th>
                         <td>{money(x.amount)}</td>
                         <td>
@@ -790,7 +862,13 @@ export function ReportPanels({
             {view.chart !== "Table"
               ? a.categories.map((x) => (
                   <div key={x.name} className="report-v2-category">
-                    <Link className="report-category-label" href={categoryHref(x.name)}><CategoryBrandMark categoryName={x.name} /><span>{x.name}</span></Link>
+                    <Link
+                      className="report-category-label"
+                      href={categoryHref(x.name)}
+                    >
+                      <CategoryBrandMark categoryName={x.name} />
+                      <span>{x.name}</span>
+                    </Link>
                     <strong>
                       {money(x.amount)} ·{" "}
                       {(
@@ -1093,7 +1171,13 @@ export function ReportPanels({
                   .map((t) => (
                     <div key={t.name}>
                       <h3>
-                        <Link className="report-category-label" href={categoryHref(t.name)}><CategoryBrandMark categoryName={t.name} /><span>{t.name}</span></Link>
+                        <Link
+                          className="report-category-label"
+                          href={categoryHref(t.name)}
+                        >
+                          <CategoryBrandMark categoryName={t.name} />
+                          <span>{t.name}</span>
+                        </Link>
                       </h3>
 
                       <p>
@@ -1136,17 +1220,61 @@ export function ReportPanels({
               />
             </Panel>
             <Panel title="Main Drivers">
-              <p>
-                {a.drivers.category
-                  ? `${a.drivers.category.name}: ${money(a.drivers.category.delta)} change in spending.`
-                  : "No category change to explain yet."}
-              </p>
-              <p>
-                {a.drivers.merchant
-                  ? `${a.drivers.merchant.name}: ${money(a.drivers.merchant.delta)} more than the comparison period.`
-                  : "No merchant increase detected."}
-              </p>
-              <p>Detected repeat costs: {money(a.drivers.recurringTotal)}</p>
+              {a.trends.some((t) => t.delta !== 0) ? (
+                <>
+                  <div
+                    className="report-v2-donut"
+                    role="img"
+                    aria-label={`Category spending changes: ${a.trends
+                      .filter((t) => t.delta !== 0)
+                      .map((t) => `${t.name} ${money(t.delta)}`)
+                      .join("; ")}`}
+                    style={{
+                      background: `conic-gradient(${a.trends
+                        .filter((t) => t.delta !== 0)
+                        .map((t, i, all) => {
+                          const total = all.reduce(
+                            (n, x) => n + Math.abs(x.delta),
+                            0,
+                          );
+                          const start =
+                            (all
+                              .slice(0, i)
+                              .reduce((n, x) => n + Math.abs(x.delta), 0) /
+                              total) *
+                            100;
+                          return `${palette[i % palette.length]} ${start}% ${start + (Math.abs(t.delta) / total) * 100}%`;
+                        })
+                        .join(",")})`,
+                    }}
+                  >
+                    <span>
+                      {money(
+                        a.trends.reduce((n, t) => n + Math.abs(t.delta), 0),
+                      )}
+                      <small>Total change size</small>
+                    </span>
+                  </div>
+                  <p>Category changes · increases and decreases</p>
+                  {a.trends
+                    .filter((t) => t.delta !== 0)
+                    .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta))
+                    .map((t) => (
+                      <div className="report-insight-row" key={t.name}>
+                        <CategoryBrandMark categoryName={t.name} />
+                        <span className="report-insight-row__label">
+                          {t.name}
+                        </span>
+                        <strong>
+                          {t.delta > 0 ? "+" : ""}
+                          {money(t.delta)}
+                        </strong>
+                      </div>
+                    ))}
+                </>
+              ) : (
+                <p>No category spending changes in this period.</p>
+              )}
             </Panel>
             <Panel title="Next Steps">
               <p>{a.reviewCount} transactions need review.</p>
@@ -1163,9 +1291,17 @@ export function ReportPanels({
             <Panel title="Goal Check">
               {r.goal ? (
                 <>
-                  <h3>{r.goal.title}</h3>
+                  <h3>⚑ {r.goal.title}</h3>
                   {r.goal.progress !== null ? (
-                    <p>{Math.round(r.goal.progress)}% progress</p>
+                    <>
+                      <progress
+                        className="report-goal-progress"
+                        aria-label={`${r.goal.title} progress`}
+                        value={Math.max(0, Math.min(100, r.goal.progress))}
+                        max={100}
+                      />
+                      <p>{Math.round(r.goal.progress)}% Complete</p>
+                    </>
                   ) : null}
                   <p>{r.goal.detail}</p>
                 </>
@@ -1208,7 +1344,12 @@ function StatementRows({
         .filter((r) => r.type === type)
         .map((row) => (
           <tr key={row.name}>
-            <th><span className="report-category-label"><CategoryBrandMark categoryName={row.name} /><span>{row.name}</span></span></th>
+            <th>
+              <span className="report-category-label">
+                <CategoryBrandMark categoryName={row.name} />
+                <span>{row.name}</span>
+              </span>
+            </th>
             {row.values.map((v, i) => (
               <td key={a.months[i]}>
                 <Link href={link(row.name, type, a.months[i])}>{money(v)}</Link>

@@ -1,5 +1,7 @@
 import { shiftDay } from "./analysis";
 export type ScheduledMovement = {
+  categoryName?: string | null;
+  commitmentId?: string;
   id: string;
   title: string;
   date: string;
@@ -74,6 +76,9 @@ export type NetWorthChange = {
     id: string;
     name: string;
     group: string;
+    type?: string;
+    institution?: string | null;
+    logoUrl?: string | null;
     opening: { date: string; balance: number } | null;
     closing: { date: string; balance: number } | null;
     change: number | null;
@@ -155,9 +160,21 @@ export function cashForecast(
 
 export const spendingPaceComparisonColor = "#8771BB";
 /** Differences between explicit linked payments, never an inferred contract price change. */
-export function recurringCostPaymentChange(row: Pick<RecurringCosts["rows"][number], "latestPayment">): { amount: number; percent: number | null } | null {
+export function recurringCostPaymentChange(
+  row: Pick<RecurringCosts["rows"][number], "latestPayment">,
+): { amount: number; percent: number | null } | null {
   const latest = row.latestPayment;
-  if (!latest || latest.previous === null || !Number.isFinite(latest.amount) || !Number.isFinite(latest.previous)) return null;
+  if (
+    !latest ||
+    latest.previous === null ||
+    !Number.isFinite(latest.amount) ||
+    !Number.isFinite(latest.previous)
+  )
+    return null;
   const amount = Math.round((latest.amount - latest.previous) * 100) / 100 || 0;
-  return { amount, percent: latest.previous > 0 ? Math.round(amount / latest.previous * 100) : null };
+  return {
+    amount,
+    percent:
+      latest.previous > 0 ? Math.round((amount / latest.previous) * 100) : null,
+  };
 }

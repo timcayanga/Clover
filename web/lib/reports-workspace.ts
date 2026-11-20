@@ -17,7 +17,11 @@ import {
 import { buildReportNetWorth } from "./report-net-worth-data";
 import { getCalendarDayEndInTimeZone } from "./report-window";
 import { finverseBalances } from "./finverse-balances";
-import { normalizeAccountBalanceSign } from "./account-balance";
+import { getAccountBrand } from "./account-brand";
+import {
+  deriveReconciledBalance,
+  normalizeAccountBalanceSign,
+} from "./account-balance";
 import { getProAccess } from "./pro-access";
 import { hasFullFeatureAccess } from "./beta-access";
 import { resolveReportCurrency } from "./report-currency";
@@ -386,6 +390,52 @@ export async function loadReportsWorkspace(
         ? buildNetWorthChange(
             scopedAccounts.map((a) => ({
               ...a,
+              logoUrl: getAccountBrand(a).logoSrc,
+              // Stored manual balances are opening balances in the account ledger.
+              // Use the first tracked transaction date without mutating that ledger.
+              trackedOpening:
+                ["manual", "adviser_manual"].includes(a.source) &&
+                a.balance !== null
+                  ? {
+                      date:
+                        a.transactions
+                          .filter((t) => t.currency === a.currency)
+                          .map((t) => reportDay(t.date, timeZone))
+                          .sort()[0] ?? reportDay(a.createdAt, timeZone),
+                      balance: normalizeAccountBalanceSign(
+                        a.type,
+                        Number(a.balance),
+                      ),
+                    }
+                  : null,
+              trackedClosing:
+                ["manual", "adviser_manual"].includes(a.source) &&
+                a.balance !== null
+                  ? {
+                      date: period.to,
+                      balance: normalizeAccountBalanceSign(
+                        a.type,
+                        Number(
+                          deriveReconciledBalance({
+                            accountType: a.type,
+                            balance: String(a.balance),
+                            treatStoredBalanceAsOpening: true,
+                            transactions: a.transactions
+                              .filter(
+                                (t) =>
+                                  t.currency === a.currency &&
+                                  reportDay(t.date, timeZone) <= period.to,
+                              )
+                              .map((t) => ({
+                                ...t,
+                                amount: String(t.amount),
+                                rawPayload: t.rawPayload as never,
+                              })),
+                          }),
+                        ),
+                      ),
+                    }
+                  : null,
               statementCheckpoints: a.statementCheckpoints.filter(
                 (p) =>
                   p.status === "reconciled" && p.importFile?.status === "done",
@@ -475,7 +525,9 @@ export async function loadReportsWorkspace(
       goal:
         goal && paid
           ? {
-              title: user.primaryGoal!.replaceAll("_", " "),
+              title: user
+                .primaryGoal!.replaceAll("_", " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase()),
               detail: goal.nextAction,
               progress: goal.progressPercent,
             }

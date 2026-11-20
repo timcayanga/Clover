@@ -1,14 +1,24 @@
 import { spendingPaceComparisonColor } from "../../shared/reports/outlook";
 import { usePageAskScope, usePageAskClover } from "./page-ask-context";
 import { ContextualUpgrade } from "./contextual-upgrade";
-import { ReportNavigation, ReportJumpTarget, ReportCurrencyScope } from "./report-navigation";
+import {
+  ReportNavigation,
+  ReportJumpTarget,
+  ReportCurrencyScope,
+} from "./report-navigation";
 import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
 import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
 import { exportReport } from "./report-export";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
 import { useEffect, useState, useRef, type ReactNode } from "react";
-import { Alert, Pressable, ScrollView, type ScrollViewInstance, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  type ScrollViewInstance,
+  View,
+} from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSession } from "./session";
 import { Text } from "./app-text";
@@ -20,6 +30,7 @@ import {
   Notice,
   SectionTitle,
   Icon,
+  CategoryMark,
   money,
   useTheme,
 } from "./ui";
@@ -63,27 +74,59 @@ function ReportCard({
   compact?: boolean;
 }) {
   return (
-    <ReportJumpTarget title={title}><Card style={compact ? { padding: 12, gap: 4 } : undefined}>
-      <SectionTitle>{title}</SectionTitle>
-      {children}
-    </Card></ReportJumpTarget>
+    <ReportJumpTarget title={title}>
+      <Card style={compact ? { padding: 12, gap: 4 } : undefined}>
+        <SectionTitle>{title}</SectionTitle>
+        {children}
+      </Card>
+    </ReportJumpTarget>
   );
 }
 export function NativeReportsWorkspace() {
   const session = useSession();
-  const { section, range, from, to, currency, transfers } = useLocalSearchParams<{
-    section?: string; range?: string; from?: string; to?: string; currency?: string; transfers?: string;
-  }>();
-  const initialView: ReportView = (section === "spending" || section === "overview") && range === "custom" &&
-    !!from && !!to && validReportDate(from) && validReportDate(to) && from <= to &&
-    !!currency && /^[A-Z]{3}$/.test(currency) && transfers === "exclude"
-    ? { ...defaultReportView, section, range, from, to, currency, transfers }
-    : defaultReportView;
-  const initialQuery = initialView === defaultReportView ? "" : reportViewParams(initialView).toString();
-  return <ReportWorkspace key={`${session.profileId}:${initialQuery}`} initialView={initialView} initialQuery={initialQuery} />;
+  const { section, range, from, to, currency, transfers } =
+    useLocalSearchParams<{
+      section?: string;
+      range?: string;
+      from?: string;
+      to?: string;
+      currency?: string;
+      transfers?: string;
+    }>();
+  const initialView: ReportView =
+    (section === "spending" || section === "overview") &&
+    range === "custom" &&
+    !!from &&
+    !!to &&
+    validReportDate(from) &&
+    validReportDate(to) &&
+    from <= to &&
+    !!currency &&
+    /^[A-Z]{3}$/.test(currency) &&
+    transfers === "exclude"
+      ? { ...defaultReportView, section, range, from, to, currency, transfers }
+      : defaultReportView;
+  const initialQuery =
+    initialView === defaultReportView
+      ? ""
+      : reportViewParams(initialView).toString();
+  return (
+    <ReportWorkspace
+      key={`${session.profileId}:${initialQuery}`}
+      initialView={initialView}
+      initialQuery={initialQuery}
+    />
+  );
 }
-function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportView; initialQuery: string }) {
-  const scrollRef = useRef<ScrollViewInstance>(null), scrollOffset = useRef(0);
+function ReportWorkspace({
+  initialView,
+  initialQuery,
+}: {
+  initialView: ReportView;
+  initialQuery: string;
+}) {
+  const scrollRef = useRef<ScrollViewInstance>(null),
+    scrollOffset = useRef(0);
   const session = useSession(),
     { colors } = useTheme();
   const [view, setView] = useState<ReportView>(initialView),
@@ -95,7 +138,14 @@ function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportVie
     `reports/workspace?${query}`,
     sampleReportsWorkspace,
   );
-  usePageAskScope({page:"reports",title:"Reports",currency:data?.view.currency,from:data?.period.from,to:data?.period.to,reportParams:data ? reportViewParams(data.view).toString() : undefined});
+  usePageAskScope({
+    page: "reports",
+    title: "Reports",
+    currency: data?.view.currency,
+    from: data?.period.from,
+    to: data?.period.to,
+    reportParams: data ? reportViewParams(data.view).toString() : undefined,
+  });
   const [exportType, setExportType] = useState<"csv" | "pdf">("csv");
   const [savedOpen, setSavedOpen] = useState(false),
     [saved, setSaved] = useState<SavedReport[]>([]),
@@ -266,267 +316,295 @@ function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportVie
     );
   };
   return (
-    <ReportNavigation controller={{ref:scrollRef,offset:scrollOffset}}><Screen layout="dashboard" gap={20} scrollController={{ref:scrollRef,offset:scrollOffset}}>
-      <PlanHeader
-        title="Reports"
-        trailing={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Filters"
-            accessibilityState={{ expanded: filters }}
-            onPress={() => {
-              setDraft({
-                ...view,
-                currency: view.currency || data?.view.currency || "",
-              });
-              setFilters(!filters);
-            }}
-            style={{
-              width: 44,
-              height: 44,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Icon name="options-outline" />
-          </Pressable>
-        }
-      />
-      {!filters ? <PlanTabs
-        items={names}
-        value={names[sections.indexOf(view.section)]}
-        onChange={(name) =>
-          setView((v) => ({ ...v, section: sections[names.indexOf(name)] }))
-        }
-      /> : null}
-      {!filters && data && view.section === "advanced" ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
-      {filters && data ? (
-        <ReportCard title="Filter reports" compact>
-          <DropdownFilter
-            label="Period"
-            value={draft.range}
-            options={reportRanges.map((r) => ({ ...r }))}
-            onChange={(range) =>
-              setDraft((v) => ({ ...v, range: range as ReportView["range"] }))
-            }
-          />
-          {draft.range === "custom" ? (
-            <>
-              <Field
-                label="From (YYYY-MM-DD)"
-                value={draft.from}
-                onChangeText={(from) => setDraft((v) => ({ ...v, from }))}
-              />
-              <Field
-                label="To (YYYY-MM-DD)"
-                value={draft.to}
-                onChangeText={(to) => setDraft((v) => ({ ...v, to }))}
-              />
-            </>
-          ) : null}
-          <DropdownFilter
-            label="Currency"
-            value={draft.currency || data.view.currency}
-            options={[
-              { value: "ALL", label: "All currencies" },
-              ...data.currencies.map((c) => ({ value: c, label: c })),
-            ]}
-            onChange={(currency) => setDraft((v) => ({ ...v, currency }))}
-          />
-          <DropdownFilter
-            label="Compare with"
-            value={draft.compare}
-            options={[
-              { value: "previous", label: "Previous period" },
-              { value: "year", label: "Previous year" },
-            ]}
-            onChange={(compare) =>
-              setDraft((v) => ({
-                ...v,
-                compare: compare as ReportView["compare"],
-              }))
-            }
-          />
-          {multi("Accounts", "accounts", data.accounts)}
-          {multi(
-            "Merchants",
-            "merchants",
-            (data.merchants ?? []).map((name) => ({ id: name, name })),
-          )}
-          {multi("Tags (match any)", "tags", data.tags ?? [])}
-          {multi("Categories", "categories", [
-            { id: "Uncategorized", name: "Uncategorized" },
-            ...data.categories.map((c) => ({ id: c.name, name: c.name })),
-          ])}
-          <DropdownFilter
-            label="Review status"
-            value={draft.review}
-            options={[
-              { value: "all", label: "All transactions" },
-              { value: "confirmed", label: "Confirmed or edited" },
-              { value: "pending", label: "Needs review" },
-            ]}
-            onChange={(review) =>
-              setDraft((v) => ({
-                ...v,
-                review: review as ReportView["review"],
-              }))
-            }
-          />
-          <DropdownFilter
-            label="Transfers"
-            value={draft.transfers}
-            options={[
-              { value: "exclude", label: "Excluded" },
-              { value: "include", label: "Include in activity" },
-              { value: "only", label: "Transfers only" },
-            ]}
-            onChange={(transfers) =>
-              setDraft((v) => ({
-                ...v,
-                transfers: transfers as ReportView["transfers"],
-              }))
-            }
-          />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ flex: 1 }}><DropdownFilter label="Export" value={exportType}
-              options={[{value:"csv",label:"CSV"},{value:"pdf",label:"PDF"}]}
-              onChange={value => setExportType(value as "csv" | "pdf")} /></View>
-            <PlanAction title={exporting ? "Preparing…" : "Download"} disabled={exporting} onPress={() => void download(exportType)} />
-          </View>
-          {exportError ? <Notice>{exportError}</Notice> : null}
-          <PlanAction title="Saved reports" onPress={() => setSavedOpen(!savedOpen)} />
-          <Body>
-            Category and review filters apply to transactions. Balance charts
-            retain all account movements. Transfers never count as income or
-            expenses.
-          </Body>
-          {filterError ? <Notice>{filterError}</Notice> : null}
-          <PlanAction
-            title="Apply filters"
-            tone="primary"
-            onPress={() => apply(draft)}
-          />
-          <PlanAction
-            title="Reset"
-            onPress={() =>
-              setDraft({
-                ...defaultReportView,
-                section: view.section,
-                currency: data.view.currency,
-              })
-            }
-          />
-          <PlanAction title="Cancel" onPress={() => setFilters(false)} />
-        </ReportCard>
-      ) : null}
-      {savedOpen && data ? (
-        <ReportCard title="Saved reports">
-          <Body>
-            Saved in this Profile. Figures refresh when you open a report.
-          </Body>
-          {saveError ? <Notice>{saveError}</Notice> : null}
-          {data.paid ? (
-            <>
-              <Field
-                label="Report name"
-                value={name}
-                maxLength={80}
-                onChangeText={setName}
-                placeholder="e.g. Household spending"
-              />
-              <PlanAction
-                title={selected ? "Save changes" : "Save current view"}
-                tone="primary"
-                disabled={saving || !name.trim()}
-                onPress={() => void save(selected ? "update" : "create")}
-              />
-              {selected ? (
-                <PlanAction
-                  title="Cancel editing"
-                  onPress={() => {
-                    setSelected(null);
-                    setName("");
-                  }}
-                />
-              ) : null}
-            </>
-          ) : (
-            <Body>Save and open custom reports with Clover Plus or Pro.</Body>
-          )}
-          {saved.map((r) => (
-            <View
-              key={r.id}
+    <ReportNavigation controller={{ ref: scrollRef, offset: scrollOffset }}>
+      <Screen
+        layout="dashboard"
+        gap={20}
+        scrollController={{ ref: scrollRef, offset: scrollOffset }}
+      >
+        <PlanHeader
+          title="Reports"
+          trailing={
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Filters"
+              accessibilityState={{ expanded: filters }}
+              onPress={() => {
+                setDraft({
+                  ...view,
+                  currency: view.currency || data?.view.currency || "",
+                });
+                setFilters(!filters);
+              }}
               style={{
-                borderBottomWidth: 1,
-                borderColor: colors.line,
-                paddingVertical: 12,
-                gap: 4,
+                width: 44,
+                height: 44,
+                justifyContent: "center",
+                alignItems: "center",
               }}
             >
-              <PlanAction
-                title={r.name}
-                disabled={!data.paid}
-                onPress={() => {
-                  apply(r.view);
-                  setSavedOpen(false);
-                  setSelected(null);
-                }}
-              />
-              <Body>
-                {reportRanges.find((x) => x.value === r.view.range)?.label} ·{" "}
-                {r.view.currency}
-              </Body>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
-                <PlanAction
-                  title="Edit"
-                  disabled={saving || !data.paid}
-                  onPress={() => {
-                    apply(r.view);
-                    setName(r.name);
-                    setSelected(r);
-                  }}
+              <Icon name="options-outline" />
+            </Pressable>
+          }
+        />
+        {!filters ? (
+          <PlanTabs
+            items={names}
+            value={names[sections.indexOf(view.section)]}
+            onChange={(name) =>
+              setView((v) => ({ ...v, section: sections[names.indexOf(name)] }))
+            }
+          />
+        ) : null}
+        {filters && data ? (
+          <ReportCard title="Filter reports" compact>
+            <DropdownFilter
+              label="Period"
+              value={draft.range}
+              options={reportRanges.map((r) => ({ ...r }))}
+              onChange={(range) =>
+                setDraft((v) => ({ ...v, range: range as ReportView["range"] }))
+              }
+            />
+            {draft.range === "custom" ? (
+              <>
+                <Field
+                  label="From (YYYY-MM-DD)"
+                  value={draft.from}
+                  onChangeText={(from) => setDraft((v) => ({ ...v, from }))}
                 />
-                <PlanAction
-                  title="Delete"
-                  tone="delete"
-                  disabled={saving}
-                  onPress={() =>
-                    Alert.alert("Delete saved report?", r.name, [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Delete",
-                        style: "destructive",
-                        onPress: () => void save("delete", r),
-                      },
-                    ])
-                  }
+                <Field
+                  label="To (YYYY-MM-DD)"
+                  value={draft.to}
+                  onChangeText={(to) => setDraft((v) => ({ ...v, to }))}
+                />
+              </>
+            ) : null}
+            <DropdownFilter
+              label="Currency"
+              value={draft.currency || data.view.currency}
+              options={[
+                { value: "ALL", label: "All currencies" },
+                ...data.currencies.map((c) => ({ value: c, label: c })),
+              ]}
+              onChange={(currency) => setDraft((v) => ({ ...v, currency }))}
+            />
+            <DropdownFilter
+              label="Compare with"
+              value={draft.compare}
+              options={[
+                { value: "previous", label: "Previous period" },
+                { value: "year", label: "Previous year" },
+              ]}
+              onChange={(compare) =>
+                setDraft((v) => ({
+                  ...v,
+                  compare: compare as ReportView["compare"],
+                }))
+              }
+            />
+            {multi("Accounts", "accounts", data.accounts)}
+            {multi(
+              "Merchants",
+              "merchants",
+              (data.merchants ?? []).map((name) => ({ id: name, name })),
+            )}
+            {multi("Tags (match any)", "tags", data.tags ?? [])}
+            {multi("Categories", "categories", [
+              { id: "Uncategorized", name: "Uncategorized" },
+              ...data.categories.map((c) => ({ id: c.name, name: c.name })),
+            ])}
+            <DropdownFilter
+              label="Review status"
+              value={draft.review}
+              options={[
+                { value: "all", label: "All transactions" },
+                { value: "confirmed", label: "Confirmed or edited" },
+                { value: "pending", label: "Needs review" },
+              ]}
+              onChange={(review) =>
+                setDraft((v) => ({
+                  ...v,
+                  review: review as ReportView["review"],
+                }))
+              }
+            />
+            <DropdownFilter
+              label="Transfers"
+              value={draft.transfers}
+              options={[
+                { value: "exclude", label: "Excluded" },
+                { value: "include", label: "Include in activity" },
+                { value: "only", label: "Transfers only" },
+              ]}
+              onChange={(transfers) =>
+                setDraft((v) => ({
+                  ...v,
+                  transfers: transfers as ReportView["transfers"],
+                }))
+              }
+            />
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <View style={{ flex: 1 }}>
+                <DropdownFilter
+                  label="Export"
+                  value={exportType}
+                  options={[
+                    { value: "csv", label: "CSV" },
+                    { value: "pdf", label: "PDF" },
+                  ]}
+                  onChange={(value) => setExportType(value as "csv" | "pdf")}
                 />
               </View>
+              <PlanAction
+                title={exporting ? "Preparing…" : "Download"}
+                disabled={exporting}
+                onPress={() => void download(exportType)}
+              />
             </View>
-          ))}
-          {!saved.length ? <Body>No saved reports yet.</Body> : null}
-        </ReportCard>
-      ) : null}
-      {error ? (
-        <>
-          <Notice>{error}</Notice>
-          <PlanAction title="Try again" onPress={reload} />
-        </>
-      ) : !data ? (
-        <Body>Loading reports…</Body>
-      ) : (
-        data.reports.map((r) => (
-          <ReportCurrencyScope key={r.currency} currency={r.currency}><NativeReportPanels
-            report={r}
-            workspace={data}
-            view={view}
-            setView={setView}
-            onChanged={reload}
-          /></ReportCurrencyScope>
-        ))
-      )}
-    </Screen></ReportNavigation>
+            {exportError ? <Notice>{exportError}</Notice> : null}
+            <PlanAction
+              title="Saved reports"
+              onPress={() => setSavedOpen(!savedOpen)}
+            />
+            <Body>
+              Category and review filters apply to transactions. Balance charts
+              retain all account movements. Transfers never count as income or
+              expenses.
+            </Body>
+            {filterError ? <Notice>{filterError}</Notice> : null}
+            <PlanAction
+              title="Apply filters"
+              tone="primary"
+              onPress={() => apply(draft)}
+            />
+            <PlanAction
+              title="Reset"
+              onPress={() =>
+                setDraft({
+                  ...defaultReportView,
+                  section: view.section,
+                  currency: data.view.currency,
+                })
+              }
+            />
+            <PlanAction title="Cancel" onPress={() => setFilters(false)} />
+          </ReportCard>
+        ) : null}
+        {savedOpen && data ? (
+          <ReportCard title="Saved reports">
+            <Body>
+              Saved in this Profile. Figures refresh when you open a report.
+            </Body>
+            {saveError ? <Notice>{saveError}</Notice> : null}
+            {data.paid ? (
+              <>
+                <Field
+                  label="Report name"
+                  value={name}
+                  maxLength={80}
+                  onChangeText={setName}
+                  placeholder="e.g. Household spending"
+                />
+                <PlanAction
+                  title={selected ? "Save changes" : "Save current view"}
+                  tone="primary"
+                  disabled={saving || !name.trim()}
+                  onPress={() => void save(selected ? "update" : "create")}
+                />
+                {selected ? (
+                  <PlanAction
+                    title="Cancel editing"
+                    onPress={() => {
+                      setSelected(null);
+                      setName("");
+                    }}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <Body>Save and open custom reports with Clover Plus or Pro.</Body>
+            )}
+            {saved.map((r) => (
+              <View
+                key={r.id}
+                style={{
+                  borderBottomWidth: 1,
+                  borderColor: colors.line,
+                  paddingVertical: 12,
+                  gap: 4,
+                }}
+              >
+                <PlanAction
+                  title={r.name}
+                  disabled={!data.paid}
+                  onPress={() => {
+                    apply(r.view);
+                    setSavedOpen(false);
+                    setSelected(null);
+                  }}
+                />
+                <Body>
+                  {reportRanges.find((x) => x.value === r.view.range)?.label} ·{" "}
+                  {r.view.currency}
+                </Body>
+                <View
+                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}
+                >
+                  <PlanAction
+                    title="Edit"
+                    disabled={saving || !data.paid}
+                    onPress={() => {
+                      apply(r.view);
+                      setName(r.name);
+                      setSelected(r);
+                    }}
+                  />
+                  <PlanAction
+                    title="Delete"
+                    tone="delete"
+                    disabled={saving}
+                    onPress={() =>
+                      Alert.alert("Delete saved report?", r.name, [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Delete",
+                          style: "destructive",
+                          onPress: () => void save("delete", r),
+                        },
+                      ])
+                    }
+                  />
+                </View>
+              </View>
+            ))}
+            {!saved.length ? <Body>No saved reports yet.</Body> : null}
+          </ReportCard>
+        ) : null}
+        {error ? (
+          <>
+            <Notice>{error}</Notice>
+            <PlanAction title="Try again" onPress={reload} />
+          </>
+        ) : !data ? (
+          <Body>Loading reports…</Body>
+        ) : (
+          data.reports.map((r) => (
+            <ReportCurrencyScope key={r.currency} currency={r.currency}>
+              <NativeReportPanels
+                report={r}
+                workspace={data}
+                view={view}
+                setView={setView}
+                onChanged={reload}
+              />
+            </ReportCurrencyScope>
+          ))
+        )}
+      </Screen>
+    </ReportNavigation>
   );
 }
 function NativeReportPanels({
@@ -540,7 +618,7 @@ function NativeReportPanels({
   workspace: ReportsWorkspace;
   view: ReportView;
   setView: (f: (v: ReportView) => ReportView) => void;
-  onChanged?:()=>void|Promise<unknown>;
+  onChanged?: () => void | Promise<unknown>;
 }) {
   const askClover = usePageAskClover();
   const { colors, dark } = useTheme();
@@ -623,10 +701,12 @@ function NativeReportPanels({
   return (
     <View style={{ gap: 20 }}>
       {w.view.currency === "ALL" ? <SectionTitle>{c}</SectionTitle> : null}
-      {(view.section === "trends" || view.section === "advanced") ? <ReportCoverageDetails
-        report={r}
-        onReview={() => open({ reviewFilter: "pending" })}
-      /> : null}
+      {view.section === "trends" ? (
+        <ReportCoverageDetails
+          report={r}
+          onReview={() => open({ reviewFilter: "pending" })}
+        />
+      ) : null}
       {view.transfers !== "exclude" ? (
         <ReportCard title="Transfer activity">
           <Body>
@@ -641,17 +721,91 @@ function NativeReportPanels({
       ) : null}
       {view.section === "overview" ? (
         <>
-          <View accessibilityLabel="Report summary" style={{flexDirection:"row",flexWrap:"wrap",borderWidth:1,borderColor:dark ? "#29384A" : "#D8E7E3",borderRadius:22,overflow:"hidden",backgroundColor:dark ? "#0E1725" : "#FCFEFC"}}>
+          <View
+            accessibilityLabel="Report summary"
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              borderWidth: 1,
+              borderColor: dark ? "#29384A" : "#D8E7E3",
+              borderRadius: 22,
+              overflow: "hidden",
+              backgroundColor: dark ? "#0E1725" : "#FCFEFC",
+            }}
+          >
             {[
-              {title:"Income",value:format(a.current.income),delta:a.current.income-a.previous.income},
-              {title:"Expenses",value:format(a.current.expense),delta:a.current.expense-a.previous.expense},
-              {title:"Net income",value:format(net),delta:net-(a.previous.income-a.previous.expense)},
-              {title:"Savings rate",value:a.current.income > 0 ? `${savingsRate(a.current.income,a.current.expense)!.toFixed(1)}%` : "N/A",delta:null},
-            ].map((item,index) => <View key={item.title} style={{width:"50%",minHeight:81,padding:16,gap:5,borderRightWidth:index % 2 === 0 ? 1 : 0,borderTopWidth:index > 1 ? 1 : 0,borderColor:dark ? "#29384A" : "#E1ECE8",backgroundColor:index === 0 ? (dark ? "#15382F" : "#E9F8EF") : "transparent"}}>
-              <Text style={{fontSize:11,fontFamily:"Poppins-Medium",color:colors.muted}}>{item.title}</Text>
-              <Text style={{fontSize:18,fontFamily:"Poppins-SemiBold",color:index === 0 ? (dark ? "#86E9D1" : "#12614E") : colors.ink}}>{item.value}</Text>
-              {item.delta !== null ? <Text accessibilityLabel={`Change from previous period: ${format(item.delta)}`} style={{fontSize:11,color:colors.muted}}>{item.delta > 0 ? "+" : ""}{format(item.delta)}</Text> : null}
-            </View>)}
+              {
+                title: "Income",
+                value: format(a.current.income),
+                delta: a.current.income - a.previous.income,
+              },
+              {
+                title: "Expenses",
+                value: format(a.current.expense),
+                delta: a.current.expense - a.previous.expense,
+              },
+              {
+                title: "Net income",
+                value: format(net),
+                delta: net - (a.previous.income - a.previous.expense),
+              },
+              {
+                title: "Savings rate",
+                value:
+                  a.current.income > 0
+                    ? `${savingsRate(a.current.income, a.current.expense)!.toFixed(1)}%`
+                    : "N/A",
+                delta: null,
+              },
+            ].map((item, index) => (
+              <View
+                key={item.title}
+                style={{
+                  width: "50%",
+                  minHeight: 81,
+                  padding: 16,
+                  gap: 5,
+                  borderRightWidth: index % 2 === 0 ? 1 : 0,
+                  borderTopWidth: index > 1 ? 1 : 0,
+                  borderColor: dark ? "#29384A" : "#E1ECE8",
+                  backgroundColor:
+                    index === 0
+                      ? dark
+                        ? "#15382F"
+                        : "#E9F8EF"
+                      : "transparent",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "Poppins-Medium",
+                    color: colors.muted,
+                  }}
+                >
+                  {item.title}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontFamily: "Poppins-SemiBold",
+                    color:
+                      index === 0 ? (dark ? "#86E9D1" : "#12614E") : colors.ink,
+                  }}
+                >
+                  {item.value}
+                </Text>
+                {item.delta !== null ? (
+                  <Text
+                    accessibilityLabel={`Change from previous period: ${format(item.delta)}`}
+                    style={{ fontSize: 11, color: colors.muted }}
+                  >
+                    {item.delta > 0 ? "+" : ""}
+                    {format(item.delta)}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
           </View>
           <ReportCard title="Money over time">
             <ReportLineChart
@@ -779,13 +933,25 @@ function NativeReportPanels({
               <Body>No spending in this period.</Body>
             ) : null}
           </ReportCard>
-          {r.recoveries?<ReportRecoveries key={w.workspaceId+ r.currency} report={r.recoveries} currency={r.currency} workspaceId={w.workspaceId} onChanged={onChanged}/>:null}
+          {r.recoveries ? (
+            <ReportRecoveries
+              key={w.workspaceId + r.currency}
+              report={r.recoveries}
+              currency={r.currency}
+              workspaceId={w.workspaceId}
+              onChanged={onChanged}
+            />
+          ) : null}
           <ReportSpendingDetails report={r} workspace={w} view={view} />
         </>
       ) : null}
       {view.section === "trends" ? (
         <>
-          <ReportOutlook key={JSON.stringify(view)} report={r} section="trends" />
+          <ReportOutlook
+            key={JSON.stringify(view)}
+            report={r}
+            section="trends"
+          />
           <ReportCard title="Spending Pace">
             <ReportLineChart
               currency={c}
@@ -816,7 +982,11 @@ function NativeReportPanels({
               title="Ask Clover"
               tone="ask"
               onPress={() =>
-                askClover({page:"reports",title:"Reports",prompt:`Explain my ${c} spending changes from ${a.from} to ${a.to}, compared with ${a.previousFrom} to ${a.previousTo}.`})
+                askClover({
+                  page: "reports",
+                  title: "Reports",
+                  prompt: `Explain my ${c} spending changes from ${a.from} to ${a.to}, compared with ${a.previousFrom} to ${a.previousTo}.`,
+                })
               }
             />
           </ReportCard>
@@ -1031,24 +1201,52 @@ function NativeReportPanels({
       {view.section === "advanced" ? (
         w.paid ? (
           <>
-            <ReportOutlook key={JSON.stringify(view)} report={r} section="advanced" />
+            <ReportOutlook
+              key={JSON.stringify(view)}
+              report={r}
+              section="advanced"
+            />
             <ReportCard title="Cash Flow">
               <ReportsCashFlow report={r} />
             </ReportCard>
             <ReportCard title="Main Drivers">
-              <Body>
-                {a.drivers.category
-                  ? `${a.drivers.category.name}: ${format(a.drivers.category.delta)} change in spending.`
-                  : "No category change to explain yet."}
-              </Body>
-              <Body>
-                {a.drivers.merchant
-                  ? `${a.drivers.merchant.name}: ${format(a.drivers.merchant.delta)} more than the comparison period.`
-                  : "No merchant increase detected."}
-              </Body>
-              <Body>
-                Detected repeat costs: {format(a.drivers.recurringTotal)}
-              </Body>
+              <SpendingDonut
+                currency={c}
+                categories={a.trends.map((t) => ({
+                  name: t.name,
+                  amount: Math.abs(t.delta),
+                }))}
+                totalLabel="Total change size"
+                variant="category"
+              />
+              {!a.trends.some((t) => t.delta !== 0) ? (
+                <Body>No category spending changes in this period.</Body>
+              ) : (
+                <Body>Category changes · increases and decreases</Body>
+              )}
+              {a.trends
+                .filter((t) => t.delta !== 0)
+                .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta))
+                .map((t) => (
+                  <View
+                    key={t.name}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                      paddingVertical: 8,
+                    }}
+                  >
+                    <CategoryMark name={t.name} size={24} />
+                    <Text style={{ flex: 1, color: colors.ink, fontSize: 14 }}>
+                      {t.name}
+                    </Text>
+                    <Text style={{ color: colors.ink, fontSize: 14 }}>
+                      {t.delta > 0 ? "+" : ""}
+                      {format(t.delta)}
+                    </Text>
+                  </View>
+                ))}
             </ReportCard>
             <ReportCard title="Next Steps">
               <Body>{a.reviewCount} transactions need review.</Body>
@@ -1059,15 +1257,35 @@ function NativeReportPanels({
               <PlanAction
                 title="Ask Clover"
                 tone="ask"
-                onPress={() => askClover({page:"reports",title:"Reports"})}
+                onPress={() => askClover({ page: "reports", title: "Reports" })}
               />
             </ReportCard>
             <ReportCard title="Goal Check">
               {r.goal ? (
                 <>
-                  <Body muted={false}>{r.goal.title}</Body>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
+                  >
+                    <Icon name="flag-outline" size={28} />
+                    <Text
+                      style={{
+                        fontFamily: "Poppins-SemiBold",
+                        fontSize: 18,
+                        color: colors.ink,
+                      }}
+                    >
+                      {r.goal.title}
+                    </Text>
+                  </View>
                   {r.goal.progress !== null ? (
-                    <Progress value={r.goal.progress} />
+                    <>
+                      <Progress value={r.goal.progress} />
+                      <Body>{Math.round(r.goal.progress)}% Complete</Body>
+                    </>
                   ) : null}
                   <Body>{r.goal.detail}</Body>
                 </>

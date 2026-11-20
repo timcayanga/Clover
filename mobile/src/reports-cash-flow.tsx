@@ -241,10 +241,6 @@ export function ReportsCashFlow({ report }: { report: ReportCurrencyData }) {
           {d.label}: {money(String(d.amount), report.currency)}
         </Body>
       ))}
-      <Body>
-        Internal transfers are excluded. Beginning balances are estimates from
-        recorded movements.
-      </Body>
     </View>
   );
 }

@@ -277,6 +277,8 @@ export function buildReportOutlook(
     cashMovements.push({
       id: `${c.id}:${occurrence.dateKey}`,
       title: c.title,
+      categoryName: cost.categoryName,
+      commitmentId: c.id,
       date: occurrence.dateKey,
       amount: recurringPaymentAmount(c, occurrence.dateKey)!,
       direction: cost.direction,
@@ -314,67 +316,108 @@ export function buildReportOutlook(
   };
 }
 export function buildNetWorthChange(
-  accounts: (ReportNetWorthAccount & { id: string; name: string })[],
+  accounts: (ReportNetWorthAccount & {
+    id: string;
+    name: string;
+    institution?: string | null;
+    logoUrl?: string | null;
+    investmentSubtype?: string | null;
+    investmentSymbol?: string | null;
+    trackedOpening?: { date: string; balance: number } | null;
+    trackedClosing?: { date: string; balance: number } | null;
+  })[],
   from: string,
   to: string,
   timeZone = "UTC",
 ): NetWorthChange {
-  const rows = accounts.map((a) => {
-    const group = spendableAccountTypes.includes(a.type)
-      ? "Bank, wallet and cash"
-      : a.type === "investment"
-        ? "Investments"
-        : [
-              "credit_card",
-              "loan",
-              "mortgage",
-              "line_of_credit",
-              "payable",
-              "bnpl",
-            ].includes(a.type)
-          ? "Liabilities"
-          : "Other assets";
-    const points = a.statementCheckpoints
-      .filter(isAccountBalanceCheckpointEvidence)
-      .flatMap((p) => {
-        const time = getAccountCheckpointEffectiveTime(p),
-          value = p.endingBalance;
-        return time > 0 &&
-          value !== null &&
-          value !== undefined &&
-          String(value).trim() !== "" &&
-          Number.isFinite(Number(value))
-          ? [
-              {
-                date: p.statementEndDate
-                  ? new Date(time).toISOString().slice(0, 10)
-                  : reportDay(new Date(time), timeZone),
-                recordedAt: p.createdAt ? +new Date(p.createdAt) : 0,
-                balance: normalizeAccountBalanceSign(a.type, Number(value)),
-              },
-            ]
-          : [];
-      })
-      .sort(
-        (a, b) => a.date.localeCompare(b.date) || a.recordedAt - b.recordedAt,
-      );
-    const opening = points.filter((p) => p.date < from).at(-1) ?? null,
-      closing =
-        points.filter((p) => p.date >= from && p.date <= to).at(-1) ?? null;
-    return {
-      id: a.id,
-      name: a.name,
-      group,
-      opening,
-      closing,
-      change: opening && closing ? closing.balance - opening.balance : null,
-      issue: !opening
-        ? "No dated opening balance"
-        : !closing
-          ? "No balance recorded in this period"
-          : null,
-    };
-  });
+  const rows = accounts
+    .filter(
+      (a) =>
+        !a.investmentSymbol &&
+        ![
+          "stock",
+          "stocks",
+          "etf",
+          "mutual_fund",
+          "money_market_fund",
+          "uitf",
+          "reit",
+          "bond",
+          "crypto",
+          "real_world_asset",
+          "commodity",
+        ].includes(a.investmentSubtype ?? ""),
+    )
+    .map((a) => {
+      const group = spendableAccountTypes.includes(a.type)
+        ? "Bank, wallet and cash"
+        : a.type === "investment"
+          ? "Investments"
+          : [
+                "credit_card",
+                "loan",
+                "mortgage",
+                "line_of_credit",
+                "payable",
+                "bnpl",
+              ].includes(a.type)
+            ? "Liabilities"
+            : "Other assets";
+      const points = a.statementCheckpoints
+        .filter(isAccountBalanceCheckpointEvidence)
+        .flatMap((p) => {
+          const time = getAccountCheckpointEffectiveTime(p),
+            value = p.endingBalance;
+          return time > 0 &&
+            value !== null &&
+            value !== undefined &&
+            String(value).trim() !== "" &&
+            Number.isFinite(Number(value))
+            ? [
+                {
+                  date: p.statementEndDate
+                    ? new Date(time).toISOString().slice(0, 10)
+                    : reportDay(new Date(time), timeZone),
+                  recordedAt: p.createdAt ? +new Date(p.createdAt) : 0,
+                  balance: normalizeAccountBalanceSign(a.type, Number(value)),
+                },
+              ]
+            : [];
+        })
+        .sort(
+          (a, b) => a.date.localeCompare(b.date) || a.recordedAt - b.recordedAt,
+        );
+      const opening =
+          points.filter((p) => p.date < from).at(-1) ??
+          (a.trackedOpening && a.trackedOpening.date <= to
+            ? a.trackedOpening
+            : null) ??
+          points.find((p) => p.date <= to) ??
+          null,
+        closing =
+          points.filter((p) => p.date >= from && p.date <= to).at(-1) ??
+          (a.trackedClosing &&
+          a.trackedClosing.date >= from &&
+          a.trackedClosing.date <= to
+            ? a.trackedClosing
+            : null);
+      return {
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        institution: a.institution,
+        logoUrl: a.logoUrl,
+        group,
+        opening,
+        closing,
+        change: opening && closing ? closing.balance - opening.balance : null,
+        issue: !opening
+          ? "No dated opening balance"
+          : !closing
+            ? "No balance recorded in this period"
+            : null,
+      };
+    });
   const complete = rows.length > 0 && rows.every((r) => r.change !== null);
   return {
     from,
