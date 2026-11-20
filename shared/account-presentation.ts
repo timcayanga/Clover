@@ -23,3 +23,18 @@ export function accountSectionType<
     return "investment";
   return account.type;
 }
+
+const accountSectionEmojis: Record<string, string> = {
+  "banks & savings": "🏦",
+  "credit cards": "💳",
+  liabilities: "🧾",
+  wallets: "👛",
+  investments: "📈",
+  "tracked assets": "💎",
+  cash: "💵",
+  "other accounts": "📁",
+};
+
+export function accountSectionEmoji(title: string) {
+  return accountSectionEmojis[title.toLowerCase()] ?? "📁";
+}

@@ -1,5 +1,5 @@
 "use client";
-import { accountSectionType } from "../../../shared/account-presentation";
+import { accountSectionEmoji, accountSectionType } from "../../../shared/account-presentation";
 import { consolidatedAccountSummary } from "../../../shared/account-summary";
 import { investmentNameLabel, investmentTickerMatches, investmentTickerHint } from "../../../shared/investment-entry";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -4474,7 +4474,7 @@ function AccountsPageContent() {
                   >
                     <div className="accounts-group__head">
                       <div className="accounts-group__title-row">
-                        <h5>{group.title}</h5>
+                        <h5><span aria-hidden="true">{accountSectionEmoji(group.title)} </span>{group.title}</h5>
                         <strong title={group.estimateUnavailable ? "An exchange rate is unavailable for this section." : undefined}>
                           {group.usesFxEstimate
                             ? group.estimateUnavailable

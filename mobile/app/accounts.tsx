@@ -1,6 +1,6 @@
 import { currencyMark } from "../../shared/currency-mark";
 import { usePageAskScope } from "../src/page-ask-context";
-import { accountSectionType } from "../../shared/account-presentation";
+import { accountSectionEmoji, accountSectionType } from "../../shared/account-presentation";
 import { SwipeDeleteRow } from "../src/swipe-delete-row";
 import { recordedSummary } from "../src/recorded-summary";
 import { Modal } from "../src/adaptive-modal";
@@ -356,13 +356,15 @@ function AccountsContent() {
                 }}
               >
                 <Text
+                  accessibilityRole="header"
+                  accessibilityLabel={group.title}
                   style={{
                     fontFamily: "Poppins-SemiBold",
                     fontSize: 14,
                     color: colors.ink,
                   }}
                 >
-                  {group.title}
+                  {accountSectionEmoji(group.title)} {group.title}
                 </Text>
                 <Text
                   style={{
