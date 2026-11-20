@@ -8,6 +8,7 @@ export type ReportRow = {
   category: string;
   categoryId?: string;
   merchant: string;
+  merchantLogoUrl?: string | null;
   accountId: string;
   account: string;
   reviewStatus?: string;

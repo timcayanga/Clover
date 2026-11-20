@@ -6,14 +6,19 @@ export function reportMerchants(
   period: ReportPeriod,
 ): MerchantReportRow[] {
   const groups = new Map<string, MerchantReportRow>();
+  const logos = new Map<string, Set<string>>();
   for (const r of rows) {
     if (r.type !== "expense") continue;
     const current = r.date >= period.from && r.date <= period.to;
     const previous =
       r.date >= period.previousFrom && r.date <= period.previousTo;
     if (!current && !previous) continue;
+    if (r.merchantLogoUrl) {
+      const paths = logos.get(r.merchant) ?? new Set<string>(); paths.add(r.merchantLogoUrl); logos.set(r.merchant, paths);
+    }
     const v = groups.get(r.merchant) ?? {
       name: r.merchant,
+      categoryName: r.category,
       amount: 0,
       previous: 0,
       count: 0,
@@ -29,6 +34,7 @@ export function reportMerchants(
   return [...groups.values()]
     .map((v) => ({
       ...v,
+      merchantLogoUrl: logos.get(v.name)?.size === 1 ? [...logos.get(v.name)!][0] : null,
       amount: Math.round(v.amount * 100) / 100,
       previous: Math.round(v.previous * 100) / 100,
       change: Math.round((v.amount - v.previous) * 100) / 100,
@@ -98,4 +104,11 @@ export function reportCoverage(
     datedHistoryAvailable,
     notes,
   };
+}
+
+/** Presentation only: do not invent a percentage against a zero baseline. */
+export function merchantSpendingChange(row: Pick<MerchantReportRow, "amount" | "previous" | "change">): string {
+  if (row.previous <= 0) return row.amount > 0 ? "New" : "—";
+  const percent = Math.round(row.change / row.previous * 100);
+  return `${percent > 0 ? "+" : ""}${percent}%`;
 }

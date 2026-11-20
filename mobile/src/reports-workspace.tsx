@@ -298,7 +298,7 @@ function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportVie
           setView((v) => ({ ...v, section: sections[names.indexOf(name)] }))
         }
       /> : null}
-      {!filters && data && view.section !== "overview" ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
+      {!filters && data && (view.section === "trends" || view.section === "advanced") ? <Body>{data.period.from} to {data.period.to} · {data.timeZone}</Body> : null}
       {filters && data ? (
         <ReportCard title="Filter reports" compact>
           <DropdownFilter
@@ -622,7 +622,7 @@ function NativeReportPanels({
   return (
     <View style={{ gap: 20 }}>
       {w.view.currency === "ALL" ? <SectionTitle>{c}</SectionTitle> : null}
-      {view.section !== "overview" ? <ReportCoverageDetails
+      {(view.section === "trends" || view.section === "advanced") ? <ReportCoverageDetails
         report={r}
         onReview={() => open({ reviewFilter: "pending" })}
       /> : null}

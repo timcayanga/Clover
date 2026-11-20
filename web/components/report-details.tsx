@@ -1,9 +1,11 @@
 "use client";
 import {
   budgetHistoryExplanation,
-  budgetHistoryLabel,
   importCoverageLines,
 } from "../../shared/reports/history-copy";
+import { MerchantLogo } from "./merchant-logo";
+import { CategoryBrandMark } from "./category-brand-mark";
+import { merchantSpendingChange } from "../../shared/reports/details";
 import { useState } from "react";
 import Link from "next/link";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -94,60 +96,16 @@ export function ReportSpendingDetails({
     <>
       <section className="report-card glass report-v2-panel">
         <h2>Merchant analysis</h2>
-        <p>
-          All matching merchants, including those with spending only in the
-          comparison period.
-        </p>
         <label className="report-v2-search">
           Find a merchant
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setLimit(20);
-            }}
-            placeholder="Search merchants"
-          />
+          <input type="search" value={query} onChange={e => {setQuery(e.target.value);setLimit(20);}} placeholder="Search merchants" />
         </label>
-        <div className="report-v2-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Merchant</th>
-                <th>Spent</th>
-                <th>Comparison</th>
-                <th>Change</th>
-                <th>Transactions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {merchants.slice(0, limit).map((m) => (
-                <tr key={m.name}>
-                  <th>
-                    <Link href={href({ merchant: m.name, type: "expense" })}>
-                      {m.name}
-                    </Link>
-                  </th>
-                  <td>{money(m.amount)}</td>
-                  <td>
-                    <Link
-                      href={href({
-                        merchant: m.name,
-                        type: "expense",
-                        customStart: w.period.previousFrom,
-                        customEnd: w.period.previousTo,
-                      })}
-                    >
-                      {money(m.previous)}
-                    </Link>
-                  </td>
-                  <td>{money(m.change)}</td>
-                  <td>{m.count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="report-detail-rows">
+          {merchants.slice(0,limit).map(m => <Link key={m.name} className="report-detail-row" href={href({merchant:m.name,type:"expense"})}>
+            <MerchantLogo transaction={{merchantRaw:m.name,merchantClean:null,merchantLogoUrl:m.merchantLogoUrl,merchantLogoNameKey:JSON.stringify([m.name,null])}} size={28} fallback={<CategoryBrandMark categoryName={m.categoryName ?? "Other"} size={28} />} />
+            <span className="report-detail-row__name">{m.name}</span>
+            <span className="report-detail-row__figures"><strong>{money(m.amount)}</strong><small aria-label="Change from comparison period">{merchantSpendingChange(m)}</small></span>
+          </Link>)}
         </div>
         {!merchants.length ? <p>No matching merchants.</p> : null}
         {merchants.length > limit ? (
@@ -163,35 +121,12 @@ export function ReportSpendingDetails({
         <h2>Budget versus actual</h2>
         {w.paid ? (
           <>
-            <p className="muted">{budgetReportExplanation}</p>
-            <div className="report-v2-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Budget / month</th>
-                    <th>Target</th>
-                    <th>Spent</th>
-                    <th>Remaining</th>
-                    <th>Over budget</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(r.budgets ?? []).slice(0, budgetLimit).map((b) => (
-                    <tr key={[b.id, b.month, b.from, b.revision].join(":")}>
-                      <th>
-                        {b.name}
-                        <small>{budgetHistoryLabel(b)}</small>
-                      </th>
-                      <td>{money(b.target)}</td>
-                      <td>
-                        <Link href={budgetHref(b)}>{money(b.actual)}</Link>
-                      </td>
-                      <td>{money(b.remaining)}</td>
-                      <td>{money(b.over)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="report-detail-rows">
+              {(r.budgets ?? []).slice(0,budgetLimit).map(b => <Link className="report-detail-row" key={[b.id,b.month,b.from,b.revision].join(":")} href={budgetHref(b)}>
+                <CategoryBrandMark categoryName={b.categoryName ?? w.categories.find(c => c.id === b.categoryId)?.name ?? "Other"} size={28} />
+                <span className="report-detail-row__name">{b.name}<small>{b.from} – {b.to}{b.historyBasis === "recorded" ? "" : " · Estimated"}</small></span>
+                <span className="report-detail-row__figures"><strong>Spent {money(b.actual)}</strong><small>Target {money(b.target)}</small><small>Remaining {money(b.remaining)}</small></span>
+              </Link>)}
             </div>
             {!r.budgets?.length ? (
               <p>

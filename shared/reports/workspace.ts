@@ -33,6 +33,8 @@ export type ReportCurrencyData = {
 };
 export type MerchantReportRow = {
   name: string;
+  merchantLogoUrl?: string | null;
+  categoryName?: string;
   amount: number;
   previous: number;
   count: number;

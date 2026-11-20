@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
+import { normalizeReportRows } from "../lib/report-rows";
 import { transactionMerchantLogo } from "../lib/transaction-merchant-logo";
 import { enrichMerchantIdentityPayload, resolveMerchantIdentity } from "../lib/merchant-identity";
 import { mobileApiResponse } from "../lib/mobile-api-response";
@@ -67,3 +68,16 @@ for (const entry of artwork.entries) {
   assert.equal(file.readUInt32BE(16),128); assert.equal(file.readUInt32BE(20),128);
   assert.equal(createHash("sha256").update(file).digest("hex"),entry.artworkHash,"Published artwork must match the reviewed source hash");
 }
+
+const reportTransaction = {
+  id:"logo-report", accountId:"report-bank", date:new Date("2026-11-20T00:00:00Z"), createdAt:new Date("2026-11-20T00:00:00Z"), amount:120, currency:"PHP", type:"expense", isTransfer:false, isExcluded:false, importFileId:null,
+  reviewStatus:"confirmed", parserConfidence:100, categoryConfidence:100, accountMatchConfidence:100, duplicateConfidence:0,
+  merchantRaw:"STARBUCKS PH",merchantClean:"Starbucks",description:null,categoryId:"food",category:{id:"food",name:"Food & Dining"}, account:{id:"report-bank",name:"BPI",type:"bank",institution:"BPI",currency:"PHP"},transactionTags:[],rawPayload:{},normalizedPayload:{},
+};
+reportTransaction.normalizedPayload = enrichMerchantIdentityPayload({...reportTransaction,categoryName:"Food & Dining",institution:"BPI"});
+const reportSnapshot = JSON.stringify(reportTransaction);
+const normalizedReport = normalizeReportRows([reportTransaction] as unknown as Parameters<typeof normalizeReportRows>[0],"Asia/Manila")[0];
+assert.ok(normalizedReport.merchantLogoUrl?.includes("starbucks"),"Reports reuse the same validated stored transaction logo");
+assert.equal(JSON.stringify(reportTransaction),reportSnapshot,"Report artwork projection does not modify financial evidence");
+assert.equal(normalizeReportRows([{...reportTransaction,merchantClean:"Unknown shop"}] as unknown as Parameters<typeof normalizeReportRows>[0],"Asia/Manila")[0].merchantLogoUrl,null,"Confirmed merchant corrections cannot inherit stale report artwork");
+console.log("Reports merchant artwork: validated stored projection, corrected names and unchanged financial evidence passed.");

@@ -1,13 +1,14 @@
 import { ReportJumpTarget } from "./report-navigation";
 import {
-  budgetHistoryExplanation,
-  budgetHistoryLabel,
   importCoverageLines,
 } from "../../shared/reports/history-copy";
 import { useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { router } from "expo-router";
-import { Body, Card, Field, SectionTitle, money } from "./ui";
+import { Text } from "./app-text";
+import { MerchantLogo } from "./merchant-logo";
+import { merchantSpendingChange } from "../../shared/reports/details";
+import { Body, Card, CategoryMark, Field, SectionTitle, money, useTheme } from "./ui";
 import { PlanAction } from "./plan-ui";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
 import type { ReportView } from "../../shared/reports/analysis";
@@ -66,6 +67,7 @@ export function ReportSpendingDetails({
   workspace: ReportsWorkspace;
   view: ReportView;
 }) {
+  const { colors } = useTheme();
   const [query, setQuery] = useState(""),
     [limit, setLimit] = useState(20),
     [budgetLimit, setBudgetLimit] = useState(24);
@@ -104,41 +106,12 @@ export function ReportSpendingDetails({
     <>
       <ReportJumpTarget title="Merchant analysis"><Card>
         <SectionTitle>Merchant analysis</SectionTitle>
-        <Body>
-          All matching merchants, including those with spending only in the
-          comparison period.
-        </Body>
-        <Field
-          label="Find a merchant"
-          value={query}
-          onChangeText={(text) => {
-            setQuery(text);
-            setLimit(20);
-          }}
-        />
-        {merchants.slice(0, limit).map((m) => (
-          <View key={m.name} style={{ gap: 6, paddingVertical: 12 }}>
-            <PlanAction
-              title={m.name}
-              onPress={() => open({ merchant: m.name, type: "expense" })}
-            />
-            <Body>
-              Spent {format(m.amount)} · {m.count} transactions
-            </Body>
-            <PlanAction
-              title={`Comparison ${format(m.previous)}`}
-              onPress={() =>
-                open({
-                  merchant: m.name,
-                  type: "expense",
-                  customStart: w.period.previousFrom,
-                  customEnd: w.period.previousTo,
-                })
-              }
-            />
-            <Body>Change {format(m.change)}</Body>
-          </View>
-        ))}
+        <Field label="Find a merchant" value={query} onChangeText={text => {setQuery(text);setLimit(20);}} />
+        {merchants.slice(0,limit).map(m => <Pressable key={m.name} accessibilityRole="link" onPress={() => open({merchant:m.name,type:"expense"})} style={{flexDirection:"row",alignItems:"center",gap:12,paddingVertical:12,minHeight:56,borderBottomWidth:1,borderColor:colors.line}}>
+          <MerchantLogo transaction={{merchantRaw:m.name,merchantClean:null,merchantLogoUrl:m.merchantLogoUrl,merchantLogoNameKey:JSON.stringify([m.name,null]),categoryName:m.categoryName ?? "Other"}} size={28} />
+          <Text style={{flex:1,minWidth:0,fontSize:14,color:colors.ink}}>{m.name}</Text>
+          <View style={{alignItems:"flex-end",maxWidth:"45%",gap:3}}><Text style={{fontSize:14,color:colors.ink}}>{format(m.amount)}</Text><Text accessibilityLabel="Change from comparison period" style={{fontSize:12,color:colors.muted}}>{merchantSpendingChange(m)}</Text></View>
+        </Pressable>)}
         {!merchants.length ? <Body>No matching merchants.</Body> : null}
         {merchants.length > limit ? (
           <PlanAction
@@ -151,42 +124,22 @@ export function ReportSpendingDetails({
         <SectionTitle>Budget versus actual</SectionTitle>
         {w.paid ? (
           <>
-            <Body>{budgetHistoryExplanation}</Body>
-            {(r.budgets ?? []).slice(0, budgetLimit).map((b) => (
-              <View
-                key={[b.id, b.month, b.from, b.revision].join(":")}
-                style={{ gap: 6, paddingVertical: 12 }}
-              >
-                <Body>
-                  {b.name} · {budgetHistoryLabel(b)}
-                </Body>
-                <Body>Target {format(b.target)}</Body>
-                <PlanAction
-                  title={`Spent ${format(b.actual)}`}
-                  onPress={() => budgetOpen(b)}
-                />
-                <Body>
-                  Remaining {format(b.remaining)} · Over budget {format(b.over)}
-                </Body>
-              </View>
-            ))}
+            {(r.budgets ?? []).slice(0,budgetLimit).map(b => <Pressable key={[b.id,b.month,b.from,b.revision].join(":")} accessibilityRole="link" onPress={() => budgetOpen(b)} style={{flexDirection:"row",alignItems:"center",gap:12,paddingVertical:12,minHeight:64,borderBottomWidth:1,borderColor:colors.line}}>
+              <CategoryMark name={b.categoryName ?? w.categories.find(c=>c.id===b.categoryId)?.name ?? "Other"} size={28} />
+              <View style={{flex:1,minWidth:0,gap:4}}><Text style={{fontSize:14,color:colors.ink}}>{b.name}</Text><Text style={{fontSize:11,color:colors.muted}}>{b.from} – {b.to}{b.historyBasis === "recorded" ? "" : " · Estimated"}</Text></View>
+              <View style={{alignItems:"flex-end",maxWidth:"48%",gap:3}}><Text style={{fontSize:13,color:colors.ink}}>Spent {format(b.actual)}</Text><Text style={{fontSize:11,color:colors.muted}}>Target {format(b.target)}</Text><Text style={{fontSize:11,color:colors.muted}}>Remaining {format(b.remaining)}</Text></View>
+            </Pressable>)}
             {!r.budgets?.length ? (
               <>
                 <Body>
                   No spend-limit budget history matches this period and
                   currency.
                 </Body>
-                <PlanAction
-                  title="Open Budgeting"
-                  onPress={() => router.push("/budgeting")}
-                />
+                <Text accessibilityRole="link" onPress={() => router.push("/budgeting")} style={{color:colors.teal}}>Open Budgeting</Text>
               </>
             ) : null}
             {(r.budgets?.length ?? 0) > budgetLimit ? (
-              <PlanAction
-                title="Show more budget months"
-                onPress={() => setBudgetLimit((n) => n + 24)}
-              />
+              <Text accessibilityRole="button" onPress={() => setBudgetLimit(n=>n+24)} style={{color:colors.teal}}>Show more budget months</Text>
             ) : null}
           </>
         ) : (
@@ -195,10 +148,7 @@ export function ReportSpendingDetails({
               Compare monthly budget targets and spending with Clover Plus or
               Pro.
             </Body>
-            <PlanAction
-              title="View plans"
-              onPress={() => router.push("/settings?section=plan")}
-            />
+            <Text accessibilityRole="link" onPress={() => router.push("/settings?section=plan")} style={{color:colors.teal}}>View plans</Text>
           </>
         )}
       </Card></ReportJumpTarget>

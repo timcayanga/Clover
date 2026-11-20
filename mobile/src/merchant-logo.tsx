@@ -6,7 +6,7 @@ import { apiBase } from "./api-base";
 import { CategoryMark } from "./ui";
 import type { Transaction } from "./types";
 
-export function MerchantLogo({ transaction, size = 24 }: { transaction: Transaction; size?: number }) {
+export function MerchantLogo({ transaction, size = 24 }: { transaction: Pick<Transaction, "merchantRaw" | "merchantClean" | "merchantLogoUrl" | "merchantLogoNameKey" | "categoryName">; size?: number }) {
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const path = transaction.merchantLogoUrl;
   const currentNameKey = JSON.stringify([transaction.merchantRaw ?? null, transaction.merchantClean ?? null]);

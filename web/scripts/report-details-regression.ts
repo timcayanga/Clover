@@ -5,7 +5,7 @@ import {
   selectedReportRows,
   type ReportRow,
 } from "../../shared/reports/analysis";
-import { reportCoverage, reportMerchants } from "../../shared/reports/details";
+import { reportCoverage, reportMerchants, merchantSpendingChange } from "../../shared/reports/details";
 import { buildReportBudgets } from "../lib/report-budget";
 import type { BudgetRecord } from "../lib/budgeting";
 import { reportViewSchema, reportViewFromParams } from "../lib/report-view";
@@ -267,3 +267,13 @@ assert(trend.tables.some((t) => t.title.startsWith("Spending pace")));
 console.log(
   "Report details passed: leap/DST-safe budget proration, creation date, scope/currency/gating, confirmed directions, exact merchant/tag drilldowns, completeness, safe CSV/PDF exports and immutable financial records.",
 );
+
+assert.equal(merchantSpendingChange({amount:125,previous:100,change:25}),"+25%");
+assert.equal(merchantSpendingChange({amount:0,previous:100,change:-100}),"-100%");
+assert.equal(merchantSpendingChange({amount:101.49,previous:100,change:1.49}),"+1%");
+assert.equal(merchantSpendingChange({amount:100,previous:0,change:100}),"New");
+assert.equal(merchantSpendingChange({amount:0,previous:0,change:0}),"—");
+const marked = [{...rows[0],type:"expense" as const,merchant:"Logo cafe",merchantLogoUrl:"/assets/cafe.png",date:period.from}];
+assert.equal(reportMerchants(marked,period)[0].merchantLogoUrl,"/assets/cafe.png");
+assert.equal(reportMerchants([...marked,{...marked[0],merchantLogoUrl:"/assets/different-cafe.png"}],period)[0].merchantLogoUrl,null,"Conflicting merchant artwork falls back instead of choosing one identity");
+console.log("Spending presentation: whole percentages, zero baselines and conservative merchant artwork passed.");

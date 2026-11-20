@@ -285,7 +285,7 @@ export function ReportsWorkspaceView({
     >
       <div className="report-v2" data-report-section={view.section} data-filters-open={filters} data-ask-page-context={JSON.stringify({reportParams:reportViewParams(data.view).toString(),currency:data.view.currency,from:data.period.from,to:data.period.to})}>
         <div className="report-v2-toolbar">
-          {view.section !== "overview" ? <p>
+          {(view.section === "trends" || view.section === "advanced") ? <p>
             {data.period.from} to {data.period.to} · {data.timeZone}
           </p> : null}
           <button
@@ -661,10 +661,10 @@ export function ReportPanels({
   return (
     <div className="report-v2-currency" data-report-currency={c}>
       {w.view.currency === "ALL" ? <h2>{c}</h2> : null}
-      <ReportCoverageDetails
+      {(view.section === "trends" || view.section === "advanced") ? <ReportCoverageDetails
         report={r}
         href={href({ reviewFilter: "pending" })}
-      />
+      /> : null}
       {view.transfers !== "exclude" ? (
         <Panel title="Transfer activity">
           <p>

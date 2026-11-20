@@ -1,3 +1,4 @@
+import { transactionMerchantLogo } from "./transaction-merchant-logo";
 import type { Prisma } from "@prisma/client";
 import { hasTransactionUserEdits } from "./transaction-user-edits";
 import { transactionNeedsReview } from "./transaction-review-reasons";
@@ -91,6 +92,8 @@ export function normalizeReportRows(
     category: resolvedCategories.get(t.id)!,
     categoryId: t.category?.id,
     merchant: t.merchantClean || t.merchantRaw || "Other",
+    merchantLogoUrl: (t.normalizedPayload as { merchantIdentity?: { status?: string } } | null)?.merchantIdentity?.status === "suggested"
+      ? transactionMerchantLogo({ ...t, categoryName: resolvedCategories.get(t.id), institution: t.account.institution }, { storedOnly: true }).merchantLogoUrl : null,
     accountId: t.accountId,
     account: t.account.name,
     reviewStatus: t.reviewStatus,
