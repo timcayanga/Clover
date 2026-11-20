@@ -133,8 +133,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
     await prisma.$transaction(async (tx) => {
       // Lock both identities before moving history; concurrent linking must not
       // attach a new relationship to an account that is about to disappear.
-      const locked=await tx.$queryRaw<Array<{id:string}>>`SELECT "id" FROM "Account" WHERE "workspaceId"=${workspaceId} AND "id" IN (${sourceAccountId},${targetAccountId}) ORDER BY "id" FOR UPDATE`;
+      const locked=await tx.$queryRaw<Array<{id:string;type:string;currency:string}>>`SELECT "id","type","currency" FROM "Account" WHERE "workspaceId"=${workspaceId} AND "id" IN (${sourceAccountId},${targetAccountId}) ORDER BY "id" FOR UPDATE`;
       if(locked.length!==2)throw new AccountMergeConflict("The accounts changed. Refresh before merging.");
+      if(locked[0].type!==locked[1].type||locked[0].currency!==locked[1].currency)throw new AccountMergeConflict("Choose accounts of the same type and currency.");
       const source=await tx.account.findUniqueOrThrow({where:{id:sourceAccountId},select:{finverseAccountLink:{select:{id:true}},lunchFlowAccountLink:{select:{id:true}},_count:{select:{investmentPositions:true,investmentTrades:true,budgets:true,circleInvestmentShares:true}}}});
       // These relationships are not transferred by this merge flow. Preserve
       // them instead of letting foreign-key deletion detach or erase them.

@@ -25,6 +25,9 @@ async function main(){
   assert.equal((await send({targetAccountId:target.id,confirmed:true},"bad")).status,401);
   for(const body of [{targetAccountId:target.id},{targetAccountId:target.id,confirmed:false},{targetAccountId:source.id,confirmed:true},{targetAccountId:mismatch.id,confirmed:true}])assert.equal((await send(body)).status,400);
   assert.equal((await send({targetAccountId:foreign.id,confirmed:true})).status,404);
+  const canonical=await import("../app/api/accounts/[accountId]/merge/route");
+  const mismatchRequest=new Request(`https://staging.clover.ph/api/accounts/${source.id}/merge`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({workspaceId:w.id,targetAccountId:mismatch.id})});
+  assert.equal((await canonical.POST(mismatchRequest,{params:Promise.resolve({accountId:source.id})})).status,409,"Web merge also refuses mismatched currencies");
   assert.equal((await db.transaction.findUniqueOrThrow({where:{id:transaction.id}})).accountId,source.id);
   const connection=await db.finverseConnection.create({data:{workspaceId:w.id,userId:user.id,stateHash:randomUUID(),stateExpiresAt:new Date(),status:"ready"}});
   const link=await db.finverseAccountLink.create({data:{workspaceId:w.id,connectionId:connection.id,accountId:source.id,externalAccountId:"fixture-bank",rawPayload:{},normalizedPayload:{}}});

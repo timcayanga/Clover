@@ -120,7 +120,7 @@ export function AccountDetailActions({
                 <Notice>
                   <Body>
                     Keep {target.name}. Move {account.name} and its linked
-                    history into it. This cannot be undone.
+                    history into it. Balances are not added together. This cannot be undone.
                   </Body>
                   <Button
                     title={busy ? "Merging…" : "Confirm Merge"}

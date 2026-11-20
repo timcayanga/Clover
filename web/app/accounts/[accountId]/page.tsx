@@ -3801,7 +3801,7 @@ function AccountDetailPageContent() {
   const mergeableAccounts = useMemo(
     () =>
       workspaceAccounts
-        .filter((candidate) => Boolean(account && candidate.id !== account.id))
+        .filter((candidate) => Boolean(account && candidate.id !== account.id && candidate.type === account.type && candidate.currency === account.currency))
         .sort((left, right) => {
           const leftLabel = `${left.institution ?? ""} ${left.name}`.trim().toLowerCase();
           const rightLabel = `${right.institution ?? ""} ${right.name}`.trim().toLowerCase();
@@ -5422,7 +5422,7 @@ function AccountDetailPageContent() {
                 onClick={() => setMergeDirection("into_other")}
                 disabled={mergeBusy}
               >
-                {account?.type === "investment" ? "Keep this asset" : "Keep this account"}
+                {account?.type === "investment" ? "Keep another asset" : "Keep another account"}
               </button>
               <button
                 className={`button button-secondary button-small accounts-detail__merge-direction-button${mergeDirection === "into_current" ? " is-active" : ""}`}
@@ -5430,7 +5430,7 @@ function AccountDetailPageContent() {
                 onClick={() => setMergeDirection("into_current")}
                 disabled={mergeBusy}
               >
-                {account?.type === "investment" ? "Keep another asset" : "Keep another account"}
+                {account?.type === "investment" ? "Keep this asset" : "Keep this account"}
               </button>
             </div>
             <p>
@@ -5461,7 +5461,7 @@ function AccountDetailPageContent() {
             </label>
             <p>
               Clover will move linked transactions, imports, checkpoints, investment history, recurring patterns, and rules so the
-              merged account keeps its history in one place.
+              merged account keeps its history in one place. Balances are not added together. This cannot be undone.
             </p>
             <div className="detail-warning-actions">
               <button className="button button-secondary button-small" type="button" onClick={closeMergeAccountModal} disabled={mergeBusy}>
