@@ -3794,6 +3794,7 @@ function AccountDetailPageContent() {
     }
   };
 
+  const [mergeError,setMergeError]=useState("");
   const [replaceCardSignal, setReplaceCardSignal] = useState(0);
   const [replacingCard,setReplacingCard]=useState(false);
   useEffect(()=>setReplaceCardSignal(0),[account?.id]);
@@ -3814,6 +3815,7 @@ function AccountDetailPageContent() {
       return;
     }
 
+    setMergeError("");
     setReplaceCardSignal(0);
     setMergeDirection((current) => current ?? "into_other");
     setMergeAccountId((current) => {
@@ -3830,6 +3832,7 @@ function AccountDetailPageContent() {
       return;
     }
 
+    setMergeError("");
     setMergeDirection(null);
     setMergeAccountId("");
   };
@@ -3846,6 +3849,7 @@ function AccountDetailPageContent() {
       return;
     }
 
+    setMergeError("");
     setMergeBusy(true);
     try {
       const response = await fetch(`/api/accounts/${sourceAccountId}/merge`, {
@@ -3879,7 +3883,7 @@ function AccountDetailPageContent() {
 
       throw new Error("The merged account was not returned.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to merge accounts.");
+      setMergeError(error instanceof Error ? error.message : "Unable to merge accounts.");
     } finally {
       setMergeBusy(false);
     }
@@ -5396,6 +5400,7 @@ function AccountDetailPageContent() {
           </div>
         ) : mergeDirection ? (
           <div className="detail-warning-box accounts-detail__merge-confirm" style={{ marginTop: 20 }}>
+            {mergeError ? <p role="alert">{mergeError}</p> : null}
             <div className="detail-warning-box__header">
               <span className="detail-warning-box__icon" aria-hidden="true">
                 <ActionIcon name="warning" />
