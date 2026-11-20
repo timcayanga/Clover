@@ -197,7 +197,7 @@ async function main() {
       react: ui.h, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
       "@clerk/expo": {useUser:()=>({user:{fullName:"Personal profile name"}})},
       "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {},
-      "./split-people-field": {PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": {suggestBillCategory:()=>null},
+      "./split-people-field": {...load("../mobile/src/split-people-field.tsx", {"react/jsx-runtime":jsx,"react-native":{},"./app-text":{},"./ui":{}}), PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": {suggestBillCategory:()=>null},
       "./add-entry-methods": {AddEntryMethods:"Methods"}, "./upload": loadPhotoUpload(platform),
       "./session": {useSession:()=>({profileId:"profile",request:async (_path, opts)=>{if (_path.startsWith("split-bill-receipts/preview")) {
           const {body,boundary} = await convertFormDataAsync(opts.body);
@@ -226,7 +226,7 @@ async function main() {
     assert.deepEqual(Array.from(control("label","Add Circle Member").props.options, o=>o.value),["Bea"]);
     control("label","Add Circle Member").props.onChange("Bea");
     control("accessibilityLabel","Remove Carlo").props.onPress();
-    control("title","More Details").props.onPress();
+    control("accessibilityLabel","More Details").props.onPress();
     assert.equal(control("label","Paid By").props.value,"Alex");
     assert.ok(control("label","Note (Optional)"));
     const fields = render().filter(n=>n.type==="Choice").map(n=>n.props.label);

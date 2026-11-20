@@ -85,27 +85,25 @@ export function AddEntryMethods({
             }
             onReview={() => setTab("manual")}
           />
-          <Button
+          {kind !== "split" && <Button
             secondary
             title="Continue in Manual"
             onPress={() => setTab("manual")}
-          />
+          />}
         </View>
       ) : null}
       <View style={{ display: tab === "upload" ? "flex" : "none", gap: 16 }}>
-        <Body>
-          {kind === "split"
-            ? "Read a receipt, then review the items, people and split before creating the bill."
-            : kind === "recurring"
+        {kind !== "split" && <Body>
+          {kind === "recurring"
               ? "Review a bill or statement first. Confirm its repeating schedule in Manual; a single bill never establishes a recurring payment."
               : "Upload a statement and review the account or holding match before confirming."}
-        </Body>
+        </Body>}
         <UploadTiles cameraFirst={kind === "split"} disabled={disabled} onChoose={source => {
           if (onUploadSource) { onUploadSource(source); return; }
           if (onUpload && source === "file") { onUpload(); setTab("manual"); }
           else navigate(() => router.push({ pathname: "/add-transaction", params: { entry: `upload-${source}`, picker: source } }));
         }}/>
-        <Body>Your manual draft stays here while you switch methods.</Body>
+        {kind !== "split" && <Body>Your manual draft stays here while you switch methods.</Body>}
       </View>
       </EntryTransition>
     </View>

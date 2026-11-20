@@ -46,6 +46,7 @@ export const mobileSplitBillInput = z
       .min(1)
       .max(30),
     paidByIndex: z.number().int().min(0).nullable(),
+    contributions: z.array(z.object({participantIndex:z.number().int().nonnegative(), amount:z.string().regex(/^\d+(\.\d{1,2})?$/).refine(v => Number(v) > 0)}).strict()).min(1).max(30).optional(),
     reviewedItems: z
       .array(
         z
@@ -103,6 +104,12 @@ export const mobileSplitBillInput = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (value.contributions) {
+      const indexes = value.contributions.map(row => row.participantIndex);
+      const cents = value.contributions.reduce((sum, row) => sum + Math.round(Number(row.amount) * 100), 0);
+      if (value.circleId || value.paidByIndex !== null || new Set(indexes).size !== indexes.length || indexes.some(i => i >= value.participants.length) || cents !== Math.round(Number(value.total) * 100))
+        ctx.addIssue({code:"custom", path:["contributions"], message:"Choose bill participants and enter contributions totaling the bill amount."});
+    }
     if (value.circleId ? !value.expense : value.participants.length < 2)
       ctx.addIssue({code:"custom", message: value.circleId ? "Choose a Circle for this expense." : "Choose at least two people.", path:["participants"]});
     if (
@@ -233,7 +240,7 @@ export function mobileSplitBillPayload(
             })) ?? [])
           : [],
     })),
-    payments:
+    payments: input.contributions ? input.contributions.map(row => ({participantId:participants[row.participantIndex].id, amount:row.amount})) :
       input.paidByIndex === null
         ? []
         : [

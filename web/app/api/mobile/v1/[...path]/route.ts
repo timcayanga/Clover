@@ -455,13 +455,15 @@ async function handle(
       return reply({ok:true});
     }
     if (operation === "together-options") {
-      const [groups, people, profiles] = await Promise.all([
+      const [groups, people, profiles, circleMembers] = await Promise.all([
         prisma.splitBillGroup.findMany({ where:{ OR:[{userId:user.id},{collaborators:{some:{userId:user.id}}}], archivedAt:null }, select:{id:true,userId:true,name:true,avatarUrl:true,members:{select:{id:true,name:true,previousNames:true}},_count:{select:{bills:true}}} }),
         prisma.splitBillPerson.findMany({where:{userId:user.id},select:{id:true,name:true,avatarUrl:true}}),
         prisma.splitBillPaymentProfile.findMany({where:{userId:user.id},select:{id:true,label:true,provider:true,currency:true,accountName:true,accountNumber:true,qrImageData:true,isDefault:true}}),
+        prisma.circleMembership.findMany({where:{status:"active",circle:{archivedAt:null,memberships:{some:{userId:user.id,status:"active"}}},OR:[{userId:null},{userId:{not:user.id}}]},select:{displayName:true}}),
       ]);
+      const circlePeople = circleMembers.map(member => ({name:member.displayName}));
       const {paymentOptionBrand}=await import("@/lib/payment-option-brand");
-      return reply({groups:groups.map(({userId,...g})=>({...g,canEdit:userId===user.id})),people,profiles:profiles.map(profile=>({...profile,...paymentOptionBrand(profile.provider,profile.label)}))});
+      return reply({circlePeople,groups:groups.map(({userId,...g})=>({...g,canEdit:userId===user.id})),people,profiles:profiles.map(profile=>({...profile,...paymentOptionBrand(profile.provider,profile.label)}))});
     }
     if (operation === "investments") {
       return reply(await (await import("@/lib/mobile-investment-data")).loadMobileInvestments(workspaceId));

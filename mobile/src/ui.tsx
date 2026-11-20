@@ -342,9 +342,10 @@ export function Screen({
 }
 export function Field({
   label,
+  leading,
   trailing,
   ...props
-}: TextInputProps & { label?: string; trailing?: ReactNode }) {
+}: TextInputProps & { label?: string; leading?: ReactNode; trailing?: ReactNode }) {
   const { colors, styles, dark } = useTheme();
   return (
     <View style={{ gap: 8 }}>
@@ -358,10 +359,12 @@ export function Field({
           style={[
             styles.input,
             props.multiline ? { textAlignVertical: "top" } : undefined,
+            leading ? { paddingLeft: 46 } : undefined,
             trailing ? { paddingRight: 56 } : undefined,
             props.style,
           ]}
         />
+        {leading && <View pointerEvents="none" style={{position:"absolute",left:12,top:0,bottom:0,justifyContent:"center"}}>{leading}</View>}
         {trailing ? (
           <View
             style={{

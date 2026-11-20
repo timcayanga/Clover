@@ -129,6 +129,13 @@ async function main() {
   assert.equal(mobileEditSchema.safeParse({ receiptLineItems: [{ description: "Item", rawPayload: {} }] }).success, false);
   assert.equal(mobileEditSchema.safeParse({ receiptLineItems: Array.from({ length: 101 }, () => ({ description: "Item" })) }).success, false);
   const splitPayload = mobileSplitBillPayload(mobileSplitBillInput.parse(splitInput));
+  const contributions = [{participantIndex:0, amount:"40.01"}, {participantIndex:1, amount:"60"}];
+  const sharedPayment = {...splitInput, paidByIndex:null, contributions};
+  const converted = mobileSplitBillPayload(mobileSplitBillInput.parse(sharedPayment));
+  assert.deepEqual(converted.payments, contributions.map(p => ({participantId:converted.participants[p.participantIndex].id, amount:p.amount})));
+  for (const invalid of [[contributions[0]], [contributions[0], {...contributions[1],participantIndex:0}], [{participantIndex:2,amount:splitInput.total}]]) {
+    assert.equal(mobileSplitBillInput.safeParse({...sharedPayment, contributions:invalid}).success, false);
+  }
   assert.equal(splitPayload.sourceType, "manual");
   assert.equal(splitPayload.payments[0].participantId, splitPayload.participants[0].id);
   assert.equal(new Set(splitPayload.participants.map(person => person.id)).size, 2);

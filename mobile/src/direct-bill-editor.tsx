@@ -1,4 +1,4 @@
-import { PeopleSuggestions, type SavedPerson } from "./split-people-field";
+import { mergePeople, PeopleSuggestions, type SavedPerson } from "./split-people-field";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
@@ -16,7 +16,7 @@ import type { BillItem } from "./bill-details";
 import { AddEntryMethods } from "./add-entry-methods";
 import { fileProblem, receiptPhotoForm, resolveSelectedFile, removeUploadCopy } from "./upload";
 import { useSession } from "./session";
-import { Body, Field, Notice, Screen, CategoryMark, useTheme } from "./ui";
+import { Body, Field, Notice, Screen, Icon, CategoryMark, useTheme } from "./ui";
 import { PlanAction, PlanHeader, usePlanData } from "./plan-ui";
 import { Text } from "./app-text";
 import { AccountTypeMark } from "./account-type-mark";
@@ -58,7 +58,7 @@ const emptyEntryOptions = {
   accounts: [] as {id: string; name: string; currency: string; type: string}[],
   categories: [] as {id: string; name: string}[],
 };
-const emptyGroupOptions = {groups: [] as SplitGroup[], people: [] as SavedPerson[]};
+const emptyGroupOptions = {circlePeople: [] as SavedPerson[], groups: [] as SplitGroup[], people: [] as SavedPerson[]};
 
 export function BillEditor({
   sourceTransaction,
@@ -81,8 +81,7 @@ export function BillEditor({
     ),
     [moreDetails, setMoreDetails] = useState(false),
     [accountId, setAccountId] = useState(""),
-    [categoryId, setCategoryId] = useState(""),
-    [groupPicker, setGroupPicker] = useState(false);
+    [categoryId, setCategoryId] = useState("");
   const [attemptId] = useState(() => Crypto.randomUUID());
   const entryOptions = usePlanData("options", emptyEntryOptions);
   const savedGroups = usePlanData("together-options", emptyGroupOptions);
@@ -251,6 +250,8 @@ export function BillEditor({
     ).join("\n"),
   );
   const [payer, setPayer] = useState<number | null>(() => {if (!circleId) return 0; const i = circleMembers.findIndex(m => m.name === recorder); return i < 0 ? null : i;});
+  const [multiplePayers, setMultiplePayers] = useState(false);
+  const [paidAmounts, setPaidAmounts] = useState<Record<string,string>>({});
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -259,15 +260,10 @@ export function BillEditor({
     .split("\n")
     .map((name) => ({ name: name.trim() }))
     .filter((p) => p.name);
+  const options = savedGroups.data ?? emptyGroupOptions;
+  const suggestedPeople = mergePeople([], [...(options.people ?? []), ...(options.circlePeople ?? []), ...(options.groups ?? []).flatMap(group => group.members)].map(person => person.name), []).map(name => ({name}));
   function addNames(values: string[]) {
-    setNames(current => {
-      const unique = new Map<string, string>();
-      for (const entry of [...current.split("\n"), ...values]) {
-        const name = entry.trim();
-        if (name && !unique.has(name.toLowerCase())) unique.set(name.toLowerCase(), name);
-      }
-      return [...unique.values()].join("\n");
-    });
+    setNames(current => mergePeople(current.split("\n"), values, suggestedPeople).join("\n"));
   }
   const availableMembers = circleMembers.filter(m => !participants.some(p => p.name === m.name));
   const memberPicker = <ChoiceField label="Add Circle Member" initiallyOpen value="" options={availableMembers.map(m => ({value:m.name,label:m.name}))}
@@ -281,13 +277,13 @@ export function BillEditor({
           const parts = text.split(/[,\n]/);
           setPersonName(parts.pop() ?? "");
           if (parts.length) addNames(parts);
-        }} onSubmitEditing={() => { addNames([personName]); setPersonName(""); setAddingPerson(false); }} />
+        }} submitBehavior="submit" onSubmitEditing={event => { addNames([event.nativeEvent.text]); setPersonName(""); setAddingPerson(false); }} />
       <Pressable accessibilityRole="button" accessibilityLabel="Add Person" onPress={() => {
         if (!personName.trim()) { (autoFocus ? linePeopleInput : peopleInput).current?.focus(); return; }
         addNames([personName]); setPersonName(""); setAddingPerson(false);
       }} style={{ padding: 10 }}><Text style={{ fontSize: 22, color: colors.teal }}>+</Text></Pressable>
     </View>
-    <PeopleSuggestions draft={personName} selected={participants.map(p => p.name)} saved={savedGroups.data?.people ?? []}
+    <PeopleSuggestions draft={personName} selected={participants.map(p => p.name)} saved={suggestedPeople}
       choose={name => {addNames([name]); setPersonName(""); setAddingPerson(false);}}/>
     </>
   );
@@ -330,6 +326,15 @@ export function BillEditor({
       );
       return;
     }
+    const contributions = participants.flatMap((person, participantIndex) => {
+      const amount = paidAmounts[person.name]?.trim();
+      return amount && Number(amount) !== 0 ? [{participantIndex, amount}] : [];
+    });
+    if (multiplePayers && (contributions.some(row => !/^\d+(\.\d{1,2})?$/.test(row.amount)) ||
+      contributions.reduce((sum,row) => sum + Math.round(Number(row.amount) * 100), 0) !== Math.round(Number(total) * 100))) {
+      setError("Enter each contribution so the amounts add up to the bill total.");
+      return;
+    }
     inFlight.current = true;
     setBusy(true);
     setError("");
@@ -353,7 +358,8 @@ export function BillEditor({
         currency,
         total,
         participants,
-        paidByIndex: payer,
+        paidByIndex: multiplePayers ? null : payer,
+        ...(multiplePayers ? {contributions} : {}),
         ...(receipt ? { receipt } : {}),
         ...(reviewedItems.length
           ? {
@@ -429,7 +435,8 @@ export function BillEditor({
             if (f.currency !== undefined) setCurrency(f.currency);
             if (f.date !== undefined) setDate(f.date);
             if (!circleId && f.people !== undefined) {
-              setNames(f.people);
+              setNames(mergePeople([user?.fullName || "You"], f.people.split(/[,\n]/), suggestedPeople).join("\n"));
+              setMultiplePayers(false);
               setPayer(0);
             }
           }}
@@ -437,19 +444,19 @@ export function BillEditor({
         >
           <Field
             label="Name"
-            placeholder="Name" style={{borderBottomWidth:2,borderBottomColor:colors.muted}}
+            placeholder="Name"
             value={title}
             onChangeText={setTitle}
             maxLength={100}
           />
           <Field
             label="Amount"
-            placeholder="0.00" style={{borderBottomWidth:2,borderBottomColor:colors.muted}}
+            placeholder="0.00"
             value={total}
             onChangeText={setTotal}
             keyboardType="decimal-pad"
           />
-          <Field label={`Currency  ${currencyMark(currency)}`} value={currency}
+          <Field label="Currency" leading={<Text>{currencyMark(currency)}</Text>} value={currency}
             onChangeText={v => { setCurrency(v.toUpperCase()); setAccountId(""); }} maxLength={3} />
           <View style={{ borderWidth: 1, borderRadius: 16, borderColor: colors.line, padding: 12, gap: 8 }}>
             <Body muted={false}>{circleId ? "People" : "People or Group"}</Body>
@@ -470,18 +477,22 @@ export function BillEditor({
               <PlanAction title="+" disabled={!availableMembers.length} onPress={() => {setPickerAtItems(false);setAddingPerson(v => !v || pickerAtItems);}}/>
               {addingPerson && !pickerAtItems && availableMembers.length > 0 && memberPicker}
             </> : nameInput()}
-            {!context?.group && savedGroups.data?.groups.length ? <PlanAction title={groupPicker ? "Hide Groups" : "Choose Group"} onPress={() => setGroupPicker(!groupPicker)} /> : null}
-            {!context?.group && groupPicker && savedGroups.data?.groups.map(g => <PlanAction key={g.id} title={g.name} onPress={() => {
-              setGroupId(g.id); addNames(g.members.map(m => m.name).filter(n => !/^(you|me)$/i.test(n))); setGroupPicker(false);
-            }} />)}
+            {!context?.group && (options.groups?.length ?? 0) > 0 && <ChoiceField label="Group" value={groupId}
+              options={[{value:"",label:"No Group"}, ...options.groups.map((group,index) => ({
+                value:group.id, label:group.name, icon:<View style={{width:16,height:16,borderRadius:8,backgroundColor:["#00abb6","#9b77bd","#ea936e","#61b497"][index % 4]}}/>,
+              }))]} onChange={id => {
+                setGroupId(id);
+                const group = options.groups.find(g => g.id === id);
+                if (group) addNames(group.members.map(m => m.name).filter(name => !/^(you|me)$/i.test(name)));
+              }}/>}
           </View>
-          <PlanAction
-            title={moreDetails ? "Less Details" : "More Details"}
-            onPress={() => setMoreDetails((v) => !v)}
-          />
+          <Pressable accessibilityLabel="More Details" accessibilityRole="button" accessibilityState={{expanded:moreDetails}} onPress={() => setMoreDetails(v => !v)}
+            style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",minHeight:44}}>
+            <Body>More Details</Body><Icon line name={moreDetails ? "chevron-up" : "chevron-down"} size={18}/>
+          </Pressable>
           {moreDetails ? (
             <>
-              <SplitItemGrid wholeItem={circleId ? {description:title, amount:total} : undefined} equalLabel={circleId ? "Equal" : "Equally"}
+              <SplitItemGrid flat wholeItem={circleId ? {description:title, amount:total} : undefined} equalLabel={circleId ? "Equal" : "Equally"}
                 people={participants.map((p) => ({
                   id: p.name,
                   name: p.name,
@@ -528,24 +539,19 @@ export function BillEditor({
                 </Body>
               ) : null}
               {circleId ? <ChoiceField label="Paid By" value={payer === null ? "" : participants[payer]?.name ?? ""} options={[{value:"",label:"Not Paid Yet"}, ...participants.map(p => ({value:p.name,label:p.name}))]}
-                onChange={name => setPayer(name ? participants.findIndex(p => p.name === name) : null)}/> : sourceTransaction ? (
-                <>
-                  <Body>Who Paid?</Body>
-                  <PlanAction
-                    title={payer === null ? "Not Paid Yet ✓" : "Not Paid Yet"}
-                    onPress={() => setPayer(null)}
-                  />
-                  {participants.map((person, index) => (
-                    <PlanAction
-                      key={index}
-                      title={`${person.name}${payer === index ? " ✓" : ""}`}
-                      onPress={() => setPayer(index)}
-                    />
-                  ))}
-                </>
-              ) : (
-                <Body>You Paid</Body>
-              )}
+                onChange={name => setPayer(name ? participants.findIndex(p => p.name === name) : null)}/> : <>
+                <ChoiceField label="Paid By" value={multiplePayers ? "multiple" : payer === null ? "" : String(payer)}
+                  options={[...participants.map((person,index) => ({value:String(index),label:person.name})), {value:"multiple",label:"Multiple People"}, ...(sourceTransaction ? [{value:"",label:"Not Paid Yet"}] : [])]}
+                  onChange={value => {
+                    setMultiplePayers(value === "multiple");
+                    if (value !== "multiple") setPayer(value === "" ? null : Number(value));
+                  }}/>
+                {multiplePayers && participants.map(person => <View key={person.name} style={{flexDirection:"row",alignItems:"center",gap:12}}>
+                  <Text style={{flex:1,color:colors.ink}}>{person.name}</Text>
+                  <View style={{flex:1}}><Field accessibilityLabel={`Contribution from ${person.name} in ${currency}`} placeholder="0.00" keyboardType="decimal-pad"
+                    value={paidAmounts[person.name] ?? ""} onChangeText={value => setPaidAmounts(old => ({...old,[person.name]:value}))}/></View>
+                </View>)}
+              </>}
               <Field
                 label="Note (Optional)"
                 value={note}

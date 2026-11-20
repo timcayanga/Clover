@@ -21,7 +21,9 @@ export function SplitItemGrid({
   circleSplitControls,
   equalLabel = "Equally",
   wholeItem,
+  flat = false,
 }: {
+  flat?: boolean;
   fixedItems?: boolean;
   wholeItem?: {description:string; amount:string};
   equalLabel?: "Equal" | "Equally";
@@ -44,10 +46,11 @@ export function SplitItemGrid({
     310,
     182 + people.length * 116 + (onAddPerson ? 44 : 0),
   );
+  const Section = flat ? View : Card;
   const method = items[0]?.splitMethod ?? "equal";
   return (
     <>
-      <Card>
+      <Section>
         <SectionTitle>Line Items</SectionTitle>
         <ScrollView
           horizontal
@@ -288,8 +291,8 @@ export function SplitItemGrid({
             </Text>
           </Pressable>
         ) : null}
-      </Card>
-      <Card>
+      </Section>
+      <Section>
         {circleSplitControls}
         <SectionTitle>Split Method</SectionTitle>
         <View style={{ flexDirection: "row", gap: 4 }}>
@@ -323,7 +326,7 @@ export function SplitItemGrid({
             </Pressable>
           ))}
         </View>
-      </Card>
+      </Section>
     </>
   );
 }
