@@ -771,6 +771,7 @@ async function DashboardStream({
       select: {
         id: true,
         title: true,
+        categoryName: true,
         amount: true,
         currency: true,
         dueDate: true,
@@ -955,6 +956,7 @@ async function DashboardStream({
     return {
       id: commitment.id,
       title: commitment.title,
+      categoryName: commitment.categoryName,
       detail: formatPaymentDate(dueDate),
       amountLabel,
       currency: commitment.currency,
@@ -973,6 +975,7 @@ async function DashboardStream({
     .map((suggestion) => ({
       id: suggestion.id,
       title: suggestion.title,
+      categoryName: suggestion.categoryName,
       detail: [
         suggestion.dueDate ? formatPaymentDate(new Date(suggestion.dueDate)) : "Date to confirm",
       ].filter(Boolean).join(" · "),

@@ -1,6 +1,7 @@
 "use client";
 
 import { dateInTimeZone, paymentCountdown } from "../../shared/home-return";
+import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
 
 import Link from "next/link";
@@ -11,6 +12,7 @@ import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 export type HomeRecurringPaymentItem = {
   id: string;
   title: string;
+  categoryName?: string | null;
   detail: string;
   amountLabel?: string | null;
   currency?: string | null;
@@ -21,6 +23,7 @@ export type HomeRecurringPaymentItem = {
 export type HomeRecurringSuggestionItem = {
   id: string;
   title: string;
+  categoryName?: string | null;
   detail: string;
   amountLabel?: string | null;
   currency?: string | null;
@@ -103,7 +106,7 @@ export function HomeRecurringPaymentsCard({
       {hasItems ? (
         <div className="dashboard-home__action-list">
           {items.map((item) => (
-            <div className="dashboard-home__action-row" data-completed={item.completed ? "true" : "false"} key={`${item.id}:${item.dueDate}`}>
+            <div className="dashboard-home__action-row" style={{ gridTemplateColumns: "auto 24px minmax(0, 1fr)" }} data-completed={item.completed ? "true" : "false"} key={`${item.id}:${item.dueDate}`}>
               <button
                 aria-checked={item.completed}
                 aria-label={`Mark ${item.title} ${item.completed ? "not completed" : "completed"}`}
@@ -115,6 +118,7 @@ export function HomeRecurringPaymentsCard({
               >
                 {item.completed ? "✓" : ""}
               </button>
+              <CategoryBrandMark categoryName={item.categoryName ?? "Other"} size={24} radius={8} />
               <div className="dashboard-home__action-row-copy">
                 <strong>{item.title}</strong>
                 <small>{item.detail}{paymentCountdown(item.dueDate,today) ? ` · ${paymentCountdown(item.dueDate,today)}` : ""}{item.amountLabel ? <> · <HomeSensitiveAmount value={item.amountLabel} currency={item.currency} /></> : null}</small>
@@ -122,8 +126,9 @@ export function HomeRecurringPaymentsCard({
             </div>
           ))}
           {visibleSuggestions.map((suggestion) => (
-            <div className="dashboard-home__action-row" key={suggestion.id}>
+            <div className="dashboard-home__action-row" style={{ gridTemplateColumns: "auto 24px minmax(0, 1fr) auto" }} key={suggestion.id}>
               <span className="dashboard-home__payment-check dashboard-home__payment-check--suggestion" aria-hidden="true">?</span>
+              <CategoryBrandMark categoryName={suggestion.categoryName ?? "Other"} size={24} radius={8} />
               <div className="dashboard-home__action-row-copy">
                 <strong>{suggestion.title}</strong>
                 <small>{suggestion.detail}{suggestion.amountLabel ? <> · <HomeSensitiveAmount value={suggestion.amountLabel} currency={suggestion.currency} /></> : null}</small>

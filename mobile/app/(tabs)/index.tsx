@@ -26,6 +26,7 @@ import {
   Body,
   Button,
   Card,
+  CategoryMark,
   Icon,
   Notice,
   Screen,
@@ -72,6 +73,7 @@ type HomeData = HomeSections & {
     amount: string | null;
     date: string;
     currency?: string;
+    categoryName?: string | null;
   }[];
 };
 
@@ -465,6 +467,7 @@ export default function Home() {
                     justifyContent: "space-between",
                   }}
                 >
+                  <View style={{ paddingTop: 2, flexShrink: 0 }}><CategoryMark name={item.categoryName ?? "Other"} size={24} /></View>
                   <View style={{ flex: 1, minWidth: 0, gap: 4 }}><Text style={{ color: colors.ink, fontSize: 14 }}>{item.title}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{[shortPaymentDate(item.date), paymentCountdown(item.date, today)].filter(Boolean).join(" · ")}</Text></View>
                   <Text style={{ flexShrink: 1, maxWidth: "48%", textAlign: "right", color: colors.muted, fontSize: 14 }}>{amount(item.amount, item.currency)}</Text>
                 </View>
