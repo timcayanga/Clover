@@ -3,11 +3,11 @@ import {
   importCoverageLines,
 } from "../../shared/reports/history-copy";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import { Text } from "./app-text";
 import { MerchantLogo } from "./merchant-logo";
-import { merchantSpendingChange } from "../../shared/reports/details";
+import { budgetTimelines, merchantSpendingChange } from "../../shared/reports/details";
 import { Body, Card, CategoryMark, Field, SectionTitle, money, useTheme } from "./ui";
 import { PlanAction } from "./plan-ui";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
@@ -71,6 +71,7 @@ export function ReportSpendingDetails({
   const [query, setQuery] = useState(""),
     [limit, setLimit] = useState(20),
     [budgetLimit, setBudgetLimit] = useState(24);
+  const budgets = budgetTimelines(r.budgets ?? []);
   const merchants = (r.merchantAnalysis ?? []).filter((m) =>
     m.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
   );
@@ -124,11 +125,27 @@ export function ReportSpendingDetails({
         <SectionTitle>Budget versus actual</SectionTitle>
         {w.paid ? (
           <>
-            {(r.budgets ?? []).slice(0,budgetLimit).map(b => <Pressable key={[b.id,b.month,b.from,b.revision].join(":")} accessibilityRole="link" onPress={() => budgetOpen(b)} style={{flexDirection:"row",alignItems:"center",gap:12,paddingVertical:12,minHeight:64,borderBottomWidth:1,borderColor:colors.line}}>
-              <CategoryMark name={b.categoryName ?? w.categories.find(c=>c.id===b.categoryId)?.name ?? "Other"} size={28} />
-              <View style={{flex:1,minWidth:0,gap:4}}><Text style={{fontSize:14,color:colors.ink}}>{b.name}</Text><Text style={{fontSize:11,color:colors.muted}}>{b.from} – {b.to}{b.historyBasis === "recorded" ? "" : " · Estimated"}</Text></View>
-              <View style={{alignItems:"flex-end",maxWidth:"48%",gap:3}}><Text style={{fontSize:13,color:colors.ink}}>Spent {format(b.actual)}</Text><Text style={{fontSize:11,color:colors.muted}}>Target {format(b.target)}</Text><Text style={{fontSize:11,color:colors.muted}}>Remaining {format(b.remaining)}</Text></View>
-            </Pressable>)}
+            {budgets.slice(0,budgetLimit).map(({id, latest, months, scale}) => (
+              <View key={id} style={{gap:10,paddingVertical:12,borderBottomWidth:1,borderColor:colors.line}}>
+                <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
+                  <CategoryMark name={latest.categoryName ?? w.categories.find(c=>c.id===latest.categoryId)?.name ?? "Other"} size={28}/>
+                  <Text style={{color:colors.ink,fontSize:15}}>{latest.name}</Text>
+                </View>
+                <ScrollView horizontal contentContainerStyle={{gap:12,paddingHorizontal:2}}>
+                  {months.map(m => <View key={m.label} style={{minWidth:110,gap:3}}>
+                    <View style={{height:60,width:42,justifyContent:"flex-end",alignItems:"center"}}>
+                      <View style={{height:56*m.actual/scale,width:24,backgroundColor:colors.teal}}/>
+                      <View style={{position:"absolute",bottom:56*m.target/scale,height:2,width:40,backgroundColor:colors.ink}}/>
+                    </View>
+                    <Text style={{color:colors.ink}}>{m.label}</Text>
+                    <Text style={{fontSize:12,color:colors.ink}}>Spent {format(m.actual)}</Text>
+                    <Text style={{fontSize:12,color:colors.muted}}>─ Target {format(m.target)}</Text>
+                    <Text style={{fontSize:12,color:colors.muted}}>Remaining {format(Math.max(0,m.target-m.actual))}</Text>
+                    {m.rows.map(b => <Text key={b.from} accessibilityRole="link" onPress={()=>budgetOpen(b)} style={{fontSize:12,color:colors.teal,paddingVertical:4}}>{b.from.slice(8)}–{b.to.slice(8)} {m.label}{b.historyBasis === "recorded" ? "" : " · Estimated"}</Text>)}
+                  </View>)}
+                </ScrollView>
+              </View>
+            ))}
             {!r.budgets?.length ? (
               <>
                 <Body>
@@ -138,8 +155,8 @@ export function ReportSpendingDetails({
                 <Text accessibilityRole="link" onPress={() => router.push("/budgeting")} style={{color:colors.teal}}>Open Budgeting</Text>
               </>
             ) : null}
-            {(r.budgets?.length ?? 0) > budgetLimit ? (
-              <Text accessibilityRole="button" onPress={() => setBudgetLimit(n=>n+24)} style={{color:colors.teal}}>Show more budget months</Text>
+            {budgets.length > budgetLimit ? (
+              <Text accessibilityRole="button" onPress={() => setBudgetLimit(n=>n+24)} style={{color:colors.teal}}>Show more budgets</Text>
             ) : null}
           </>
         ) : (

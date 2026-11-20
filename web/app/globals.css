@@ -67637,3 +67637,11 @@ html[data-theme="dark"] .report-v2-summary--accounts .report-v2-summary__cell:fi
 .report-forecast-controls button{border:1px solid #d5dfe5;border-radius:24px;padding:10px 20px;min-height:44px;color:#111;background:white}.report-forecast-controls button[aria-pressed="true"]{background:linear-gradient(110deg,#00abc0,#4dcccc);color:white;border-color:transparent}.report-v2-donut span small{display:block;font-size:11px;font-weight:400}
 
 .accounts-detail__account-actions{margin-top:20px;padding:20px;border:1px solid var(--line,#d5dfe5);border-radius:24px}.accounts-detail__action-stack{display:grid;gap:16px}.accounts-detail__action-row{display:flex;gap:12px}.accounts-detail__action-row>.button{flex:1;min-width:0;white-space:normal;text-align:center}.accounts-detail__delete-row{display:flex}.accounts-detail__account-actions .card-replacement-panel:empty{display:none}
+
+.report-budget-timeline { min-width: 0; padding-block: 12px; }
+.report-budget-timeline h3 { display: flex; align-items: center; gap: 10px; }
+.report-budget-months { display: flex; gap: 16px; overflow-x: auto; padding-block: 8px; }
+.report-budget-month { display: grid; flex: 0 0 auto; align-content: start; gap: 3px; font-size: .85rem; }
+.report-budget-plot { position: relative; display: flex; justify-content: center; align-items: end; height: 60px; width: 42px; }
+.report-budget-plot i { width: 24px; background: #00a6aa; }
+.report-budget-plot b { position: absolute; width: 40px; height: 2px; background: currentColor; }

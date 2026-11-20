@@ -5,7 +5,7 @@ import {
   selectedReportRows,
   type ReportRow,
 } from "../../shared/reports/analysis";
-import { reportCoverage, reportMerchants, merchantSpendingChange } from "../../shared/reports/details";
+import { budgetTimelines, reportCoverage, reportMerchants, merchantSpendingChange } from "../../shared/reports/details";
 import { buildReportBudgets } from "../lib/report-budget";
 import type { BudgetRecord } from "../lib/budgeting";
 import { reportViewSchema, reportViewFromParams } from "../lib/report-view";
@@ -277,3 +277,21 @@ const marked = [{...rows[0],type:"expense" as const,merchant:"Logo cafe",merchan
 assert.equal(reportMerchants(marked,period)[0].merchantLogoUrl,"/assets/cafe.png");
 assert.equal(reportMerchants([...marked,{...marked[0],merchantLogoUrl:"/assets/different-cafe.png"}],period)[0].merchantLogoUrl,null,"Conflicting merchant artwork falls back instead of choosing one identity");
 console.log("Spending presentation: whole percentages, zero baselines and conservative merchant artwork passed.");
+
+const genericLabels = ["Fund Transfer", "InstaPay", "Insta Pay Cash-in", "InstaPay Cash-in Fee", "TAX WITHHELD", "Withholding Tax"];
+for (const date of [period.from, period.previousFrom]) {
+  const names = [...genericLabels, "Cash & Carry", "Tax Services Manila"];
+  assert.deepEqual(reportMerchants(names.map(merchant => row({merchant, date})), period).map(m => m.name),
+    ["Cash & Carry", "Tax Services Manila"]);
+}
+const template = make()[0];
+const slices = [
+  {...template, month:"2026-10", from:"2026-10-22", to:"2026-10-31", actual:5000, target:3225.81},
+  {...template, month:"2026-11", from:"2026-11-01", to:"2026-11-10", actual:1000, target:3000},
+  {...template, month:"2026-11", from:"2026-11-11", to:"2026-11-20", actual:400, target:3666.67},
+];
+const timelines = budgetTimelines([...slices, {...slices[0], id:"separate-budget"}]);
+assert.equal(timelines.length,2);
+assert.deepEqual(timelines[0].months.map(m=>[m.actual,m.target,m.rows.length]), [[5000,3225.81,1],[1400,6666.67,2]]);
+assert.equal(timelines[0].scale,6666.67);
+console.log("Merchant activity labels and multi-month budget target markers passed.");

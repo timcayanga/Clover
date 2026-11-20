@@ -5,7 +5,7 @@ import {
 } from "../../shared/reports/history-copy";
 import { MerchantLogo } from "./merchant-logo";
 import { CategoryBrandMark } from "./category-brand-mark";
-import { merchantSpendingChange } from "../../shared/reports/details";
+import { budgetTimelines, merchantSpendingChange } from "../../shared/reports/details";
 import { useState } from "react";
 import Link from "next/link";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -73,6 +73,7 @@ export function ReportSpendingDetails({
   const [query, setQuery] = useState(""),
     [limit, setLimit] = useState(20),
     [budgetLimit, setBudgetLimit] = useState(24);
+  const budgets = budgetTimelines(r.budgets ?? []);
   const merchants = (r.merchantAnalysis ?? []).filter((m) =>
     m.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
   );
@@ -122,11 +123,20 @@ export function ReportSpendingDetails({
         {w.paid ? (
           <>
             <div className="report-detail-rows">
-              {(r.budgets ?? []).slice(0,budgetLimit).map(b => <Link className="report-detail-row" key={[b.id,b.month,b.from,b.revision].join(":")} href={budgetHref(b)}>
-                <CategoryBrandMark categoryName={b.categoryName ?? w.categories.find(c => c.id === b.categoryId)?.name ?? "Other"} size={28} />
-                <span className="report-detail-row__name">{b.name}<small>{b.from} – {b.to}{b.historyBasis === "recorded" ? "" : " · Estimated"}</small></span>
-                <span className="report-detail-row__figures"><strong>Spent {money(b.actual)}</strong><small>Target {money(b.target)}</small><small>Remaining {money(b.remaining)}</small></span>
-              </Link>)}
+              {budgets.slice(0,budgetLimit).map(({id,latest,months,scale}) => (
+                <section key={id} className="report-budget-timeline">
+                  <h3><CategoryBrandMark categoryName={latest.categoryName ?? w.categories.find(c => c.id === latest.categoryId)?.name ?? "Other"} size={28}/>{latest.name}</h3>
+                  <div className="report-budget-months">
+                    {months.map(m => <div key={m.label} className="report-budget-month">
+                      <div className="report-budget-plot" aria-hidden="true">
+                        <i style={{height:56*m.actual/scale}}/><b style={{bottom:56*m.target/scale}}/>
+                      </div>
+                      <strong>{m.label}</strong><span>Spent {money(m.actual)}</span><span>─ Target {money(m.target)}</span><span>Remaining {money(Math.max(0,m.target-m.actual))}</span>
+                      {m.rows.map(b => <Link key={b.from} href={budgetHref(b)}>{b.from.slice(8)}–{b.to.slice(8)} {m.label}{b.historyBasis === "recorded" ? "" : " · Estimated"}</Link>)}
+                    </div>)}
+                  </div>
+                </section>
+              ))}
             </div>
             {!r.budgets?.length ? (
               <p>
@@ -134,12 +144,12 @@ export function ReportSpendingDetails({
                 <Link href="/budgeting">Open Budgeting</Link>
               </p>
             ) : null}
-            {(r.budgets?.length ?? 0) > budgetLimit ? (
+            {budgets.length > budgetLimit ? (
               <button
                 className="report-text-action"
                 onClick={() => setBudgetLimit((n) => n + 24)}
               >
-                Show more budget months
+                Show more budgets
               </button>
             ) : null}
           </>

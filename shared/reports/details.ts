@@ -1,5 +1,13 @@
 import type { ReportPeriod, ReportRow, ReportView } from "./analysis";
-import type { MerchantReportRow, ReportCoverage } from "./workspace";
+import type { BudgetReportRow, MerchantReportRow, ReportCoverage } from "./workspace";
+
+// Match complete bank activity labels so merchants with words like “Cash” or “Tax” in their names survive.
+function isMerchantLabel(name: string) {
+  const label = name.normalize("NFKC").toLowerCase().replace(/[-–—_./]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!label || /^(unknown( merchant)?|other|imported transaction|transaction)$/.test(label)) return false;
+  if (/^(withholding tax|tax withheld|withheld tax|interest earned|interest paid|bank fee|service charge|atm withdrawal|credit card payment)$/.test(label)) return false;
+  return !/^(?:(?:insta ?pay|pesonet)(?: (?:cash (?:in|out)|(?:funds? |bank )?transfer|payment))?|(?:funds? |bank |interbank )?transfer|cash (?:in|out))(?: (?:service |transfer )?(?:fee|charge))?$/.test(label);
+}
 
 export function reportMerchants(
   rows: ReportRow[],
@@ -8,7 +16,7 @@ export function reportMerchants(
   const groups = new Map<string, MerchantReportRow>();
   const logos = new Map<string, Set<string>>();
   for (const r of rows) {
-    if (r.type !== "expense") continue;
+    if (r.type !== "expense" || !isMerchantLabel(r.merchant)) continue;
     const current = r.date >= period.from && r.date <= period.to;
     const previous =
       r.date >= period.previousFrom && r.date <= period.previousTo;
@@ -111,4 +119,29 @@ export function merchantSpendingChange(row: Pick<MerchantReportRow, "amount" | "
   if (row.previous <= 0) return row.amount > 0 ? "New" : "—";
   const percent = Math.round(row.change / row.previous * 100);
   return `${percent > 0 ? "+" : ""}${percent}%`;
+}
+
+/** Rows are already scoped to one report currency and prorated at revision boundaries. */
+export function budgetTimelines(rows: BudgetReportRow[]) {
+  type Month = { label: string; target: number; actual: number; rows: BudgetReportRow[] };
+  const budgets = new Map<string, Map<string, Month>>();
+  for (const row of rows) {
+    const months = budgets.get(row.id) ?? new Map<string, Month>();
+    budgets.set(row.id, months);
+    const month = months.get(row.month) ?? {
+      label: new Date(row.month + "-01T12:00:00Z").toLocaleDateString("en", { month:"short", year:"numeric", timeZone:"UTC" }),
+      target:0, actual:0, rows:[],
+    };
+    month.target += row.target;
+    month.actual += row.actual;
+    month.rows.push(row);
+    months.set(row.month, month);
+  }
+  return Array.from(budgets, ([id, byMonth]) => {
+    const months = [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([,month]) => month);
+    for (const month of months) month.rows.sort((a,b) => a.from.localeCompare(b.from));
+    const latest = months[months.length - 1].rows.at(-1)!;
+    const scale = Math.max(1, ...months.map(m => Math.max(m.target, m.actual)));
+    return { id, latest, months, scale };
+  });
 }
