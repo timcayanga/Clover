@@ -75,6 +75,7 @@ export async function runSwipeDeleteInteractions() {
     if (native) assert.equal(h.find(n => !!n.props.onMoveShouldSetPanResponderCapture).props.onMoveShouldSetPanResponderCapture(null, { dx: -100, dy: 0 }), false);
     else assert(h.button("Delete").props.disabled);
   }
-  for (const file of ["app/(tabs)/transactions.tsx", "app/accounts.tsx", "app/recurring.tsx", "app/split-bills.tsx", "src/investment-views.tsx", "src/account-history.tsx", "src/split-group-details.tsx"]) assert.match(readFileSync(`../mobile/${file}`, "utf8"), /<SwipeDeleteRow[\s>]/, `${file} must render actual swipe rows`);
+  assert.doesNotMatch(readFileSync("../mobile/app/accounts.tsx", "utf8"), /<SwipeDeleteRow[\s>]/);
+  for (const file of ["app/(tabs)/transactions.tsx", "app/recurring.tsx", "app/split-bills.tsx", "src/investment-views.tsx", "src/account-history.tsx", "src/split-group-details.tsx"]) assert.match(readFileSync(`../mobile/${file}`, "utf8"), /<SwipeDeleteRow[\s>]/, `${file} must render actual swipe rows`);
   console.log("PASS web/native swipe gestures, confirmation, cancellation, double-tap guard, inline failure and retry");
 }

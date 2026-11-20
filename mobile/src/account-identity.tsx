@@ -1,3 +1,4 @@
+import { accountSectionTitle, accountSectionType } from "../../shared/account-presentation";
 import { useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { AccountBrandLogo } from "./account-brand-logo";
@@ -87,7 +88,7 @@ export function AccountIdentity({
           </View>
           {expanded ? (
             <Text style={{ color: foreground, fontSize: 12 }}>
-              {account.type.replaceAll("_", " ")} · {account.currency}
+              {accountSectionTitle(accountSectionType(account))} · {account.currency}
             </Text>
           ) : null}
         </LinearGradient>
@@ -123,8 +124,8 @@ export function AccountIdentity({
         </Pressable>
       </View>
       <Body>
-        {account.institution || "Manual account"} ·{" "}
-        {account.type.replaceAll("_", " ")}
+        {account.institution || "Manual Account"} ·{" "}
+        {accountSectionTitle(accountSectionType(account))}
       </Body>
     </View>
   );

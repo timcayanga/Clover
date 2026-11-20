@@ -70,7 +70,6 @@ async function main() {
   );
 
   for (const [name, source] of [
-    ["accounts", accounts],
     ["account details", accountDetails],
     ["transactions", transactions],
     ["recurring", recurring],
@@ -84,7 +83,8 @@ async function main() {
     );
   }
 
-  assert.match(accounts, /confirmationMessage=.*linked transactions/);
+  assert.doesNotMatch(accounts, /<MobileSwipeDelete[\s>]/);
+  assert.match(accounts, /window\.confirm\(.*linked transactions/);
   assert.match(component, /Confirm deletion/);
   assert.match(component, /role="alert"/);
   assert.match(recurring, /window\.confirm\("Delete this recurring item\?"\)/);

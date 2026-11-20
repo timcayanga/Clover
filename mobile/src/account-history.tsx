@@ -334,7 +334,7 @@ export function AccountHistory({
                 from another account.
               </Body>
               <PlanAction
-                title="Confirm purchase"
+                title="Confirm Purchase"
                 tone="primary"
                 disabled={busy}
                 onPress={() => void save()}
@@ -342,7 +342,7 @@ export function AccountHistory({
             </Notice>
           ) : (
             <PlanAction
-              title="Review purchase"
+              title="Review Purchase"
               tone="primary"
               disabled={busy}
               onPress={() => setConfirm(true)}
@@ -429,7 +429,7 @@ export function AccountHistory({
             {item.note ? <Body>{item.note}</Body> : null}
             {kind === "purchases" ? (
               <PlanAction
-                title="Delete purchase"
+                title="Delete Purchase"
                 tone="delete"
                 onPress={() => setRemove(item.id)}
               />
@@ -441,13 +441,13 @@ export function AccountHistory({
                   This cannot be undone.
                 </Body>
                 <PlanAction
-                  title="Confirm deletion"
+                  title="Confirm Deletion"
                   tone="delete"
                   disabled={busy}
                   onPress={() => void deletePurchase()}
                 />
                 <PlanAction
-                  title="Keep purchase"
+                  title="Keep Purchase"
                   disabled={busy}
                   onPress={() => setRemove(null)}
                 />

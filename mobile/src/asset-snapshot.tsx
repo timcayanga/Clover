@@ -35,28 +35,28 @@ export function AssetSnapshot({
   const formatted = (number: number | null) =>
     number === null ? "Not recorded" : money(String(number), account.currency);
   const fields: [string, string | null | undefined][] = [
-    ["Holding name", account.name],
+    ["Holding Name", account.name],
     ["Institution", account.institution],
-    ["Investment type", subtype],
+    ["Investment Type", subtype],
     ["Currency", account.currency],
     ["Ticker Name", account.investmentSymbol],
     ["Units", account.investmentQuantity],
     [
-      "Deposit amount",
+      "Deposit Amount",
       account.investmentPrincipal == null
         ? null
         : formatted(amount(account.investmentPrincipal)),
     ],
-    ["Start date", account.investmentStartDate?.slice(0, 10)],
-    ["Maturity date", account.investmentMaturityDate?.slice(0, 10)],
+    ["Start Date", account.investmentStartDate?.slice(0, 10)],
+    ["Maturity Date", account.investmentMaturityDate?.slice(0, 10)],
     [
-      "Interest rate",
+      "Interest Rate",
       account.investmentInterestRate
         ? `${account.investmentInterestRate}%`
         : null,
     ],
     [
-      "Maturity value",
+      "Maturity Value",
       account.investmentMaturityValue == null
         ? null
         : formatted(amount(account.investmentMaturityValue)),
@@ -179,9 +179,9 @@ export function AssetSnapshot({
         .filter(
           ([label, field]) =>
             [
-              "Holding name",
+              "Holding Name",
               "Institution",
-              "Investment type",
+              "Investment Type",
               "Currency",
             ].includes(label) ||
             (field != null && field !== ""),

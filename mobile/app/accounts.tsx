@@ -1,11 +1,10 @@
 import { currencyMark } from "../../shared/currency-mark";
 import { usePageAskScope } from "../src/page-ask-context";
-import { accountSectionEmoji, accountSectionType } from "../../shared/account-presentation";
-import { SwipeDeleteRow } from "../src/swipe-delete-row";
+import { accountSectionEmoji, accountSectionTitle, accountSectionType } from "../../shared/account-presentation";
 import { recordedSummary } from "../src/recorded-summary";
 import { Modal } from "../src/adaptive-modal";
 import { AdaptiveDetail } from "../src/adaptive-detail";
-import { AccountGrid, AccountGridCard } from "../src/account-grid";
+import { AccountEditTile, AccountGrid, AccountGridCard } from "../src/account-grid";
 import { useLiveInvestmentValues } from "../src/use-live-investment-values";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { institutionGroups } from "../src/institution-groups";
@@ -27,7 +26,7 @@ import {
 } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, ScrollView, View } from "react-native";
 import { useSession } from "../src/session";
 import {
   AppHeader,
@@ -66,6 +65,24 @@ function AccountsContent() {
     setAccounts(current => current.filter(row => row.id !== account.id));
     session.refresh();
   }
+  const [editingCards, setEditingCards] = useState(false);
+  const deleting = useRef(false);
+  useFocusEffect(useCallback(() => () => setEditingCards(false), []));
+  const enterEdit = session.demo ? undefined : () => setEditingCards(true);
+  function confirmRemoval(account: Account) {
+    if (!editingCards || session.demo || deleting.current || account.id.startsWith("fallback-cash-")) return;
+    Alert.alert(`Delete ${account.name}?`, "This deletes the account and its linked transactions and cannot be undone.", [
+      {text:"Cancel", style:"cancel"},
+      {text:"Delete Account", style:"destructive", onPress:async () => {
+        if (deleting.current) return;
+        deleting.current = true;
+        try { await deleteRow(account); }
+        catch { Alert.alert("Unable to Delete Account", "Please try again."); }
+        finally { deleting.current = false; }
+      }},
+    ]);
+  }
+  const doneEditing = editingCards ? <Button title="Done" secondary onPress={() => setEditingCards(false)} /> : null;
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [recordedAccounts, setAccounts] = useState<Account[]>([]);
@@ -196,26 +213,6 @@ function AccountsContent() {
       : account.type === "investment"
         ? "Recorded value"
         : "Balance";
-  const sectionName = (type: string) =>
-    ({
-      bank: "Banks & savings",
-      bank_account: "Banks & savings",
-      savings: "Banks & savings",
-      checking: "Banks & savings",
-      credit_card: "Credit cards",
-      line_of_credit: "Liabilities",
-      wallet: "Wallets",
-      cash: "Cash",
-      investment: "Investments",
-      loan: "Liabilities",
-      mortgage: "Liabilities",
-      payable: "Liabilities",
-      bnpl: "Liabilities",
-      receivable: "Tracked assets",
-      insurance: "Tracked assets",
-      prepaid: "Tracked assets",
-      other: "Tracked assets",
-    })[type] ?? "Other accounts";
   const ownedCurrencies = [...new Set(accounts.map(account => account.currency))];
   const displayedCurrency = currencyFilter === "ALL" ? "ALL" : ownedCurrencies.includes(currencyFilter) ? currencyFilter : ownedCurrencies.includes(session.data?.defaultCurrency ?? "") ? session.data!.defaultCurrency : ownedCurrencies[0];
   usePageAskScope({
@@ -227,31 +224,31 @@ function AccountsContent() {
   useLayoutEffect(() => {
     navigation.setOptions({ header: () => <AppHeader title="Accounts" leading={
       <Pressable accessibilityRole="button" accessibilityLabel={`Select account currency: ${displayedCurrency ?? "none"}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}>{displayedCurrency === "ALL" || !displayedCurrency ? <Icon line name="globe-outline" size={24} /> : <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{currencyMark(displayedCurrency)} {displayedCurrency}</Text>}</Pressable>
-    } trailing={
+    } trailing={editingCards ? <Button title="Done" secondary onPress={() => setEditingCards(false)} /> :
       <Pressable accessibilityRole="button" accessibilityLabel="Add account" onPress={() => setAdding(true)} style={styles.iconButton}><AddNavigationMark size={32} /></Pressable>
     } /> });
-  }, [navigation, displayedCurrency, colors.teal, styles.iconButton]);
+  }, [navigation, displayedCurrency, colors.teal, styles.iconButton, editingCards]);
 
   const groups = new Map<
     string,
     { title: string; currency: string; rows: Account[] }
   >();
   for (const account of accounts.filter(account => displayedCurrency === "ALL" || account.currency === displayedCurrency)) {
-    const title = sectionName(accountSectionType(account)),
+    const title = accountSectionTitle(accountSectionType(account)),
       key = displayedCurrency === "ALL" ? title : `${title}:${account.currency}`;
     if (!groups.has(key))
       groups.set(key, { title, currency: account.currency, rows: [] });
     groups.get(key)!.rows.push(account);
   }
   const groupOrder = [
-    "Banks & savings",
-    "Credit cards",
+    "Banks & Savings",
+    "Credit Cards",
     "Liabilities",
     "Wallets",
     "Investments",
-    "Tracked assets",
+    "Tracked Assets",
     "Cash",
-    "Other accounts",
+    "Other Accounts",
   ];
   const summaryCurrency = displayedCurrency === "ALL" ? session.data?.defaultCurrency ?? "PHP" : displayedCurrency ?? session.data?.defaultCurrency ?? "PHP";
   const summaryRows = accounts.filter(a => displayedCurrency === "ALL" || a.currency === displayedCurrency).map(a => ({ type: accountSectionType(a), currency: a.currency, balance: accountDisplayBalance(a) === null ? null : Number(accountDisplayBalance(a)) }));
@@ -303,14 +300,16 @@ function AccountsContent() {
     <Button title="All accounts" secondary onPress={() => setInstitutionId(null)} />
     <Heading>{institution.name}</Heading>
     <Body>{institution.assets.length} assets · {institution.currency}</Body>
-    {institution.assets.map(asset => <SwipeDeleteRow key={asset.id} label={asset.name} disabled={session.demo} message={`Delete "${asset.name}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(asset)} onDelete={() => deleteRow(asset)}><Pressable accessibilityRole="button" accessibilityLabel={`View ${asset.name}`} onPress={() => setSelected(asset)}>
+    {doneEditing}
+    {institution.assets.map(asset => <AccountEditTile key={asset.id} editing={editingCards} name={asset.name} onDelete={()=>confirmRemoval(asset)}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`View ${asset.name}`} onLongPress={enterEdit} onPress={() => !editingCards && setSelected(asset)}>
       <Card><View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <AccountBrandLogo account={asset} size={36} />
         <View style={{ flex: 1 }}><Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold" }}>{asset.name}</Text><Body>{asset.investmentSymbol ?? "Investment"}</Body></View>
         <Text style={{ color: colors.ink }}>{money(accountDisplayBalance(asset) ?? "0", asset.currency)}</Text>
         <Icon line name="chevron-forward" size={16} />
       </View></Card>
-    </Pressable></SwipeDeleteRow>)}
+    </Pressable></AccountEditTile>)}
   </Screen> : <Screen><Body>Select an investment institution to see its assets here.</Body></Screen>;
   return <AdaptiveDetail selected={Boolean(institution)} detailOnlyOnCompact detail={institutionDetail} list={(
     <Screen layout="dashboard" gap={24}>
@@ -376,7 +375,7 @@ function AccountsContent() {
                   {(() => {
                     const totals = consolidatedAccountSummary(group.rows.map(account => ({ type: accountSectionType(account), currency: account.currency, balance: Number(accountDisplayBalance(account) ?? 0) })), displayedCurrency === "ALL" ? summaryCurrency : group.currency, exchangeRates.rates);
                     const total = totals.values[0];
-                    return total === null ? "—" : money(String(["Credit cards", "Liabilities"].includes(group.title) ? Math.abs(total) : total), displayedCurrency === "ALL" ? summaryCurrency : group.currency);
+                    return total === null ? "—" : money(String(["Credit Cards", "Liabilities"].includes(group.title) ? Math.abs(total) : total), displayedCurrency === "ALL" ? summaryCurrency : group.currency);
                   })()}
                 </Text>
               </View>
@@ -385,11 +384,11 @@ function AccountsContent() {
                 const representative = institution.assets[0];
                 const palette = accountCardPalette(representative);
                 const value = recordedSummary(institution.assets.map(a => accountDisplayBalance(a) ?? "0"));
-                return <AccountGridCard key={institution.id} name={institution.name}
+                return <AccountEditTile key={institution.id} name={institution.name} editing={editingCards}><AccountGridCard onLongPress={enterEdit} name={institution.name}
                   identifier={`${institution.assets.length} ${institution.assets.length === 1 ? "asset" : "assets"}`}
                   amount={(money(String(value.value ?? 0), institution.currency)) + (value.missing > 0 && value.known > 0 ? "*" : "")}
                   palette={palette} logo={<AccountBrandLogo account={representative} size={32} radius={7} />}
-                  onOpen={() => setInstitutionId(institution.id)} />;
+                  onOpen={() => setInstitutionId(institution.id)} /></AccountEditTile>;
               }) : [...group.rows]
                 .sort(
                   (a, b) =>
@@ -401,13 +400,13 @@ function AccountsContent() {
                   const palette = accountCardPalette(account);
                   const balance = accountDisplayBalance(account);
                   return (
-                    <SwipeDeleteRow key={account.id} label={label(account)} disabled={session.demo || account.id.startsWith("fallback-cash-")} message={`Delete "${label(account)}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(account)} onDelete={() => deleteRow(account)}>
-                      <AccountGridCard name={label(account)}
-                        identifier={account.lastFour ? `•••• ${account.lastFour}` : account.type === "cash" ? "Cash on hand" : account.type.replaceAll("_", " ")}
+                    <AccountEditTile key={account.id} editing={editingCards} name={label(account)} onDelete={account.id.startsWith("fallback-cash-") ? undefined : () => confirmRemoval(account)}>
+                      <AccountGridCard onLongPress={enterEdit} name={label(account)}
+                        identifier={account.lastFour ? `•••• ${account.lastFour}` : account.type === "cash" ? "Cash on hand" : accountSectionTitle(accountSectionType(account))}
                         amount={money(balance ?? "0", account.currency)} palette={palette}
                         logo={<AccountBrandLogo account={account} size={32} radius={7} />}
-                        onOpen={() => setSelected(account)} />
-                    </SwipeDeleteRow>
+                        onOpen={() => !editingCards && setSelected(account)} />
+                    </AccountEditTile>
                   );
                 })}
               </AccountGrid>

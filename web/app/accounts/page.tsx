@@ -30,7 +30,7 @@ import { FinancialAccountCard } from "@/components/financial-account-card";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
-import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
+import { AccountEditTile } from "@/components/account-edit-tile";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
 import { compareAccountCheckpointFreshness, isAccountBalanceCheckpointEvidence } from "@/lib/account-balance-projection";
@@ -1553,6 +1553,8 @@ function AccountsPageContent() {
   const [accountEditBalance, setAccountEditBalance] = useState("");
   const [accountEditSource, setAccountEditSource] = useState("manual");
   const [accountEditBusy, setAccountEditBusy] = useState(false);
+  const [editingCards, setEditingCards] = useState(false);
+  useEffect(() => setEditingCards(false), [selectedWorkspaceId]);
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
   const [accountDeleteConfirmOpen, setAccountDeleteConfirmOpen] = useState(false);
   const [balanceDraft, setBalanceDraft] = useState("");
@@ -3173,7 +3175,7 @@ function AccountsPageContent() {
   const accountGroups = useMemo(() => {
     const groups = [
       {
-        title: "Banks & savings",
+        title: "Banks & Savings",
         dropType: "bank" as const,
         tone: "assets",
         itemLabel: "account",
@@ -3220,7 +3222,7 @@ function AccountsPageContent() {
         ),
       },
       {
-        title: "Tracked assets",
+        title: "Tracked Assets",
         dropType: "other" as const,
         tone: "neutral",
         itemLabel: "account",
@@ -3813,7 +3815,7 @@ function AccountsPageContent() {
       <div
         key={key}
         className={`accounts-card-drag-shell${draggedAccountId === row.id ? " is-dragging" : ""}`}
-        draggable={!isDeleting && !loadingContext.isLoading && !isCashFallbackAccount(row)}
+        draggable={!mobileOverview && !isDeleting && !loadingContext.isLoading && !isCashFallbackAccount(row)}
         onDragStart={(event) => handleAccountDragStart(event, row)}
         onDragEnd={finishAccountDrag}
       >
@@ -3847,12 +3849,13 @@ function AccountsPageContent() {
 
   const renderMobileListRow = (row: Account | InvestmentInstitutionCard, key: string) => {
     const card = renderAccountCard(row, `${key}-card`, true);
-    if (isInvestmentInstitutionCard(row)) return <div key={key}>{card}</div>;
-    const name = getAccountDisplayName(row);
-    return <MobileSwipeDelete key={key} className="accounts-mobile-grid-swipe"
-      deleteLabel={`Delete ${name}`} disabled={accountDeleteBusy || deletingAccountIdsSet.has(row.id) || isCashFallbackAccount(row)}
-      confirmationMessage={`Delete account "${name}" and its linked transactions? This cannot be undone.`}
-      onDelete={() => deleteAccount(row, true)}>{card}</MobileSwipeDelete>;
+    const account = isInvestmentInstitutionCard(row) ? null : row;
+    const name = isInvestmentInstitutionCard(row) ? row.institution : getAccountDisplayName(row);
+    const remove = account && !accountDeleteBusy && !deletingAccountIdsSet.has(account.id) && !isCashFallbackAccount(account)
+      ? () => { if (window.confirm(`Delete account "${name}" and its linked transactions? This cannot be undone.`)) void deleteAccount(account, true); }
+      : undefined;
+    return <AccountEditTile key={key} name={name} editing={editingCards} onEdit={()=>setEditingCards(true)} onDelete={remove}>{card}</AccountEditTile>;
+
   };
 
   useEffect(() => {
@@ -4419,6 +4422,7 @@ function AccountsPageContent() {
         {usesFxEstimates && !accountExchangeRates.loading && consolidated.missingCurrencies.length ? <button type="button" className="button button-small" onClick={accountExchangeRates.retry}>Retry rates</button> : null}
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
+            {editingCards && <button type="button" className="button button-small" onClick={()=>setEditingCards(false)}>Done</button>}
             <div className="accounts-sections">
               {accountsLoadFailed ? (
                 <div className="empty-state accounts-empty-state accounts-empty-state--error">
@@ -4562,7 +4566,7 @@ function AccountsPageContent() {
               <div>
                 <p className="eyebrow">Account drawer</p>
                 <h4 id="account-drawer-title">{accountEditName || selectedAccount.name}</h4>
-                <p>{getAccountDisplayType(selectedAccount)} · {selectedAccount.source === "manual" ? "Manual" : "Imported"}</p>
+                <p>{getAccountDisplayType(selectedAccount) === "Bank" ? "Banks & Savings" : getAccountDisplayType(selectedAccount)} · {selectedAccount.source === "manual" ? "Manual" : "Imported"}</p>
               </div>
               <button className="icon-button" type="button" onClick={() => setDrawerAccountId(null)} aria-label="Close account drawer">
                 ×

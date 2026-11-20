@@ -67,23 +67,23 @@ const types = [
   "other",
 ];
 const labels: Record<string, string> = {
-  name: "Account name",
+  name: "Account Name",
   institution: "Institution",
   currency: "Currency",
-  balance: "Opening balance",
-  accountNumber: "Account number",
-  creditLimit: "Credit limit",
-  creditPeriodStart: "Statement period start",
-  creditPeriodEnd: "Statement period end",
-  investmentSubtype: "Asset type",
+  balance: "Opening Balance",
+  accountNumber: "Account Number",
+  creditLimit: "Credit Limit",
+  creditPeriodStart: "Statement Period Start",
+  creditPeriodEnd: "Statement Period End",
+  investmentSubtype: "Asset Type",
   investmentSymbol: "Ticker Name",
   investmentQuantity: "Quantity",
   investmentCostBasis: "Purchase Value",
   investmentPrincipal: "Principal",
-  investmentStartDate: "Start date",
-  investmentMaturityDate: "Maturity date",
-  investmentInterestRate: "Interest rate (%)",
-  investmentMaturityValue: "Maturity value",
+  investmentStartDate: "Start Date",
+  investmentMaturityDate: "Maturity Date",
+  investmentInterestRate: "Interest Rate (%)",
+  investmentMaturityValue: "Maturity Value",
 };
 const dateFields = new Set([
   "creditPeriodStart",
@@ -471,12 +471,12 @@ export function AccountEditor({
               </Body>
               <PlanAction
                 tone="delete"
-                title="Confirm account deletion"
+                title="Confirm Account Deletion"
                 disabled={busy}
                 onPress={() => void remove()}
               />
               <Button
-                title="Keep account"
+                title="Keep Account"
                 secondary
                 disabled={busy}
                 onPress={() => setConfirmDelete(false)}

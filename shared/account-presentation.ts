@@ -38,3 +38,24 @@ const accountSectionEmojis: Record<string, string> = {
 export function accountSectionEmoji(title: string) {
   return accountSectionEmojis[title.toLowerCase()] ?? "📁";
 }
+
+export const accountSectionTitle = (type: string) =>
+    ({
+      bank: "Banks & Savings",
+      bank_account: "Banks & Savings",
+      savings: "Banks & Savings",
+      checking: "Banks & Savings",
+      credit_card: "Credit Cards",
+      line_of_credit: "Liabilities",
+      wallet: "Wallets",
+      cash: "Cash",
+      investment: "Investments",
+      loan: "Liabilities",
+      mortgage: "Liabilities",
+      payable: "Liabilities",
+      bnpl: "Liabilities",
+      receivable: "Tracked Assets",
+      insurance: "Tracked Assets",
+      prepaid: "Tracked Assets",
+      other: "Tracked Assets",
+    })[type] ?? "Other Accounts";
