@@ -191,7 +191,7 @@ export function AdviserInputTools({
               height: value.trim() ? inputHeight : 44,
               maxHeight: expanded ? 84 : 96,
               textAlignVertical: "center",
-              textAlign: "center",
+              textAlign: "left",
               includeFontPadding: false,
               paddingVertical: 8,
               color: colors.ink,

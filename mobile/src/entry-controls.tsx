@@ -81,9 +81,7 @@ export function EntrySelector({
           }}
         >
           {methodIcons[method] ? (
-            <View style={{ width: 26, height: 26 }}>
-              {value === method && <Image source={methodIcons[method]} accessible={false} resizeMode="contain" fadeDuration={0}
-                style={{ position: "absolute", left: -1, top: 0, width: 28, height: 28, tintColor: "white", opacity: 0.85 }} />}
+            <View style={{ width: 34, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: value === method ? "#fff" : "transparent" }}>
               <Image source={methodIcons[method]} accessible={false} resizeMode="contain" fadeDuration={0} style={{ width: 26, height: 26 }} />
             </View>
           ) : null}

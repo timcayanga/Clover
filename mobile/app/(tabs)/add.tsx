@@ -50,7 +50,8 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   const { colors, dark } = useTheme();
   const insets = useSafeAreaInsets();
   const session = useSession();
-  const [tableMode, setTableMode] = useState(false);
+  // Keep spreadsheet edits when switching back to a single transaction.
+  const [tableMode, setTableMode] = useState<boolean | null>(null);
   const [tab, setTab] = useState("manual");
   const [syncVisited, setSyncVisited] = useState(false);
   const [draft, setDraft] = useState(emptyTransaction);
@@ -270,6 +271,13 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
     router.setParams({ picker: undefined });
     void choose(picker as "file" | "camera" | "library");
   }, [picker, session.data]);
+  const entryModeButton = (
+    <Pressable accessibilityRole="button" accessibilityLabel={tableMode ? "Single entry" : "Table entry"}
+      onPress={() => setTableMode(current => !current)}
+      style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+      <Icon line name={tableMode ? "create-outline" : "grid-outline"} size={22} />
+    </Pressable>
+  );
   return (
     <View style={{ flex: 1 }}>
       <Screen sheet={sheet} onDismiss={close}>
@@ -287,14 +295,12 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
           <EntryTransition value={tab}>
           {syncVisited ? <View style={{ display: tab === "sync" ? "flex" : "none" }}><FinverseConnect mode="sync" onSynced={() => {}} /></View> : null}
           <View style={{ display: tab === "manual" ? "flex" : "none" }}>
-            <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-              <Pressable accessibilityRole="button" accessibilityLabel={tableMode ? "Single entry" : "Table entry"} onPress={() => setTableMode(!tableMode)} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Icon line name={tableMode ? "create-outline" : "grid-outline"} size={22}/></Pressable>
-            </View>
             <View style={{ display: tableMode ? "none" : "flex" }}>
-              <ManualTransaction draft={draft} onChange={setDraft} onSaved={() => { if (sheet && router.canGoBack()) router.back(); else router.replace("/(tabs)"); }} />
+              <ManualTransaction modeButton={tableMode ? undefined : entryModeButton} draft={draft} onChange={setDraft} onSaved={() => { if (sheet && router.canGoBack()) router.back(); else router.replace("/(tabs)"); }} />
             </View>
             <View style={{ display: tableMode ? "flex" : "none" }}>
-              <TransactionTableEntry key={session.profileId} />
+              <View style={{ alignItems: "flex-end" }}>{tableMode && entryModeButton}</View>
+              {tableMode !== null && <TransactionTableEntry key={session.profileId} />}
             </View>
           </View>
           <View style={{ display: tab === "ask" ? "flex" : "none" }}>
@@ -303,6 +309,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
                 context={{ kind: "transaction", fields: { accountId: draft.accountId, currency: draft.currency, date: draft.date, type: draft.type, merchantRaw: draft.merchantRaw, amount: draft.amount } }}
                 onReview={(value) => {
                   setDraft(value);
+                  setTableMode(current => current === null ? null : false);
                   setTab("manual");
                 }}
               />

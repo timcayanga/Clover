@@ -62,7 +62,7 @@ export function Choices({
   pill = false,
 }: {
   pill?: boolean;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; icon?: ReactNode }[];
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -87,7 +87,7 @@ export function Choices({
             maxWidth: "100%",
             paddingVertical: 8,
             justifyContent: "center",
-            paddingHorizontal: pill ? 8 : 14,
+            paddingHorizontal: pill ? 2 : 14,
             flex: pill ? 1 : undefined,
             alignItems: "center",
             borderRadius: pill ? 24 : 12,
@@ -97,6 +97,7 @@ export function Choices({
               value === option.value ? colors.pale : colors.white,
           }}
         >
+          {option.icon}
           <Text style={{ color: colors.ink, textAlign: "center", flexShrink: 1, fontSize: pill ? 12 : undefined }}>
             {option.label}
           </Text>
@@ -114,11 +115,11 @@ export function ChoiceField({ label, options, value, onChange, disabled = false,
   initiallyOpen?: boolean;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
-  const { colors } = useTheme();
+  const { colors, styles } = useTheme();
   const selected = options.find(option => option.value === value);
   const row = { minHeight: 48, paddingVertical: 10, paddingHorizontal: 12, flexDirection: "row" as const, alignItems: "center" as const, gap: 10 };
   return <View style={{ gap: 6 }}>
-    <Text style={{ color: colors.muted, fontSize: 13 }}>{label}</Text>
+    <Text style={styles.label}>{label}</Text>
     <Pressable disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label ?? "Choose"}`} accessibilityState={{ expanded: open, disabled }} onPress={() => setOpen(!open)} style={{ ...row, borderWidth: 1, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.white }}>
       {selected?.icon}<Text style={{ flex: 1, color: colors.ink, fontSize: 15 }}>{selected?.label ?? `Choose ${label.toLowerCase()}`}</Text><Icon line name={open ? "chevron-up" : "chevron-down"} size={16}/>
     </Pressable>
@@ -133,14 +134,17 @@ export function ChoiceField({ label, options, value, onChange, disabled = false,
   </View>;
 }
 export function ManualTransaction({
+  modeButton,
   draft,
   onChange,
   onSaved,
 }: {
+  modeButton?: ReactNode;
   draft: TransactionDraft;
   onChange: (draft: TransactionDraft) => void;
   onSaved?: () => void;
 }) {
+  const { colors, styles } = useTheme();
   const session = useSession();
   const [localRows, setLocalRows] = useState<Transaction[]>([]);
   useEffect(() => {
@@ -356,13 +360,14 @@ export function ManualTransaction({
               : "Transaction saved."}
         </Notice>
       ) : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><View style={{ flex: 1 }}>
       <Choices
         pill
         options={[
-          { value: "expense", label: "Expense" },
-          { value: "income", label: "Income" },
+          { value: "expense", label: "Expense", icon: <Icon line name="arrow-up-outline" size={16} /> },
+          { value: "income", label: "Income", icon: <Icon line name="arrow-down-outline" size={16} /> },
           ...(!draft.adviserEntry
-            ? [{ value: "transfer", label: "Transfer" }]
+            ? [{ value: "transfer", label: "Transfer", icon: <Icon line name="swap-horizontal-outline" size={16} /> }]
             : []),
         ]}
         value={draft.type}
@@ -370,6 +375,7 @@ export function ManualTransaction({
           change({ type: type as TransactionDraft["type"], categoryId: null })
         }
       />
+      </View>{modeButton}</View>
       <Field
         label={`Amount (${draft.currency})`}
         style={{ fontSize: 28, lineHeight: 42, fontFamily: "Poppins-SemiBold", minHeight: 80, paddingVertical: 16, textAlignVertical: "center", includeFontPadding: false }}
@@ -457,7 +463,7 @@ export function ManualTransaction({
         </Card>
       ) : null}
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: moreDetails }} onPress={() => setMoreDetails(value => !value)} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Body>More details</Body><Icon line name={moreDetails ? "chevron-up" : "chevron-down"} size={18} />
+        <Text style={styles.label}>More details</Text><Icon line name={moreDetails ? "chevron-up" : "chevron-down"} size={18} />
       </Pressable>
       {moreDetails ? (
         <>
@@ -469,16 +475,19 @@ export function ManualTransaction({
           maxLength={2000}
         />
         {!draft.adviserEntry && draft.type !== "transfer" ? <>
-          <Body muted={false}>Line items</Body>
+          <Text style={styles.label}>Line items</Text>
+          {(draft.receiptLineItems?.length ?? 0) > 0 && <View style={{ flexDirection: "row", gap: 8, paddingRight: 40 }}>
+            <Text style={[styles.label, {flex: 3}]}>Name</Text><Text style={[styles.label, {flex: 2}]}>Amount</Text>
+          </View>}
           {(draft.receiptLineItems ?? []).map((item, index) => {
             const update = (patch: Partial<typeof item>) => change({ receiptLineItems: draft.receiptLineItems?.map((row, i) => i === index ? { ...row, ...patch } : row) });
-            return <Card key={index}>
-              <Field label="Description" value={item.description} maxLength={500} onChangeText={description => update({ description })} editable={!busy && !uncertain} />
-              <Field label={`Amount (${draft.currency})`} value={item.amount} maxLength={15} keyboardType="decimal-pad" onChangeText={amount => update({ amount })} editable={!busy && !uncertain} />
-              <Button title="Remove line item" secondary disabled={busy || uncertain} onPress={() => change({ receiptLineItems: draft.receiptLineItems?.filter((_, i) => i !== index) })} />
-            </Card>;
+            return <View key={index} style={{flexDirection: "row", alignItems: "center", gap: 8}}>
+              <View style={{flex: 3}}><Field accessibilityLabel={`Item ${index + 1} name`} placeholder="Name" value={item.description} maxLength={500} onChangeText={description => update({ description })} editable={!busy && !uncertain} /></View>
+              <View style={{flex: 2}}><Field accessibilityLabel={`Item ${index + 1} amount in ${draft.currency}`} placeholder="0.00" value={item.amount} maxLength={15} keyboardType="decimal-pad" onChangeText={amount => update({ amount })} editable={!busy && !uncertain} /></View>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Remove line item ${index + 1}`} disabled={busy || uncertain} onPress={() => change({ receiptLineItems: draft.receiptLineItems?.filter((_, i) => i !== index) })} style={{padding: 8}}><Icon line name="close" size={18}/></Pressable>
+            </View>;
           })}
-          <Button title="Add line item" icon="add" secondary disabled={busy || uncertain || (draft.receiptLineItems?.length ?? 0) >= 100} onPress={() => change({ receiptLineItems: [...(draft.receiptLineItems ?? []), { description: "", amount: "" }] })} />
+          <Pressable accessibilityRole="button" disabled={busy || uncertain || (draft.receiptLineItems?.length ?? 0) >= 100} onPress={() => change({ receiptLineItems: [...(draft.receiptLineItems ?? []), { description: "", amount: "" }] })} style={{alignSelf:"flex-start", justifyContent:"center", minHeight:44}}><Text style={{color:colors.teal}}>+ Add line item</Text></Pressable>
         </> : null}
         </>
       ) : null}
@@ -744,6 +753,17 @@ export function TransactionChat({
       {error ? <Notice>{error}</Notice> : null}
       {busy ? <Body>Clover is preparing your draft…</Body> : null}
       <View style={{marginTop: "auto", paddingTop: 16}}>
+      {context?.kind === "transaction" && !input.trim() && !messages.length && !attachments.length && !busy && !attaching && (
+        <View style={{ gap: 8, paddingBottom: 12 }}>
+          <Text style={styles.label}>Try a transaction</Text>
+          <View style={{flexDirection:"row", flexWrap:"wrap", gap: 6}}>
+            {[["🍜","Lunch for 250"],["💼","Received 5,000 for freelance work"],["🚕","Taxi fare of 180"]].map(([emoji, example]) =>
+              <Pressable key={example} accessibilityRole="button" accessibilityLabel={example} onPress={() => setInput(example)} style={{backgroundColor:colors.pale, borderRadius:16, paddingVertical:8, paddingHorizontal:12}}>
+                <Text style={{color:colors.ink}}>{emoji} {example}</Text>
+              </Pressable>)}
+          </View>
+        </View>
+      )}
       <AdviserInputTools
         active={active}
         expanded
