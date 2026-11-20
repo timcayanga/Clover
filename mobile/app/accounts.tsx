@@ -1,3 +1,4 @@
+import { AccountSummaryGrid } from "../src/account-summary-grid";
 import { currencyMark } from "../../shared/currency-mark";
 import { usePageAskScope } from "../src/page-ask-context";
 import { accountSectionEmoji, accountSectionTitle, accountSectionType } from "../../shared/account-presentation";
@@ -58,7 +59,7 @@ function Accounts() {
   return <AccountsContent key={session.profileId} />;
 }
 function AccountsContent() {
-  const { colors, styles, dark } = useTheme();
+  const { colors, styles } = useTheme();
   const session = useSession();
   async function deleteRow(account: Account) {
     await session.request(`accounts/${account.id}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
@@ -329,12 +330,11 @@ function AccountsContent() {
         </View>
       </Modal>
       <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", borderWidth: 1, borderColor: dark ? "#29384A" : "#D8E7E3", borderRadius: 22, overflow: "hidden", backgroundColor: dark ? "#0E1725" : "#FCFEFC" }}>
-          {["Net worth", "Spendable", "Assets", "Liabilities"].map((title, i) => <View key={title} style={{ width: "50%", minHeight: 81, padding: 16, gap: 5, borderRightWidth: i % 2 === 0 ? 1 : 0, borderTopWidth: i > 1 ? 1 : 0, borderColor: dark ? "#29384A" : "#E1ECE8", backgroundColor: i === 0 ? (dark ? "#15382F" : "#E9F8EF") : "transparent" }}>
-            <Text style={{ fontSize: 11, fontFamily: "Poppins-Medium", color: colors.muted }}>{displayedCurrency === "ALL" ? `Est. ${title}` : title}</Text>
-            <Text style={{ fontSize: 18, fontFamily: "Poppins-SemiBold", color: i === 3 || (summary.values[i] ?? 0) < 0 ? colors.danger : i === 0 ? (dark ? "#86E9D1" : "#12614E") : colors.ink }}>{summary.values[i] === null ? "—" : money(String(summary.values[i]), summaryCurrency)}</Text>
-          </View>)}
-        </View>
+        <AccountSummaryGrid metrics={["Net worth", "Spendable", "Assets", "Liabilities"].map((title, i) => ({
+          label: displayedCurrency === "ALL" ? `Est. ${title}` : title,
+          value: summary.values[i] === null ? "—" : money(String(summary.values[i]), summaryCurrency),
+          negative: i === 3 || (summary.values[i] ?? 0) < 0,
+        }))} />
         {summary.missingCurrencies.length ? <><Body>{exchangeRates.loading ? "Loading exchange rates…" : `Unable to estimate all balances. Exchange rate unavailable: ${summary.missingCurrencies.join(", ")}.`}</Body>{!exchangeRates.loading ? <Button secondary title="Retry rates" onPress={exchangeRates.retry} /> : null}</> : null}
       </View>
       {loading ? (

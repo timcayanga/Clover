@@ -1,5 +1,5 @@
 import { ContextualUpgrade } from "../src/contextual-upgrade";
-import { AdaptiveGrid } from "../src/adaptive";
+import { AccountSummaryGrid } from "../src/account-summary-grid";
 import { investmentTypeLabel } from "../../shared/investment-entry";
 import { useLiveInvestmentValues } from "../src/use-live-investment-values";
 import { CloverEmptyState } from "../src/clover-mascot";
@@ -9,7 +9,6 @@ import { createScreenDataLoader, registerScreenRefresh } from "../src/screen-ref
 import { EntryOverlay } from "../src/entry-overlay";
 import { Text } from "../src/app-text";
 import { LinearGradient } from "expo-linear-gradient";
-import { compactSummaryMoney } from "../../shared/summary-format";
 import { useEffect, useState } from "react";
 import { Image, Pressable, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
@@ -27,7 +26,6 @@ import {
 } from "../src/ui";
 import {
   PlanAction,
-  SummaryCard,
   PlanHeader,
   PlanTabs,
   Progress,
@@ -286,45 +284,11 @@ export default function Investments() {
         <ContextualUpgrade tier="free" context={tab.startsWith("Planner") ? "planner" : tab.startsWith("Markets") ? "markets" : "analysis"} />
       ) : tab === "Overview" ? (
         <>
-          <AdaptiveGrid minItemWidth={100} maxColumns={3} gap={8}>
-            <SummaryCard
-              title="Est. value"
-              color={colors.positive}
-              value={
-                valuation.value !== null
-                  ? compactSummaryMoney(total, selectedCurrency)
-                  : "—"
-              }
-            />
-            <SummaryCard
-              title="Gain/loss"
-              value={
-                known.length ? compactSummaryMoney(gain, selectedCurrency) : "—"
-              }
-              color={
-                gain === 0
-                  ? colors.ink
-                  : gain > 0
-                    ? colors.positive
-                    : colors.danger
-              }
-            />
-            <SummaryCard
-              title="Return"
-              value={cost > 0 ? `${((gain / cost) * 100).toFixed(2)}%` : "—"}
-              color={
-                gain === 0
-                  ? colors.ink
-                  : gain > 0
-                    ? colors.positive
-                    : colors.danger
-              }
-            />
-          </AdaptiveGrid>
-          {valuation.missing > 0 ? <Body>Known value · {valuation.known} of {visibleHoldings.length} holdings. {valuation.missing} without a recorded value.</Body> : null}
-          <Body>
-            Portfolio values are estimates. Check your investment apps for the latest amounts.
-          </Body>
+          <AccountSummaryGrid metrics={[
+            { label: "Estimated Value", value: valuation.value === null ? "—" : money(String(total), selectedCurrency), negative: total < 0 },
+            { label: "Gain/Loss", value: known.length ? money(String(gain), selectedCurrency) : "—", negative: gain < 0 },
+            { label: "Return", value: cost > 0 ? `${((gain / cost) * 100).toFixed(2)}%` : "—", negative: cost > 0 && gain < 0 },
+          ]} />
           {visibleHoldings.length ? (
             <ValuationHistory
               history={data?.history ?? []}
@@ -336,6 +300,7 @@ export default function Investments() {
                 ),
               ]}
               currency={selectedCurrency}
+              overview
               accountOptions={[...new Map(visibleHoldings.map((h) => [h.valuationAccountId ?? h.accountId, { id: h.valuationAccountId ?? h.accountId, name: accounts.find((a) => a.id === h.accountId)?.name ?? h.name }])).values()]}
             />
           ) : null}

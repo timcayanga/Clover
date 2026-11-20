@@ -82,12 +82,14 @@ export function ValuationHistory({
   accountIds,
   currency,
   asset = false,
+  overview = false,
   accountOptions,
 }: {
   history: RecordedValuation[];
   accountIds: string[];
   currency: string;
   asset?: boolean;
+  overview?: boolean;
   accountOptions?: { id: string; name: string }[];
 }) {
   const { colors } = useTheme();
@@ -162,18 +164,24 @@ export function ValuationHistory({
         currency={currency}
         series={[{ name: "Recorded value", color: colors.bright, points }]}
       />
-      <Body>
-        {new Set(selected).size}{" "}
-        {asset ? "asset" : new Set(selected).size === 1 ? "account" : "accounts"} · {currency}.
-        Recorded estimates, not live prices. Lines connect dated records;
-        accounts enter the total when their first value is recorded.
-      </Body>
-      {all.length && all[all.length - 1].accounts < new Set(selected).size ? (
-        <Body>
-          History covers {all[all.length - 1].accounts} of these accounts.
-          Missing values are not treated as zero.
-        </Body>
-      ) : null}
+      {overview ? (
+        <Body>Portfolio values are estimates. Check your investment apps for the latest amounts.</Body>
+      ) : (
+        <>
+          <Body>
+            {new Set(selected).size}{" "}
+            {asset ? "asset" : new Set(selected).size === 1 ? "account" : "accounts"} · {currency}.
+            Recorded estimates, not live prices. Lines connect dated records;
+            accounts enter the total when their first value is recorded.
+          </Body>
+          {all.length && all[all.length - 1].accounts < new Set(selected).size ? (
+            <Body>
+              History covers {all[all.length - 1].accounts} of these accounts.
+              Missing values are not treated as zero.
+            </Body>
+          ) : null}
+        </>
+      )}
     </Card>
   );
 }

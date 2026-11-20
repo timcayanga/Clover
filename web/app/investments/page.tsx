@@ -8,7 +8,7 @@ import { InvestmentTableEntry } from "@/components/investment-table-entry";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import Link from "next/link";
-import { compactSummaryMoney } from "../../../shared/summary-format";
+import overviewStyles from "./overview.module.css";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { useSearchParams } from "next/navigation";
@@ -3023,40 +3023,19 @@ export default function InvestmentsPage() {
           <PremiumPreview context={selectedTab === "market" ? "markets" : selectedTab === "planner" ? "planner" : "analysis"} />
         ) : selectedTab === "overview" ? (
           <>
-            <section className="investments-overview-metrics" aria-label="Portfolio totals">
-              <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <InfoTooltip className="summary-card-info" label={getPortfolioSummaryTooltip("The total value of the visible investment holdings for the selected currency view.")} />
-                <p className="eyebrow"><span className="summary-desktop-label">Estimated value</span><span className="summary-mobile-label">Est. value</span></p>
-                <strong className="accounts-overview-card__amount is-good">
-                  <span className="summary-desktop-label">{hasVisibleCurrencySelection
-                    ? formatPortfolioSummary(estimatedPortfolioTotals.currentValue)
-                    : "—"}</span><span className="summary-mobile-label">{hasVisibleCurrencySelection && !portfolioEstimateUnavailable ? compactSummaryMoney(estimatedPortfolioTotals.currentValue, growthDisplayCurrency) : "—"}</span>
-                </strong>
-                <small className="summary-mobile-label">{hasVisibleCurrencySelection ? formatPortfolioSummary(estimatedPortfolioTotals.currentValue) : "—"}</small>
-              </article>
-              <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <InfoTooltip className="summary-card-info" label={getPortfolioSummaryTooltip("Recorded gain or loss for visible holdings with an available purchase value.")} />
-                <p className="eyebrow"><span className="summary-desktop-label">Unrealized gain / loss</span><span className="summary-mobile-label">Gain/loss</span></p>
-                <strong className={`accounts-overview-card__amount ${portfolioEstimateUnavailable ? "is-neutral" : estimatedPortfolioTotals.gainLoss > 0 ? "is-good" : estimatedPortfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
-                  <span className="summary-desktop-label">{hasVisibleCurrencySelection
-                    ? formatPortfolioSummary(estimatedPortfolioTotals.gainLoss)
-                    : "—"}</span><span className="summary-mobile-label">{hasVisibleCurrencySelection && !portfolioEstimateUnavailable ? compactSummaryMoney(estimatedPortfolioTotals.gainLoss, growthDisplayCurrency) : "—"}</span>
-                </strong>
-                <small className="summary-mobile-label">{hasVisibleCurrencySelection ? formatPortfolioSummary(estimatedPortfolioTotals.gainLoss) : "—"}</small>
-              </article>
-
-              <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <InfoTooltip className="summary-card-info" label="Total recorded return divided by the available purchase value for visible holdings." />
-                <p className="eyebrow"><span className="summary-desktop-label">Return on recorded purchase value</span><span className="summary-mobile-label">Return</span></p>
-                <strong className={`accounts-overview-card__amount ${portfolioRoi === null ? "is-neutral" : portfolioRoi > 0 ? "is-good" : portfolioRoi < 0 ? "is-danger" : "is-neutral"}`}>
-                  {portfolioRoi === null ? "—" : percentFormatter.format(portfolioRoi)}
-                </strong>
-                <small className="summary-mobile-label">On cost</small>
-              </article>
+            <section className={overviewStyles.summary} aria-label="Portfolio totals">
+              {[
+                { label: "Estimated Value", value: hasVisibleCurrencySelection ? formatPortfolioSummary(estimatedPortfolioTotals.currentValue) : "—", negative: estimatedPortfolioTotals.currentValue < 0, info: getPortfolioSummaryTooltip("The total value of the visible investment holdings for the selected currency view.") },
+                { label: "Gain/Loss", value: hasVisibleCurrencySelection ? formatPortfolioSummary(estimatedPortfolioTotals.gainLoss) : "—", negative: estimatedPortfolioTotals.gainLoss < 0, info: getPortfolioSummaryTooltip("Recorded gain or loss for visible holdings with an available purchase value.") },
+                { label: "Return", value: portfolioRoi === null ? "—" : percentFormatter.format(portfolioRoi), negative: (portfolioRoi ?? 0) < 0, info: "Total recorded return divided by the available purchase value for visible holdings." },
+              ].map(metric => (
+                <article key={metric.label}>
+                  <InfoTooltip className="summary-card-info" label={metric.info} />
+                  <span className={overviewStyles.label}>{metric.label}</span>
+                  <strong data-negative={metric.negative && metric.value !== "—"}>{metric.value}</strong>
+                </article>
+              ))}
             </section>
-            <p className="investments-estimate-note">
-              Portfolio values are estimates.{usesPortfolioFxEstimates ? ` Mixed-currency totals use the latest available FX rates in ${defaultCurrencyCode}.` : ""} Check your investment apps for the latest amounts.
-            </p>
             <section className="investments-growth-hero glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
@@ -3067,6 +3046,9 @@ export default function InvestmentsPage() {
                 </div>
               </div>
               <InvestmentPortfolioGrowthChart assets={growthAssets} currency={growthDisplayCurrency} />
+              <p className="investments-estimate-note">
+                Portfolio values are estimates.{usesPortfolioFxEstimates ? ` Mixed-currency totals use the latest available FX rates in ${defaultCurrencyCode}.` : ""} Check your investment apps for the latest amounts.
+              </p>
               {!growthAssets.length ? <div className="investment-history-empty-action"><CloverMascot pose="investments" />{renderAddInvestmentButton()}</div> : null}
             </section>
             {portfolioAllocation.length > 0 || portfolioEstimateUnavailable || (usesPortfolioFxEstimates && portfolioExchangeRates.loading) ? <section className="investments-allocation investments-allocation--overview glass">
