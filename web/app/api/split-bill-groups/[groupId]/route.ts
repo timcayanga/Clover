@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { groupCoverPatch } from "@/lib/split-group-cover-input";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
@@ -25,7 +26,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
     assertTrustedRequestOrigin(request);
     const user = await getSplitBillCurrentUser();
     const { groupId } = await params;
-    const body = updateGroupSchema.parse(await request.json());
+    const input = await request.json();
+    const cover = groupCoverPatch.safeParse(input);
+    if (cover.success) {
+      const updated = await prisma.splitBillGroup.updateMany({
+        where: { id: groupId, userId: user.id }, data: cover.data,
+      });
+      return updated.count ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Group not found" }, { status: 404 });
+    }
+    const body = updateGroupSchema.parse(input);
 
     const existing = await prisma.splitBillGroup.findFirst({
       where: {
@@ -47,7 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
         data: {
           name: body.name,
           avatarUrl:
-            body.avatarUrl === undefined ? existing.avatarUrl ?? null : body.avatarUrl?.trim() || null,
+            body.avatarUrl === undefined ? undefined : body.avatarUrl?.trim() || null,
           archivedAt: body.archivedAt === undefined ? existing.archivedAt : body.archivedAt ? new Date(body.archivedAt) : null,
         },
       });
@@ -75,7 +84,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
           where: { id: existing.circleId },
           data: {
             name: body.name,
-            avatarUrl: body.avatarUrl === undefined ? existing.avatarUrl ?? null : body.avatarUrl?.trim() || null,
+            avatarUrl: body.avatarUrl === undefined ? undefined : body.avatarUrl?.trim() || null,
             archivedAt: body.archivedAt === undefined ? undefined : body.archivedAt ? new Date(body.archivedAt) : null,
           },
         });

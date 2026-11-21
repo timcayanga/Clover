@@ -1,3 +1,5 @@
+import { resolvedGroupCover } from "../../../../../../shared/split-group-cover";
+import { groupCoverPatch } from "@/lib/split-group-cover-input";
 import { importCommitAgeMs } from "../../../../../../shared/import-commit-timing";
 import { formatStatementReviewAccount } from "../../../../../../shared/transaction-record-display";
 import { splitBillReadErrorCode, splitBillReadSurface, type SplitBillReadErrorCode } from "../../../../../../shared/split-bill-read";
@@ -463,7 +465,7 @@ async function handle(
       ]);
       const circlePeople = circleMembers.map(member => ({name:member.displayName}));
       const {paymentOptionBrand}=await import("@/lib/payment-option-brand");
-      return reply({circlePeople,groups:groups.map(({userId,...g})=>({...g,canEdit:userId===user.id})),people,profiles:profiles.map(profile=>({...profile,...paymentOptionBrand(profile.provider,profile.label)}))});
+      return reply({circlePeople,groups:groups.map(({userId,...g})=>({...g,avatarUrl:(() => { const cover = resolvedGroupCover(g.id, g.avatarUrl); return cover.startsWith("/") ? new URL(cover, request.url).href : cover; })(),canEdit:userId===user.id})),people,profiles:profiles.map(profile=>({...profile,...paymentOptionBrand(profile.provider,profile.label)}))});
     }
     if (operation === "investments") {
       return reply(await (await import("@/lib/mobile-investment-data")).loadMobileInvestments(workspaceId));
@@ -830,9 +832,9 @@ async function handle(
     }
     if (operation === "split-group-create" || (operation === "split-group-edit" && request.method === "PATCH")) {
       const text = await request.text();
-      if (new TextEncoder().encode(text).length > 10000) return reply({error:"Group details are too large."},413);
+      if (new TextEncoder().encode(text).length > 202000) return reply({error:"Group details are too large."},413);
       const { mobileGroupInput } = await import("@/lib/mobile-together-input");
-      const body = (operation === "split-group-edit" ? mobileGroupInput.extend({members:z.array(z.object({id:z.string().optional(),name:z.string().trim().min(1).max(80)})).max(30)}) : mobileGroupInput).parse(JSON.parse(text));
+      const body = (operation === "split-group-edit" ? groupCoverPatch.or(mobileGroupInput.extend({members:z.array(z.object({id:z.string().optional(),name:z.string().trim().min(1).max(80)})).max(30)})) : mobileGroupInput).parse(JSON.parse(text));
       forwarded = new Request(request.url,{method:request.method,headers:request.headers,body:JSON.stringify(body)});
     }
     const response = await withMobileRequestContext(

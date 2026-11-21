@@ -1,4 +1,5 @@
 "use client";
+import { coverNames, geometricCover, resolvedGroupCover } from "../../shared/split-group-cover";
 import { useState } from "react";
 import type {
   SplitBillGroupSummary,
@@ -86,6 +87,35 @@ export function SplitGroupPeople({
       setBusy(false);
     }
   }
+  async function changeCover(choice: string | File | null) {
+    if (!editable || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      let avatarUrl: string | null;
+      if (choice instanceof File) {
+        const bitmap = await createImageBitmap(choice);
+        try {
+          const canvas = document.createElement("canvas");
+          const scale = Math.min(1, 800 / Math.max(bitmap.width, bitmap.height));
+          canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+          canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Unable to read this image.");
+          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          avatarUrl = canvas.toDataURL("image/jpeg", 0.78);
+          if (avatarUrl.length > 200000) avatarUrl = canvas.toDataURL("image/jpeg", 0.4);
+          if (avatarUrl.length > 200000) throw new Error("Choose a smaller cover photo.");
+        } finally { bitmap.close(); }
+      } else avatarUrl = choice;
+      const res = await fetch("/api/split-bill-groups/" + encodeURIComponent(group.id), {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ avatarUrl }),
+      });
+      if (!res.ok) throw new Error("Unable to update the group cover.");
+      onSaved({ ...group, avatarUrl }, []);
+    } catch (error) { setError(error instanceof Error ? error.message : "Unable to read this photo."); }
+    finally { setBusy(false); }
+  }
   function amount(from: string, to: string) {
     from = participantName({ group }, from);
     to = participantName({ group }, to);
@@ -149,6 +179,17 @@ export function SplitGroupPeople({
     );
   return (
     <section>
+      {editable && <fieldset disabled={busy}>
+        <legend>Group Cover</legend>
+        <div className="group-cover-choices">{coverNames.map((name, i) => (
+          <button key={name} type="button" aria-label={name} aria-pressed={resolvedGroupCover(group.id, group.avatarUrl) === geometricCover(i)}
+            onClick={() => void changeCover(geometricCover(i))}><img src={geometricCover(i)} alt="" /></button>
+        ))}</div>
+        <label>Choose Photo<input type="file" accept="image/*" onChange={event => {
+          const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void changeCover(file);
+        }} /></label>
+        <button type="button" className="button button-secondary" onClick={() => void changeCover(null)}>Use Default Cover</button>
+      </fieldset>}
       <label>
         Group Name
         <input

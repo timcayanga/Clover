@@ -5,5 +5,14 @@ export function groupCoverIndex(id: string) {
   return (hash >>> 0) % 8;
 }
 export function groupCoverUrl(id: string) {
-  return `/assets/split-group-covers/cover-${groupCoverIndex(id)}.jpg`;
+  return geometricCover(groupCoverIndex(id));
+}
+
+export const coverNames = ["Circles", "Peaks", "Arches", "Stripes", "Orbits", "Triangles", "Half Moons", "Diagonals"];
+export const geometricCover = (index: number) => `/assets/split-group-covers/shape-${index}.jpg`;
+export function resolvedGroupCover(id: string, stored?: string | null) {
+  const url = stored?.trim();
+  if (!url || /^(?:https:\/\/(?:staging\.)?clover\.ph)?\/assets\/(?:profiles\/avatar_\d+\.png|split-group-covers\/cover-\d+\.jpg)$/i.test(url))
+    return geometricCover(groupCoverIndex(id));
+  return url;
 }

@@ -1,4 +1,9 @@
 import { type SavedPerson } from "./split-people-field";
+import { GroupCover } from "./group-cover";
+import { coverNames, geometricCover, resolvedGroupCover } from "../../shared/split-group-cover";
+import { displayPhoto } from "./prepare-display-photo";
+import { removeUploadCopy } from "./upload";
+import * as ImagePicker from "expo-image-picker";
 import { TogetherToolbar } from "./together-toolbar";
 import { BillEditor } from "./direct-bill-editor";
 import { EntryOverlay } from "./entry-overlay";
@@ -22,6 +27,7 @@ import { splitItemTotals } from "../../shared/split-bill-experience";
 export type SplitGroup = {
   id: string;
   name: string;
+  avatarUrl?: string | null;
   recorderName?: string;
   canEdit?: boolean;
   members: { id: string; name: string; previousNames?: string[] }[];
@@ -86,6 +92,28 @@ export function SplitGroupDetails({
     participantName({ group: { members: roster } }, data?.viewerName ?? ""),
   );
   const editable = !!group && group.canEdit !== false && !session.demo;
+  const [coverOverride, setCoverOverride] = useState<string | null | undefined>();
+  const cover = coverOverride === undefined ? group?.avatarUrl : coverOverride;
+  async function changeCover(source: number | "photo" | null) {
+    if (!editable || !group || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      let avatarUrl: string | null = null;
+      if (source === "photo") {
+        const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.9 });
+        if (picked.canceled) return;
+        const asset = picked.assets[0];
+        try { avatarUrl = await displayPhoto(asset, 960, 200_000); } finally { removeUploadCopy(asset.uri); }
+      } else if (source !== null) avatarUrl = geometricCover(source);
+      await session.request(`split-bill-groups/${group.id}?workspaceId=${encodeURIComponent(session.profileId)}`, {
+        method: "PATCH", body: JSON.stringify({ avatarUrl }),
+      });
+      setCoverOverride(avatarUrl);
+      onChanged();
+    } catch (error) { setError(error instanceof Error ? error.message : "Unable to update cover."); }
+    finally { setBusy(false); }
+  }
   async function persist(nextName: string, nextMembers: string[]) {
     if (!group || busy || !editable) return;
     const title = nextName.trim(),
@@ -343,6 +371,25 @@ export function SplitGroupDetails({
         </>
       ) : (
         <Card>
+          {group && <>
+            <Body>Group Cover</Body>
+            <GroupCover id={group.id} url={cover} style={{ width: "100%", aspectRatio: 2.2, borderRadius: 8 }} />
+            {editable && <>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {coverNames.map((label, i) => {
+                  const url = geometricCover(i);
+                  const selected = resolvedGroupCover(group.id, cover).endsWith(url);
+                  return <Pressable key={label} disabled={busy} accessibilityRole="button" accessibilityLabel={label}
+                    accessibilityState={{ selected }} onPress={() => void changeCover(i)}
+                    style={{ borderWidth: 2, borderColor: selected ? colors.teal : "transparent", padding: 2 }}>
+                    <GroupCover id={group.id} url={url} style={{ width: 58, height: 30 }} />
+                  </Pressable>;
+                })}
+              </View>
+              <PlanAction title="Choose Photo" disabled={busy} onPress={() => void changeCover("photo")} />
+              <PlanAction title="Use Default Cover" disabled={busy} onPress={() => void changeCover(null)} />
+            </>}
+          </>}
           <Body>Group Name</Body>
           <TextInput
             accessibilityLabel="Group Name"
