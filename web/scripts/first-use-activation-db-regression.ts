@@ -27,7 +27,7 @@ async function main() {
     const account = await db.account.create({ data: { workspaceId: workspace.id, name: "Cash", type: "cash", balance: 0 } });
     const get = (id = workspace.id) => GET(new Request(`https://clover.ph/api/activation?workspaceId=${id}`));
     const send = (transactionId: string, action = "view", origin = "https://clover.ph") => POST(new Request(`https://clover.ph/api/activation?workspaceId=${workspace.id}`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ action, transactionId }) }));
-    assert.equal((await getFirstUseActivation(workspace.id, user.id)).state, "start", "Seeded Cash is not activation");
+    assert.equal((await getFirstUseActivation(workspace.id, user.id)).state, "hidden", "Seeded Cash is not activation");
     const base = { workspaceId: workspace.id, accountId: account.id, date: new Date("2026-09-09"), currency: "IDR", type: "expense" as const, merchantRaw: "Synthetic lunch" };
     await db.transaction.createMany({ data: [
       { ...base, amount: 0, reviewStatus: "confirmed" },
@@ -37,7 +37,7 @@ async function main() {
       { ...base, amount: 500, deletedAt: new Date() },
     ] });
     await db.importFile.create({ data: { workspaceId: workspace.id, fileName: "failed-receipt.png", fileType: "image/png", status: "failed", storageKey: "fixture-only" } });
-    assert.equal((await getFirstUseActivation(workspace.id, user.id)).state, "start", "A failed upload, zero draft, rejected, excluded or deleted row cannot count");
+    assert.equal((await getFirstUseActivation(workspace.id, user.id)).state, "hidden", "A failed upload, zero draft, rejected, excluded or deleted row cannot count");
     const imported = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: "receipt.png", fileType: "image/png", status: "done", storageKey: "fixture-only" } });
     const first = await db.transaction.create({ data: { ...base, amount: 69000, importFileId: imported.id, reviewStatus: "pending_review" } });
     const original = JSON.stringify(await db.transaction.findMany({ where: { workspaceId: workspace.id }, orderBy: { id: "asc" } }));
@@ -46,7 +46,7 @@ async function main() {
     assert.equal(snapshot.transaction?.currency, "IDR"); assert.equal(snapshot.transaction?.amount, "69000");
     assert.equal(snapshot.transaction?.date.slice(0, 10), "2026-09-09", "Use receipt date, not ingestion date");
     assert.equal(snapshot.transaction?.needsReview, true, "Suggested results cannot claim confirmation");
-    assert.equal((await getFirstUseActivation(other.id, user.id)).state, "start", "Active Profiles stay separate");
+    assert.equal((await getFirstUseActivation(other.id, user.id)).state, "hidden", "Active Profiles stay separate");
     assert.equal((await get("another-users-profile")).status, 401);
     assert.equal((await send(first.id, "view", "https://attacker.invalid")).status, 400);
     assert.equal((await send("wrong-transaction")).status, 409);
