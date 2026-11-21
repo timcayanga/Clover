@@ -134,6 +134,7 @@ assert.doesNotMatch(JSON.stringify(events), /PRIVATE|private-profile|private-acc
 await engine.dispose();
 // Request-scoped server events preserve device/operation context and run after response.
 let deletedIdentity = false;
+let trackingEnabled = false;
 let outgoing: any[] = [], scheduled: Array<() => Promise<void>> = [];
 let requestHeaders: Headers | null = new Headers({ "x-clover-platform": "android", "x-clover-device-model": "Pixel", "x-clover-os-version": "16", "x-clover-app-version": "0.1.0", "x-clover-operation-id": "test-operation-001" });
 const serverModule = { exports: {} as any };
@@ -142,11 +143,17 @@ vm.runInNewContext(serverCode, { exports: serverModule.exports, require: (id: st
   if (id === "next/headers") return { headers: async () => { if (!requestHeaders) throw Error("worker"); return requestHeaders; } };
   if (id === "next/server") return { after: (run: () => Promise<void>) => { if (!requestHeaders) throw Error("worker"); scheduled.push(run); } };
   if (id.endsWith("shared/analytics")) return { browserContext };
+  if (id === "./analytics") return { shouldTrackAnalytics: () => trackingEnabled };
   if (id === "./analytics-capture") return { capturePostHogServerEvent: async (...args: any[]) => { outgoing.push(args); } };
   if (id === "./analytics-audience") return { getAnalyticsAudience: async () => ({analytics_audience:"customer",analytics_excluded:false,analytics_audience_version:1}) };
   if (id === "./prisma") return { prisma: { user: { findUnique: async () => ({ clerkUserId: "user_billing" }) }, clerkIdentityDeletion: { findUnique: async () => deletedIdentity ? { clerkUserId: "user_billing" } : null } } };
   throw Error(id);
 } });
+await serverModule.exports.capturePostHogServerEvent("account_created", "test-user");
+await serverModule.exports.scheduleFirstLogin("test-user", true, new Date());
+assert.equal(scheduled.length, 0);
+assert.equal(outgoing.length, 0);
+trackingEnabled = true;
 await serverModule.exports.capturePostHogServerEvent("account_created", "test-user", { account_type: "cash" });
 assert.equal(outgoing.length, 0); assert.equal(scheduled.length, 1);
 await scheduled.pop()!();
