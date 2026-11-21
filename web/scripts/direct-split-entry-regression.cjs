@@ -199,6 +199,7 @@ async function main() {
       "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]}),launchImageLibraryAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {getDocumentAsync:async()=>({canceled:false,assets:[{...captured,name:"receipt.jpg"}]})},
       "./split-people-field": {...load("../mobile/src/split-people-field.tsx", {"react/jsx-runtime":jsx,"react-native":{},"./app-text":{},"./ui":{}}), PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": {suggestBillCategory:()=>null},
       "./add-entry-methods": {AddEntryMethods:"Methods"}, "./upload": loadPhotoUpload(platform),
+      "./ai-consent": {useCloudAiConsent:()=>({ensure:async()=>true,prompt:null})},
       "./upload-selected-file": load("../mobile/src/upload-selected-file.ts", {"expo-crypto":{}, "./offline/file-storage":{}, "../../shared/receipt-upload":{receiptMultipartLimit:1572864}, "react-native":{Platform:{OS:platform}}, "./upload":loadPhotoUpload(platform)}),
       "./session": {useSession:()=>({profileId:"profile",request:async (_path, opts)=>{if (_path.startsWith("split-bill-receipts/preview")) {
           const {body,boundary} = await convertFormDataAsync(opts.body);

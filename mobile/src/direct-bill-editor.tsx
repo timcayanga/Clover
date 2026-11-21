@@ -14,6 +14,7 @@ import type { Transaction } from "./types";
 import type { SplitGroup } from "./split-group-details";
 import type { BillItem } from "./bill-details";
 import { AddEntryMethods } from "./add-entry-methods";
+import { useCloudAiConsent } from "./ai-consent";
 import { removeUploadCopy } from "./upload";
 import { uploadSelectedFile } from "./upload-selected-file";
 import { useSession } from "./session";
@@ -73,6 +74,7 @@ export function BillEditor({
   context?: { circleId?: string; group?: SplitGroup; person?: string; currency?: string };
 }) {
   const session = useSession();
+  const receiptConsent = useCloudAiConsent(session.request, true);
   const circleId = context?.circleId;
   const circleMembers = context?.group?.members ?? [];
   const recorder = context?.group?.recorderName;
@@ -183,6 +185,8 @@ export function BillEditor({
       }
       copiedUri = file.uri;
       setReading(true);
+      await receiptConsent.ensure().catch(() => false);
+      if (!alive.current) return;
       const result = await uploadSelectedFile<{
         receiptStorageKey: string;
         preview: {
@@ -422,7 +426,8 @@ export function BillEditor({
         }}
       />
       {error ? <Notice>{error}</Notice> : null}
-      {reading ? <Notice>Reading your receipt…</Notice> : null}
+      {receiptConsent.prompt}
+      {reading && !receiptConsent.prompt ? <Notice>Reading your receipt…</Notice> : null}
         <AddEntryMethods
           key={reviewVersion}
           initialMethod={entryMode === "manual" ? "manual" : "upload"}

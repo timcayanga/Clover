@@ -337,11 +337,6 @@ export function SessionProvider({
   const request = useCallback(
     async <T,>(path: string, options?: RequestInit, requireNetwork = false) => {
       if (path.startsWith("adviser/chat") && options?.method === "POST" && !demo && !(await cloudAiRef.current.ensure())) throw new Error("AI permission was not granted. You can enable it in Privacy and Data Use.");
-      if (path.startsWith("split-bill-receipts/preview") && !path.includes("action=") && options?.method === "POST" && !demo) {
-        // UIKit may still be dismissing the camera or document picker when its promise resolves.
-        if (Platform.OS === "ios" && !path.includes("uploadId=")) await new Promise(resolve => setTimeout(resolve, 400));
-        await cloudAiRef.current.ensure().catch(() => false);
-      }
       if (path.startsWith("settings/ai-consent")) return transport<T>(path, options);
       const engine = await offlineReady.current;
       const read = () => engine ? engine.request<T>(path, options, requireNetwork) : transport<T>(path, options);
