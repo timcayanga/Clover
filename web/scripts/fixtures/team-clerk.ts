@@ -11,3 +11,7 @@ export const fixture: {
 export async function currentUser() {
   return fixture.user;
 }
+
+export async function clerkClient() {
+  return {users: {getUserList: async () => ({data: fixture.user ? [fixture.user] : []})}};
+}

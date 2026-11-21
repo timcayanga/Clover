@@ -13,6 +13,11 @@ export async function readStudioJson(request: Request, maxBytes = 2_000_000) {
   } catch {
     throw new Error("UNTRUSTED_ORIGIN");
   }
+  return readStudioBody(request, maxBytes);
+}
+
+// Machine ingestion authenticates its scoped bearer before calling this bounded parser.
+export async function readStudioBody(request: Request, maxBytes = 2_000_000) {
   if (!request.headers.get("content-type")?.startsWith("application/json"))
     throw new Error("INVALID_STATE");
   const reader = request.body?.getReader();

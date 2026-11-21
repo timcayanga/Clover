@@ -1,3 +1,4 @@
+import { POST as ingestReport } from "../app/api/team/reports/ingest/route";
 import { POST as importReport } from "../app/api/team/reports/route";
 import { saveTeamReport } from "../lib/team-report-store";
 import { saveGeneratedTeamImage, teamMediaReadUrl } from "../lib/team-media.server";
@@ -559,6 +560,22 @@ async function main() {
     if (outcomes[1].status === "rejected") await saveTeamReport(owner, raceReport);
     assert((await loadTeamStudio(owner)).state.briefs.length >= afterRace.state.briefs.length);
   }
+  process.env.CLOVER_TEAM_REPORT_TOKEN = "a".repeat(64);
+  process.env.VERCEL_ENV = "production";
+  const ingestRequest = (token: string, body: unknown = {...report, reportKey: "machine-v1"}) => new Request("https://team.clover.ph/api/team/reports/ingest", {method: "POST", headers: {authorization: `Bearer ${token}`, "content-type": "application/json"}, body: JSON.stringify(body)});
+  assert.equal((await ingestReport(ingestRequest("wrong"))).status, 401);
+  process.env.VERCEL_ENV = "preview";
+  assert.equal((await ingestReport(ingestRequest("a".repeat(64)))).status, 401);
+  process.env.VERCEL_ENV = "production";
+  fixture.user!.emailAddresses[0].verification.status = "unverified";
+  assert.equal((await ingestReport(ingestRequest("a".repeat(64)))).status, 403);
+  fixture.user!.emailAddresses[0].verification.status = "verified";
+  const machineReport = await ingestReport(ingestRequest("a".repeat(64)));
+  assert.equal(machineReport.status, 200);
+  assert.equal((await machineReport.json()).contentHash.length, 64);
+  const duplicateMachine = await ingestReport(ingestRequest("a".repeat(64)));
+  assert.equal((await duplicateMachine.json()).duplicate, true);
+  assert.equal((await ingestReport(ingestRequest("a".repeat(64), {...report, agent: "creator"}))).status, 400);
   const roles = await prisma.$queryRaw<
     { relname: string; relrowsecurity: boolean }[]
   >`SELECT relname,relrowsecurity FROM pg_class WHERE relname IN ('TeamAgentRun','TeamAgentEvent')`;

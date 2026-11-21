@@ -14,12 +14,14 @@ After producing the real weekly Business analysis and independent measurement-qu
 
 The other agent ID is `analytics-reviewer`; its content must be the actual reviewer assessment, not fabricated completion. Keep each report key stable on retries. Changed content requires an explicitly new revision key; existing reports are immutable. Do not truncate the full report (limit 100,000 characters; split larger reports into explicitly numbered parts).
 
-With securely loaded and environment-verified Clerk/database credentials for the destination, run from `web/`:
+Use the report-only token in the private local file `/Users/TimCayanga1/.codex/automations/clover-daily-quality-report/team-report.env` (mode 0600). The matching production Vercel secret is `CLOVER_TEAM_REPORT_TOKEN`. Never print or commit it. From `web/`, use the supported Node runtime:
 
 ```
-CLOVER_TEAM_REPORT_DESTINATION=production npx tsx scripts/team-report-import.ts /absolute/path/to/report.json
+node --env-file=/Users/TimCayanga1/.codex/automations/clover-daily-quality-report/team-report.env --import tsx scripts/team-report-import.ts /absolute/path/to/report.json
 ```
 
-The CLI requires a matching Clerk key mode and database environment marker before writing. It finds the single verified hello@clover.ph identity in that Clerk instance, saves only Team state/assignment/audit tables and returns `{id,href,duplicate}`. It does not use customer financial tables, model generation or email. Never print credentials or reuse staging identity IDs in production. Verify the saved report through the owner-authenticated Team page and save a destination-specific receipt before marking website delivery complete. When credentials/session are unavailable, report website delivery as blocked and continue the already-authorized Business email/Agents destinations. No duplicate automation is needed.
+The CLI posts only to `https://team.clover.ph/api/team/reports/ingest`, refuses redirects, validates a content-hash receipt and returns the saved report URL. The production-only endpoint verifies its scoped bearer and resolves the single verified hello@clover.ph owner through Clerk. It can only import these two report types; it cannot read customer finances, start model execution or approve reports. No production database credentials or browser cookies are needed locally.
+
+Keep the returned ID/hash/URL as a website-specific receipt. Identical report-key retries return the existing report; changed content with the same key is a conflict. If the endpoint, owner verification or token is unavailable, mark website delivery pending and continue email/Agents delivery. No duplicate automation is needed. Rotate/revoke the production secret and local file together if access changes.
 
 An authenticated same-origin `POST /api/team/reports` accepts the same payload and derives owner from the Clerk session. The role dialog also offers “Save an existing weekly report” for manual pasting. Neither route bypasses approval or starts a paid model run.
