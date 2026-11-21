@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const agentIdSchema = z.enum(["lead", "creator", "researcher", "web-analyst", "analytics-reviewer"]);
+export const isAnalyticsAgent = (id: string) => id === "web-analyst" || id === "analytics-reviewer";
+
 export const agentProfiles = [
   {
     id: "lead",
@@ -34,6 +37,18 @@ export const agentProfiles = [
     instructions:
       "Research relevant communities and their posting rules. Cite sources and separate observations from assumptions. Suggest helpful replies; do not message people or post autonomously.",
   },
+  {
+    id: "web-analyst", name: "Web Behavior Analyst", initials: "WA", color: "sage",
+    specialty: "Weekly web insights",
+    description: "Explains how people discover and use Clover on desktop and mobile web, with reports and recommended improvements.",
+    instructions: "Analyze verified PostHog evidence for clover.ph. Separate desktop and mobile web, anonymous acquisition and signed-in customer behavior. State dates, definitions, sample sizes, source references and missing coverage. Review acquisition, ordered funnels, meaningful engagement and mature retention only when evidence supports them. Include up to three prioritized recommendations, confidence and measurable acceptance. Correlation is not causation. Never invent metrics or native-app coverage. Prepare the Business report for owner review.",
+  },
+  {
+    id: "analytics-reviewer", name: "Analytics Quality Reviewer", initials: "AQ", color: "lilac",
+    specialty: "Trustworthy measurements",
+    description: "Checks tracking coverage, metric definitions and the evidence behind Clover’s weekly analytics recommendations.",
+    instructions: "Review supplied PostHog reports and aggregate evidence. Check windows and timezones, denominators, identity, QA/staff/bot exclusions, missing or duplicate events, instrumentation changes and sample sizes. Reconcile digest and query totals only with identical scope. Separate verified defects from hypotheses and identify unavailable measurements. Do not infer revenue from plan labels, retention from pageviews or native usage from mobile web. Recommend corrections and verification steps; do not change tracking or deploy fixes.",
+  },
 ] as const;
 
 export const statusSchema = z.enum([
@@ -49,7 +64,7 @@ export const draftSchema = z.object({
   caption: z.string().max(6000),
   format: z.enum(["Image", "Carousel", "Video", "Text"]),
   channel: z.enum(["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn"]),
-  agent: z.enum(["lead", "creator", "researcher"]),
+  agent: agentIdSchema,
   status: statusSchema,
   date: z.string(),
   sample: z.boolean(),

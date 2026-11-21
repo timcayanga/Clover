@@ -16,7 +16,7 @@ import {
   type AssignmentSummary,
   type AssignmentView,
 } from "@/lib/team-agent-contract";
-import { agentProfiles, type StudioState } from "@/lib/team-studio";
+import { agentProfiles, isAnalyticsAgent, type StudioState } from "@/lib/team-studio";
 
 const label = (value: string) => value.replaceAll("_", " ");
 
@@ -312,6 +312,10 @@ export function TeamAssignmentWorkspace({
           <summary>Instructions used for this run</summary>
           <p className="assignment-result">{run.instructions}</p>
         </details>
+        {run.analyticsEvidence ? <details className="studio-brief">
+          <summary>Analytics evidence and coverage</summary>
+          <pre style={{whiteSpace: "pre-wrap", overflowWrap: "anywhere"}}>{run.analyticsEvidence}</pre>
+        </details> : null}
         {run.feedback ? (
           <>
             <h3>Requested changes</h3>
@@ -422,13 +426,13 @@ export function TeamAssignmentWorkspace({
           </> : null}
           {run.output === "image" ? <p className="studio-fine">A revision generates a new image from your brief and feedback. It does not edit the previous image’s pixels.</p> : null}
           <label>
-            Changes for the agent
+            {isAnalyticsAgent(run.agent) ? "Question or changes for the agent" : "Changes for the agent"}
             <textarea
               rows={4}
               maxLength={4000}
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
-              placeholder="What should the agent change?"
+              placeholder={isAnalyticsAgent(run.agent) ? "Ask about a finding or explain what should change…" : "What should the agent change?"}
             />
           </label>
           <button
@@ -436,7 +440,7 @@ export function TeamAssignmentWorkspace({
             disabled={busy || !feedback.trim()}
             onClick={() => act("revise")}
           >
-            Request revision
+            {isAnalyticsAgent(run.agent) ? "Send question or request changes" : "Request revision"}
           </button>
         </section>
       ) : null}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentIdSchema } from "./team-studio";
 
 export const activeRunStatuses = ["starting", "queued", "running", "canceling"];
 export const startAssignmentSchema = z.object({
@@ -26,6 +27,7 @@ export const assignmentViewSchema = z.object({
   brief: z.string(),
   sourceAssignmentId: z.string().default(""),
   instructions: z.string(),
+  analyticsEvidence: z.string().default(""),
   feedback: z.string(),
   result: z.string(),
   output: z.enum(["text", "image"]).default("text"),
@@ -77,7 +79,7 @@ export function safeSourceUrl(value: string) {
 export const assignmentTransferSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("brief"),
-    agent: z.enum(["lead", "creator", "researcher"]),
+    agent: agentIdSchema,
     text: z.string().trim().min(1).max(6000),
   }),
   z.object({

@@ -216,7 +216,8 @@
     "qa:measurement-gaps": "NODE_OPTIONS=--conditions=react-server tsx scripts/measurement-gaps-regression.ts",
     "qa:bank-statement-validation": "tsx scripts/bank-statement-validation-regression.ts",
     "validate:bank-statement": "tsx scripts/validate-bank-statement.ts",
-    "export:bank-statement-snapshot": "tsx scripts/export-bank-statement-snapshot.ts"
+    "export:bank-statement-snapshot": "tsx scripts/export-bank-statement-snapshot.ts",
+    "qa:team-analytics": "tsx scripts/team-analytics-regression.ts && tsx scripts/team-studio-regression.ts"
   },
   "dependencies": {
     "@apple/app-store-server-library": "3.1.0",
