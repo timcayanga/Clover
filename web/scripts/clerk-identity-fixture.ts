@@ -77,8 +77,14 @@ async function signed(type: string, data: unknown) {
 const ids = [id, "user_qaIdentityCreated", "user_qaIdentityConflict"];
 async function testSignupDelivery() {
   const previousEnvironment = process.env.VERCEL_ENV;
-  process.env.VERCEL_ENV = "preview";
+  const previousDeployment = process.env.CLOVER_DEPLOYMENT_ENVIRONMENT;
+  const previousSecret = process.env.CLERK_SECRET_KEY;
+  // This suite uses loopback storage and mocked Clerk/PostHog transports.
+  process.env.VERCEL_ENV = "production";
+  process.env.CLOVER_DEPLOYMENT_ENVIRONMENT = "production";
+  process.env.CLERK_SECRET_KEY = "sk_live_disposable_fixture";
   try {
+    await prisma.$executeRaw`UPDATE "CloverDeploymentEnvironment" SET environment='production' WHERE id='primary'`;
     for (const loginFirst of [false, true]) {
       const identity = loginFirst ? "user_qaLoginFirst" : "user_qaWebhookFirst";
       ids.push(identity);
@@ -117,6 +123,11 @@ async function testSignupDelivery() {
       pass(loginFirst ? "Login before webhook" : "Webhook before login with retry");
     }
   } finally {
+    await prisma.$executeRaw`UPDATE "CloverDeploymentEnvironment" SET environment='staging' WHERE id='primary'`;
+    if (previousDeployment === undefined) delete process.env.CLOVER_DEPLOYMENT_ENVIRONMENT;
+    else process.env.CLOVER_DEPLOYMENT_ENVIRONMENT = previousDeployment;
+    if (previousSecret === undefined) delete process.env.CLERK_SECRET_KEY;
+    else process.env.CLERK_SECRET_KEY = previousSecret;
     if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
     else process.env.VERCEL_ENV = previousEnvironment;
     g.__identityAnalyticsUnavailable = false;

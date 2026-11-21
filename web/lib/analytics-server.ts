@@ -2,7 +2,7 @@ import { prisma } from "./prisma";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { browserContext } from "../../shared/analytics";
-import { type AnalyticsEventName, type AnalyticsProperties } from "./analytics";
+import { shouldTrackAnalytics, type AnalyticsEventName, type AnalyticsProperties } from "./analytics";
 import { capturePostHogServerEvent as capture } from "./analytics-capture";
 import { getAnalyticsAudience } from "./analytics-audience";
 async function prepareServerCapture(event: AnalyticsEventName, distinctId: string, properties: AnalyticsProperties = {}, timestamp?: Date) {
@@ -38,6 +38,7 @@ async function prepareServerCapture(event: AnalyticsEventName, distinctId: strin
 }
 
 export async function capturePostHogServerEvent(event: AnalyticsEventName, distinctId: string, properties: AnalyticsProperties = {}, timestamp?: Date) {
+  if (!shouldTrackAnalytics()) return;
   const send = await prepareServerCapture(event, distinctId, properties, timestamp);
   const deliver = async () => { await send(); };
   try { after(deliver); } catch { await deliver(); }
@@ -50,6 +51,7 @@ export async function captureClerkSignup(identity: string, verified: boolean, cr
 }
 
 export async function scheduleFirstLogin(identity: string, verified: boolean, timestamp: Date) {
+  if (!shouldTrackAnalytics()) return;
   const send = await prepareServerCapture("first_login", identity, { email_verified: verified }, timestamp);
   const deliver = async () => {
     if (await send()) {
