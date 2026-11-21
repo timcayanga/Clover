@@ -11,7 +11,7 @@ export function parseAdviserChart(value:unknown): AdviserChart | null {
   if(calendarWindow!==undefined&&(!calendarWindow||!day(calendarWindow.from)||!day(calendarWindow.through)||calendarWindow.from>calendarWindow.through))return null;
   const savingsPlan = parseAdviserSavingsPlan(chart.savingsPlan);
   if (chart.savingsPlan !== undefined && !savingsPlan) return null;
-  if (savingsPlan && savingsPlan.fractionDigits !== new Intl.NumberFormat("en",{style:"currency",currency:chart.currency}).resolvedOptions().maximumFractionDigits) return null;
+  if (savingsPlan && (!/^[A-Z]{3}$/.test(chart.currency) || savingsPlan.fractionDigits !== new Intl.NumberFormat("en",{style:"currency",currency:chart.currency}).resolvedOptions().maximumFractionDigits)) return null;
   if (savingsPlan && (chart.bars.length !== savingsPlan.points.length || chart.bars.some((b,i) => b.amount !== savingsPlan.points[i].amount || b.label !== `Month ${savingsPlan.points[i].month}`))) return null;
   const spendingPlan = parseAdviserSpendingPlan(chart.spendingPlan);
   if (chart.spendingPlan !== undefined && !spendingPlan) return null;

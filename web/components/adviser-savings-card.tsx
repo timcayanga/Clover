@@ -4,7 +4,7 @@ import './adviser-savings-card.css';
 
 export function AdviserSavingsCard({chart}:{chart:AdviserChart}) {
   const plan = chart.savingsPlan!;
-  const money = (n:number) => new Intl.NumberFormat('en-PH',{style:'currency',currency:chart.currency,minimumFractionDigits:0,maximumFractionDigits:2}).format(n);
+  const money = (n:number) => new Intl.NumberFormat('en-PH',{style:'currency',currency:chart.currency,minimumFractionDigits:0,maximumFractionDigits:plan.fractionDigits}).format(n);
   const compact = (n:number) => new Intl.NumberFormat('en', {notation:'compact', maximumFractionDigits:1}).format(n);
   const width = 320 / plan.points.length;
   return <figure className="adviser-savings-card" aria-label={chart.title}>

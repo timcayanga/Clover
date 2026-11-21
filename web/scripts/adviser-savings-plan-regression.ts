@@ -15,3 +15,5 @@ for(const patch of [{monthlyContribution:1},{monthlyBuffer:90000},{points:[{mont
 console.log('Savings projections: target math, budget deficit, partial savings, currencies, checkpoints, validation and saved history passed.');
 
 const yen=answer('Help me save JPY 100000 in 6 months.','JPY')!;assert.equal(yen.visualization.savingsPlan?.monthlyContribution,16667);assert.ok(parseAdviserChart(yen.visualization));
+
+assert.equal(parseAdviserChart({...a.visualization,currency:'123'}),null);
