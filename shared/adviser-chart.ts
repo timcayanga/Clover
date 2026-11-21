@@ -1,5 +1,6 @@
+import { parseAdviserSavingsPlan, type AdviserSavingsPlan } from "./adviser-savings-plan";
 import { parseAdviserSpendingPlan, type AdviserSpendingPlan } from "./adviser-spending-plan";
-export type AdviserChart = {hideReportLink?:true;calendarWindow?:{from:string;through:string};spendingPlan?:AdviserSpendingPlan;title:string;currency:string;from:string;through:string;bars:Array<{label:string;amount:number}>};
+export type AdviserChart = {savingsPlan?:AdviserSavingsPlan;hideReportLink?:true;calendarWindow?:{from:string;through:string};spendingPlan?:AdviserSpendingPlan;title:string;currency:string;from:string;through:string;bars:Array<{label:string;amount:number}>};
 export function parseAdviserChart(value:unknown): AdviserChart | null {
   if(!value||typeof value!=="object")return null;
   const chart=value as AdviserChart;
@@ -8,9 +9,13 @@ export function parseAdviserChart(value:unknown): AdviserChart | null {
   const day=(value:unknown):value is string=>typeof value==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;
   const calendarWindow=chart.calendarWindow;
   if(calendarWindow!==undefined&&(!calendarWindow||!day(calendarWindow.from)||!day(calendarWindow.through)||calendarWindow.from>calendarWindow.through))return null;
+  const savingsPlan = parseAdviserSavingsPlan(chart.savingsPlan);
+  if (chart.savingsPlan !== undefined && !savingsPlan) return null;
+  if (savingsPlan && savingsPlan.fractionDigits !== new Intl.NumberFormat("en",{style:"currency",currency:chart.currency}).resolvedOptions().maximumFractionDigits) return null;
+  if (savingsPlan && (chart.bars.length !== savingsPlan.points.length || chart.bars.some((b,i) => b.amount !== savingsPlan.points[i].amount || b.label !== `Month ${savingsPlan.points[i].month}`))) return null;
   const spendingPlan = parseAdviserSpendingPlan(chart.spendingPlan);
   if (chart.spendingPlan !== undefined && !spendingPlan) return null;
-  return {...(chart.hideReportLink === true ? {hideReportLink:true as const} : {}),...(calendarWindow ? {calendarWindow:{from:calendarWindow.from,through:calendarWindow.through}} : {}),...(spendingPlan ? {spendingPlan} : {}),title:chart.title,currency:chart.currency,from:chart.from,through:chart.through,bars:chart.bars.map(({label,amount})=>({label,amount}))};
+  return {...(savingsPlan ? {savingsPlan} : {}),...(chart.hideReportLink === true ? {hideReportLink:true as const} : {}),...(calendarWindow ? {calendarWindow:{from:calendarWindow.from,through:calendarWindow.through}} : {}),...(spendingPlan ? {spendingPlan} : {}),title:chart.title,currency:chart.currency,from:chart.from,through:chart.through,bars:chart.bars.map(({label,amount})=>({label,amount}))};
 }
 
 /** Calendar windows are dates, not instants. Keep captions stable across device timezones. */

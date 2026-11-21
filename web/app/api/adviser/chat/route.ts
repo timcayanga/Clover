@@ -1,3 +1,4 @@
+import { buildAdviserSavingsAnswer } from "@/lib/adviser-savings-plan";
 import { asksWhereMoneyWent, asksHowMuchIsAvailable, asksWhereSweldoWent, asksForGcashSpending, asksForBillsBeforePayday } from "@/lib/adviser-facts";
 import { adviserCircleCurrencyFollowUp, adviserCircleQuestion, adviserQuickReply, answerAdviserAccount, answerAdviserBudgets, answerAdviserCircle, answerAdviserGoals, answerAdviserPage, asksForChart, isAdviserAccountQuestion, isAdviserBudgetStatusQuestion, isAdviserCircleQuestion, isAdviserGoalStatusQuestion, isAdviserReportQuestion } from "@/lib/adviser-page-answer";
 import { getMonthBounds } from "@/lib/circles";
@@ -945,6 +946,8 @@ export async function POST(request: Request) {
     const priorQuestion = incomingMessages.slice(0, -1).reverse().find(message =>
       message.role === "user" && !isAdviserChartFollowUp(message.content),
     )?.content;
+    const savingsAnswer = !hasAttachments && !entryRequested && !entryDraft && !body?.activeDraft
+      ? buildAdviserSavingsAnswer(chartFollowUp && priorQuestion ? priorQuestion : latestIncomingQuestion, locationCurrency) : null;
     const circleTurns = pageContext.circleId ? incomingMessages.slice(0, -1).reverse().filter(message => message.role === "user") : [];
     const currencyFollowUp = adviserCircleCurrencyFollowUp(localizedQuestion ?? latestIncomingQuestion) ??
       (chartFollowUp && priorQuestion ? adviserCircleCurrencyFollowUp(resolveAdviserLocalCurrency(priorQuestion.trim(), locationCurrency) ?? priorQuestion) : undefined);
@@ -970,7 +973,7 @@ export async function POST(request: Request) {
     const regionalBudgetRequested = Boolean(regionalBudget);
     const currencyExplanationRequested = !hasAttachments && !entryRequested && isAdviserCurrencyExplanation(latestIncomingQuestion);
     const previousRegionalBudget = currencyExplanationRequested ? resolveAdviserRegionalBudget(incomingMessages.slice(0, -1)) : null;
-    if (chartFollowUp && !reportChartFollowUp && !circleAnswerRequested && !budgetAnswerRequested && !goalAnswerRequested && !regionalBudgetRequested && factQuestion === latestIncomingQuestion) {
+    if (chartFollowUp && !savingsAnswer && !reportChartFollowUp && !circleAnswerRequested && !budgetAnswerRequested && !goalAnswerRequested && !regionalBudgetRequested && factQuestion === latestIncomingQuestion) {
       return NextResponse.json({
         reply: "What would you like to see in the chart? Try spending by category, income and spending, or spendable cash by account.",
         actions: [], suggestions: [], answerSource: "local",
@@ -979,7 +982,7 @@ export async function POST(request: Request) {
     const everydayFact = asksWhereMoneyWent(factQuestion) || asksHowMuchIsAvailable(factQuestion) || asksWhereSweldoWent(factQuestion) || asksForGcashSpending(factQuestion) || asksForBillsBeforePayday(factQuestion);
     const isPageSuggestion = askPagePrompts(pageContext).includes(latestIncomingQuestion) ||
       (planningSurface === "reports" && isAdviserReportQuestion(latestIncomingQuestion));
-    const scopeDecision = (entryRequested || hasAttachments || isPageSuggestion || (everydayFact && !!adviserFactIntent(factQuestion)) || reportChartFollowUp || circleAnswerRequested || accountAnswerRequested || budgetAnswerRequested || goalAnswerRequested || regionalBudgetRequested || currencyExplanationRequested || (!hasAttachments && !entryRequested && localizedQuestion === null)) ? {allowed:true,reason:"clover" as const} : classifyAdviserScope(factQuestion, incomingMessages);
+    const scopeDecision = (entryRequested || hasAttachments || !!savingsAnswer || isPageSuggestion || (everydayFact && !!adviserFactIntent(factQuestion)) || reportChartFollowUp || circleAnswerRequested || accountAnswerRequested || budgetAnswerRequested || goalAnswerRequested || regionalBudgetRequested || currencyExplanationRequested || (!hasAttachments && !entryRequested && localizedQuestion === null)) ? {allowed:true,reason:"clover" as const} : classifyAdviserScope(factQuestion, incomingMessages);
     if (!scopeDecision.allowed) {
       console.info("[adviser-scope] rejected out-of-scope question before usage, workspace, or model work", {
         actorUserId: user.id,
@@ -1518,7 +1521,7 @@ export async function POST(request: Request) {
         ? previousWindowTransactions
         : normalizedAllTransactions.filter((transaction) => transaction.date <= currentWindowStart);
 
-    const visualization = hasScopedPage ? undefined : buildAdviserChart(latestIncomingQuestion, activeTransactions, requestedMonth ? {from:requestedMonth.start.toISOString(),through:new Date(requestedMonth.end.getTime()-1).toISOString()} : undefined);
+    const visualization = savingsAnswer?.visualization ?? (hasScopedPage ? undefined : buildAdviserChart(latestIncomingQuestion, activeTransactions, requestedMonth ? {from:requestedMonth.start.toISOString(),through:new Date(requestedMonth.end.getTime()-1).toISOString()} : undefined));
     const currentSummary = buildTransactionSummary(activeTransactions);
     const previousSummary = buildTransactionSummary(comparisonWindowTransactions);
     const allSummary = buildTransactionSummary(normalizedAllTransactions);
@@ -3126,6 +3129,10 @@ export async function POST(request: Request) {
     }
     if (entryDraft || entryRequested) selectedAdviserToolNames = ["prepare_write_action"];
     if (hasAttachments && !entryRequested) selectedAdviserToolNames = [];
+    if (savingsAnswer) {
+      await recordLocalResponse("calculated_savings_projection", {intent:"savings_projection",confidence:100});
+      return NextResponse.json({...savingsAnswer,actions:[],suggestions:[],usage:usageForResponse(),grounding,answerSource:"local"}, {headers:{"Cache-Control":"private, no-store"}});
+    }
     const planningTurn = !hasAttachments && !entryDraft && !entryRequested ? buildAdviserPlanningTurn({
       question: latestQuestion,
       surface: planningSurface,
