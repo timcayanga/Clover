@@ -216,6 +216,7 @@ async function main() {
     const saved = [];
     const captured = {uri:"file:///cache/123.jpg",fileName:"receipt.jpg",mimeType:"image/jpeg"};
     let receiptPreviewed = false;
+    let reliableForScopedSplit = false;
     let visible = true;
     const {HostedBillEditor} = load("../mobile/src/direct-bill-editor.tsx", {
       "../../shared/currency-mark": load("../shared/currency-mark.ts"),
@@ -233,7 +234,7 @@ async function main() {
           assert.equal(file.name,"receipt.jpg");
           assert.deepEqual(new Uint8Array(await file.arrayBuffer()), photoBytes);
           receiptPreviewed=true;
-          return {receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:"2026-11-20",currency:"PHP",items:[{description:"Bread",amount:"12.00"}]}};
+          return {reliableForScopedSplit,receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:"2026-11-20",currency:"PHP",items:[{description:"Bread",amount:"12.00"}]}};
         }
         saved.push(JSON.parse(opts.body)); return {bill:{id:"saved"}};}})},
       "./ui": {useTheme:()=>({colors:{}}),Field:"Field",Screen:"Screen",Body:"Body",CategoryMark:"CategoryMark"},
@@ -285,6 +286,13 @@ async function main() {
     assert.deepEqual(saved[1].participants,saved[0].participants);
     assert.equal(saved[1].receipt.storageKey,"receipt");
     assert.equal(saved[1].paidByIndex,0);
+    reliableForScopedSplit = true;
+    render().find(n=>n.type==="Methods").props.onUploadSource("file");
+    await flush(); render(); await flush(); render();
+    assert.equal(saved.length,3,"A reliable scoped receipt creates exactly one bill in the background");
+    assert.equal(saved[2].circleId,"trip");
+    assert.equal(saved[2].reviewedItems[0].splitMethod,"equal");
+    assert.deepEqual(Array.from(saved[2].reviewedItems[0].participantIndexes),[0,1]);
     ui.stop();
   }
   for (const capture of [false, true]) {
