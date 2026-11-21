@@ -21,6 +21,7 @@ import { AnimatedTabs } from "@/components/animated-tabs";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { SplitBillHome } from "@/components/split-bill-home";
+import { PersonContactDetails } from "./split-person-search";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
 import { SplitBillPaymentTools } from "@/components/split-bill-payment-tools";
 import { SplitBillDetailTools } from "@/components/split-bill-detail-tools";
@@ -353,7 +354,7 @@ export function SplitBillWorkspace({
     setPeople((current) => {
       const map = new Map(current.map((person) => [person.id, person] as const));
       nextPeople.forEach((person) => {
-        map.set(person.id, person);
+        map.set(person.id, { ...map.get(person.id), ...person });
       });
       return Array.from(map.values()).sort((left, right) => right.name.localeCompare(left.name));
     });
@@ -387,11 +388,6 @@ export function SplitBillWorkspace({
     });
     upsertPeople(people);
     setSelected({ kind: "group", id: group.id });
-  };
-
-  const handlePersonSaved = (person: SplitBillPersonSummary) => {
-    upsertPeople([person]);
-    setSelected({ kind: "person", id: person.id });
   };
 
   const removeGroup = async (groupId: string) => {
@@ -1218,7 +1214,6 @@ export function SplitBillWorkspace({
           groups={groups}
           onBillSaved={handleBillSaved}
           onGroupSaved={handleGroupSaved}
-          onPersonSaved={handlePersonSaved}
         />
       }
     >
@@ -1229,6 +1224,7 @@ export function SplitBillWorkspace({
         currentUserName={currentUserName}
         onOpenBill={openBill}
         onOpenGroup={openGroup}
+        onPersonSaved={person => upsertPeople([person])}
         onOpenPerson={openPerson}
         onDeleteBill={(id) => removeBill(id, true)}
         onDeleteGroup={removeGroup}
@@ -1598,6 +1594,7 @@ export function SplitBillWorkspace({
                   <SplitBillEntityAvatar name={selectedPerson.name} avatarUrl={selectedPerson.avatarUrl} sizeClass="split-bill-person-avatar--medium" />
                   <div>
                     <strong>{selectedPerson.name}</strong>
+                    <PersonContactDetails key={selectedPerson.id} person={selectedPerson} onSaved={person=>upsertPeople([person])} />
                   </div>
                 </div>
                 {renderDetailTabs()}{renderDetailToolbar()}

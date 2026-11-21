@@ -4,6 +4,8 @@ export type SplitBillEntityAvatar = {
 };
 
 export type SplitBillPersonSummary = SplitBillEntityAvatar & {
+  email?: string | null;
+  phone?: string | null;
   id: string;
 };
 

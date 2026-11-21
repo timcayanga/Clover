@@ -132,7 +132,7 @@ const workspaceBillSelect = {
   },
 };
 
-export const loadSplitBillWorkspaceData = async (userId: string) => {
+export const loadSplitBillWorkspaceData = async (userId: string, includeContactDetails = false) => {
   const [groups, people] = await Promise.all([
     prisma.splitBillGroup.findMany({
       where: { OR: [{ userId }, { collaborators: { some: { userId } } }], archivedAt: null },
@@ -150,7 +150,7 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
         _count: { select: { bills: true } },
       },
     }),
-    loadSplitBillPeople(userId),
+    loadSplitBillPeople(userId, includeContactDetails),
   ]);
   const accessibleGroupIds = groups.map((group) => group.id);
   const bills = await prisma.splitBill.findMany({

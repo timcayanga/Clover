@@ -67567,6 +67567,9 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 /* Stable product chrome in loading states, pages and body portals. */
 .clover-tabs.clover-tabs,.split-bill-detail-tabs.clover-tabs,.circle-detail .circle-product-tabs.clover-tabs{height:44px!important;min-height:44px!important;max-height:44px!important;flex:0 0 auto!important;align-self:start!important;align-items:center!important;overflow-y:hidden!important}
 .clover-tabs.clover-tabs>button,.split-bill-detail-tabs.clover-tabs>button,.circle-detail .circle-product-tabs.clover-tabs>button{box-sizing:border-box!important;height:44px!important;min-height:44px!important;max-height:44px!important;align-self:center!important;flex-grow:0!important;white-space:nowrap!important;line-height:20px!important}
+.split-person-matches { display: grid; background: var(--surface); border: 1px solid var(--stroke); border-radius: 12px; overflow: hidden; }
+.split-person-matches button { padding: 10px 14px; text-align: left; background: transparent; color: var(--text); font: inherit; border: 0; }
+.split-person-matches button + button { border-top: 1px solid var(--stroke); }
 .split-entry-toolbar{display:flex;align-items:center;gap:12px;width:100%;min-width:0;margin:12px 0}
 .split-entry-toolbar>input{flex:1;min-width:0;height:44px;border:1px solid var(--stroke);border-radius:999px;padding:0 16px;background:var(--surface);color:var(--text);font:inherit}
 .split-entry-toolbar>.button{flex:0 0 auto;height:44px;white-space:nowrap;background:linear-gradient(110deg,#00a9bd,#54d1cc);color:#fff;border:0}

@@ -461,7 +461,7 @@ async function handle(
     if (operation === "together-options") {
       const [groups, people, profiles, circleMembers] = await Promise.all([
         prisma.splitBillGroup.findMany({ where:{ OR:[{userId:user.id},{collaborators:{some:{userId:user.id}}}], archivedAt:null }, select:{id:true,userId:true,name:true,avatarUrl:true,members:{select:{id:true,name:true,previousNames:true}},_count:{select:{bills:true}}} }),
-        loadSplitBillPeople(user.id),
+        loadSplitBillPeople(user.id, true),
         prisma.splitBillPaymentProfile.findMany({where:{userId:user.id},select:{id:true,label:true,provider:true,currency:true,accountName:true,accountNumber:true,qrImageData:true,isDefault:true}}),
         prisma.circleMembership.findMany({where:{status:"active",circle:{archivedAt:null,memberships:{some:{userId:user.id,status:"active"}}},OR:[{userId:null},{userId:{not:user.id}}]},select:{displayName:true}}),
       ]);
@@ -827,10 +827,16 @@ async function handle(
     if(operation==="split-person-create"||operation==="split-payment-create"){
       const text=await request.text();if(new TextEncoder().encode(text).length>(operation==="split-payment-create"?1_510_000:10_000))return reply({error:"Details are too large."},413);
       const raw=JSON.parse(text);
-      const body=operation==="split-person-create"?z.object({name:z.string().trim().min(1).max(100)}).strict().parse(raw):(await import("@/lib/split-bill-payment-profile-schema")).splitBillPaymentProfileSchema.parse(raw);
+      const body=operation==="split-person-create"?z.object({name:z.string().trim().min(1).max(100),email:z.string().trim().email().max(254).optional(),phone:z.string().trim().min(1).max(80).optional()}).strict().parse(raw):(await import("@/lib/split-bill-payment-profile-schema")).splitBillPaymentProfileSchema.parse(raw);
       const safe=new Request(request.url,{method:"POST",headers:request.headers,body:JSON.stringify(body)});
       const response=await withMobileRequestContext(userId,safe,async()=>operation==="split-person-create"?(await import("@/app/api/split-bill-people/route")).POST(safe):(await import("@/app/api/split-bill-payment-profiles/route")).POST(safe));
-      const data=await response.json();return reply(response.ok?{ok:true}:{error:data.error??"Unable to save."},response.status);
+      const data=await response.json();
+      if (!response.ok) return reply({error:data.error??"Unable to save."},response.status);
+      if (operation === "split-person-create") {
+        const {id,name,email,phone,avatarUrl} = data.person;
+        return reply({ok:true,person:{id,name,email,phone,avatarUrl}},response.status);
+      }
+      return reply({ok:true},response.status);
     }
     if (operation === "split-group-create" || (operation === "split-group-edit" && request.method === "PATCH")) {
       const text = await request.text();

@@ -211,6 +211,82 @@ async function main() {
     if(kind==="Payment")assert.equal(requests[0].data.label,"QA Payment");
     ui.stop();
   }
+  {
+    const contacts = [{id:"naomi",userId:"owner",name:"Naomi",email:"confirmed@example.test"}];
+    let owner = "owner";
+    const tx = {
+      $executeRaw: async () => {},
+      splitBillPerson: {
+        findFirst: async ({where}) => contacts.find(p=>p.userId===where.userId && p.name.toLowerCase()===where.name.equals.toLowerCase()),
+        create: async ({data}) => {const p={id:"new",...data};contacts.push(p);return p;},
+        update: async ({where,data}) => Object.assign(contacts.find(p=>p.id===where.id),data),
+      },
+    };
+    const {POST} = load("app/api/split-bill-people/route.ts",{
+      "@/lib/split-bill-people":{}, "next/server":{NextResponse:{json:(body,opts)=>({...body,status:opts.status})}},
+      zod:require("zod"), "@/lib/prisma":{prisma:{$transaction:async fn=>fn(tx)}},
+      "@/lib/split-bill-access":{getSplitBillCurrentUser:async()=>({id:owner})},
+    });
+    const save=body=>POST({json:async()=>body});
+    const existing=await save({name:" naomi ",phone:"+63912345",email:"different@example.test"});
+    assert.equal(existing.status,200);
+    assert.equal(existing.person.email,"confirmed@example.test");
+    assert.equal(existing.person.phone,"+63912345");
+    owner="another-owner";
+    assert.equal((await save({name:"Naomi"})).status,201);
+    assert.equal(contacts.length,2);
+    assert.equal(contacts[1].email,undefined);
+    assert.equal((await save({name:"Bad",email:"invalid"})).status,400);
+  }
+  for (const name of ["Naomi", "Ari"]) {
+    const ui = hooks(), writes = [], saved = [];
+    const {SplitPersonSearch} = load("components/split-person-search.tsx", {react:ui.h,"react/jsx-runtime":jsx},{
+      fetch:async (url,opts)=>{
+        writes.push(JSON.parse(opts.body));
+        return {ok:true,json:async()=>({person:{name,id:"new"}})};
+      },
+    });
+    const render=()=>nodes(ui.render(()=>SplitPersonSearch({search:"",onSearch:()=>{},people:[{id:"existing",name:"Naomi"}],onSaved:p=>saved.push(p)})));
+    render().find(n=>n.type==="input").props.ref.current.focus=()=>{};
+    const submit=()=>render().find(n=>n.type==="form").props.onSubmit({preventDefault(){}});
+    submit();
+    render().find(n=>n.type==="input").props.onChange({target:{value:name==="Naomi"?"na":name}});
+    if(name==="Naomi") render().find(n=>n.type==="button" && text(n)==="Naomi").props.onClick();
+    submit(); await flush();
+    assert.equal(saved[0].name,name);
+    assert.equal(writes.length,name==="Naomi"?0:1);
+    ui.stop();
+  }
+  for (const scenario of ["existing", "manual", "contact", "cancel"]) {
+    const ui = hooks(), writes = [], saved = [];
+    const existing = {id:"known",name:"Naomi"};
+    const picked = {name:"Ari",phone:"+639000000000",email:"ari@example.test"};
+    const {AddSplitPerson} = load("../mobile/src/add-split-person.tsx", {
+      react:ui.h, "react/jsx-runtime":jsx, "react-native":{View:"View"},
+      "expo-modules-core":{requireOptionalNativeModule:()=>({pick:async()=>scenario==="cancel"?null:picked})},
+      "./plan-ui":{PlanAction:"Action"}, "./ui":{Field:"Field",Notice:"Notice"},
+      "./session":{useSession:()=>({profileId:"qa",request:async(url,opts)=>{
+        const body=JSON.parse(opts.body); writes.push(body);
+        return {person:{id:"new",...body}};
+      }})},
+    });
+    const render=()=>nodes(ui.render(()=>AddSplitPerson({initial:"",people:[existing],onSaved:p=>saved.push(p),onCancel:()=>{}})));
+    const action=title=>render().find(n=>n.props.title===title).props.onPress();
+    if (scenario==="contact" || scenario==="cancel") await action("From Contacts");
+    else render().find(n=>n.type==="Field").props.onChangeText(scenario==="existing"?"na":"Ari");
+    if (scenario==="existing") await action("Naomi");
+    if (scenario==="cancel") {
+      assert.equal(render().find(n=>n.type==="Field").props.value,"");
+      assert.equal(saved.length,0);
+    } else {
+      await action("+ Add Person");
+      assert.equal(saved.length,1);
+      assert.equal(writes.length,scenario==="existing"?0:1);
+      if (scenario==="existing") assert.equal(saved[0].id,"known");
+      if (scenario==="contact") assert.deepEqual(writes[0],picked);
+    }
+    ui.stop();
+  }
   for (const platform of ["ios","android"]) {
     const ui = hooks();
     const saved = [];

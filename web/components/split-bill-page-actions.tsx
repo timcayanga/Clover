@@ -9,7 +9,6 @@ import { useCloverChrome } from "@/components/clover-shell";
 import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillEntry, type BillEntryContext } from "@/components/split-bill-entry";
-import { SplitBillPersonModal } from "@/components/split-bill-person-modal";
 import type { SplitBillSerializedBill } from "@/lib/split-bill";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
@@ -19,7 +18,6 @@ type SplitBillPageActionsProps = {
   groups: SplitBillGroupSummary[];
   onBillSaved?: (bill: SplitBillSerializedBill) => void;
   onGroupSaved?: (group: SplitBillGroupSummary, people?: SplitBillPersonSummary[]) => void;
-  onPersonSaved?: (person: SplitBillPersonSummary) => void;
 };
 
 function SplitBillPeoplePicker({
@@ -91,18 +89,17 @@ function SplitBillPeoplePicker({
   );
 }
 
-export function SplitBillPageActions({ currentUserName, people, groups, onBillSaved, onGroupSaved, onPersonSaved }: SplitBillPageActionsProps) {
+export function SplitBillPageActions({ currentUserName, people, groups, onBillSaved, onGroupSaved }: SplitBillPageActionsProps) {
   const { setMobileOverlayChrome } = useCloverChrome();
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
   const [entryContext,setEntryContext]=useState<BillEntryContext>({});
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const [isPersonModalOpen, setIsPersonModalOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupPeople, setGroupPeople] = useState<string[]>([]);
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
-  const isModalOpen = Boolean(openAddMode || isGroupModalOpen || isPersonModalOpen);
+  const isModalOpen = Boolean(openAddMode || isGroupModalOpen);
 
   const closeAddModal = () => {
     setOpenAddMode(null);
@@ -116,9 +113,6 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
     setGroupError(null);
   };
 
-  const closePersonModal = () => {
-    setIsPersonModalOpen(false);
-  };
 
   useLayoutEffect(() => {
     document.body.dataset.splitBillModalOpen = isModalOpen ? "true" : "false";
@@ -127,7 +121,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
         document.body.dataset.splitBillModalOpen = "false";
       }
     };
-  }, [isGroupModalOpen, isModalOpen, openAddMode, isPersonModalOpen]);
+  }, [isGroupModalOpen, isModalOpen, openAddMode]);
 
   useEffect(() => {
     const handleOpenAdd = (event: Event) => {
@@ -145,39 +139,30 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       setIsGroupModalOpen(true);
     };
 
-    const handleOpenPeople = () => {
-      setIsPersonModalOpen(true);
-    };
 
     window.addEventListener("clover:open-split-bill-add", handleOpenAdd);
     window.addEventListener("clover:open-split-bill-group", handleOpenGroup);
-    window.addEventListener("clover:open-split-bill-people", handleOpenPeople);
     return () => {
       window.removeEventListener("clover:open-split-bill-add", handleOpenAdd);
       window.removeEventListener("clover:open-split-bill-group", handleOpenGroup);
-      window.removeEventListener("clover:open-split-bill-people", handleOpenPeople);
     };
   }, [groups]);
 
   useEffect(() => {
-    if (!isGroupModalOpen && !isPersonModalOpen) {
+    if (!isGroupModalOpen) {
       setMobileOverlayChrome(null);
       return;
     }
 
     const mobileQuery = window.matchMedia("(max-width: 1100px)");
     const closeMobilePage = () => {
-      if (isPersonModalOpen) {
-        closePersonModal();
-        return;
-      }
       closeGroupModal();
     };
     const syncMobileChrome = () => {
       setMobileOverlayChrome(
         mobileQuery.matches
           ? {
-              title: isPersonModalOpen ? "Add Person" : editingGroupId ? "Edit Group" : "Add Group",
+              title: editingGroupId ? "Edit Group" : "Add Group",
               onBack: closeMobilePage,
             }
           : null,
@@ -190,7 +175,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       mobileQuery.removeEventListener("change", syncMobileChrome);
       setMobileOverlayChrome(null);
     };
-  }, [editingGroupId, isGroupModalOpen, isPersonModalOpen, setMobileOverlayChrome]);
+  }, [editingGroupId, isGroupModalOpen, setMobileOverlayChrome]);
 
   const saveGroup = async () => {
     setIsSavingGroup(true);
@@ -228,7 +213,6 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       ) : null}
 
       {openAddMode ? <SplitBillEntry currentUserName={currentUserName} people={people} groups={groups} context={entryContext} onClose={closeAddModal} onSaved={bill=>onBillSaved?.(bill)} /> : null}
-      <SplitBillPersonModal open={isPersonModalOpen} onClose={closePersonModal} onSaved={onPersonSaved} />
 
       {isGroupModalOpen ? createPortal(
         <div className="split-bill-modal split-bill-simple-entry-modal" role="presentation" onClick={closeGroupModal}>

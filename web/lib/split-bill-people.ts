@@ -73,9 +73,9 @@ export const upsertSplitBillPeopleFromNames = async (
 
 // Older Circles can predate the personal contact directory. Reconcile only
 // active members visible to this user and preserve their existing contact edits.
-export async function loadSplitBillPeople(userId: string) {
+export async function loadSplitBillPeople(userId: string, includeContactDetails = false) {
   const { prisma } = await import("./prisma");
-  const select = { id: true, name: true, avatarUrl: true } as const;
+  const select = { id: true, name: true, avatarUrl: true, email: includeContactDetails, phone: includeContactDetails } as const;
   const [contacts, members] = await Promise.all([
     prisma.splitBillPerson.findMany({ where: { userId }, select, orderBy: { name: "asc" } }),
     prisma.circleMembership.findMany({

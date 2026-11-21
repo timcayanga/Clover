@@ -1,4 +1,5 @@
 "use client";
+import { SplitPersonSearch } from "./split-person-search";
 import {remainingDebts,simplifyDebts} from "../../shared/split-debts";
 import { resolvedGroupCover, groupCoverUrl } from "../../shared/split-group-cover";
 import { suggestBillCategory } from "../../shared/split-bill-experience";
@@ -35,6 +36,7 @@ type SplitBillHomeProps = {
   currentUserName: string;
   onOpenBill: (billId: string) => void;
   onOpenGroup: (groupId: string) => void;
+  onPersonSaved: (person: SplitBillPersonSummary) => void;
   onOpenPerson: (personId: string) => void;
   onDeleteBill: (billId: string) => void | Promise<void>;
   onDeleteGroup: (groupId: string) => void | Promise<void>;
@@ -101,6 +103,7 @@ export function SplitBillHome({
   onOpenBill,
   onOpenGroup,
   onOpenPerson,
+  onPersonSaved,
   onDeleteBill,
   onDeleteGroup,
   onDeletePerson,
@@ -528,7 +531,7 @@ export function SplitBillHome({
         </>
       ) : tab === "People" ? (
         <>
-          <div className="split-entry-toolbar"><input type="search" aria-label="Search people" placeholder="Search people" value={search} onChange={e=>setSearch(e.target.value)}/><button className="button button-primary" onClick={()=>window.dispatchEvent(new Event("clover:open-split-bill-people"))}>Add Person</button></div>
+          <SplitPersonSearch search={search} onSearch={setSearch} people={people} onSaved={onPersonSaved} />
           <div className="split-bill-table-scroll">
             <table aria-label="People">
               <thead>

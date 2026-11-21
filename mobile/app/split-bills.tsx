@@ -1,3 +1,4 @@
+import { AddSplitPerson, type DirectoryPerson } from "../src/add-split-person";
 import {PaymentDetailsEditor} from "../src/payment-details-editor";
 import {SimplifyAction} from "../src/simplified-debts";
 import { TogetherToolbar } from "../src/together-toolbar";
@@ -89,7 +90,7 @@ const optionsSample = {
     avatarUrl?: string | null;
     _count: { bills: number };
   }[],
-  people: [] as { id: string; name: string; avatarUrl?: string | null }[],
+  people: [] as DirectoryPerson[],
   profiles: [] as {
     id: string;
     label: string;
@@ -148,14 +149,16 @@ export default function SplitBills() {
   const [deletePayment, setDeletePayment] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState("");
-  const [creating,setCreating]=useState<"Group"|"Person"|"Payment"|null>(null);
+  const [creating,setCreating]=useState<"Group"|"Payment"|null>(null);
+  const [addingPerson,setAddingPerson] = useState(false);
   const [tab, setTab] = useState("Bills");
   const [selected, setSelected] = useState<Bill | null>(null);
   const [adding, setAdding] = useState(false);
   const [initialMethod,setInitialMethod] = useState<"manual"|"upload">("manual");
   function openTabAdd() {
     if (tab === "Bills") { setInitialMethod("manual"); setAdding(true); }
-    else setCreating(tab === "Groups" ? "Group" : tab === "People" ? "Person" : "Payment");
+    else if (tab === "People") setAddingPerson(true);
+    else setCreating(tab === "Groups" ? "Group" : "Payment");
   }
   useEffect(()=>onContextBillEntry(()=>{if(!entity)openTabAdd();}),[entity,tab]);
   const [sourceTransaction, setSourceTransaction] = useState<Transaction | null>(null);
@@ -177,6 +180,7 @@ export default function SplitBills() {
     setSelected(null);
     setAdding(false);
     setSearch("");
+    setAddingPerson(false);
     setEntity(null);
     setPaymentDetail(null);
     setDeletePayment(false);
@@ -351,9 +355,16 @@ export default function SplitBills() {
           <PlanTabs
             items={["Bills", "Groups", "People", "Payments"]}
             value={tab}
-            onChange={setTab}
+            onChange={value => {setTab(value);setAddingPerson(false);setSearch("");}}
           />
-          {tab!=="Bills"?<TogetherToolbar search={search} onSearch={setSearch} placeholder={`Search ${tab.toLowerCase()}`} action={`Add ${tab==="Groups"?"Group":tab==="People"?"Person":"Payment"}`} onAdd={()=>setCreating(tab==="Groups"?"Group":tab==="People"?"Person":"Payment")}/>:null}
+          {tab === "People" && addingPerson ? <AddSplitPerson initial={search} people={options.data?.people ?? []}
+            onCancel={()=>setAddingPerson(false)} onSaved={person=>{
+              options.setData(current => current && ({...current,people:[...current.people.filter(p=>p.id!==person.id),person]}));
+              setSearch(person.name);
+              setAddingPerson(false);
+              if (!session.demo) options.reload();
+            }}/> : tab !== "Bills" ? <TogetherToolbar search={search} onSearch={setSearch}
+            placeholder={`Search ${tab.toLowerCase()}`} action={`Add ${tab==="Groups"?"Group":tab==="People"?"Person":"Payment"}`} onAdd={openTabAdd}/> : null}
           {tab === "Bills" ? (
             <>
               <AccountSummaryGrid metrics={[

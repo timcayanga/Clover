@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function SplitBillPage() {
   const user = await getSplitBillCurrentUser(await getPageSessionContext());
   const currentUserName = getUserDisplayName(user);
-  const { bills, groups, people } = await loadSplitBillWorkspaceData(user.id);
+  const { bills, groups, people } = await loadSplitBillWorkspaceData(user.id, true);
 
   return (
     <SplitBillWorkspace bills={bills} groups={groups} people={people} currentUserId={user.id} currentUserName={currentUserName} />

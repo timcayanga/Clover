@@ -1,3 +1,5 @@
+import { MissingContactDetails } from "./add-split-person";
+import { Linking } from "react-native";
 import { type SavedPerson } from "./split-people-field";
 import { GroupCover } from "./group-cover";
 import { coverNames, geometricCover, resolvedGroupCover } from "../../shared/split-group-cover";
@@ -180,6 +182,7 @@ export function SplitGroupDetails({
   const detail = selectedPerson ?? person;
   if (detail) {
     const key = personKey(detail);
+    const contact = savedPeople.find(p => personKey(p.name) === key);
     const related = bills.filter((b) =>
       b.participants?.some(
         (p) => personKey(participantName(b, p.name)) === key,
@@ -192,6 +195,9 @@ export function SplitGroupDetails({
           back={selectedPerson ? () => setSelectedPerson(null) : onClose}
           add={() => setAdding(true)}
         />
+        {contact?.email && <PlanAction title={contact.email} onPress={()=>{void Linking.openURL(`mailto:${contact.email}`).catch(()=>setError("Unable to open email."));}}/>}
+        {contact?.phone && <PlanAction title={contact.phone} onPress={()=>{void Linking.openURL(`sms:${contact.phone}`).catch(()=>setError("Unable to open messages."));}}/>}
+        {contact && <MissingContactDetails key={key} person={{name:contact.name,email:contact.email ?? undefined,phone:contact.phone ?? undefined}} onSaved={onChanged}/> }
         {adding ? (
           <BillEditor
               context={{
