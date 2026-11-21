@@ -137,13 +137,17 @@ async function main() {
   const article=new ElementDouble({"data-analytics-resource":"/help/imports/receipts"});
   const doc={body:{dataset:{environment:"production"}},referrer:"",visibilityState:"visible",scrollingElement:{scrollHeight:1000,clientHeight:600,scrollTop:0},querySelector:()=>article,addEventListener:(key:string,fn:Function)=>listeners.set(key,fn),removeEventListener:(key:string)=>listeners.delete(key)};
   const location={origin:"https://clover.ph",pathname,hostname:"clover.ph",search:"?private=PRIVATE"};
+  let sdkDistinctId = "anonymous-device-id";
+  let resets = 0;
+  const tabStorage = new Map<string, string>();
   const browserModule={exports:{} as any};
   const browserSource=ts.transpileModule(readFileSync("components/posthog-analytics.tsx","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   const sharedAnalytics=await import("../../shared/analytics");
   const measurement=await import("../../shared/analytics-measurement");
   const signup=await import("../../shared/web-signup-attribution");
-  vm.runInNewContext(browserSource+"\nexports.runViews=PostHogPageViews;exports.runBehavior=PostHogBehaviorSignals;",{exports:browserModule.exports,Element:ElementDouble,URL,URLSearchParams,document:doc,navigator:{userAgent:"iPhone Safari",maxTouchPoints:1},performance:{now:()=>now},window:{location,innerWidth:390,innerHeight:844,localStorage:{getItem:()=>null,setItem:()=>{}},posthog:{capture:(event:string,properties:any,options:any)=>browserEvents.push({event,properties,options})},addEventListener:(key:string,fn:Function)=>windowListeners.set(key,fn),removeEventListener:(key:string)=>windowListeners.delete(key)},require:(id:string)=>{
+  vm.runInNewContext(browserSource+"\nexports.runIdentity=PostHogIdentity;exports.authenticated=trackAuthenticatedSignIn;exports.runViews=PostHogPageViews;exports.runBehavior=PostHogBehaviorSignals;",{exports:browserModule.exports,Element:ElementDouble,URL,URLSearchParams,document:doc,navigator:{userAgent:"iPhone Safari",maxTouchPoints:1},performance:{now:()=>now},window:{__posthogReady:true,sessionStorage:{getItem:(k:string)=>tabStorage.get(k),setItem:(k:string,v:string)=>tabStorage.set(k,v),removeItem:(k:string)=>tabStorage.delete(k)},location,innerWidth:390,innerHeight:844,localStorage:{getItem:()=>null,setItem:()=>{}},posthog:{get_distinct_id:()=>sdkDistinctId,reset:()=>{resets++;sdkDistinctId="new-anonymous";},capture:(event:string,properties:any,options:any)=>browserEvents.push({event,properties,options})},addEventListener:(key:string,fn:Function)=>windowListeners.set(key,fn),removeEventListener:(key:string)=>windowListeners.delete(key)},require:(id:string)=>{
     if(id==="react")return {useRef:(current:any)=>({current}),useEffect:(fn:()=>any)=>{const cleanup=fn();if(cleanup)effects.push(cleanup);}};
+    if(id==="@clerk/nextjs")return {useUser:()=>({isLoaded:true,user:null})};
     if(id==="next/navigation")return {usePathname:()=>pathname};
     if(id.includes("shared/web-signup-attribution"))return signup;
     if(id==="@/lib/web-signup-attribution-client")return {
@@ -157,6 +161,16 @@ async function main() {
     if(id==="@/lib/responsive-layout")return {getCloverViewportLayout:()=>"mobile"};
     return {};
   }});
+  browserModule.exports.runIdentity();
+  assert.equal(resets, 0, "anonymous sign-in entries retain their analytics session");
+  sdkDistinctId = "production:user_fixture";
+  browserModule.exports.runIdentity();
+  browserModule.exports.runIdentity();
+  assert.equal(resets, 1, "logout clears a previous identity exactly once");
+  browserModule.exports.trackSignInSubmission("password", "form");
+  browserModule.exports.authenticated();
+  browserModule.exports.authenticated();
+  assert.deepEqual(browserEvents.splice(0).map(e => e.properties.stage), ["submitted", "authenticated"]);
   browserModule.exports.runViews();browserModule.exports.runBehavior();
   assert.equal(browserEvents[0].properties.is_public_website,true);
   assert.equal(browserEvents[0].properties.public_resource_path,"/help/imports/receipts");

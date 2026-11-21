@@ -29,6 +29,7 @@ declare global {
       init: (key: string, config: { api_host: string; capture_pageview?: boolean; capture_pageleave?: boolean }) => void;
       capture: (event: string, properties?: Record<string, unknown>, options?: CaptureOptions) => void;
       identify: (distinctId: string, properties?: Record<string, unknown>) => void;
+      get_distinct_id: () => string;
       reset: () => void;
     };
     __posthogReady?: boolean;
@@ -105,7 +106,7 @@ const runWhenPostHogReady = (callback: () => void) => {
     return;
   }
 
-  if (window.posthog) {
+  if (window.__posthogReady && window.posthog) {
     callback();
     return;
   }
@@ -227,6 +228,11 @@ function PostHogBootstrap({ token, host }: PostHogScriptProps) {
           window.__cloverSafeRoute = function(path) { const segments = new Set(${JSON.stringify(routeSegments)}); return "/" + path.split(/[?#]/)[0].split("/").filter(Boolean).map(s => segments.has(s) ? s : ":id").join("/"); };
           posthog.init(${JSON.stringify(token)}, {
             api_host: ${JSON.stringify(apiHost)},
+            loaded: function() {
+              window.__posthogReady = true;
+              (${flushPostHogQueue.toString()})();
+              window.dispatchEvent(new Event("posthog-ready"));
+            },
             capture_pageview: false,
             capture_pageleave: false,
             autocapture: false,
@@ -245,9 +251,6 @@ function PostHogBootstrap({ token, host }: PostHogScriptProps) {
               return event;
             }
           });
-          window.__posthogReady = true;
-          (${flushPostHogQueue.toString()})();
-          window.dispatchEvent(new Event("posthog-ready"));
         `,
       }}
     />
@@ -511,6 +514,40 @@ function PostHogRequestSignals() {
   return null;
 }
 
+const SIGNIN_SUBMISSION_KEY = "clover.analytics.signin-submitted-at";
+
+export function trackSignInSubmission(method: string, step: string) {
+  if (!shouldTrackAnalytics()) return;
+  try {
+    window.sessionStorage.setItem(SIGNIN_SUBMISSION_KEY, String(Date.now()));
+  } catch {
+    // Stage counts still work when tab storage is unavailable.
+  }
+  capturePostHogClientEvent("web_signin_stage", { stage: "submitted", method, step }, { send_instantly: true });
+}
+
+export function clearPendingSignIn() {
+  try {
+    window.sessionStorage.removeItem(SIGNIN_SUBMISSION_KEY);
+  } catch {
+    // Storage may be disabled.
+  }
+}
+
+function trackAuthenticatedSignIn() {
+  try {
+    const started = window.sessionStorage.getItem(SIGNIN_SUBMISSION_KEY);
+    if (!started) return;
+    window.sessionStorage.removeItem(SIGNIN_SUBMISSION_KEY);
+    const elapsed = Date.now() - Number(started);
+    if (elapsed >= 0 && elapsed < 30 * 60_000 && shouldTrackAnalytics()) {
+      safeCapture("web_signin_stage", { stage: "authenticated" });
+    }
+  } catch {
+    // Authentication must work without tab storage.
+  }
+}
+
 function PostHogIdentity() {
   const { isLoaded, user } = useUser();
   const path = usePathname();
@@ -541,6 +578,7 @@ function PostHogIdentity() {
             ...getPostHogPersonProperties(user),
           }
         );
+        trackAuthenticatedSignIn();
         const attribution = getFirstTouchAttribution();
         if (attribution) {
           const conversionKey = `clover.posthog.acquisition-identified.v1:${user.id}`;
@@ -564,8 +602,12 @@ function PostHogIdentity() {
         return;
       }
 
-        currentPlanProperties = {};
+      currentPlanProperties = {};
+      // Anonymous visitors keep their original session through Clerk sign-in.
+      const previousId = window.posthog?.get_distinct_id();
+      if (previousId && /^(?:production:|staging:|local:|user_)/.test(previousId)) {
         safeReset();
+      }
     });
   }, [isLoaded, user]);
 

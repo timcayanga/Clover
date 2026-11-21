@@ -2,11 +2,12 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const source=fs.readFileSync(require('node:path').join(__dirname,'../components/clerk-auth-screen.tsx'),'utf8');
 const code=ts.transpileModule(source+'\nexport { ClerkAuthScreenInner };',{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 async function scenario(status){
- const states=[],calls=[];let index=0;const exports={};
+ const states=[],calls=[],stages=[];let index=0;const exports={};
  const signIn={create:async()=>({status,supportedSecondFactors:[{strategy:'email_code',emailAddressId:'verified-email-id'}]}),prepareSecondFactor:async p=>calls.push(['prepare',p]),attemptSecondFactor:async p=>{calls.push(['verify',p]);return {status:'complete',createdSessionId:'verified-session'}}};
  vm.runInNewContext(code,{exports,window:{},navigator:{userAgent:''},require:name=>{
   if(name==='react')return {useState:initial=>{const i=index++;if(!(i in states))states[i]=initial;return [states[i],v=>states[i]=v]},useRef:initial=>{const i=index++;if(!(i in states))states[i]={current:initial};return states[i]},useMemo:f=>f(),useEffect(){}};
   if(name==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
+  if(name==='@/components/posthog-analytics')return {trackSignInSubmission:(method,step)=>stages.push(step),capturePostHogClientEvent:(event,props)=>stages.push(props.stage)};
   if(name==='next/navigation')return {useRouter:()=>({replace:p=>calls.push(['route',p])})};
   if(name==='@clerk/nextjs')return {useAuth:()=>({isLoaded:true,isSignedIn:false}),useSignIn:()=>({isLoaded:true,signIn,setActive:async p=>calls.push(['active',p])}),useSignUp:()=>({isLoaded:true,signUp:{}})};
   if(name==='../../shared/auth-failure')return {needsSignInVerification:s=>['needs_client_trust','needs_second_factor'].includes(s)};
@@ -23,5 +24,6 @@ async function scenario(status){
  input.props.onChange({target:{value:'123456'}});
  await render().find(n=>n.type==='form').props.onSubmit({preventDefault(){}});
  assert.deepEqual(calls.map(c=>c[0]),['prepare','verify','active']);assert.equal(calls[2][1].session,'verified-session');
+ assert.deepEqual(stages,['form','verification_required','verify-second-factor']);
 }
 (async()=>{await scenario('needs_client_trust');await scenario('needs_second_factor');console.log('PASS actual web sign-in form: Device Trust and MFA prepare code, show verification and activate only after successful verification')})().catch(e=>{console.error(e);process.exitCode=1});

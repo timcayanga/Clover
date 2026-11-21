@@ -3,7 +3,7 @@
 import { needsSignInVerification } from "../../shared/auth-failure";
 
 import { signupProperties, type SignupAttribution } from "../../shared/web-signup-attribution";
-import { capturePostHogClientEvent } from "@/components/posthog-analytics";
+import { capturePostHogClientEvent, clearPendingSignIn, trackSignInSubmission } from "@/components/posthog-analytics";
 import { shouldTrackAnalytics } from "@/lib/analytics";
 import { getSignupAttribution, submitSignupAttribution } from "@/lib/web-signup-attribution-client";
 import Link from "next/link";
@@ -233,6 +233,25 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
   const [staySignedIn, setStaySignedIn] = useState(true);
 
   const isReady = auth.isLoaded && signInState.isLoaded && signUpState.isLoaded;
+  const signInFormViewed = useRef(false);
+  useEffect(() => {
+    if (mode !== "sign-in") {
+      clearPendingSignIn();
+      signInFormViewed.current = false;
+      return;
+    }
+    if (isReady && !auth.isSignedIn && !signInFormViewed.current) {
+      signInFormViewed.current = true;
+      capturePostHogClientEvent("web_signin_stage", { stage: "form_ready" });
+    }
+  }, [mode, isReady, auth.isSignedIn]);
+
+  useEffect(() => {
+    if (mode === "sign-in" && error) {
+      capturePostHogClientEvent("web_signin_stage", { stage: "error_shown", step: phase });
+    }
+  }, [mode, phase, error]);
+
   const signupAttribution = useRef<SignupAttribution | null>(null);
   useEffect(() => {
     if (mode !== "sign-up" || !isReady || auth.isSignedIn || signupAttribution.current || !shouldTrackAnalytics()) return;
@@ -354,6 +373,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
       }
 
       if (needsSignInVerification(response.status)) {
+        capturePostHogClientEvent("web_signin_stage", { stage: "verification_required" });
         const factors = response.supportedSecondFactors ?? [];
         const factor =
           factors.find((candidate) => candidate.strategy === "totp") ??
@@ -633,6 +653,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     }
 
     if (mode === "sign-in") {
+      trackSignInSubmission("password", phase);
       if (phase === "verify-second-factor") {
         await verifySecondFactor();
         return;
@@ -679,6 +700,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
     try {
       if (mode === "sign-in") {
+        trackSignInSubmission(strategy, "form");
         await signInState.signIn.authenticateWithRedirect({
           strategy,
           redirectUrl: callbackUrl,
