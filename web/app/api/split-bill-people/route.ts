@@ -1,3 +1,4 @@
+import { loadSplitBillPeople } from "@/lib/split-bill-people";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -13,10 +14,7 @@ const createPersonSchema = z.object({
 export async function GET() {
   try {
     const user = await getSplitBillCurrentUser();
-    const people = await prisma.splitBillPerson.findMany({
-      where: { userId: user.id },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    });
+    const people = await loadSplitBillPeople(user.id);
 
     return NextResponse.json({ people });
   } catch (error) {

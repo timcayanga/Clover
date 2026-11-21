@@ -1,3 +1,4 @@
+import { AccountSummaryGrid } from "./account-summary-grid";
 import { circleExpensePayerTotals } from "../../shared/circle-expense-payers";
 import { circleSplitRevision, validateCircleExpenseSplit } from "../../shared/circle-expense-split";
 import { MerchantLogo } from "./merchant-logo";
@@ -268,13 +269,10 @@ export function CircleDetailPanels({
         null;
     return (
       <>
-        <View style={{ flexDirection: "row", borderWidth: 1, borderColor: colors.line, borderRadius: 22, overflow: "hidden", backgroundColor: colors.white }}>
-          {[["Shared Expenses", convertedValue(expenseTotals)], ["Contributions", convertedValue(contributionTotals)]].map(([label, value], index) =>
-            <View key={label} style={{ flex: 1, minHeight: 81, padding: 16, gap: 5, borderRightWidth: index === 0 ? 1 : 0, borderColor: colors.line, backgroundColor: index === 0 ? (dark ? "#15382F" : "#E9F8EF") : colors.white }}>
-              <Text style={{ fontFamily: "Poppins-Medium", color: colors.muted, fontSize: 11 }}>{label}</Text>
-              <Text style={{ fontFamily: "Poppins-SemiBold", color: index === 0 ? (dark ? "#86E9D1" : "#12614E") : colors.ink, fontSize: 18 }}>{value}</Text>
-            </View>)}
-        </View>
+        <AccountSummaryGrid metrics={[
+          {label:"Shared Expenses",value:convertedValue(expenseTotals)},
+          {label:"Contributions",value:convertedValue(contributionTotals)},
+        ]}/>
         {canEdit && <View style={{flexDirection:"row", flexWrap:"wrap", gap:8}}>
           <PlanAction title="Add Expense" tone="primary" onPress={onAddExpense}/>
           <PlanAction title="Add Contribution" onPress={() => onEdit({action:"add_contribution"})}/>

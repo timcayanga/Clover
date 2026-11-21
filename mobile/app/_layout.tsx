@@ -30,6 +30,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AccessContext, useAccess } from "../src/access";
 import { useSessionRecovery } from "../src/use-session-recovery";
 import { SessionProvider, useSession } from "../src/session";
+import { BillEntryProvider } from "../src/direct-bill-editor";
 import { ImportActivity } from "../src/import-activity";
 import { useTheme, AppHeader, Button, Notice } from "../src/ui";
 
@@ -80,7 +81,7 @@ function Routes() {
       <GlassNavigationProvider>
         <StatusBar style={active && dark ? "light" : "dark"} />
           <View style={{ flex: 1 }} accessibilityElementsHidden={!publicPaymentRequest && !active && recovering} importantForAccessibility={!publicPaymentRequest && !active && recovering ? "no-hide-descendants" : "auto"}>
-          <Stack
+          <BillEntryProvider key={session.profileId + String(entry.app)}><Stack
             screenOptions={{
               animation: reduceMotion ? "none" : "slide_from_right",
               animationDuration: 220,
@@ -160,7 +161,7 @@ function Routes() {
             </Stack.Protected>
             {/* Public deep links stay reachable without becoming the launch fallback. */}
             <Stack.Screen name="payment-request" options={{headerShown:false}} />
-          </Stack>
+          </Stack></BillEntryProvider>
           {entry.app ? <ImportActivity /> : null}
           {entry.app && session.data ? <ReturnGreeting firstName={session.data.firstName} /> : null}
           </View>

@@ -22,6 +22,7 @@ type PaymentProfile = {
   routingCode: string | null;
   qrPayload: string | null;
   qrImageData: string | null;
+  qrThumbnail?: string | null;
   isDefault: boolean;
 };
 
@@ -618,6 +619,9 @@ export function SplitBillQrLibrary() {
                 onClick={() => openEdit(profile)}
                 aria-label={`Open ${profile.label} payment details`}
               >
+                {profile.qrImageData ? (
+                  <img className="split-bill-qr-card__image" src={profile.qrThumbnail || profile.qrImageData} alt={`${profile.label} QR code`} />
+                ) : null}
                 <div className="split-bill-qr-card__copy">
                   <div className="split-bill-qr-card__provider">
                     <strong>{profile.label}</strong>
@@ -626,9 +630,7 @@ export function SplitBillQrLibrary() {
                   </div>
                   {paymentLines(profile).map(({ key, value }) => <p key={key}>{value}</p>)}
                 </div>
-                {profile.qrImageData ? (
-                  <img className="split-bill-qr-card__image" src={profile.qrImageData} alt={`${profile.label} QR code`} />
-                ) : null}
+
               </button>
             );
           })}

@@ -8,12 +8,14 @@ export async function stageReceipt(
   file: { name: string; mimeType: string; size: number },
   readPart: (index: number) => Promise<string>,
   post: (action: "start" | "part" | "cancel", id: string, body: object) => Promise<unknown>,
+  progress?: (fraction: number) => void,
 ) {
   if (file.size > NATIVE_UPLOAD_MAX_SIZE) throw new Error("Choose a receipt up to 25 MB.");
   await post("start", id, file);
   try {
     for (let index = 0; index < Math.ceil(file.size / NATIVE_UPLOAD_PART_SIZE); index++) {
       await post("part", id, { index, base64: await readPart(index) });
+      progress?.(Math.min(1,(index+1)*NATIVE_UPLOAD_PART_SIZE/file.size));
     }
   } catch (error) {
     await post("cancel", id, {}).catch(() => {});

@@ -1,3 +1,6 @@
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
+import {displayRates} from "@/lib/display-rates";
+import {personBalanceColumns} from "@/lib/split-bill-balance-summary";
 import { transactionMerchantLogo } from "@/lib/transaction-merchant-logo";
 import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { invalidateWorkspaceSummaryCache, invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
@@ -576,9 +579,12 @@ export async function GET(request: Request) {
       code = "split_bills_summary_load_failed";
       const { bills, groups, people } = await loadSplitBillWorkspaceData(user.id);
       code = "split_bills_response_failed";
+      const currency = normalizeRegionalPreferences(user.regionalPreferences).baseCurrency;
+      const rates = surface === "split_bills_balance_summary" && new Set(bills.map(b=>b.currency)).size > 1
+        ? Object.fromEntries(await displayRates(bills.map(b=>b.currency),currency)) : {};
       return NextResponse.json(surface === "home_split_bills_summary"
         ? { pending: homePendingSplitBills(bills, { groups, people, currentUserId: user.id, currentUserName: getUserDisplayName(user) }, transactionMerchantLogo) }
-        : { summary: splitBillBalanceSummary(bills, getUserDisplayName(user)) },
+        : { summary: splitBillBalanceSummary(bills, getUserDisplayName(user)), personBalances: Object.fromEntries(people.map(p=>[p.id,personBalanceColumns(bills,getUserDisplayName(user),p.name,currency,rates)])) },
       { headers: { "Cache-Control": "private, no-store" } });
     }
     const ledger = native && query.get("view") === "ledger";

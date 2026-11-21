@@ -1,3 +1,4 @@
+import {GroupCover} from "../src/group-cover";
 import { displayPhoto } from "../src/prepare-display-photo";
 import { removeUploadCopy } from "../src/upload";
 import { currencyMark } from "../../shared/currency-mark";
@@ -279,7 +280,7 @@ export default function Circles() {
     <Screen layout="dashboard" gap={20}>
       {entryOverlay}
       {billCirclePicker?<EntryOverlay onClose={()=>setBillCirclePicker(false)}><Screen sheet><PlanHeader title="Choose a Circle" back={()=>setBillCirclePicker(false)}/>{data?.circles.filter(c=>c.role!=="participant").map(c=><PlanAction key={c.id} title={c.name} onPress={()=>{setBillCirclePicker(false);setSelected(c);setPendingBillCircle(c.id);}}/>)}<PlanAction title="Add Circle" onPress={()=>{setBillCirclePicker(false);setEditor({circle:null});}}/></Screen></EntryOverlay>:null}
-      {addingBill&&selected?<EntryOverlay onClose={()=>setAddingBill(false)}><BillEditor context={{circleId:selected.id, currency:selected.currency,group:{id:selected.splitBillGroupId ?? "",name:selected.name,members:circleBillMembers(selected.members??[]), recorderName:selected.members?.find(m=>m.isMe)?.displayName}}} onClose={()=>setAddingBill(false)} onSaved={()=>{setAddingBill(false);setRevision(v=>v+1);reload();}}/></EntryOverlay>:null}
+      {addingBill&&selected?<BillEditor context={{circleId:selected.id, currency:selected.currency,group:{id:selected.splitBillGroupId ?? "",name:selected.name,members:circleBillMembers(selected.members??[]), recorderName:selected.members?.find(m=>m.isMe)?.displayName}}} onClose={()=>setAddingBill(false)} onSaved={()=>{setAddingBill(false);setRevision(v=>v+1);reload();}}/>:null}
       <PlanHeader
         title={selected ? selected.name : "Circles"}
         trailing={selected ? <View style={{flexDirection:"row",alignItems:"center"}}><Pressable accessibilityRole="button" accessibilityLabel={`Circle display currency: ${displayCurrency}`} onPress={()=>setCurrencyOpen(true)} style={{minHeight:44,minWidth:58,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:4}}><Text style={{color:colors.teal,fontFamily:'Poppins-Medium',fontSize:13}}>{currencyMark(displayCurrency)} {displayCurrency}</Text></Pressable>{selected.role !== "participant" && <Pressable accessibilityRole="button" accessibilityLabel="Add Expense" onPress={openExpense} style={{padding:4}}><AddNavigationMark size={36}/></Pressable>}</View> : undefined}
@@ -354,47 +355,12 @@ export default function Circles() {
                 key={circle.id}
                 onPress={() => { setSelected(circle); setTab("Overview"); }}
                 style={{
-                  backgroundColor: dark
-                    ? circle.type === "household"
-                      ? "#193A38"
-                      : "#302A45"
-                    : circle.type === "household"
-                      ? "#E0F6F0"
-                      : "#F0E9FC",
+                  overflow:"hidden", alignItems:"center", padding:0, paddingBottom:12, gap:8,
                 }}
               >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: 10,
-                    alignItems: "center",
-                  }}
-                >
-                  <Image
-                    source={
-                      circle.avatarUrl &&
-                      /^(https:|data:image\/)/.test(circle.avatarUrl)
-                        ? { uri: circle.avatarUrl }
-                        : circle.type === "household"
-                          ? require("../assets/circles/household.jpg")
-                          : require("../assets/circles/social.jpg")
-                    }
-                    accessible={false}
-                    style={{ width: 64, height: 64, borderRadius: 16 }}
-                  />
-                  <Text
-                    style={{
-                      color: colors.ink,
-                      fontFamily: "Poppins-SemiBold",
-                      fontSize: 16,
-                      flex: 1,
-                    }}
-                  >
-                    {circle.name}
-                  </Text>
-
-                </View>
-                <View style={{ flexDirection: "row", gap: 6 }}>
+                <GroupCover id={circle.id} url={circle.avatarUrl} style={{width:"100%",height:92}}/>
+                <Text style={{color:colors.ink,fontFamily:"Poppins-SemiBold",fontSize:16,textAlign:"center"}}>{circle.name}</Text>
+                <View style={{ flexDirection:"row",justifyContent:"center",gap:6 }}>
                   {(circle.members ?? []).slice(0, 5).map((member) => (
                     <CircleMemberPhoto key={member.id} member={member} />
                   ))}

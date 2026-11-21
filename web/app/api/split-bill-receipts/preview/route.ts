@@ -385,7 +385,7 @@ export async function POST(request: Request) {
       selectedFile.type || "application/octet-stream"
     );
 
-    return NextResponse.json({ preview, receiptStorageKey });
+    return NextResponse.json({ preview, receiptStorageKey, reliableForScopedSplit: assessReceiptPreviewQuality(preview).reliableForFastPath });
   } catch (error) {
     return NextResponse.json(
       {

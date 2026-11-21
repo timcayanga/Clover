@@ -389,6 +389,9 @@ export function BillDetails({
           />
         </Card>
       ) : null}
+      {bill.settlementStatus === "awaiting_payer" && !bill.payments?.length && <ChoiceField
+        label="Assign Payer" value="" options={(bill.participants ?? []).map(p => ({value:p.id,label:p.name}))}
+        onChange={payerId => void action(`split-bills/${bill.id}`, "PATCH", {...JSON.parse(payload), payerId})} />}
       <SplitItemGrid
         people={people.map((p) => ({
           ...p,

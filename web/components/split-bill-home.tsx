@@ -6,7 +6,9 @@ import { CloverMascot } from "@/components/clover-mascot";
 
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { InterfaceIcon } from "@/components/interface-icon";
-import { splitBillBalanceSummary, isSameSplitBillPerson as isSamePersonName } from "@/lib/split-bill-balance-summary";
+import {useDefaultCurrency} from "@/lib/use-default-currency";
+import {useExchangeRates} from "@/lib/use-exchange-rates";
+import { personBalanceColumns, splitBillBalanceSummary, isSameSplitBillPerson as isSamePersonName } from "@/lib/split-bill-balance-summary";
 import { useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
@@ -248,42 +250,9 @@ export function SplitBillHome({
     });
   }, [bills, groups, search]);
 
-  const peopleWithBalances = useMemo(
-    () =>
-      people.map((person) => {
-        const totals = new Map<string, number>();
-
-        bills.forEach((bill) => {
-          bill.settlement.transfers.forEach((transfer) => {
-            const currency = normalizeCurrencyCode(bill.currency);
-            if (transfer.fromParticipantName === person.name) {
-              addCurrencyTotal(totals, currency, -transfer.amount);
-            }
-            if (transfer.toParticipantName === person.name) {
-              addCurrencyTotal(totals, currency, transfer.amount);
-            }
-          });
-        });
-
-        const activeTotals = Array.from(totals.entries()).filter(
-          ([, amount]) => Math.abs(amount) > 0.005,
-        );
-        if (activeTotals.length !== 1) {
-          return {
-            ...person,
-            balanceLabel:
-              activeTotals.length > 1 ? "Multiple currencies" : "Settled",
-          };
-        }
-
-        const [currency, amount] = activeTotals[0];
-        return {
-          ...person,
-          balanceLabel: `${amount < 0 ? "Owes" : "Owed"} ${formatSplitBillAmount(Math.abs(amount), currency)}`,
-        };
-      }),
-    [bills, people],
-  );
+  const currency = useDefaultCurrency();
+  const fx = useExchangeRates(bills.map(b=>b.currency),currency,tab === "People");
+  const peopleWithBalances = people.map(p=>({...p,...personBalanceColumns(bills,currentUserName,p.name,currency,fx.rates)}));
   const matchingPeople=peopleWithBalances.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
   const visiblePeople = showAllPeople ? matchingPeople : matchingPeople.slice(0, 6);
   const hasHiddenPeople = peopleWithBalances.length > 6;
@@ -565,7 +534,7 @@ export function SplitBillHome({
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th className="amount">Amount owed</th>
+                  <th className="amount">Owed</th><th className="amount">Owes</th><th aria-label="Details"/>
                 </tr>
               </thead>
               <tbody>
@@ -587,7 +556,7 @@ export function SplitBillHome({
                         {person.name}
                       </button>
                     </td>
-                    <td className="amount">{person.balanceLabel}</td>
+                    <td className="amount">{person.owed}</td><td className="amount">{person.owes}</td><td><button aria-label={`Open ${person.name} details`} onClick={()=>onOpenPerson(person.id)}>•••</button></td>
                   </tr>
                 ))}
               </tbody>

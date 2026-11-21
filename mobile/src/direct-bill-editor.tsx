@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import { useUser } from "@clerk/expo";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Platform, View, TextInput, Pressable } from "react-native";
 import { SplitItemGrid } from "./split-item-grid";
 import {
@@ -17,6 +17,8 @@ import { AddEntryMethods } from "./add-entry-methods";
 import { useCloudAiConsent } from "./ai-consent";
 import { removeUploadCopy } from "./upload";
 import { uploadSelectedFile } from "./upload-selected-file";
+import { EntryOverlay } from "./entry-overlay";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "./session";
 import { Body, Field, Notice, Screen, Icon, CategoryMark, useTheme } from "./ui";
 import { PlanAction, PlanHeader, usePlanData } from "./plan-ui";
@@ -62,17 +64,52 @@ const emptyEntryOptions = {
 };
 const emptyGroupOptions = {circlePeople: [] as SavedPerson[], groups: [] as SplitGroup[], people: [] as SavedPerson[]};
 
-export function BillEditor({
-  sourceTransaction,
-  context,
-  onClose,
-  onSaved,
-}: {
+type BillEntryProps = {
   onClose: () => void;
   onSaved: (bill: Bill) => void;
   sourceTransaction?: Transaction | null;
+  initialMethod?: "manual" | "upload";
   context?: { circleId?: string; group?: SplitGroup; person?: string; currency?: string };
+};
+
+const OpenBillEditor = createContext<((props: BillEntryProps) => void) | null>(null);
+
+export function BillEntryProvider({ children }: {children: ReactNode}) {
+  const [entries, setEntries] = useState<{id: number; props: BillEntryProps}[]>([]);
+  const [active, setActive] = useState<number | null>(null);
+  const sequence = useRef(0);
+  function open(props: BillEntryProps) {
+    const id = ++sequence.current;
+    setEntries(previous => [...previous, {id, props}]);
+    setActive(id);
+    props.onClose();
+  }
+  function close(id: number) {
+    setEntries(previous => previous.filter(entry => entry.id !== id));
+    setActive(previous => previous === id ? null : previous);
+  }
+  return <OpenBillEditor.Provider value={open}>{children}
+    {entries.map(({id, props}, index) => <HostedBillEditor key={id} {...props} visible={active === id}
+      offset={index * 54} setVisible={value => setActive(previous => value ? id : previous === id ? null : previous)}
+      onClose={() => close(id)} onSaved={bill => { close(id); props.onSaved(bill); }} />)}
+  </OpenBillEditor.Provider>;
+}
+
+export function BillEditor(props: BillEntryProps) {
+  const open = useContext(OpenBillEditor);
+  const launched = useRef(false);
+  useEffect(() => {
+    if (open && !launched.current) { launched.current = true; open(props); }
+  }, [open, props]);
+  return null;
+}
+
+export function HostedBillEditor({ sourceTransaction, context, initialMethod, onClose, onSaved, visible, setVisible, offset = 0 }: BillEntryProps & {
+  visible: boolean; offset?: number; setVisible: (value: boolean) => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const scopedSave = useRef(false);
+  const [uploaded, setUploaded] = useState(0);
   const session = useSession();
   const receiptConsent = useCloudAiConsent(session.request, true);
   const circleId = context?.circleId;
@@ -80,7 +117,7 @@ export function BillEditor({
   const recorder = context?.group?.recorderName;
   const { colors } = useTheme();
   const [entryMode, setEntryMode] = useState(
-      sourceTransaction ? "manual" : "upload",
+      initialMethod ?? "manual",
     ),
     [moreDetails, setMoreDetails] = useState(false),
     [accountId, setAccountId] = useState(""),
@@ -184,10 +221,14 @@ export function BillEditor({
         file = picked.assets[0];
       }
       copiedUri = file.uri;
-      setReading(true);
       await receiptConsent.ensure().catch(() => false);
       if (!alive.current) return;
+      setUploaded(0);
+      setReading(true);
+      setVisible(false);
+      if (!alive.current) return;
       const result = await uploadSelectedFile<{
+        reliableForScopedSplit?: boolean;
         receiptStorageKey: string;
         preview: {
           merchantName: string | null;
@@ -201,7 +242,7 @@ export function BillEditor({
         };
       }>(
         `split-bill-receipts/preview?workspaceId=${encodeURIComponent(session.profileId)}`,
-        session.request, file,
+        session.request, file, setUploaded,
       );
       if (!alive.current) return;
       const p = result.preview;
@@ -229,6 +270,7 @@ export function BillEditor({
       setTotal(p.total ?? "");
       setCurrency(p.currency);
       setDate(p.billDate?.slice(0, 10) || "");
+      scopedSave.current = Boolean((context?.group || context?.person || circleId) && result.reliableForScopedSplit && !p.currencyWarning);
       if (p.currencyWarning) setError(p.currencyWarning);
     } catch (e) {
       if (alive.current)
@@ -412,22 +454,37 @@ export function BillEditor({
       setBusy(false);
     }
   };
+  useEffect(() => {
+    if (scopedSave.current && receipt && !reading && !busy) {
+      scopedSave.current = false;
+      void save();
+    }
+  }, [receipt, reading, busy]);
+  if (!visible) return <View style={{ position: "absolute", left: 12, right: 12, bottom: insets.bottom + 74 + offset, zIndex: 100 }}>
+    <Pressable accessibilityRole="button" onPress={() => setVisible(true)} style={{ backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 }}>
+      <Text style={{ color: colors.ink }}>{reading ? (uploaded < 1 ? "Uploading receipt…" : "Preparing receipt draft…") : busy ? "Saving equal split…" : error ? "Receipt needs attention ›" : "Review receipt draft ›"}</Text>
+      {reading && <View accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:Math.round(uploaded*100)}} style={{ height:4,backgroundColor:colors.line }}>
+        <View style={{height:4,width:`${Math.round(uploaded*100)}%`,backgroundColor:colors.teal}}/>
+      </View>}
+    </Pressable>
+  </View>;
   return (
+    <EntryOverlay onClose={() => reading ? setVisible(false) : !busy && onClose()}>
     <Screen
       sheet
       onDismiss={() => {
-        if (!busy || reading) onClose();
+        if (reading) setVisible(false); else if (!busy) onClose();
       }}
     >
       <PlanHeader
         title={circleId ? "Add Expense" : "Add Split Bill"}
         back={() => {
-          if (!busy || reading) onClose();
+          if (reading) setVisible(false); else if (!busy) onClose();
         }}
       />
       {error ? <Notice>{error}</Notice> : null}
       {receiptConsent.prompt}
-      {reading && !receiptConsent.prompt ? <Notice>Reading your receipt…</Notice> : null}
+
         <AddEntryMethods
           key={reviewVersion}
           initialMethod={entryMode === "manual" ? "manual" : "upload"}
@@ -584,6 +641,6 @@ export function BillEditor({
           />
           </View>
         </AddEntryMethods>
-    </Screen>
+    </Screen></EntryOverlay>
   );
 }

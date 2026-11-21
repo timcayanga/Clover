@@ -10,6 +10,7 @@ const amount = z
   .refine((v) => Number(v) > 0 && Number(v) <= 1_000_000_000);
 export const mobileBillEdit = z
   .object({
+    payerId: z.string().min(1).optional(),
     currency: z.string().regex(/^[A-Z]{3,8}$/).optional(),
     title: z.string().trim().min(1).max(100),
     addedParticipants: z
@@ -106,8 +107,12 @@ export function mergeMobileBillEdit(
   const total = Number(bill.total ?? oldItems) + newItems - oldItems;
   if (!Number.isFinite(total) || total <= 0)
     throw new Error("The bill total must remain positive.");
+  if (body.payerId && (bill.payments.length || bill.settlementStatus !== "awaiting_payer" || !people.has(body.payerId))) {
+    throw new Error("Choose a participant on a bill that still needs a payer.");
+  }
   return {
     ...bill,
+    ...(body.payerId ? {payments:[{id:crypto.randomUUID(), participantId:body.payerId, amount:total.toFixed(2), note:null}]} : {}),
     title: body.title,
     currency: body.currency ?? bill.currency,
     participants,

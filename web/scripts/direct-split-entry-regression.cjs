@@ -187,14 +187,39 @@ async function main() {
     render().find(n=>n.props.accessibilityLabel==="Remove Bea").props.onPress();
     assert.deepEqual(Array.from(selected),["Pabs","Joby","Carlo"]);
   }
+  for (const [kind, endpoint] of [["Group","split-bill-groups"],["Person","split-bill-people"],["Payment","split-bill-payment-profiles"]]) {
+    const ui=hooks(), requests=[];
+    let closed=0, saved=0;
+    const {TogetherEntry}=load("../mobile/src/together-entry.tsx", {
+      react:ui.h,"react/jsx-runtime":jsx,"./ui":{Field:"Field",Screen:"Screen",Notice:"Notice",Body:"Body"},
+      "./plan-ui":{PlanAction:"Action",PlanHeader:"Header"},
+      "./split-people-field":{SplitPeopleField:"People",mergePeople:(names,draft)=>[...new Set([...names,...draft].filter(Boolean))]},
+      "./session":{useSession:()=>({profileId:"qa",request:async(url,opts)=>{requests.push({url,data:JSON.parse(opts.body)});}})},
+    });
+    const render=()=>nodes(ui.render(()=>TogetherEntry({kind,savedPeople:[],onClose:()=>closed++,onSaved:()=>saved++})));
+    const field=render().find(n=>n.type==="Field");
+    field?.props.onChangeText("QA "+kind);
+    render().find(n=>n.type==="People")?.props.onDraft("QA member");
+    const submit=render().find(n=>n.props.title==="Save "+kind);
+    submit.props.onPress(); submit.props.onPress();
+    await flush();
+    assert.equal(requests.length,1);
+    assert.equal(requests[0].url,endpoint+"?workspaceId=qa");
+    assert.equal(closed,1); assert.equal(saved,1);
+    if(kind==="Group")assert.equal(requests[0].data.members[0].name,"QA member");
+    if(kind==="Person")assert.equal(requests[0].data.name,"QA member");
+    if(kind==="Payment")assert.equal(requests[0].data.label,"QA Payment");
+    ui.stop();
+  }
   for (const platform of ["ios","android"]) {
     const ui = hooks();
     const saved = [];
     const captured = {uri:"file:///cache/123.jpg",fileName:"receipt.jpg",mimeType:"image/jpeg"};
     let receiptPreviewed = false;
-    const {BillEditor} = load("../mobile/src/direct-bill-editor.tsx", {
+    let visible = true;
+    const {HostedBillEditor} = load("../mobile/src/direct-bill-editor.tsx", {
       "../../shared/currency-mark": load("../shared/currency-mark.ts"),
-      react: ui.h, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
+      react: {...ui.h,createContext:()=>({})}, "./entry-overlay":{EntryOverlay:"Overlay"}, "react-native-safe-area-context":{useSafeAreaInsets:()=>({bottom:0})}, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
       "@clerk/expo": {useUser:()=>({user:{fullName:"Personal profile name"}})},
       "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]}),launchImageLibraryAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {getDocumentAsync:async()=>({canceled:false,assets:[{...captured,name:"receipt.jpg"}]})},
       "./split-people-field": {...load("../mobile/src/split-people-field.tsx", {"react/jsx-runtime":jsx,"react-native":{},"./app-text":{},"./ui":{}}), PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": {suggestBillCategory:()=>null},
@@ -217,7 +242,7 @@ async function main() {
     });
     const context = {circleId:"trip",currency:"PHP",group:{id:"group",name:"Trip",recorderName:"Alex",members:[
       {id:"m1",name:"Bea"},{id:"m2",name:"Alex"},{id:"m3",name:"Carlo"}]}};
-    const render = () => nodes(ui.render(() => BillEditor({context, onSaved:()=>{}, onClose:()=>{}})));
+    const render = () => nodes(ui.render(() => HostedBillEditor({context, visible, setVisible:value=>visible=value, onSaved:()=>{}, onClose:()=>{}})));
     const control = (key,value) => render().find(n=>n.props[key]===value);
     assert.ok(control("title","Add Expense"));
     assert.ok(control("accessibilityLabel","Remove Bea"));
@@ -246,6 +271,9 @@ async function main() {
       render().find(n=>n.type==="Methods").props.onUploadSource(source);
       await flush();
       assert.ok(receiptPreviewed, source);
+      assert.equal(visible,false);
+      render().find(n=>n.props.accessibilityRole==="button").props.onPress();
+      assert.equal(visible,true);
       assert.equal(render().find(n=>n.type==="Methods").props.initialMethod, "manual");
     }
     assert.equal(control("label","Name").props.value,"Bakery");
@@ -379,6 +407,9 @@ async function main() {
     methods.props.onUploadFiles([new File(["receipt"], "receipt.jpg", { type: "image/jpeg" })]);
     await flush();
     await flush();
+    t = render();
+    assert.equal(nodes(t).some(n=>n.props.role==="dialog"), false);
+    nodes(t).find(n=>n.props.className==="receipt-draft-progress").props.onClick();
     t = render();
     assert(
       nodes(t).find(

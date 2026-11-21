@@ -36,3 +36,24 @@ export function splitBillBalanceSummary(bills: readonly BalanceBill[], currentUs
   };
   return { youOwe: label(owes), owedToYou: label(owed) };
 }
+
+export function personBalanceColumns(bills: readonly BalanceBill[], viewer: string, person: string, fallback: string, rates: Record<string,number>) {
+  const entries = bills.flatMap(bill => bill.settlement.transfers.flatMap(t => {
+    const owes = isSameSplitBillPerson(t.fromParticipantName, person) && isSameSplitBillPerson(t.toParticipantName, viewer);
+    const owed = isSameSplitBillPerson(t.toParticipantName, person) && isSameSplitBillPerson(t.fromParticipantName, viewer);
+    return (owes || owed) && !isSameSplitBillPerson(person,viewer) ? [{currency: normalizeCurrencyCode(bill.currency), owes: owes ? t.amount : 0, owed: owed ? t.amount : 0}] : [];
+  }));
+  const currencies = new Set(entries.map(row=>row.currency));
+  const currency = currencies.size === 1 ? entries[0].currency : fallback;
+  const column = (key: "owed" | "owes") => {
+    let total = 0;
+    for (const row of entries) {
+      if (!row[key]) continue;
+      const rate = row.currency === currency ? 1 : rates[row.currency];
+      if (!(rate > 0)) return "Rate unavailable";
+      total += row[key] * rate;
+    }
+    return formatSplitBillAmount(total, currency);
+  };
+  return {owed:column("owed"), owes:column("owes")};
+}

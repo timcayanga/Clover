@@ -1,3 +1,4 @@
+import { loadSplitBillPeople } from "./split-bill-people";
 import { prisma } from "@/lib/prisma";
 import { serializeSplitBillRecord, splitBillGroupMemberOrderBy, splitBillItemOrderBy } from "@/lib/split-bill";
 import type { SplitBillPersonSummary } from "@/lib/split-bill-entities";
@@ -149,15 +150,7 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
         _count: { select: { bills: true } },
       },
     }),
-    prisma.splitBillPerson.findMany({
-      where: { userId },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      select: {
-        id: true,
-        name: true,
-        avatarUrl: true,
-      },
-    }),
+    loadSplitBillPeople(userId),
   ]);
   const accessibleGroupIds = groups.map((group) => group.id);
   const bills = await prisma.splitBill.findMany({

@@ -371,7 +371,7 @@ export function CircleDetailWorkspace({
           icon: <CircleTabIcon name={t} />,
         }))}
       />
-      {addingBill && circle.splitBillGroupId ? <SplitBillEntry currentUserName={circle.members.find(m=>m.isMe)?.displayName||"You"} context={{currency:circle.currency,group:{id:circle.splitBillGroupId,name:circle.name,members:circleBillMembers(circle.members)}}} onClose={()=>setAddingBill(false)} onSaved={()=>{setAddingBill(false);void onChanged();}}/> : null}
+      {addingBill ? <SplitBillEntry currentUserName={circle.members.find(m=>m.isMe)?.displayName||"You"} context={{circleId:circle.id,currency:circle.currency,group:{id:circle.splitBillGroupId || "",name:circle.name,members:circleBillMembers(circle.members)}}} onClose={()=>setAddingBill(false)} onSaved={()=>{setAddingBill(false);void onChanged();}}/> : null}
       {tab==="Expenses" ? <div className="split-entry-toolbar"><input type="search" aria-label="Search Circle expenses" placeholder="Search expenses" value={billSearch} onChange={e=>setBillSearch(e.target.value)}/>{canEdit?<button className="button button-primary" onClick={()=>setAddingBill(true)}>Add Bill</button>:null}</div>:null}
       {error ? <p role="alert">{error}</p> : null}
       {form && form.action !== "share_transaction" ? (

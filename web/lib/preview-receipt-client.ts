@@ -1,6 +1,6 @@
 import { browserReceiptPart, receiptMultipartLimit, stageReceipt } from "../../shared/receipt-upload";
 
-export async function previewReceiptFile(file: File, url = "/api/split-bill-receipts/preview") {
+export async function previewReceiptFile(file: File, url = "/api/split-bill-receipts/preview", progress?: (fraction: number) => void) {
   const separator = url.includes("?") ? "&" : "?";
   if (file.size <= receiptMultipartLimit) {
     const body = new FormData();
@@ -14,6 +14,6 @@ export async function previewReceiptFile(file: File, url = "/api/split-bill-rece
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
       });
       if (!response.ok) throw new Error((await response.json()).error || "Receipt upload failed.");
-    });
+    }, progress);
   return fetch(url + separator + "uploadId=" + id, { method: "POST" });
 }

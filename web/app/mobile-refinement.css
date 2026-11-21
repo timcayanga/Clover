@@ -240,3 +240,20 @@
 .group-cover-choices button { padding: 2px; border: 2px solid transparent; background: none; border-radius: 6px; }
 .group-cover-choices button[aria-pressed="true"] { border-color: var(--teal, #008b89); }
 .group-cover-choices img { display: block; width: 64px; border-radius: 3px; }
+.split-group-cover-banner { height: 92px; aspect-ratio: auto; }
+.split-bill-home .split-bill-group-grid .split-bill-group-card { gap: 6px; padding-bottom: 10px; }
+.split-bill-qr-library__grid .split-bill-qr-card { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; }
+.split-bill-qr-library__grid .split-bill-qr-card__image { width:116px; height:116px; object-fit:contain; }
+.split-bill-qr-card__provider { justify-content:center; }
+.split-bill-pulse__metrics { gap:0; border:1px solid var(--border); border-radius:20px; overflow:hidden; }
+.split-bill-pulse__metrics article { border:0; border-radius:0; box-shadow:none; text-align:left; }
+.split-bill-pulse__metrics article:first-child { background:#e9f8ef; color:#12614e; }
+
+.collection-card--circle .collection-card__head { display:flex; flex-direction:column; width:100%; align-items:center; text-align:center; }
+.collection-card--circle .collection-card__icon { width:100%; height:92px; padding:0; overflow:hidden; }
+.collection-card--circle .collection-custom-photo { width:100%; height:100%; object-fit:cover; }
+.collection-card--circle .collection-card__chevron { display:none; }
+.collection-card--circle .split-bill-avatars { justify-content:center; }
+.collection-card--circle .collection-card__view { align-self:center; justify-self:center; }
+.receipt-draft-progress { position:fixed; z-index:100; inset-inline:16px; bottom:calc(80px + env(safe-area-inset-bottom)); margin:auto; max-width:480px; padding:12px; border-radius:12px; background:var(--surface,white); color:var(--text,#17252c); display:grid; gap:6px; }
+.receipt-draft-progress progress { width:100%; accent-color:#009b9a; }

@@ -187,7 +187,7 @@ export type SplitBillSettlementStatus =
 
 export const formatSplitBillSettlementStatus = (status: SplitBillSettlementStatus) => {
   if (status === "awaiting_allocation") return "Awaiting allocation";
-  if (status === "awaiting_payer") return "Choose who paid";
+  if (status === "awaiting_payer") return "Assign Payer";
   if (status === "needs_payer_confirmation") return "Confirm payer";
   if (status === "open") return "Open";
   return "Settled";

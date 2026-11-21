@@ -9,6 +9,7 @@ export async function uploadSelectedFile<T>(
   path: string,
   request: <R>(path: string, options: RequestInit) => Promise<R>,
   selected: SelectedFile,
+  progress?: (fraction: number) => void,
 ) {
   const file = Platform.OS === "web" ? selected : resolveSelectedFile(selected);
   const blob = Platform.OS === "web" ? await (await fetch(file.uri)).blob() : null;
@@ -21,6 +22,6 @@ export async function uploadSelectedFile<T>(
   const read = blob ? (index: number) => browserReceiptPart(blob, index) : selectedUploadPartReader(file);
   await stageReceipt(id, { name: file.name, mimeType: file.mimeType || "application/octet-stream", size },
     read, (action, uploadId, data) => request(path + "&action=" + action + "&uploadId=" + uploadId,
-      { method: "POST", body: JSON.stringify(data) }));
+      { method: "POST", body: JSON.stringify(data) }), progress);
   return request<T>(path + "&uploadId=" + id, { method: "POST" });
 }

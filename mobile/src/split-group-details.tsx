@@ -193,8 +193,7 @@ export function SplitGroupDetails({
           add={() => setAdding(true)}
         />
         {adding ? (
-          <EntryOverlay onClose={() => setAdding(false)}>
-            <BillEditor
+          <BillEditor
               context={{
                 group,
                 person: detail,
@@ -208,7 +207,6 @@ export function SplitGroupDetails({
                 onChanged();
               }}
             />
-          </EntryOverlay>
         ) : null}
         {loadError ? <Notice>{loadError}</Notice> : null}
         {data ? (
@@ -267,8 +265,7 @@ export function SplitGroupDetails({
   return (
     <Screen>
       {adding ? (
-        <EntryOverlay onClose={() => setAdding(false)}>
-          <BillEditor
+        <BillEditor
             context={{
               group: group
                 ? {
@@ -288,7 +285,6 @@ export function SplitGroupDetails({
               onChanged();
             }}
           />
-        </EntryOverlay>
       ) : null}
       <PlanHeader
         title={name || "Group"}

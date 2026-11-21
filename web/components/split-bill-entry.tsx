@@ -19,6 +19,7 @@ import type {
   SplitBillPersonSummary,
 } from "@/lib/split-bill-entities";
 export type BillEntryContext = {
+  circleId?: string;
   group?: Pick<SplitBillGroupSummary, "id" | "name" | "members">;
   person?: string;
   currency?: string;
@@ -66,10 +67,13 @@ export function SplitBillEntry({
       { id: string; name: string; currency: string; type: string }[]
     >([]),
     [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const scopedSave = useRef(false);
+  const [background, setBackground] = useState(false);
+  const [progress, setProgress] = useState(0);
   const dialog = useRef<HTMLElement>(null);
   useEffect(() => {
     if (dialog.current) return containDialogFocus(dialog.current);
-  }, []);
+  }, [background]);
   const key = useRef(crypto.randomUUID()),
     lock = useRef(false),
     alive = useRef(true);
@@ -103,7 +107,7 @@ export function SplitBillEntry({
   }, []);
   useEffect(() => {
     const close = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !lock.current) {
+      if (!background && e.key === "Escape" && !lock.current) {
         e.preventDefault();
         e.stopImmediatePropagation();
         onClose();
@@ -111,7 +115,7 @@ export function SplitBillEntry({
     };
     document.addEventListener("keydown", close, true);
     return () => document.removeEventListener("keydown", close, true);
-  }, [onClose]);
+  }, [onClose, background]);
   const loadDetails = () => {
     if (!workspaceId || accounts.length) return;
     void Promise.all([
@@ -147,7 +151,9 @@ export function SplitBillEntry({
     try {
       if (!(await requestAiConsent()))
         throw Error("You can add this bill manually without AI processing.");
-      const r = await previewReceiptFile(file);
+      setProgress(0);
+      setBackground(true);
+      const r = await previewReceiptFile(file, undefined, setProgress);
       const p = await r.json();
       if (!r.ok) throw Error(p.error || "Unable to read receipt.");
       if (!alive.current) return;
@@ -172,6 +178,7 @@ export function SplitBillEntry({
           participantIds: [],
         })),
       );
+      scopedSave.current = Boolean((context.group || context.person) && p.reliableForScopedSplit && !v.currencyWarning);
       setMode("manual");
     } catch (e) {
       if (alive.current)
@@ -200,7 +207,7 @@ export function SplitBillEntry({
       !title.trim() ||
       !/^\d+(\.\d{1,2})?$/.test(amount) ||
       Number(amount) <= 0 ||
-      all.length < 2 ||
+      all.length < (context.circleId ? 1 : 2) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
       !Number.isFinite(Date.parse(date)) ||
       !/^[A-Z]{3}$/.test(currency)
@@ -255,6 +262,7 @@ export function SplitBillEntry({
         billDate: date,
         note: notes || null,
         groupId: groupId || null,
+        ...(context.circleId ? {circleId:context.circleId} : {}),
         ...receipt,
         participants,
         items: billItems,
@@ -286,6 +294,16 @@ export function SplitBillEntry({
       if (alive.current) setBusy(false);
     }
   };
+  useEffect(() => {
+    if (scopedSave.current && receipt && !busy) {
+      scopedSave.current = false;
+      void save();
+    }
+  }, [receipt, busy]);
+  if (background) return createPortal(<button type="button" className="receipt-draft-progress" onClick={() => setBackground(false)}>
+    <span role="status">{busy ? (progress === 1 ? "Preparing receipt draft…" : "Uploading receipt…") : error ? "Review upload issue" : "Review receipt draft ›"}</span>
+    {busy && <progress max={1} value={progress || undefined} />}
+  </button>, document.body);
   return createPortal(
     <div
       className="split-bill-modal direct-bill-backdrop"
@@ -316,7 +334,7 @@ export function SplitBillEntry({
         {error ? <p role="alert">{error}</p> : null}
         {busy ? (
           <p role="status">
-            {mode === "upload" ? "Reading receipt…" : "Saving bill…"}
+            {mode === "upload" ? "Preparing draft…" : "Saving…"}
           </p>
         ) : null}
           <AddEntryMethods

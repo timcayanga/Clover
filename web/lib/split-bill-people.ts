@@ -70,3 +70,27 @@ export const upsertSplitBillPeopleFromNames = async (
 
   return people;
 };
+
+// Older Circles can predate the personal contact directory. Reconcile only
+// active members visible to this user and preserve their existing contact edits.
+export async function loadSplitBillPeople(userId: string) {
+  const { prisma } = await import("./prisma");
+  const select = { id: true, name: true, avatarUrl: true } as const;
+  const [contacts, members] = await Promise.all([
+    prisma.splitBillPerson.findMany({ where: { userId }, select, orderBy: { name: "asc" } }),
+    prisma.circleMembership.findMany({
+      where: {
+        status: "active",
+        OR: [{ userId: null }, { userId: { not: userId } }],
+        circle: { archivedAt: null, OR: [{ ownerUserId: userId }, { memberships: { some: { userId, status: "active" } } }] },
+      },
+      select: { displayName: true, avatarUrl: true },
+    }),
+  ]);
+  const known = new Set(contacts.map(person => normalizeName(person.name)));
+  const missing = members.filter(member => !known.has(normalizeName(member.displayName)));
+  const discovered = missing.length ? await prisma.$transaction(tx =>
+    upsertSplitBillPeopleFromNames(tx, userId, missing.map(member => member.displayName))) : [];
+  const photos = new Map(members.filter(m => m.avatarUrl).map(m => [normalizeName(m.displayName), m.avatarUrl]));
+  return [...contacts, ...discovered].map(p => ({ ...p, avatarUrl: p.avatarUrl || photos.get(normalizeName(p.name)) || null }));
+}

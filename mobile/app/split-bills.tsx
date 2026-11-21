@@ -44,9 +44,10 @@ import {
   PlanAction,
   PlanHeader,
   PlanTabs,
-  SummaryCard,
+
   usePlanData,
 } from "../src/plan-ui";
+import { AccountSummaryGrid } from "../src/account-summary-grid";
 import { GroupCover } from "../src/group-cover";
 type Bill = {
   id: string;
@@ -78,7 +79,7 @@ type Bill = {
     }[];
   };
 };
-const balanceSample = { summary: { youOwe: "₱0.00", owedToYou: "₱0.00" } };
+const balanceSample = { personBalances: {} as Record<string,{owed:string;owes:string}>, summary: { youOwe: "₱0.00", owedToYou: "₱0.00" } };
 const sample = { bills: [] as Bill[], hasMore: false, page: 1 };
 const optionsSample = {
   groups: [] as {
@@ -97,6 +98,7 @@ const optionsSample = {
     accountName: string | null;
     accountNumber: string | null;
     qrImageData: string | null;
+    qrThumbnail?: string | null;
     isDefault: boolean;
     brandLogoUrl?:string|null;
     brandPalette?:AccountCardPalette;
@@ -150,7 +152,12 @@ export default function SplitBills() {
   const [tab, setTab] = useState("Bills");
   const [selected, setSelected] = useState<Bill | null>(null);
   const [adding, setAdding] = useState(false);
-  useEffect(()=>onContextBillEntry(()=>{if(!entity)setAdding(true);}),[entity]);
+  const [initialMethod,setInitialMethod] = useState<"manual"|"upload">("manual");
+  function openTabAdd() {
+    if (tab === "Bills") { setInitialMethod("manual"); setAdding(true); }
+    else setCreating(tab === "Groups" ? "Group" : tab === "People" ? "Person" : "Payment");
+  }
+  useEffect(()=>onContextBillEntry(()=>{if(!entity)openTabAdd();}),[entity,tab]);
   const [sourceTransaction, setSourceTransaction] = useState<Transaction | null>(null);
   useEffect(() => {
     let active = true;
@@ -234,9 +241,9 @@ export default function SplitBills() {
       />
     );
   const entryOverlay = adding ? (
-    <EntryOverlay onClose={() => setAdding(false)}>
-      <BillEditor
+    <BillEditor
         key={sourceTransaction?.id || session.profileId}
+        initialMethod={initialMethod}
         sourceTransaction={sourceTransaction}
         onClose={() => { setAdding(false); setSourceTransaction(null); }}
         onSaved={(bill) => {
@@ -250,7 +257,6 @@ export default function SplitBills() {
           else { reload(); options.reload(); }
         }}
       />
-    </EntryOverlay>
   ) : null;
   if (paymentDetail)
     return (
@@ -308,11 +314,11 @@ export default function SplitBills() {
   return (
     <Screen layout="dashboard">
       {entryOverlay}
-      {creating?<EntryOverlay onClose={()=>setCreating(null)}><TogetherEntry savedPeople={options.data?.people ?? []} kind={creating} onClose={()=>setCreating(null)} onSaved={options.reload}/></EntryOverlay>:null}
+      {creating?<EntryOverlay onClose={()=>setCreating(null)}><TogetherEntry savedPeople={options.data?.people ?? []} kind={creating} onClose={()=>setCreating(null)} onSaved={() => {options.reload(); reload();}}/></EntryOverlay>:null}
       <PlanHeader
         title={selected ? "Bill Details" : "Split Bills"}
         back={selected ? () => setSelected(null) : undefined}
-        add={() => setAdding(true)}
+        add={openTabAdd}
       />
       {selected ? (
         <>
@@ -350,16 +356,11 @@ export default function SplitBills() {
           {tab!=="Bills"?<TogetherToolbar search={search} onSearch={setSearch} placeholder={`Search ${tab.toLowerCase()}`} action={`Add ${tab==="Groups"?"Group":tab==="People"?"Person":"Payment"}`} onAdd={()=>setCreating(tab==="Groups"?"Group":tab==="People"?"Person":"Payment")}/>:null}
           {tab === "Bills" ? (
             <>
-              <AdaptiveGrid minItemWidth={140} maxColumns={2} gap={8}>
-                <SummaryCard
-                  title="You owe"
-                  value={balance.data?.summary?.youOwe ?? "—"}
-                />
-                <SummaryCard
-                  title="Owed to you"
-                  value={balance.data?.summary?.owedToYou ?? "—"}
-                />
-              </AdaptiveGrid>
+              <AccountSummaryGrid metrics={[
+                {label:"You Owe",value:balance.data?.summary?.youOwe ?? "—"},
+                {label:"Owed to You",value:balance.data?.summary?.owedToYou ?? "—"},
+              ]}/>
+
               {balance.error ? (
                 <>
                   <Notice>Balance summary is unavailable.</Notice>
@@ -457,7 +458,7 @@ export default function SplitBills() {
                             <Body muted={false}>
                               {money(bill.total, bill.currency)}
                             </Body>
-                            {bill.resolved || bill.settlementStatus !== "open" ? <Body>{bill.resolved ? "Resolved" : bill.settlementStatus}</Body> : null}
+                            {bill.resolved || bill.settlementStatus !== "open" ? <Body>{bill.resolved ? "Resolved" : bill.settlementStatus === "awaiting_payer" ? "Assign Payer" : bill.settlementStatus.replaceAll("_"," ").replace(/^./, c=>c.toUpperCase())}</Body> : null}
                           </View>
                           <Text
                             style={{ fontSize: 26, color: colors.ink }}
@@ -490,7 +491,7 @@ export default function SplitBills() {
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="Add bill manually"
-                          onPress={() => setAdding(true)}
+                          onPress={() => {setInitialMethod("manual");setAdding(true);}}
                           style={{
                             width: 44,
                             height: 44,
@@ -506,7 +507,7 @@ export default function SplitBills() {
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="Upload receipt"
-                          onPress={() => setAdding(true)}
+                          onPress={() => {setInitialMethod("upload");setAdding(true);}}
                           style={{
                             width: 44,
                             height: 44,
@@ -566,8 +567,8 @@ export default function SplitBills() {
                       borderColor: colors.line,
                     }}
                   >
-                    <GroupCover id={group.id} url={group.avatarUrl} style={{ width: "100%", aspectRatio: 2.2 }} />
-                    <View style={{ padding: 16, gap: 12, alignItems: "center" }}>
+                    <GroupCover id={group.id} url={group.avatarUrl} style={{ width: "100%", height: 92 }} />
+                    <View style={{ padding: 10, gap: 6, alignItems: "center" }}>
                     <Text style={{ textAlign: "center", color: colors.ink, fontFamily: "Poppins-SemiBold" }}>{group.name}</Text>
                     <View style={{ flexDirection: "row", justifyContent: "center", flexWrap: "wrap", gap: 6 }}>
                       {group.members.slice(0, 5).map((member) => (
@@ -600,27 +601,18 @@ export default function SplitBills() {
           ) : tab === "People" ? (
             <>
               {options.data.people.length ? (
-                options.data.people.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).map((person) => (
-                  <Card key={person.id}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        gap: 12,
-                        alignItems: "center",
-                      }}
-                    >
-                      <PersonAvatar
-                        name={person.name}
-                        imageUrl={person.avatarUrl}
-                      />
-                      <Body muted={false}>{person.name}</Body>
-                    </View>
-                    <PlanAction
-                      title="View person"
-                      onPress={() => setEntity({ person: person.name })}
-                    />
-                  </Card>
-                ))
+                <View>
+                  <View style={{flexDirection:"row",gap:6,paddingVertical:8}}><Text style={{flex:1,color:colors.muted}}>Name</Text><Text style={{width:82,textAlign:"right",color:colors.muted}}>Owed</Text><Text style={{width:82,textAlign:"right",color:colors.muted}}>Owes</Text><View style={{width:36}}/></View>
+                  {options.data.people.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).map(person=>(
+                    <Pressable key={person.id} accessibilityRole="button" accessibilityLabel={`Open ${person.name} details`} onPress={()=>setEntity({person:person.name})}
+                      style={{flexDirection:"row",alignItems:"center",gap:6,minHeight:58,borderBottomWidth:1,borderColor:colors.line}}>
+                      <PersonAvatar name={person.name} imageUrl={person.avatarUrl}/>
+                      <Text style={{flex:1,color:colors.ink}}>{person.name}</Text>
+                      <Text style={{width:82,textAlign:"right",color:colors.ink}}>{balance.data?.personBalances?.[person.id]?.owed ?? "—"}</Text>
+                      <Text style={{width:82,textAlign:"right",color:colors.ink}}>{balance.data?.personBalances?.[person.id]?.owes ?? "—"}</Text>
+                      <Text style={{width:36,textAlign:"center",color:colors.teal}}>•••</Text>
+                    </Pressable>
+                  ))}</View>
               ) : (
                 <CloverEmptyState pose="circles">No people saved yet.</CloverEmptyState>
               )}
@@ -632,18 +624,19 @@ export default function SplitBills() {
                   <Pressable key={profile.id} accessibilityRole="button" accessibilityLabel={`Open ${profile.label} payment details`} onPress={() => setPaymentDetail(profile)}>
                     <LinearGradient
                       colors={accountCardPalette({type:"bank",institution:profile.provider,brandPalette:profile.brandPalette}).colors}
-                      style={{ padding: 20, gap: 6, borderRadius: 20 }}
+                      style={{ padding: 16, gap: 6, borderRadius: 20, alignItems:"center" }}
                     >
+                      {profile.qrImageData ? (
+                        <Image source={{ uri: profile.qrThumbnail || profile.qrImageData }} accessibilityLabel={`${profile.label} QR code`}
+                          style={{ width: 116, height: 116, maxWidth: "100%", alignSelf: "center", marginTop: 6 }} resizeMode="contain" />
+                      ) : null}
                       <Text style={{ fontFamily: "Poppins-SemiBold", color: "white", fontSize: 16 }}>
                         {profile.label}{profile.isDefault ? " · Default" : ""}
                       </Text>
                       {paymentLines(profile).map(({ key, value }) => (
                         <Text key={key} style={{ color: "white" }}>{value}</Text>
                       ))}
-                      {profile.qrImageData ? (
-                        <Image source={{ uri: profile.qrImageData }} accessibilityLabel={`${profile.label} QR code`}
-                          style={{ width: 160, height: 160, maxWidth: "100%", alignSelf: "center", marginTop: 6 }} resizeMode="contain" />
-                      ) : null}
+
                     </LinearGradient>
                   </Pressable>
                 ))

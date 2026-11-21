@@ -1,3 +1,5 @@
+import {paymentQrThumbnail} from "@/lib/payment-qr-thumbnail";
+import { loadSplitBillPeople } from "@/lib/split-bill-people";
 import { resolvedGroupCover } from "../../../../../../shared/split-group-cover";
 import { groupCoverPatch } from "@/lib/split-group-cover-input";
 import { importCommitAgeMs } from "../../../../../../shared/import-commit-timing";
@@ -459,13 +461,13 @@ async function handle(
     if (operation === "together-options") {
       const [groups, people, profiles, circleMembers] = await Promise.all([
         prisma.splitBillGroup.findMany({ where:{ OR:[{userId:user.id},{collaborators:{some:{userId:user.id}}}], archivedAt:null }, select:{id:true,userId:true,name:true,avatarUrl:true,members:{select:{id:true,name:true,previousNames:true}},_count:{select:{bills:true}}} }),
-        prisma.splitBillPerson.findMany({where:{userId:user.id},select:{id:true,name:true,avatarUrl:true}}),
+        loadSplitBillPeople(user.id),
         prisma.splitBillPaymentProfile.findMany({where:{userId:user.id},select:{id:true,label:true,provider:true,currency:true,accountName:true,accountNumber:true,qrImageData:true,isDefault:true}}),
         prisma.circleMembership.findMany({where:{status:"active",circle:{archivedAt:null,memberships:{some:{userId:user.id,status:"active"}}},OR:[{userId:null},{userId:{not:user.id}}]},select:{displayName:true}}),
       ]);
       const circlePeople = circleMembers.map(member => ({name:member.displayName}));
       const {paymentOptionBrand}=await import("@/lib/payment-option-brand");
-      return reply({circlePeople,groups:groups.map(({userId,...g})=>({...g,avatarUrl:(() => { const cover = resolvedGroupCover(g.id, g.avatarUrl); return cover.startsWith("/") ? new URL(cover, request.url).href : cover; })(),canEdit:userId===user.id})),people,profiles:profiles.map(profile=>({...profile,...paymentOptionBrand(profile.provider,profile.label)}))});
+      return reply({circlePeople,groups:groups.map(({userId,...g})=>({...g,avatarUrl:(() => { const cover = resolvedGroupCover(g.id, g.avatarUrl); return cover.startsWith("/") ? new URL(cover, request.url).href : cover; })(),canEdit:userId===user.id})),people,profiles:await Promise.all(profiles.map(async profile=>({...profile,qrThumbnail:await paymentQrThumbnail(profile.qrImageData),...paymentOptionBrand(profile.provider,profile.label)})))});
     }
     if (operation === "investments") {
       return reply(await (await import("@/lib/mobile-investment-data")).loadMobileInvestments(workspaceId));

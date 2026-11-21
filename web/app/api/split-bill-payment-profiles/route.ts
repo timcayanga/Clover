@@ -1,3 +1,4 @@
+import {paymentQrThumbnail} from "@/lib/payment-qr-thumbnail";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
@@ -12,7 +13,7 @@ export async function GET() {
       where: { userId: user.id },
       orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
     });
-    return NextResponse.json({ profiles });
+    return NextResponse.json({ profiles: await Promise.all(profiles.map(async p=>({...p,qrThumbnail:await paymentQrThumbnail(p.qrImageData)}))) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load payment methods" }, { status: 400 });
   }

@@ -1,4 +1,5 @@
 "use client";
+import {groupCoverUrl} from "../../shared/split-group-cover";
 import { createCircleAvatarDataUrl } from "@/lib/circle-photo";
 import {CircleDetailWorkspace} from "./circle-detail-workspace";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -80,10 +81,10 @@ const emptyStateCircleTypes = [
 
 const CIRCLE_MARK_URL = "/clover-mark.svg";
 
-const getCircleAvatarUrl = (circle: Pick<CircleSummary, "avatarUrl" | "type">) =>
+const getCircleAvatarUrl = (circle: Pick<CircleSummary, "avatarUrl" | "type" | "id">) =>
   circle.avatarUrl && !isSplitBillBuiltInAvatarUrl(circle.avatarUrl)
     ? circle.avatarUrl
-    : circle.type === "household" ? "/assets/circles/household.jpg" : "/assets/circles/social.jpg";
+    : groupCoverUrl(circle.id);
 
 
 const formatMoney = (amount: number, currency: string) =>
