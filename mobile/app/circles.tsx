@@ -1,3 +1,5 @@
+import { displayPhoto } from "../src/prepare-display-photo";
+import { removeUploadCopy } from "../src/upload";
 import { currencyMark } from "../../shared/currency-mark";
 import { circleBillMembers, circleBillContextReady } from "../../shared/direct-bill-context";
 import { TogetherToolbar } from "../src/together-toolbar";
@@ -528,15 +530,13 @@ function CircleEditor({
             quality: 0.2,
             base64: true,
           })
-            .then((r) => {
-              if (!r.canceled && r.assets[0].base64) {
-                const value = `data:image/jpeg;base64,${r.assets[0].base64}`;
-                if (value.length > 200000)
-                  setError("Choose a smaller image (under 150 KB).");
-                else setAvatar(value);
-              }
-            })
-            .catch((e) => setError(e.message));
+            .then(async (r) => {
+                      if (r.canceled) return;
+                      const asset = r.assets[0];
+                      try { setAvatar(await displayPhoto(asset, 512, 200000)); }
+                      finally { removeUploadCopy(asset.uri); }
+                    })
+                    .catch((e) => setError(e.message));
         }}
       />
       {(avatar === undefined ? initial?.avatarUrl : avatar) ? <PlanAction title="Remove photo" onPress={() => setAvatar(null)} /> : null}

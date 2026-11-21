@@ -196,9 +196,10 @@ async function main() {
       "../../shared/currency-mark": load("../shared/currency-mark.ts"),
       react: ui.h, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
       "@clerk/expo": {useUser:()=>({user:{fullName:"Personal profile name"}})},
-      "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {},
+      "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]}),launchImageLibraryAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {getDocumentAsync:async()=>({canceled:false,assets:[{...captured,name:"receipt.jpg"}]})},
       "./split-people-field": {...load("../mobile/src/split-people-field.tsx", {"react/jsx-runtime":jsx,"react-native":{},"./app-text":{},"./ui":{}}), PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": {suggestBillCategory:()=>null},
       "./add-entry-methods": {AddEntryMethods:"Methods"}, "./upload": loadPhotoUpload(platform),
+      "./upload-selected-file": load("../mobile/src/upload-selected-file.ts", {"expo-crypto":{}, "./offline/file-storage":{}, "../../shared/receipt-upload":{receiptMultipartLimit:1572864}, "react-native":{Platform:{OS:platform}}, "./upload":loadPhotoUpload(platform)}),
       "./session": {useSession:()=>({profileId:"profile",request:async (_path, opts)=>{if (_path.startsWith("split-bill-receipts/preview")) {
           const {body,boundary} = await convertFormDataAsync(opts.body);
           const req = new Request("https://example.invalid", {method:"POST",body,headers:{"content-type":"multipart/form-data; boundary="+boundary}});
@@ -239,9 +240,13 @@ async function main() {
     assert.equal(saved[0].circleId,"trip");
     assert.deepEqual(saved[0].participants.map(p=>p.name),["Alex","Bea"]);
     assert.equal(saved[0].paidByIndex,0);
-    render().find(n=>n.type==="Methods").props.onUploadSource("camera");
-    await flush();
-    assert.ok(receiptPreviewed);
+    for (const source of ["camera", "library", "file"]) {
+      receiptPreviewed = false;
+      render().find(n=>n.type==="Methods").props.onUploadSource(source);
+      await flush();
+      assert.ok(receiptPreviewed, source);
+      assert.equal(render().find(n=>n.type==="Methods").props.initialMethod, "manual");
+    }
     assert.equal(control("label","Name").props.value,"Bakery");
     assert.equal(control("label","Amount").props.value,"12.00");
     control("title","Save Expense").props.onPress();
@@ -318,6 +323,9 @@ async function main() {
     const { SplitBillEntry } = load(
       "components/split-bill-entry.tsx",
       {
+        "@/lib/preview-receipt-client": { previewReceiptFile: (file) => {
+          const form = new FormData(); form.set("file", file); return fetch("/api/split-bill-receipts/preview",{body:form});
+        } },
         react: h.h,
         "react/jsx-runtime": jsx,
         "react-dom": { createPortal: (n) => n },

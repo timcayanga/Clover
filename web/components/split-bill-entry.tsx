@@ -1,4 +1,5 @@
 "use client";
+import { previewReceiptFile } from "@/lib/preview-receipt-client";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supportsReceiptCapture } from "@/lib/receipt-capture-platform";
@@ -146,12 +147,7 @@ export function SplitBillEntry({
     try {
       if (!(await requestAiConsent()))
         throw Error("You can add this bill manually without AI processing.");
-      const form = new FormData();
-      form.set("file", file);
-      const r = await fetch("/api/split-bill-receipts/preview", {
-        method: "POST",
-        body: form,
-      });
+      const r = await previewReceiptFile(file);
       const p = await r.json();
       if (!r.ok) throw Error(p.error || "Unable to read receipt.");
       if (!alive.current) return;

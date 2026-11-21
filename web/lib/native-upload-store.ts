@@ -122,6 +122,34 @@ async function owned(id: string, userId: string, workspaceId: string) {
     );
   return row;
 }
+async function assembleUpload(row: Upload) {
+  const count = Math.ceil(row.size / NATIVE_UPLOAD_PART_SIZE);
+  const assembled = Buffer.allocUnsafe(row.size);
+  // Bound R2 concurrency while preserving exact byte order and per-part validation.
+  for (let first = 0; first < count; first += 4) {
+    await Promise.all(Array.from({ length: Math.min(4, count - first) }, async (_, offset) => {
+      const index = first + offset;
+      const digest = row.parts[String(index)];
+      if (!digest) throw new NativeInputError("Some upload parts are missing. Resume the upload.");
+      const part = await getPart(row.id, index);
+      if (part.length !== nativeUploadPartBytes(row.size, index) ||
+          createHash("sha256").update(part).digest("hex") !== digest) {
+        throw new NativeInputError("Upload verification failed. Choose the original file again.");
+      }
+      assembled.set(part, index * NATIVE_UPLOAD_PART_SIZE);
+    }));
+  }
+  return assembled;
+}
+
+export async function readReceiptUpload(id: string, userId: string, workspaceId: string) {
+  z.string().uuid().parse(id);
+  const row = await owned(id, userId, workspaceId);
+  if (row.state !== "uploading") throw new NativeInputError("Choose the receipt again.");
+  const bytes = await assembleUpload(row);
+  return new File([new Uint8Array(bytes)], row.fileName, { type: row.contentType });
+}
+
 type ImportProcessor = (request: Request, id: string) => Promise<Response>;
 const processImport: ImportProcessor = async (request, id) =>
   (await import("@/app/api/imports/[importId]/process/route")).POST(request, {
@@ -337,25 +365,7 @@ export async function nativeUploadRequest(
       });
     } else {
       const assemblyStartedAt = performance.now();
-      const bytes = await measureImportTiming(id, "native_source_assembly", async () => {
-        const count = Math.ceil(row.size / NATIVE_UPLOAD_PART_SIZE);
-        const assembled = Buffer.allocUnsafe(row.size);
-        // Bound R2 concurrency while preserving exact byte order and per-part validation.
-        for (let first = 0; first < count; first += 4) {
-          await Promise.all(Array.from({ length: Math.min(4, count - first) }, async (_, offset) => {
-            const index = first + offset;
-            const digest = row.parts[String(index)];
-            if (!digest) throw new NativeInputError("Some upload parts are missing. Resume the upload.");
-            const part = await getPart(id, index);
-            if (part.length !== nativeUploadPartBytes(row.size, index) ||
-                createHash("sha256").update(part).digest("hex") !== digest) {
-              throw new NativeInputError("Upload verification failed. Choose the original file again.");
-            }
-            assembled.set(part, index * NATIVE_UPLOAD_PART_SIZE);
-          }));
-        }
-        return assembled;
-      });
+      const bytes = await measureImportTiming(id, "native_source_assembly", () => assembleUpload(row));
       if (isUploadPdf(row.fileName, row.contentType)) pdfByteAssemblyMs = performance.now() - assemblyStartedAt;
       const problem = validateImportFileBytes({
         fileName: row.fileName,

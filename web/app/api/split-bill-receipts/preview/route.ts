@@ -9,10 +9,12 @@ import { parseImportTextWithOpenAIFallback, type OpenAIImportModelUsage } from "
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseAmountValue, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 import { isLocalDevHost } from "@/lib/auth";
-import { MAX_IMPORT_FILE_SIZE, validateImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
+import { validateImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { uploadObject } from "@/lib/s3";
+import { nativeUploadRequest, readReceiptUpload } from "@/lib/native-upload-store";
+import { NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -22,7 +24,7 @@ import { estimateLocalParserTokens } from "@/lib/import-token-usage";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
-const MAX_RECEIPT_REQUEST_BYTES = MAX_IMPORT_FILE_SIZE + 128 * 1024;
+const MAX_RECEIPT_REQUEST_BYTES = 4.5 * 1024 * 1024;
 const sanitizeReceiptFileName = (value: string) =>
   value
     .trim()
@@ -251,6 +253,14 @@ export async function POST(request: Request) {
         select: { id: true },
         orderBy: { createdAt: "asc" },
       });
+    const params = new URL(request.url).searchParams;
+    const uploadId = params.get("uploadId");
+    const action = params.get("action");
+    if (action) {
+      if (!workspace || !uploadId || !["start", "part", "cancel"].includes(action))
+        return NextResponse.json({ error: "Invalid receipt upload." }, { status: 400 });
+      return await nativeUploadRequest(request, uploadId, user.clerkUserId, workspace.id, action);
+    }
     const tokenUsage = await getCloverTokenUsage(user);
     const tokenLimitError = getCloverTokenLimitError(tokenUsage);
     if (tokenLimitError) {
@@ -278,8 +288,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Too many receipt previews. Please try again shortly." }, { status: 429 });
     }
 
-    const formData = await request.formData();
-    const file = formData.get("file");
+    const file = uploadId && workspace
+      ? await readReceiptUpload(uploadId, user.clerkUserId, workspace.id)
+      : (await request.formData()).get("file");
+    if (uploadId && workspace) {
+      after(() => nativeUploadRequest(request, uploadId, user.clerkUserId, workspace.id, "cancel").then(() => {}));
+    }
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Receipt file is required" }, { status: 400 });
@@ -291,7 +305,7 @@ export async function POST(request: Request) {
       fileSize: selectedFile.size,
       contentType: selectedFile.type,
       importMode: "receipt",
-    });
+    }, { maximumBytes: NATIVE_UPLOAD_MAX_SIZE, maximumLabel: "25 MB" });
     if (validationError) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }

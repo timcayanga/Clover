@@ -1,5 +1,6 @@
 import { storeAdviserAttachment } from "@/lib/adviser-attachments.server";
-import { NextResponse } from "next/server";
+import { nativeUploadRequest, readReceiptUpload } from "@/lib/native-upload-store";
+import { after, NextResponse } from "next/server";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
@@ -25,6 +26,13 @@ export async function POST(request: Request) {
     const workspaceId = new URL(request.url).searchParams.get("workspaceId");
     if (!workspaceId) return respond({ error: "Choose a Profile first." }, 400);
     await assertWorkspaceAccess(user.clerkUserId, workspaceId);
+    const params = new URL(request.url).searchParams;
+    const uploadId = params.get("uploadId");
+    const action = params.get("action");
+    if (action) {
+      if (!uploadId || !["start", "part", "cancel"].includes(action)) return respond({ error: "Invalid attachment upload." }, 400);
+      return await nativeUploadRequest(request, uploadId, user.clerkUserId, workspaceId, action);
+    }
     try {
       assertRateLimit(`adviser-attachment:${user.id}`, 6, 60_000);
     } catch {
@@ -32,6 +40,11 @@ export async function POST(request: Request) {
         { error: "Please wait a minute before attaching another file." },
         429,
       );
+    }
+    if (uploadId) {
+      const file = await readReceiptUpload(uploadId, user.clerkUserId, workspaceId);
+      after(() => nativeUploadRequest(request, uploadId, user.clerkUserId, workspaceId, "cancel").then(() => {}));
+      return respond({ attachment: await storeAdviserAttachment(file, workspaceId, user.id) });
     }
     // Bound actual multipart bytes even when Content-Length is absent.
     const reader = request.body?.getReader();
