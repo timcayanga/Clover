@@ -1,7 +1,7 @@
 "use client";
 import {SplitGroupPeople} from "./split-group-people";
 import {remainingDebts,simplifyDebts} from "../../shared/split-debts";
-import {groupCoverUrl} from "../../shared/split-group-cover";
+import {resolvedGroupCover} from "../../shared/split-group-cover";
 import {useUser} from "@clerk/nextjs";
 import { SplitItemGrid } from "./split-item-grid";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
@@ -1526,7 +1526,7 @@ export function SplitBillWorkspace({
             {selectedGroup ? (
               <div className="split-bill-detail-modal__body">
                 <div className="split-bill-detail-modal__identity">
-                  <SplitBillEntityAvatar name={selectedGroup.name} avatarUrl={selectedGroup.avatarUrl||groupCoverUrl(selectedGroup.id)} sizeClass="split-bill-person-avatar--medium" />
+                  <SplitBillEntityAvatar name={selectedGroup.name} avatarUrl={resolvedGroupCover(selectedGroup.id,selectedGroup.avatarUrl)} sizeClass="split-bill-person-avatar--medium" />
                   <div>
                     <strong>{selectedGroup.name}</strong>
                   </div>

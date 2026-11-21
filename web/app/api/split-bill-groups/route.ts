@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
-import { pickSplitBillAvatarUrl } from "@/lib/split-bill-avatars";
 import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { getUserDisplayName } from "@/lib/user-display-name";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
 
     const { group, people } = await prisma.$transaction(async (tx) => {
       if (body.createCircle) await assertPlanQuota(tx, user.id, "circles");
-      const avatarUrl = body.avatarUrl?.trim() || pickSplitBillAvatarUrl(body.name);
+      const avatarUrl = body.avatarUrl?.trim() || null;
       const circle = body.createCircle
         ? await tx.circle.create({
             data: {

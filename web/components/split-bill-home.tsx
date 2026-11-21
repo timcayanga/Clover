@@ -1,6 +1,6 @@
 "use client";
 import {remainingDebts,simplifyDebts} from "../../shared/split-debts";
-import { groupCoverUrl } from "../../shared/split-group-cover";
+import { resolvedGroupCover, groupCoverUrl } from "../../shared/split-group-cover";
 import { suggestBillCategory } from "../../shared/split-bill-experience";
 import { CloverMascot } from "@/components/clover-mascot";
 
@@ -530,10 +530,9 @@ export function SplitBillHome({
           <div className="split-bill-group-grid">
             {visibleGroups.map((group) => (
               <article className="split-bill-group-card" key={group.id} onClick={() => onOpenGroup(group.id)}>
-                <div className="split-bill-group-identity">
-                  <SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl || groupCoverUrl(group.id)} sizeClass="split-bill-group-photo" />
-                  <strong>{group.name}</strong>
-                </div>
+                <img className="split-group-cover-banner" alt="" src={resolvedGroupCover(group.id, group.avatarUrl)}
+                  onError={e => { const fallback = groupCoverUrl(group.id); if (e.currentTarget.getAttribute("src") !== fallback) e.currentTarget.src = fallback; }} />
+                <strong>{group.name}</strong>
                 <div className="split-bill-avatars">
                   {group.members.slice(0, 5).map((member) => (
                     <SplitBillEntityAvatar

@@ -229,3 +229,14 @@
   from { transform: translateX(0); }
   to { transform: translateX(-100%); }
 }
+
+.split-bill-home .split-bill-group-grid .split-bill-group-card {
+  padding: 0 0 18px; align-items: center; text-align: center; gap: 12px; overflow: hidden;
+}
+.split-group-cover-banner { display: block; width: 100%; aspect-ratio: 2.2; object-fit: cover; }
+.split-bill-group-card > strong { padding-inline: 14px; overflow-wrap: anywhere; }
+.split-bill-group-card .split-bill-avatars { justify-content: center; }
+.group-cover-choices { display: flex; gap: 8px; flex-wrap: wrap; }
+.group-cover-choices button { padding: 2px; border: 2px solid transparent; background: none; border-radius: 6px; }
+.group-cover-choices button[aria-pressed="true"] { border-color: var(--teal, #008b89); }
+.group-cover-choices img { display: block; width: 64px; border-radius: 3px; }

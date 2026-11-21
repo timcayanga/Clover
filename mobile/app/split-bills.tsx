@@ -47,17 +47,7 @@ import {
   SummaryCard,
   usePlanData,
 } from "../src/plan-ui";
-import { groupCoverIndex } from "../../shared/split-group-cover";
-const groupCovers = [
-  require("../assets/split-group-covers/cover-0.jpg"),
-  require("../assets/split-group-covers/cover-1.jpg"),
-  require("../assets/split-group-covers/cover-2.jpg"),
-  require("../assets/split-group-covers/cover-3.jpg"),
-  require("../assets/split-group-covers/cover-4.jpg"),
-  require("../assets/split-group-covers/cover-5.jpg"),
-  require("../assets/split-group-covers/cover-6.jpg"),
-  require("../assets/split-group-covers/cover-7.jpg"),
-];
+import { GroupCover } from "../src/group-cover";
 type Bill = {
   id: string;
   title: string;
@@ -571,32 +561,15 @@ export default function SplitBills() {
                     }
                     style={{
                       borderRadius: 20,
-                      padding: 20,
-                      gap: 16,
+                      overflow: "hidden",
                       borderWidth: 1,
                       borderColor: colors.line,
                     }}
                   >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 16,
-                      }}
-                    >
-                      <Image
-                        source={
-                          group.avatarUrl
-                            ? { uri: group.avatarUrl }
-                            : groupCovers[groupCoverIndex(group.id)]
-                        }
-                        style={{ width: 72, height: 72, borderRadius: 12 }}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Body muted={false}>{group.name}</Body>
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: "row", gap: 6 }}>
+                    <GroupCover id={group.id} url={group.avatarUrl} style={{ width: "100%", aspectRatio: 2.2 }} />
+                    <View style={{ padding: 16, gap: 12, alignItems: "center" }}>
+                    <Text style={{ textAlign: "center", color: colors.ink, fontFamily: "Poppins-SemiBold" }}>{group.name}</Text>
+                    <View style={{ flexDirection: "row", justifyContent: "center", flexWrap: "wrap", gap: 6 }}>
                       {group.members.slice(0, 5).map((member) => (
                         <PersonAvatar
                           key={member.id}
@@ -616,6 +589,7 @@ export default function SplitBills() {
                       title="View Group"
                       onPress={() => setEntity({ group })}
                     />
+                    </View>
                   </LinearGradient>
                   </Pressable>
                 ))}</AdaptiveGrid>

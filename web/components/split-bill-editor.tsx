@@ -687,7 +687,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
                   type="file"
                   accept="image/*,.pdf"
                   hidden
-                  onChange={(event) => void importReceipt(event.target.files?.[0] ?? null)}
+                  onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void importReceipt(file); }}
                 />
                 {isPreviewing ? "Reading receipt..." : "Import receipt"}
               </label>
