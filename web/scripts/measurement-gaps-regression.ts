@@ -70,8 +70,15 @@ async function main() {
   const captureCode=ts.transpileModule(readFileSync("lib/analytics-capture.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   assert.throws(()=>vm.runInNewContext(captureCode,{exports:{},window:{},require:()=>({})}),/cannot run in a browser/);
   // Use the real pinned Node SDK and real transport; intercept every network request.
+  const previousEnvironment=process.env.VERCEL_ENV;
   const previousFetch=global.fetch, previousKey=process.env.NEXT_PUBLIC_POSTHOG_KEY;
   process.env.NEXT_PUBLIC_POSTHOG_KEY="synthetic-ingestion-key";
+  const { getPostHogConfig } = await import("../lib/analytics");
+  for (const environment of ["preview", "development", ""]) {
+    process.env.VERCEL_ENV = environment;
+    assert.equal(getPostHogConfig().key, "", "nonproduction capture and mobile config must be disabled");
+  }
+  process.env.VERCEL_ENV = "production";
   const requests:any[]=[];
   global.fetch=async (_input,init)=>{const body=init?.body; const bytes=typeof body === "string" ? Buffer.from(body) : Buffer.from(body as Uint8Array); requests.push(JSON.parse(bytes[0] === 31 && bytes[1] === 139 ? gunzipSync(bytes).toString() : bytes.toString()));return Response.json({status:1});};
   try {
@@ -97,7 +104,7 @@ async function main() {
     finally { console.warn=previousWarn; }
     assert.equal(failures,1,"ambiguous analytics delivery must not replay product work or retry in capture");
     assert.equal(warnings.length,1);assert.doesNotMatch(JSON.stringify(warnings),/PRIVATE|synthetic-ingestion-key/);
-  } finally {global.fetch=previousFetch;if(previousKey===undefined)delete process.env.NEXT_PUBLIC_POSTHOG_KEY;else process.env.NEXT_PUBLIC_POSTHOG_KEY=previousKey;}
+  } finally {if(previousEnvironment===undefined)delete process.env.VERCEL_ENV;else process.env.VERCEL_ENV=previousEnvironment;global.fetch=previousFetch;if(previousKey===undefined)delete process.env.NEXT_PUBLIC_POSTHOG_KEY;else process.env.NEXT_PUBLIC_POSTHOG_KEY=previousKey;}
 
 
   // The actual read-only import report must keep staff/test out of customer denominators.

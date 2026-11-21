@@ -251,7 +251,10 @@ export const scopeAnalyticsDistinctId = (distinctId: string, environment = getAn
   `${environment}:${distinctId}`;
 
 export const getPostHogConfig = () => {
-  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "";
+  const production = typeof document === "undefined"
+    ? process.env.VERCEL_ENV === "production"
+    : document.body?.dataset.environment === "production" && ["clover.ph", "www.clover.ph"].includes(window.location.hostname);
+  const key = production ? process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "" : "";
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com";
 
   return {

@@ -204,14 +204,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <MobileScreenTransition />
         {publishableKey ? (
           <ClerkAppProvider publishableKey={publishableKey} localization={clerkLocalization}>
-            <PostHogAnalytics />
-            <PostHogClerkIdentity />
+            {process.env.VERCEL_ENV === "production" && <PostHogAnalytics />}
+            {process.env.VERCEL_ENV === "production" && <PostHogClerkIdentity />}
             <AdminOnlyRedirect />
             {children}
           </ClerkAppProvider>
         ) : (
           <>
-            <PostHogAnalytics />
+            {process.env.VERCEL_ENV === "production" && <PostHogAnalytics />}
             {children}
           </>
         )}

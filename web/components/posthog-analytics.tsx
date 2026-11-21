@@ -615,7 +615,7 @@ function PostHogIdentity() {
 }
 
 export function PostHogAnalytics() {
-  const token = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  const token = shouldTrackAnalytics() && process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host = getPostHogClientHost();
 
   if (!token) {
@@ -635,7 +635,7 @@ export function PostHogAnalytics() {
 }
 
 export function PostHogClerkIdentity() {
-  const token = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  const token = shouldTrackAnalytics() && process.env.NEXT_PUBLIC_POSTHOG_KEY;
 
   if (!token) {
     return null;
