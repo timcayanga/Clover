@@ -64,6 +64,13 @@ const nextConfig = {
       "../node_modules/libheif-js/**/*",
     ],
   },
+  // Keep normal builds unchanged; low-disk release runs can omit compiler caches.
+  ...(process.env.CLOVER_BUILD_NO_CACHE === "1" ? {
+    webpack(config, { dev }) {
+      if (!dev) config.cache = false;
+      return config;
+    },
+  } : {}),
   typescript: {
     ignoreBuildErrors: true,
   },
