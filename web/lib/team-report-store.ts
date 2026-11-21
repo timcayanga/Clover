@@ -28,7 +28,11 @@ export async function saveTeamReport(ownerId: string, raw: TeamReport) {
     state.briefs.push({id: briefId, agent: input.agent, text: input.title, at: at.toISOString()});
     const revision = (record?.revision ?? 0) + 1;
     const payload = JSON.parse(JSON.stringify(state)) as Prisma.InputJsonValue;
-    await tx.teamStudioState.upsert({where: {ownerId}, create: {ownerId, revision, payload}, update: {revision, payload}});
+    if (!record) await tx.teamStudioState.create({data: {ownerId, revision, payload}});
+    else {
+      const updated = await tx.teamStudioState.updateMany({where: {ownerId, revision: record.revision}, data: {revision, payload}});
+      if (updated.count !== 1) throw new Error("CONFLICT");
+    }
     await tx.teamStudioAudit.create({data: {ownerId, revision, payload}});
     await tx.teamAgentRun.create({data: {
       id, ownerId, briefId, agent: input.agent, triggerKey, model: "coordinator-report",

@@ -546,6 +546,19 @@ async function main() {
   assert.match(captured.at(-1).instructions, /No|no live PostHog/);
   const qualityReport = await saveTeamReport(owner, {...report, agent: "analytics-reviewer", reportKey: "2026-11-21-review", markdown: "Measurement gaps"});
   assert.notEqual(qualityReport.id, saved.id);
+  for (let i = 0; i < 5; i++) {
+    const beforeRace = await loadTeamStudio(owner);
+    const nextInstructions = `Concurrent owner direction ${i}`;
+    const raceReport = {...report, reportKey: `race-${i}`, markdown: "Evidence snapshot"};
+    const outcomes = await Promise.allSettled([
+      saveTeamStudio(owner, {revision: beforeRace.revision, state: {...beforeRace.state, instructions: {...beforeRace.state.instructions, "web-analyst": nextInstructions}}}),
+      saveTeamReport(owner, raceReport),
+    ]);
+    const afterRace = await loadTeamStudio(owner);
+    if (outcomes[0].status === "fulfilled") assert.equal(afterRace.state.instructions["web-analyst"], nextInstructions, "Imported reports must never erase a successful instruction edit");
+    if (outcomes[1].status === "rejected") await saveTeamReport(owner, raceReport);
+    assert((await loadTeamStudio(owner)).state.briefs.length >= afterRace.state.briefs.length);
+  }
   const roles = await prisma.$queryRaw<
     { relname: string; relrowsecurity: boolean }[]
   >`SELECT relname,relrowsecurity FROM pg_class WHERE relname IN ('TeamAgentRun','TeamAgentEvent')`;

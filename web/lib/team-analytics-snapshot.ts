@@ -24,7 +24,7 @@ export async function getTeamAnalyticsSnapshot(now = new Date()) {
   const sql = `SELECT if(timestamp >= toDateTime('${window.comparisonEnd}'), 'current', 'previous') AS period,
     coalesce(nullIf(toString(properties.$device_type), ''), 'Unknown') AS device,
     count() AS pageviews, uniqExact(distinct_id) AS visitors,
-    countIf(empty(toString(properties.analytics_audience))) AS missing_audience
+    countIf(empty(coalesce(toString(properties.analytics_audience), ''))) AS missing_audience
     FROM events WHERE event = '$pageview'
     AND timestamp >= toDateTime('${window.from}') AND timestamp < toDateTime('${window.toExclusive}')
     AND properties.$host = 'clover.ph'
