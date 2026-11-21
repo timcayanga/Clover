@@ -22,6 +22,10 @@ import { assertTrustedRequestOrigin } from "../lib/request-security";
 import { getSessionContext, isLocalDevHost } from "../lib/auth";
 
 async function main() {
+  for (const reliableForScopedSplit of [true, false, undefined]) {
+    const projected = mobileApiResponse("split-receipt-preview", { reliableForScopedSplit, receiptStorageKey: "receipt", preview: { total: "80.00" } });
+    assert.deepEqual(projected, { reliableForScopedSplit: reliableForScopedSplit === true, receiptStorageKey: "receipt", preview: { total: "80.00" } });
+  }
   assert.deepEqual(mobileApiResponse("split-bills", {pending:{count:1,rawPayload:"private",bills:[{id:"one",title:"Lunch",currency:"PHP",remaining:125,rawPayload:"private",receiptStorageKey:"private"}]}}), {pending:{count:1,bills:[{id:"one",title:"Lunch",currency:"PHP",remaining:125}]}});
 
   const resume = mobileApiResponse("import-status", {canResume:true, statementSelfHeal:{reason:"stale_statement_image_queue",rawPayload:"private"}, importFile:{status:"failed",processingPhase:"queued_retry",processingMessage:"Waiting to resume"}}) as {canResume:boolean;statementSelfHeal:{reason:string}};
