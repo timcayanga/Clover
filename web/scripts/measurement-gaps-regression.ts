@@ -168,6 +168,8 @@ async function main() {
     if(id==="@/lib/responsive-layout")return {getCloverViewportLayout:()=>"mobile"};
     return {};
   }});
+  const bootstrap = readFileSync("components/posthog-analytics.tsx", "utf8");
+  assert.match(bootstrap, /loaded: function\(client\)\s*\{[^}]*window\.posthog = client;[^}]*window\.__posthogReady = true;/);
   browserModule.exports.runIdentity();
   assert.equal(resets, 0, "anonymous sign-in entries retain their analytics session");
   sdkDistinctId = "production:user_fixture";

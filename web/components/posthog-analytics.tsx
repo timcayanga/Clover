@@ -228,7 +228,9 @@ function PostHogBootstrap({ token, host }: PostHogScriptProps) {
           window.__cloverSafeRoute = function(path) { const segments = new Set(${JSON.stringify(routeSegments)}); return "/" + path.split(/[?#]/)[0].split("/").filter(Boolean).map(s => segments.has(s) ? s : ":id").join("/"); };
           posthog.init(${JSON.stringify(token)}, {
             api_host: ${JSON.stringify(apiHost)},
-            loaded: function() {
+            loaded: function(client) {
+              // PostHog invokes loaded before replacing the snippet on window.
+              window.posthog = client;
               window.__posthogReady = true;
               (${flushPostHogQueue.toString()})();
               window.dispatchEvent(new Event("posthog-ready"));
