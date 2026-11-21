@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import ts from 'typescript';
 const compile=file=>ts.transpileModule(fs.readFileSync(new URL(file,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-const lifecycle={};vm.runInNewContext(compile('../src/request-lifecycle.ts'),{exports:lifecycle,AbortController,Promise,Error,setTimeout:(fn,ms)=>setTimeout(fn,Math.min(ms,15)),clearTimeout});
+const deadlines=[];
+const lifecycle={};vm.runInNewContext(compile('../src/request-lifecycle.ts'),{exports:lifecycle,AbortController,Promise,Error,setTimeout:(fn,ms)=>{deadlines.push(ms);return setTimeout(fn,Math.min(ms,15))},clearTimeout});
 const upload={};vm.runInNewContext(compile('../../shared/native-upload.ts'),{exports:upload});
 const events=[],api={};let fetchImpl;
 vm.runInNewContext(compile('../src/api.ts'),{exports:api,URL,Headers,AbortController,Date,Error,fetch:(...args)=>fetchImpl(...args),require:name=>{
@@ -11,6 +12,11 @@ vm.runInNewContext(compile('../src/api.ts'),{exports:api,URL,Headers,AbortContro
  if(name==='../../shared/analytics')return {newTelemetryId:()=>String(Math.random()),getTelemetryHeaders:()=>({}),requestTelemetry:path=>({operation:path.startsWith('uploads/')?'POST /uploads/:id/complete':path.startsWith('transactions')?'GET /transactions':'GET /bootstrap'}),telemetry:(event,p)=>events.push({event,...p}),beginTelemetry:()=>{let done=false;return(outcome,p)=>{if(done)return;done=true;events.push({event:outcome,...p})}}};
  throw Error(name);
 }});
+fetchImpl=async()=>({ok:true,status:200,json:async()=>({})});
+for (const [suffix, expected] of [['',315000],['&uploadId=fixture',315000],['&action=part&uploadId=fixture',120000]]) {
+ await api.apiRequest('synthetic','split-bill-receipts/preview?workspaceId=fixture'+suffix,{method:'POST'});
+ assert.equal(deadlines.at(-1),expected);
+}
 const tick=()=>new Promise(r=>setImmediate(r));
 fetchImpl=()=>new Promise(()=>{});await assert.rejects(api.apiRequest('synthetic','bootstrap'),api.NetworkError);assert.equal(events.at(-1).reason,'timeout');
 let resolveBody;fetchImpl=async()=>({ok:true,status:200,json:()=>new Promise(r=>resolveBody=r)});

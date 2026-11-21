@@ -20,6 +20,9 @@ export async function apiRequest<T>(
   options: RequestInit = {},
   format: "json" | "text" = "json",
 ): Promise<T> {
+  // Final receipt recognition can run for the endpoint's full five-minute budget.
+  const url = new URL(`${apiBase()}/api/mobile/v1/${path}`);
+  const readingReceipt = url.pathname === "/api/mobile/v1/split-bill-receipts/preview" && !url.searchParams.has("action");
   const operation_id = newTelemetryId();
   const started = Date.now();
   const description = requestTelemetry(path, options.method);
@@ -28,7 +31,6 @@ export async function apiRequest<T>(
   const serverTimings: Record<string, number> = {};
   try {
     const result = await boundedRequest(async signal => {
-    const url = new URL(`${apiBase()}/api/mobile/v1/${path}`);
     if (!url.pathname.startsWith("/api/mobile/v1/"))
       throw new Error("Invalid mobile API path.");
     const headers = new Headers(options.headers);
@@ -70,7 +72,7 @@ export async function apiRequest<T>(
     if (!data)
       throw new Error("Clover returned an unexpected response. Please retry.");
     return data as T;
-    }, { signal: options.signal, timeoutMs:
+    }, { signal: options.signal, timeoutMs: readingReceipt ? 315_000 :
       path.includes("/process") || path.startsWith("finverse/") || path.startsWith("uploads/") ||
       path.startsWith("split-bill-receipts/") || path.startsWith("adviser/chat") ? 120000 :
       path.startsWith("billing/store") ? 60000 : 25000 });
