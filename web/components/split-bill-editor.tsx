@@ -1,4 +1,5 @@
 "use client";
+import { previewReceiptFile } from "@/lib/preview-receipt-client";
 
 import { readLocalReceiptOcrText, replaceLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
 
@@ -519,13 +520,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.set("file", file);
-
-      const response = await fetch("/api/split-bill-receipts/preview", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await previewReceiptFile(file);
 
       const payload = await readJsonResponse<{ preview: ReceiptPreviewResult; receiptStorageKey: string }>(response);
 

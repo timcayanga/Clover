@@ -795,22 +795,14 @@ async function handle(
       );
       forwarded = new Request(url, { headers: request.headers });
     }
-    if (operation === "import-process" || operation === "split-receipt-preview") {
+    if (operation === "import-process") {
+      if (Number(request.headers.get("content-length")) > 4 * 1024 * 1024 + 131072)
+        return reply({ error: "This request exceeds the multipart upload limit." }, 413);
       if (!request.headers.get("content-type")?.includes("multipart/form-data"))
         return reply({ error: "Choose a file to upload." }, 400);
-      // This first native transport respects the host's 4.5 MB request limit.
-      if (Number(request.headers.get("content-length") ?? 0) > 4_000_000)
-        return reply(
-          { error: "For files over 3.5 MB, use Clover on the web for now." },
-          413,
-        );
       const data = await request.formData();
       const file = data.get("file");
-      if (!(file instanceof File) || file.size > 3_500_000)
-        return reply(
-          { error: "Choose a file smaller than 3.5 MB for this preview." },
-          413,
-        );
+      if (!(file instanceof File)) return reply({ error: "Choose a file to upload." }, 400);
       // Reconstruct only supported fields; no training/duplicate bypass flags.
       const safe = new FormData();
       safe.set("file", file);
@@ -829,7 +821,7 @@ async function handle(
       });
     }
     if(operation==="split-person-create"||operation==="split-payment-create"){
-      const text=await request.text();if(new TextEncoder().encode(text).length>10000)return reply({error:"Details are too large."},413);
+      const text=await request.text();if(new TextEncoder().encode(text).length>(operation==="split-payment-create"?1_510_000:10_000))return reply({error:"Details are too large."},413);
       const raw=JSON.parse(text);
       const body=operation==="split-person-create"?z.object({name:z.string().trim().min(1).max(100)}).strict().parse(raw):(await import("@/lib/split-bill-payment-profile-schema")).splitBillPaymentProfileSchema.parse(raw);
       const safe=new Request(request.url,{method:"POST",headers:request.headers,body:JSON.stringify(body)});

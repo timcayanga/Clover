@@ -1,3 +1,4 @@
+import { displayPhoto } from "./prepare-display-photo";
 import { useState } from "react";
 import { Image, Switch, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -45,12 +46,8 @@ export function PaymentDetailsEditor({
       if (result.canceled) return;
       const asset = result.assets[0];
       try {
-        if (!asset.base64 || asset.base64.length > 1499900)
-          throw new Error("Choose a smaller QR image.");
-        setDraft((d) => ({
-          ...d,
-          qrImageData: "data:image/jpeg;base64," + asset.base64,
-        }));
+        const qrImageData = await displayPhoto(asset, 1600, 1_500_000);
+        setDraft(d => ({ ...d, qrImageData }));
         setError("");
       } finally {
         removeUploadCopy(asset.uri);

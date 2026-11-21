@@ -14,7 +14,9 @@ import type { Transaction } from "./types";
 import type { SplitGroup } from "./split-group-details";
 import type { BillItem } from "./bill-details";
 import { AddEntryMethods } from "./add-entry-methods";
-import { fileProblem, receiptPhotoForm, resolveSelectedFile, removeUploadCopy } from "./upload";
+import { useCloudAiConsent } from "./ai-consent";
+import { removeUploadCopy } from "./upload";
+import { uploadSelectedFile } from "./upload-selected-file";
 import { useSession } from "./session";
 import { Body, Field, Notice, Screen, Icon, CategoryMark, useTheme } from "./ui";
 import { PlanAction, PlanHeader, usePlanData } from "./plan-ui";
@@ -72,6 +74,7 @@ export function BillEditor({
   context?: { circleId?: string; group?: SplitGroup; person?: string; currency?: string };
 }) {
   const session = useSession();
+  const receiptConsent = useCloudAiConsent(session.request, true);
   const circleId = context?.circleId;
   const circleMembers = context?.group?.members ?? [];
   const recorder = context?.group?.recorderName;
@@ -181,10 +184,10 @@ export function BillEditor({
         file = picked.assets[0];
       }
       copiedUri = file.uri;
-      const problem = fileProblem(Platform.OS === "web" ? file : resolveSelectedFile(file));
-      if (problem) throw new Error(problem);
-      const form = await receiptPhotoForm(file);
-      const result = await session.request<{
+      setReading(true);
+      await receiptConsent.ensure().catch(() => false);
+      if (!alive.current) return;
+      const result = await uploadSelectedFile<{
         receiptStorageKey: string;
         preview: {
           merchantName: string | null;
@@ -198,11 +201,12 @@ export function BillEditor({
         };
       }>(
         `split-bill-receipts/preview?workspaceId=${encodeURIComponent(session.profileId)}`,
-        { method: "POST", body: form },
+        session.request, file,
       );
       if (!alive.current) return;
       const p = result.preview;
       setEntryMode("manual");
+      setReviewVersion(v => v + 1);
       setMoreDetails(true);
       setReceipt({
         fileName: file.name,
@@ -232,7 +236,7 @@ export function BillEditor({
     } finally {
       if (copiedUri) removeUploadCopy(copiedUri);
       inFlight.current = false;
-      if (alive.current) setBusy(false);
+      if (alive.current) { setReading(false); setBusy(false); }
     }
   };
   const [names, setNames] = useState(() => circleId ? circleMembers.map(m => m.name).join("\n") :
@@ -254,6 +258,8 @@ export function BillEditor({
   const [paidAmounts, setPaidAmounts] = useState<Record<string,string>>({});
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [reviewVersion, setReviewVersion] = useState(0);
+  const [reading, setReading] = useState(false);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const participants = names
@@ -410,18 +416,20 @@ export function BillEditor({
     <Screen
       sheet
       onDismiss={() => {
-        if (!busy) onClose();
+        if (!busy || reading) onClose();
       }}
     >
       <PlanHeader
         title={circleId ? "Add Expense" : "Add Split Bill"}
         back={() => {
-          if (!busy) onClose();
+          if (!busy || reading) onClose();
         }}
       />
       {error ? <Notice>{error}</Notice> : null}
+      {receiptConsent.prompt}
+      {reading && !receiptConsent.prompt ? <Notice>Reading your receipt…</Notice> : null}
         <AddEntryMethods
-          key={entryMode}
+          key={reviewVersion}
           initialMethod={entryMode === "manual" ? "manual" : "upload"}
           kind="split"
           disabled={busy}

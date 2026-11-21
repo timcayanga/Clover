@@ -1,4 +1,5 @@
 "use client";
+import { previewReceiptFile } from "@/lib/preview-receipt-client";
 import type { AskPageContext } from "../../shared/ask-clover-page";
 import "./ask-clover-entry.css";
 import { askCloverExamples, formatAskExampleAmount } from "../../shared/ask-clover-examples";
@@ -575,7 +576,10 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
     attachmentBusy.current=true;setAttaching(true);setError(null);
     try {
       const form=new FormData();form.append("file",file);
-      const response=await fetch(`/api/adviser/attachments?workspaceId=${encodeURIComponent(workspaceId)}`,{method:"POST",body:form});
+      const path = `/api/adviser/attachments?workspaceId=${encodeURIComponent(workspaceId)}`;
+      const response = /\.(png|jpe?g|webp|hei[cf])$/i.test(file.name)
+        ? await previewReceiptFile(file, path)
+        : await fetch(path, { method: "POST", body: form });
       const data=await response.json();
       if(!response.ok) throw new Error(data.error || "Unable to attach this file.");
       if(attachmentActive.current) setAttachments(current=>[...current,data.attachment]);
@@ -608,7 +612,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
 
       <div className="adviser-chat__composer-bar adviser-chat__composer-bar--files">
         <input ref={attachmentInput} type="file" accept={adviserFileAccept} hidden aria-label="Choose an Ask Clover attachment" onChange={event=>{void attachFile(event.target.files?.[0]);event.target.value="";}} />
-        <button type="button" className="adviser-chat__attach" aria-label="Attach a file" title="Attach a file (up to 3.5 MB)" disabled={hasReachedLimit||isSending||attaching||entryLocked||attachments.length>=3} onClick={()=>attachmentInput.current?.click()}>+</button>
+        <button type="button" className="adviser-chat__attach" aria-label="Attach a file" title="Attach a photo up to 25 MB or a document up to 3.5 MB" disabled={hasReachedLimit||isSending||attaching||entryLocked||attachments.length>=3} onClick={()=>attachmentInput.current?.click()}>+</button>
         <textarea
           ref={inputRef}
           id="adviser-chat-input"

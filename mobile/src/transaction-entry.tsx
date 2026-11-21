@@ -1,4 +1,5 @@
-import {receiptPhotoForm} from "./upload";
+import { uploadSelectedFile } from "./upload-selected-file";
+import { removeUploadCopy } from "./upload";
 import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, validManualTransactionDate } from "../../shared/manual-transaction-defaults";
 import { entryExample } from "../../shared/entry-examples";
 import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
@@ -593,17 +594,10 @@ export function TransactionChat({
       finishInput(result.canceled ? "canceled" : "completed");
       if (result.canceled) return;
       const asset = result.assets[0];
-      if ((asset.fileSize ?? 0) > 3.5 * 1024 * 1024) {
-        setError("Choose a photo smaller than 3.5 MB.");
-        return;
-      }
-      const form = await receiptPhotoForm({uri:asset.uri, name:asset.fileName || "receipt.jpg", mimeType:asset.mimeType || "image/jpeg"});
-      const response = await session.request<{
-        attachment: { id: string; name: string };
-      }>(
-        `adviser/attachments?workspaceId=${encodeURIComponent(session.profileId)}`,
-        { method: "POST", body: form },
-      );
+      const response = await uploadSelectedFile<{ attachment: { id: string; name: string } }>(
+        `adviser/attachments?workspaceId=${encodeURIComponent(session.profileId)}`, session.request,
+        { uri: asset.uri, name: asset.fileName || "receipt.jpg", mimeType: asset.mimeType || "image/jpeg", size: asset.fileSize },
+      ).finally(() => removeUploadCopy(asset.uri));
       setAttachments((current) => [...current, response.attachment]);
     } catch (e) {
       finishInput("failed", { reason: "camera_unavailable" });

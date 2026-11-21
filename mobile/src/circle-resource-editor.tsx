@@ -1,3 +1,5 @@
+import { displayPhoto } from "./prepare-display-photo";
+import { removeUploadCopy } from "./upload";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -332,15 +334,11 @@ export function CircleResourceEditor({
                     quality: 0.2,
                     base64: true,
                   })
-                    .then((result) => {
+                    .then(async (result) => {
                       if (result.canceled) return;
-                      const base64 = result.assets[0]?.base64;
-                      if (!base64)
-                        throw new Error("Unable to read this photo.");
-                      const value = `data:image/jpeg;base64,${base64}`;
-                      if (value.length > 180000)
-                        throw new Error("Choose a smaller photo.");
-                      setPhoto(value);
+                      const asset = result.assets[0];
+                      try { setPhoto(await displayPhoto(asset, 512, 180000)); }
+                      finally { removeUploadCopy(asset.uri); }
                     })
                     .catch((e) => setError(e.message));
                 }}

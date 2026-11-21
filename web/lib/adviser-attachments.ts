@@ -10,6 +10,9 @@ export const adviserFileAccept =
   ".pdf,.csv,.tsv,.txt,.md,.xlsx,.xls,.xlsm,.xlsb,.ods,.png,.jpg,.jpeg,.webp,.heic,.heif";
 export function adviserFileProblem(file: { name: string; size?: number }) {
   if (!file.size || file.size < 0) return "Choose a non-empty file.";
+  if (/\.(png|jpe?g|webp|hei[cf])$/i.test(file.name)) {
+    return file.size <= 25 * 1024 * 1024 ? null : "Choose a photo up to 25 MB.";
+  }
   if (file.size > MAX_ADVISER_FILE_BYTES) return "Choose a file up to 3.5 MB.";
   if (
     !/\.(pdf|csv|tsv|txt|md|xlsx?|xlsm|xlsb|ods|png|jpe?g|webp|heic|heif)$/i.test(

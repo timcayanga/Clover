@@ -1,4 +1,5 @@
 "use client";
+import { previewReceiptFile } from "@/lib/preview-receipt-client";
 import { UploadSourceButtons } from "./upload-source-buttons";
 import { requestAiConsent } from "./ai-consent";
 
@@ -25,8 +26,8 @@ type SplitBillImportModalProps = {
   onSaved?: (bill: SplitBillSerializedBill) => void;
 };
 
-const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"];
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const RECEIPT_PREVIEW_STORAGE_KEY = "split-bill:receipt-preview";
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
@@ -43,12 +44,12 @@ const validateFile = (file: File | null) => {
     return "Choose a receipt file to continue.";
   }
 
-  if (!ACCEPTED_TYPES.includes(file.type)) {
-    return "Use a PDF, PNG, JPG, or WEBP file.";
+  if (!ACCEPTED_TYPES.includes(file.type) && !/\.(pdf|png|jpe?g|webp|hei[cf])$/i.test(file.name)) {
+    return "Use a PDF, PNG, JPG, HEIC, HEIF, or WEBP file.";
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return "Keep the file under 10 MB.";
+    return "Keep the file at or below 25 MB.";
   }
 
   return null;
@@ -256,13 +257,7 @@ export function SplitBillImportModal({ open, initialFile, currentUserName, onClo
     setMessage("Reading your receipt...");
 
     try {
-      const formData = new FormData();
-      formData.set("file", selectedFile);
-
-      const response = await fetch("/api/split-bill-receipts/preview", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await previewReceiptFile(selectedFile);
       const payload = await readJsonResponse<{ preview: ReceiptPreviewResult; receiptStorageKey: string }>(response);
       const quality = assessReceiptPreviewQuality(payload.preview);
 
@@ -352,7 +347,7 @@ export function SplitBillImportModal({ open, initialFile, currentUserName, onClo
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/png,image/jpeg,image/webp"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/png,image/jpeg,image/webp"
             onChange={(event) => {
               chooseFile(event.target.files?.[0] ?? null);
             }}

@@ -1,3 +1,4 @@
+import { displayPhoto } from "./prepare-display-photo";
 import { useEffect, useRef, useState } from "react";
 import { Image, View, Pressable } from "react-native";
 import { useUser } from "@clerk/expo";
@@ -42,14 +43,12 @@ function PhotoControls() {
       });
       if (result.canceled) return;
       const selected = result.assets[0];
-      if (!selected.base64 || selected.base64.length > 4 * 1024 * 1024) {
+      try {
+        setPhoto({ uri: selected.uri, data: await displayPhoto(selected, 1024, 4 * 1024 * 1024) });
+      } catch (error) {
         removeUploadCopy(selected.uri);
-        throw new Error("Choose a smaller photo (under 3 MB).");
+        throw error;
       }
-      setPhoto({
-        uri: selected.uri,
-        data: `data:image/jpeg;base64,${selected.base64}`,
-      });
       setRemove(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to choose photo.");
