@@ -1,5 +1,6 @@
 import {
   initialStudio,
+  agentIdSchema,
   reviseDraft,
   reviewDraft,
   studioSchema,
@@ -41,7 +42,7 @@ export function canonicalStudioState(
     throw new Error("INVALID_STATE");
   if (
     Object.keys(proposed.instructions).some(
-      (k) => !["lead", "creator", "researcher"].includes(k),
+      (k) => !agentIdSchema.safeParse(k).success,
     )
   )
     throw new Error("INVALID_STATE");

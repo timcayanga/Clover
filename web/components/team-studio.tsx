@@ -1,5 +1,7 @@
 "use client";
 
+import { TeamReportImport } from "./team-report-import";
+
 import Image from "next/image";
 import { AssignmentInbox, useAssignmentInbox } from "./team-assignment-inbox";
 import { TeamAssignmentBriefs } from "./team-assignments";
@@ -7,6 +9,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   agentProfiles,
+  isAnalyticsAgent,
   initialStudio,
   reviseDraft,
   reviewDraft,
@@ -527,7 +530,7 @@ export function TeamStudio({
     const agent = params.get("agent");
     if (agentProfiles.some((a) => a.id === agent)) {
       setAgentId(agent!);
-      setInstructions(state.instructions[agent!] || "");
+      setInstructions(state.instructions[agent!] ?? agentProfiles.find((a) => a.id === agent)?.instructions ?? "");
       setView("Team");
     }
     const draft = params.get("draft");
@@ -636,7 +639,7 @@ export function TeamStudio({
   }).format(new Date());
   function openAgent(id: string) {
     setAgentId(id);
-    setInstructions(state.instructions[id] ?? "");
+    setInstructions(state.instructions[id] ?? agentProfiles.find((a) => a.id === id)?.instructions ?? "");
     setBrief("");
   }
   function changeView(next: View) {
@@ -768,8 +771,8 @@ export function TeamStudio({
             <div>
               <span className="studio-eyebrow">
                 {view === "Overview"
-                  ? "YOUR DISTRIBUTION STUDIO"
-                  : "CLOVER · DISTRIBUTION"}
+                  ? "YOUR TEAM STUDIO"
+                  : "CLOVER · TEAM"}
               </span>
               <h1>
                 {view === "Overview"
@@ -792,7 +795,7 @@ export function TeamStudio({
                   : view === "Assignments"
                     ? "Follow progress, review results, and move approved work forward."
                     : view === "Team"
-                      ? "Three focused roles. One shared direction. You’re in charge."
+                      ? "Distribution and analytics. One shared direction. You’re in charge."
                       : view === "Content board"
                         ? "A home for the stories, visuals, and ideas you’re shaping."
                         : view === "Approvals"
@@ -964,7 +967,7 @@ export function TeamStudio({
                       className="studio-button secondary"
                       onClick={() => openAgent(a.id)}
                     >
-                      Open role & briefs ↗
+                      Open role, reports & briefs ↗
                     </button>
                   </article>
                 ))}
@@ -1219,6 +1222,10 @@ export function TeamStudio({
           <div className="studio-form">
             <span className="studio-pill">Manual start · owner review</span>
             <p>{activeAgent.description}</p>
+            {isAnalyticsAgent(activeAgent.id) ? <>
+              <p className="studio-fine">Start an assignment to analyze the available web analytics snapshot. Open a saved report below to request changes, ask a follow-up question, or approve recommendations. Weekly reports appear here after the reporting coordinator saves them.</p>
+              <TeamReportImport agent={activeAgent.id as "web-analyst" | "analytics-reviewer"} disabled={!ready || storageBlocked || saving || localPreview} />
+            </> : null}
             <label>
               Standing instructions
               <textarea

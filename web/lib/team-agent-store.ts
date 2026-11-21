@@ -1,8 +1,9 @@
+import { getTeamAnalyticsSnapshot } from "./team-analytics-snapshot";
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type TeamAgentRun } from "@prisma/client";
 import { prisma } from "./prisma";
 import { assertTeamMediaStorage, saveGeneratedTeamImage } from "./team-media.server";
-import { studioSchema, agentProfiles } from "./team-studio";
+import { studioSchema, agentProfiles, isAnalyticsAgent } from "./team-studio";
 import {
   assignmentTransferSchema,
   type AssignmentTransfer,
@@ -49,6 +50,7 @@ export async function getAssignment(
     brief: prompt.brief,
     sourceAssignmentId: prompt.sourceAssignmentId,
     instructions: prompt.instructions,
+    analyticsEvidence: prompt.analyticsEvidence,
     feedback: prompt.feedback,
     result: row.result,
     output: prompt.output,
@@ -263,12 +265,12 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
         : {
             output,
             sourceAssignmentId: source?.id || "",
-            sourceContext: source?.result.slice(0, 30000) || "",
+            sourceContext: source?.result.slice(0, 100000) || "",
             brief: brief.text,
             instructions: payload!.instructions[agent.id] || agent.instructions,
             role: agent.name,
             feedback: input.feedback,
-            previousResult: parent?.result.slice(0, 30000) || "",
+            previousResult: parent?.result.slice(0, 100000) || "",
           };
     const row = await tx.teamAgentRun.create({
       data: {
@@ -306,10 +308,16 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
   if (reserved.created) {
     let responseConfirmed = false;
     try {
+      const savedPrompt = assignmentPromptSchema.parse(reserved.row.prompt);
+      // Capture once outside the transaction; preserve the snapshot for retries and audit.
+      if (isAnalyticsAgent(reserved.row.agent) && !savedPrompt.analyticsEvidence) {
+        savedPrompt.analyticsEvidence = JSON.stringify(await getTeamAnalyticsSnapshot());
+        await prisma.teamAgentRun.update({where: {id: reserved.row.id}, data: {prompt: json(savedPrompt)}});
+      }
       const response = await createAgentResponse(
         model,
         reserved.row.agent,
-        assignmentPromptSchema.parse(reserved.row.prompt),
+        savedPrompt,
       );
       // Save the provider ID before media persistence so a storage outage can
       // recover the same paid result without issuing another generation.
@@ -561,7 +569,7 @@ export async function transferAssignment(
         caption: input.caption,
         channel: input.channel,
         format: input.format,
-        agent: run.agent as "lead" | "creator" | "researcher",
+        agent: run.agent as (typeof agentProfiles)[number]["id"],
         sourceAssignmentId: id,
         ...(assignmentPromptSchema.parse(run.prompt).output === "image" ? { mediaId: run.id, mediaType: "image" as const } : {}),
         status: "Draft",
