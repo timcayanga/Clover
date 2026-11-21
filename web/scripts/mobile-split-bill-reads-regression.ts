@@ -65,6 +65,7 @@ async function main() {
       return { bills: [bill], groups: [], people: [] };
     } },
     "@/lib/split-bill-balance-summary": { splitBillBalanceSummary: () => ({ youOwe: "₱125.00", owedToYou: "₱0.00" }) },
+    "@/lib/regional-preferences": { normalizeRegionalPreferences: () => ({ baseCurrency: "PHP" }) },
     "@/lib/user-display-name": { getUserDisplayName: () => "Fixture" },
     "@/lib/split-bill": { serializeSplitBillRecord: (row: unknown) => row },
     "@/lib/split-bill-transfer-settlements": { loadSplitBillTransferSettlementsForBills: async () => {
