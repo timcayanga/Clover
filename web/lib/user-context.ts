@@ -4,7 +4,7 @@ import { ensureSignupTrial } from "./signup-trial";
 import { Prisma, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser, type SyncedClerkUser } from "@/lib/clerk";
-import { capturePostHogServerEvent } from "@/lib/analytics-server";
+import { capturePostHogServerEvent, scheduleFirstLogin } from "@/lib/analytics-server";
 import { refreshProAccess } from "@/lib/pro-access";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 
@@ -29,7 +29,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       currentEnvironment,
       existing?.environment
     );
-    const { user, created } = await prisma.$transaction(async (tx) => {
+    const user = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`clerk-identity:${clerkUserId}`}))`;
       if (await tx.clerkIdentityDeletion.findUnique({ where: { clerkUserId } })) throw new Error("UNAUTHORIZED");
       const freshExisting = await tx.user.findUnique({ where: { clerkUserId } });
@@ -60,12 +60,16 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
             lastName: syncedLastName,
             verified: syncedVerified,
             environment: currentEnvironment,
+            firstLoginAnalyticsPending: clerkUserId.startsWith("user_"),
             planTier: isLocalEnvironment ? "pro" : "free",
           },
         });
 
       if (!result.signupTrialEvaluatedAt) await ensureSignupTrial(tx, result.id, clerkUser.accountCreatedAt);
-      return { user: result, created: !freshExisting };
+      if (result.firstLoginAnalyticsPending && !result.firstLoginAt) {
+        return tx.user.update({ where: { id: result.id }, data: { firstLoginAt: new Date() } });
+      }
+      return result;
     });
 
     try {
@@ -80,12 +84,9 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
         void capturePostHogServerEvent("web_signup_account_created", clerkUser.clerkUserId, properties, new Date(recordedAt + 1));
       }
     } catch { /* Browser attribution is optional and must not block signup. */ }
-    if (created) {
-      void capturePostHogServerEvent("signup_completed", clerkUser.clerkUserId, {
-        email_verified: syncedVerified,
-      });
-      void capturePostHogServerEvent("first_login", clerkUser.clerkUserId, {
-        email_verified: syncedVerified,
+    if (user.firstLoginAnalyticsPending && user.firstLoginAt) {
+      await scheduleFirstLogin(clerkUserId, syncedVerified, user.firstLoginAt).catch(() => {
+        console.warn("[analytics] first login delivery pending");
       });
     }
 

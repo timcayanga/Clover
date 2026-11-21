@@ -72,7 +72,7 @@ export async function syncClerkIdentity(clerkUserId: string) {
       const result = await tx.user.upsert({
         where: { clerkUserId },
         update: data,
-        create: { ...data, clerkUserId, environment, planTier: "free" },
+        create: { ...data, clerkUserId, environment, planTier: "free", firstLoginAnalyticsPending: true },
       });
       if (!result.signupTrialEvaluatedAt) await ensureSignupTrial(tx, result.id, new Date(source.createdAt));
       return result;

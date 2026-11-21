@@ -75,6 +75,54 @@ async function signed(type: string, data: unknown) {
   );
 }
 const ids = [id, "user_qaIdentityCreated", "user_qaIdentityConflict"];
+async function testSignupDelivery() {
+  const previousEnvironment = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = "preview";
+  try {
+    for (const loginFirst of [false, true]) {
+      const identity = loginFirst ? "user_qaLoginFirst" : "user_qaWebhookFirst";
+      ids.push(identity);
+      const createdAt = Date.now() - 3600000;
+      const data = { id: identity, created_at: createdAt };
+      g.__identityUsers.set(identity, {
+        ...source, id: identity, createdAt,
+        emailAddresses: [{ ...source.emailAddresses[1], emailAddress: identity + "@example.invalid" }],
+      });
+      g.__identityEvents.length = 0;
+      if (loginFirst) await getOrCreateCurrentUser(identity);
+      g.__identityAnalyticsUnavailable = true;
+      assert.equal((await signed("user.created", data)).status, 503);
+      g.__identityAnalyticsUnavailable = false;
+      assert.equal((await signed("user.created", data)).status, 200);
+      assert.equal((await signed("user.created", data)).status, 200);
+      assert.equal((await signed("user.updated", data)).status, 200);
+      await syncClerkIdentity(identity); // Admin reconciliation
+      if (!loginFirst) {
+        g.__identityAnalyticsUnavailable = true;
+        await getOrCreateCurrentUser(identity);
+        g.__identityAnalyticsUnavailable = false;
+      }
+      const user = await getOrCreateCurrentUser(identity);
+      await getOrCreateCurrentUser(identity);
+      const events = g.__identityEvents as Array<{event:string; uuid:string; timestamp:Date}>;
+      const signups = events.filter(e => e.event === "signup_completed");
+      assert.equal(signups.length, 2);
+      assert.ok(signups[0].uuid);
+      assert.equal(signups[0].uuid, signups[1].uuid);
+      assert.ok(signups.every(e => e.timestamp.getTime() === createdAt));
+      const logins = events.filter(e => e.event === "first_login");
+      assert.equal(logins.length, 1);
+      assert.equal(logins[0].timestamp.getTime(), user.firstLoginAt?.getTime());
+      assert.notEqual(logins[0].uuid, signups[0].uuid);
+      pass(loginFirst ? "Login before webhook" : "Webhook before login with retry");
+    }
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previousEnvironment;
+    g.__identityAnalyticsUnavailable = false;
+  }
+}
+
 async function main() {
   await prisma.$executeRawUnsafe(
     'CREATE TABLE IF NOT EXISTS "CloverDeploymentEnvironment" (id TEXT PRIMARY KEY, environment TEXT NOT NULL, "updatedAt" TIMESTAMP NOT NULL)',
@@ -90,6 +138,7 @@ async function main() {
         update: { role: "owner", active: true },
         create: { clerkUserId: member, role: "owner", active: true },
       });
+    await testSignupDelivery();
     g.__identityUsers.set(id, source);
     const u = (await syncClerkIdentity(id))!;
     assert.equal(u.environment, "staging");

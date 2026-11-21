@@ -2,6 +2,8 @@ const Module = require('module');
 const original = Module._load;
 const url = new URL(process.env.DATABASE_URL || 'http://invalid');
 if (!['localhost', '127.0.0.1'].includes(url.hostname) || !url.pathname.endsWith('_qa')) throw Error('Isolated QA database required');
+process.env.NEXT_PUBLIC_POSTHOG_KEY = 'fixture';
+globalThis.__identityEvents = [];
 globalThis.__identityUsers = new Map();
 globalThis.__identityActor = 'user_qaIdentityOwner';
 globalThis.__identityFiles = [];
@@ -10,6 +12,14 @@ globalThis.__identityCreateCount = 0;
 const missing = () => Object.assign(new Error('Not found'), {status:404});
 Module._load = function(id) {
  const value = original.apply(this, arguments);
+ if (id === 'posthog-node') return { ...value, PostHog: class {
+  on() {}
+  async shutdown() {}
+  async captureImmediate(message) {
+   if (globalThis.__identityAnalyticsUnavailable) throw Error('Fixture transport offline');
+   globalThis.__identityEvents.push(message);
+  }
+ } };
  if (id === '@clerk/nextjs/server') return { ...value, auth: async () => ({ userId: globalThis.__identityActor }), clerkClient: async () => ({ users: {
   getUser: async id => { const u=globalThis.__identityUsers.get(id); if(!u) throw missing(); return u; },
   getUserList: async args => { let data=[...globalThis.__identityUsers.values()]; if(args.externalId) data=data.filter(u=>args.externalId.includes(u.externalId)); return {data:data.slice(args.offset||0,(args.offset||0)+args.limit),totalCount:data.length}; },

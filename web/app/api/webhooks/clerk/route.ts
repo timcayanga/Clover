@@ -4,6 +4,8 @@ import {
   deleteClerkIdentity,
   syncClerkIdentity,
 } from "@/lib/clerk-identity-lifecycle";
+import { captureClerkSignup } from "@/lib/analytics-server";
+import { shouldTrackAnalytics } from "@/lib/analytics";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function POST(request: NextRequest) {
@@ -22,9 +24,13 @@ export async function POST(request: NextRequest) {
     );
   }
   try {
-    if (event.type === "user.created" || event.type === "user.updated")
-      await syncClerkIdentity(event.data.id);
-    else if (event.type === "user.deleted" && event.data.id)
+    if (event.type === "user.created" || event.type === "user.updated") {
+      const user = await syncClerkIdentity(event.data.id);
+      if (user && event.type === "user.created" && shouldTrackAnalytics()) {
+        const delivered = await captureClerkSignup(user.clerkUserId, user.verified, new Date(event.data.created_at));
+        if (!delivered) return NextResponse.json({ error: "Signup analytics delivery pending." }, { status: 503 });
+      }
+    } else if (event.type === "user.deleted" && event.data.id)
       await deleteClerkIdentity(event.data.id, true);
     return NextResponse.json({ received: true });
   } catch {

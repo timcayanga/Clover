@@ -5,7 +5,7 @@ import { browserContext } from "../../shared/analytics";
 import { type AnalyticsEventName, type AnalyticsProperties } from "./analytics";
 import { capturePostHogServerEvent as capture } from "./analytics-capture";
 import { getAnalyticsAudience } from "./analytics-audience";
-export async function capturePostHogServerEvent(event: AnalyticsEventName, distinctId: string, properties: AnalyticsProperties = {}, timestamp?: Date) {
+async function prepareServerCapture(event: AnalyticsEventName, distinctId: string, properties: AnalyticsProperties = {}, timestamp?: Date) {
   let context: AnalyticsProperties = { event_source: "server", platform: "server" };
   try {
     const h = await headers();
@@ -28,10 +28,36 @@ export async function capturePostHogServerEvent(event: AnalyticsEventName, disti
       try { identity = (await prisma.user.findUnique({ where: { id: distinctId }, select: { clerkUserId: true } }))?.clerkUserId ?? distinctId; } catch { /* Delivery must not affect billing. */ }
     }
     try {
-      if (identity.startsWith("user_") && await prisma.clerkIdentityDeletion.findUnique({ where: { clerkUserId: identity }, select: { clerkUserId: true } })) return;
-    } catch { return; /* Analytics must not block billing or capture an unverified deleted identity. */ }
+      if (identity.startsWith("user_") && await prisma.clerkIdentityDeletion.findUnique({ where: { clerkUserId: identity }, select: { clerkUserId: true } })) return true;
+    } catch { return false; /* Analytics must not block billing or capture an unverified deleted identity. */ }
     const audience = await getAnalyticsAudience(identity);
-    await capture(event, identity, { ...context, ...properties, ...audience, event_source: "server" }, timestamp);
+    if ((event === "signup_completed" || event === "first_login") && audience.analytics_audience === "unknown") return false;
+    return capture(event, identity, { ...context, ...properties, ...audience, event_source: "server" }, timestamp);
   };
-  try { after(send); } catch { await send(); }
+  return send;
+}
+
+export async function capturePostHogServerEvent(event: AnalyticsEventName, distinctId: string, properties: AnalyticsProperties = {}, timestamp?: Date) {
+  const send = await prepareServerCapture(event, distinctId, properties, timestamp);
+  const deliver = async () => { await send(); };
+  try { after(deliver); } catch { await deliver(); }
+}
+
+// Clerk can retry the signed delivery if PostHog is temporarily unavailable.
+export async function captureClerkSignup(identity: string, verified: boolean, createdAt: Date) {
+  const send = await prepareServerCapture("signup_completed", identity, { email_verified: verified }, createdAt);
+  return send();
+}
+
+export async function scheduleFirstLogin(identity: string, verified: boolean, timestamp: Date) {
+  const send = await prepareServerCapture("first_login", identity, { email_verified: verified }, timestamp);
+  const deliver = async () => {
+    if (await send()) {
+      await prisma.user.updateMany({
+        where: { clerkUserId: identity, firstLoginAt: timestamp, firstLoginAnalyticsPending: true },
+        data: { firstLoginAnalyticsPending: false },
+      });
+    }
+  };
+  try { after(deliver); } catch { await deliver(); }
 }

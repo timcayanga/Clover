@@ -8,7 +8,7 @@ import { getPostHogConfig, getAnalyticsEnvironment, getAnalyticsEpochProperties,
 /** Official server SDK supplies truthful library provenance; never impersonate a browser UA. */
 export async function capturePostHogServerEvent(event: AnalyticsEventName, distinctId: string, properties: AnalyticsProperties = {}, timestamp?: Date) {
   const { key, host } = getPostHogConfig();
-  if (!key) return;
+  if (!key) return false;
   const client = new PostHog(key, { host, flushInterval: 0, fetchRetryCount: 0, requestTimeout: 5000, disableGeoip: true, disableRemoteFeatureFlags: true });
   const normalized = normalizePlanAnalytics(properties);
   const { analytics_audience, analytics_excluded, analytics_audience_version, ...planPersonProperties } = normalized;
@@ -20,7 +20,7 @@ export async function capturePostHogServerEvent(event: AnalyticsEventName, disti
   const insertId = normalized.$insert_id;
   const stableCharge = event === "billing_payment_verified" && typeof insertId === "string" &&
     typeof paidAt === "number" && Number.isFinite(+new Date(paidAt));
-  const signupMilestone = event === "web_signup_verified" || event === "web_signup_account_created";
+  const signupMilestone = event === "signup_completed" || event === "first_login" || event === "web_signup_verified" || event === "web_signup_account_created";
   const stableId = stableCharge ? insertId : signupMilestone ? `${event}:${scopeAnalyticsDistinctId(distinctId)}` : null;
   const hex = stableId ? createHash("sha256").update(stableId).digest("hex") : null;
   const uuid = hex ? `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}` : undefined;
@@ -41,4 +41,5 @@ export async function capturePostHogServerEvent(event: AnalyticsEventName, disti
     await client.shutdown(1000).catch(() => { failed = true; });
     if (failed) console.warn("[analytics] delivery_failed", { event });
   }
+  return !failed;
 }
