@@ -74,7 +74,7 @@ export const buildReceiptPreviewTransactions = (
 
   return [
     {
-      id: params.receiptDocument.transactionId?.trim() || `optimistic-${params.importFileId}-receipt`,
+      id: `optimistic-${params.importFileId}-receipt`,
       importFileId: params.importFileId,
       sourceRowIndex: 1,
       accountId: params.accountId,
@@ -157,7 +157,7 @@ export const buildReceiptSummaryFromReceiptDocument = (
   const normalizedAccountId = params.accountId ?? `receipt-${params.importFileId}`;
   const previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]> = [
     {
-      id: `optimistic-${params.importFileId}-receipt`,
+      id: params.receiptDocument.transactionId?.trim() || `optimistic-${params.importFileId}-receipt`,
       importFileId: params.importFileId,
       sourceRowIndex: 1,
       accountId: normalizedAccountId,
