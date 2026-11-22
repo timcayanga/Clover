@@ -48,7 +48,7 @@ import {
 } from "@/lib/data-engine";
 import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
-import { assessReceiptPreviewQuality, hasUnreadableReceiptPhotoTotal, parseReceiptPhotoText, parseReceiptText } from "@/lib/split-bill";
+import { assessReceiptPreviewQuality, parseAirlineTicketReceiptText, hasUnreadableReceiptPhotoTotal, parseReceiptPhotoText, parseReceiptText } from "@/lib/split-bill";
 import { decodeStructuredDelimitedBytes } from "@/lib/structured-delimited-decoder";
 import { decodeSpreadsheetWorkbookBytes } from "@/lib/spreadsheet-import.server";
 
@@ -1294,16 +1294,32 @@ export function hasVerifiedPdfNativeLedger(data: Uint8Array, selectedText: strin
 }
 
 // A short digital receipt can have a complete text layer even when it falls
-// below the length threshold for statements. Limit this to one verified page.
+// below the length threshold for statements. Item tables must occupy one page.
 function hasVerifiedPdfReceipt(data: Uint8Array, text: string) {
   const pages = pdfNativePageReads.get(data);
-  if (pages?.length !== 1 || pages[0].trim() !== text.trim() ||
-      !(/\breceipt\b/i.test(text) || purchaseInvoiceHeading.test(text)) || /[\uFFFD\uE000-\uF8FF]|\(cid:\d+\)/u.test(text)) return false;
+  if (!pages?.length || pages.some(page => !page.trim()) || pages.join("\n").trim() !== text.trim() ||
+      /[\uFFFD\uE000-\uF8FF]|\(cid:\d+\)/u.test(text)) return false;
+  if (pages.length !== 1) return false;
+  if (/\belectronic ticket receipt\b/i.test(text)) {
+    const ticket = parseAirlineTicketReceiptText(text);
+    const extras = text.match(/\belectronic miscellaneous document receipt\b/gi) ?? [];
+    return ticket != null && ticket.items.length === 1 + extras.length;
+  }
+  const labeled = /\breceipt\b/i.test(text) || purchaseInvoiceHeading.test(text);
+  if (!labeled && !/^cash\b/im.test(text)) return false;
   if (resolvePositiveImportDocumentRoute(text)?.mode !== "receipt") return false;
   const { total } = parseReceiptPhotoText(text);
   if (!total) return false;
+  if (!labeled) {
+    const cash = [...text.matchAll(/^cash[ \t]*[:：]?[ \t]+([\d,]+\.\d{2})[ \t]*$/gim)];
+    const change = [...text.matchAll(/^change[ \t]*[:：]?[ \t]+([\d,]+\.\d{2})[ \t]*$/gim)];
+    if (cash.length !== 1 || change.length !== 1) return false;
+    const cents = (value: string) => Number(value.replace(/[,.]/g, ""));
+    const paid = cents(cash[0][1]), returned = cents(change[0][1]), payable = cents(total);
+    if (![paid, returned, payable].every(Number.isSafeInteger) || paid - returned !== payable) return false;
+  }
   const table = readReconciledItemTable(text);
-  return table ? table.total === total : hasPrintedItemizedTotal(text, total, true);
+  return table ? table.total === total : labeled && hasPrintedItemizedTotal(text, total, true);
 }
 
 export async function verifyPdfStatementPageCoverage(data: Uint8Array, selectedText: string, password?: string, baseUrl?: string | null) {
@@ -1489,17 +1505,6 @@ const shouldAvoidPdfRenderForServerless = (fileName?: string | null) =>
 export const knownStatementNativeTextIsComplete = (text: string, fileName?: string | null) =>
   /\b(?:statement|account|deposit|withdrawal|encashment|inclearing|cheque)\b/i.test(text) &&
   pdfTextLayerLooksSufficientForParsing(text, fileName);
-
-export const shouldPreferPdfTextLayerWithoutStatementGate = (
-  fileName?: string | null,
-  importMode?: string | null
-) => {
-  const lower = String(fileName ?? "").toLowerCase();
-  return (
-    String(importMode ?? "").toLowerCase() === "receipt" ||
-    /\b(?:receipt|invoice|voucher|e[\s_-]*ticket|electronic[\s_-]*ticket|itinerary|booking[\s_-]*confirmation)\b/i.test(lower)
-  );
-};
 
 const shouldUseAggressivePdfOcrProfile = (fileName?: string | null) => {
   const lower = String(fileName ?? "").toLowerCase();
@@ -3740,25 +3745,10 @@ export const readImportedFileTextWithCacheInfo = async (
     }
 
     try {
-      let nativeText: string | undefined;
-      if (shouldPreferPdfTextLayerWithoutStatementGate(params.fileName, params.importMode)) {
-        const textLayer = await extractTextFromPdfBytes(bytes, password, pdfJsBaseUrl);
-        // Receipts, vouchers, and known text-native statement exports already
-        // contain the authoritative document text. Avoid the statement-shaped
-        // sufficiency gate here: receipts such as airline e-tickets do not
-        // contain repeated transaction rows, so that gate incorrectly sends a
-        // complete text layer through a 30-60 second rendered OCR pass. Keep
-        // the OCR fallback for scanned PDFs whose text layer is actually empty.
-        nativeText = textLayer;
-        if (parseBcaTransferProof(textLayer)?.rows.length) return textLayer;
-        if (textLayer.trim() && gcashBillsReceiptTextLayerIsComplete(textLayer)) {
-          return textLayer;
-        }
-      }
       if (shouldPreferPdfOcrFirst(params.fileName)) {
         return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile, params.fileName, deferHybridRecovery);
       }
-      return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile, params.fileName, nativeText, deferHybridRecovery);
+      return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile, params.fileName, undefined, deferHybridRecovery);
     } catch (error) {
       if (!pdfJsBaseUrl || isPdfPasswordError(error)) {
         throw error;

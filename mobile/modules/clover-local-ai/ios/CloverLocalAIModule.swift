@@ -85,17 +85,26 @@ public class CloverLocalAIModule: Module {
         guard let doc = PDFDocument(url: url), !doc.isLocked else { throw self.failure("This PDF needs a password or online processing.") }
         let count = min(doc.pageCount, 5)
         var pages: [String] = []
+        var unresolvedCaption = false
         for i in 0..<count {
           guard let page = doc.page(at:i) else { continue }
-          if let text=page.string, !text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty { pages.append(text) }
-          else {
-            let image=page.thumbnail(of:CGSize(width:1400,height:1800),for:.mediaBox)
-            if let cg=image.cgImage { pages.append(try self.recognize(cg).text) }
+          let nativeText = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+          // A selectable caption over a scanned page can be the entire text
+          // layer. Preserve native financial figures whenever they exist.
+          let captionOnly = nativeText.count < 120 && nativeText.range(of: #"[0-9]+[.,][0-9]{2}"#, options: .regularExpression) == nil
+          if !nativeText.isEmpty && !captionOnly {
+            pages.append(nativeText)
+            continue
           }
+          let image = page.thumbnail(of: CGSize(width: 1400, height: 1800), for: .mediaBox)
+          let optical = try image.cgImage.map { try self.recognize($0).text } ?? ""
+          let recovered = optical.trimmingCharacters(in: .whitespacesAndNewlines)
+          if recovered.isEmpty || recovered == nativeText { unresolvedCaption = true }
+          pages.append(recovered.isEmpty ? nativeText : recovered)
         }
         let text=pages.joined(separator:"\n\n")
         let pagesRead = pages.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
-        return ["text":String(text.prefix(40000)),"pagesRead":pagesRead,"totalPages":doc.pageCount,"complete":pagesRead > 0 && pagesRead == doc.pageCount && text.utf16.count <= 40000]
+        return ["text":String(text.prefix(40000)),"pagesRead":pagesRead,"totalPages":doc.pageCount,"complete":!unresolvedCaption && pagesRead > 0 && pagesRead == doc.pageCount && text.utf16.count <= 40000]
       }
       guard let source=CGImageSourceCreateWithURL(url as CFURL,nil), let cg=CGImageSourceCreateThumbnailAtIndex(source,0,[kCGImageSourceCreateThumbnailFromImageAlways:true,kCGImageSourceCreateThumbnailWithTransform:true,kCGImageSourceThumbnailMaxPixelSize:2000] as CFDictionary) else { throw self.failure("This image format needs online processing.") }
       let result = try self.recognize(cg)

@@ -136,6 +136,13 @@ async function verify() {
       assert.equal(paidInvoice.status, 200);
       assert.equal((await paidInvoice.json()).preview.total, "20.00");
     }
+    const cashReceipt = statementPdf(["Green Cafe", "2026-11-19", "Qty Description Unit Price Amount",
+      "0.100 Green Tea 42 400.00 40.00", "0.200 Rice Bowl 300.00 60.00", "Total Qty 0.300",
+      "Gross Amount 100.00", "Bill Amount 100.00", "Cash 150.00", "Change 50.00"]);
+    const cashText = await readUploadedFileText(new File([Buffer.from(cashReceipt)], "receipt.pdf", { type: "application/pdf" }),
+      undefined, { importMode: "receipt", sourceBytes: cashReceipt });
+    assert.match(cashText, /0\.100 Green Tea 42/);
+    assert.equal(rasterizations, 0, "A reconciled headingless cash receipt should skip OCR");
     expectedBytes = quantityReceipt;
     pdf = await uploadPdf(expectedBytes);
   } finally {
@@ -195,6 +202,17 @@ async function verify() {
     assert.equal(preview.requiresReview, true);
     assert.equal(allowanceChecks, checksBefore);
     console.log("PASS quantity margin preserves the payable and unreadable quantities in the receipt draft");
+  }
+  // Only "Scanned attachment" is selectable. The purchases are in the image.
+  const hybrid = new Uint8Array(await readFile("scripts/fixtures/scanned-receipt-with-text-header.pdf"));
+  const { readImportedFileTextWithCacheInfo } = await import("../lib/import-file-text.server");
+  for (const importMode of ["statement", "receipt"]) {
+    const result = await readImportedFileTextWithCacheInfo({
+      fileName: "receipt.pdf", fileType: "application/pdf", storageKey: "fixture", sourceBytes: hybrid, importMode,
+    });
+    const draft = parseReceiptPhotoText(result.text);
+    assert.equal(draft.total, "100.00");
+    assert.deepEqual(draft.items.map(item => [item.description, item.amount]), [["Green Tea 42", "40.00"], ["Rice Bowl", "60.00"]]);
   }
   console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }

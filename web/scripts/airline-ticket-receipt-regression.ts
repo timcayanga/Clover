@@ -57,7 +57,7 @@ assert.deepEqual(
 assert.equal(assessReceiptPreviewQuality(preview).reliableForFastPath, true);
 
 const workerSource = readFileSync(resolve(process.cwd(), "workers/import-processor.ts"), "utf8");
-const fileTextSource = readFileSync(resolve(process.cwd(), "lib/import-file-text.server.ts"), "utf8");
+
 assert.match(
   workerSource,
   /parseAirlineTicketReceiptText\(text\)[\s\S]*importMode = "receipt"[\s\S]*trainedReceiptDetails = buildReceiptDetailsFromPreview/,
@@ -68,10 +68,31 @@ assert.match(
   /promotesNotesSplitBillToReceipt \|\| deterministicAirlineReceiptPreview[\s\S]*\? \[\]/,
   "Airline document fragments must be suppressed instead of becoming transactions."
 );
-assert.match(
-  fileTextSource,
-  /shouldPreferPdfTextLayerWithoutStatementGate[\s\S]*electronic\[\\s_-\]\*ticket[\s\S]*const textLayer = await extractTextFromPdfBytes[\s\S]*if \(textLayer\.trim\(\)\)/,
-  "Text-native airline receipts must bypass rendered OCR while scanned PDFs retain the OCR fallback."
-);
-
-console.log("Airline ticket receipt regression passed.");
+async function checkPdfReaders() {
+  const { statementPdf } = await import("./fixtures/synthetic-statement-pdf");
+  const { readUploadedFileText, readImportedFileTextWithCacheInfo, shutdownImportOcrWorkers } = await import("../lib/import-file-text.server");
+  const data = statementPdf(sample.trim().split("\n"));
+  const info = console.info;
+  let renders = 0;
+  console.info = (...args) => {
+    if (args[0] === "[import-performance] PDF rasterization requested") renders++;
+    info(...args);
+  };
+  try {
+    for (const name of ["ticket.pdf", "document.pdf"]) {
+      const direct = await readUploadedFileText(new File([Buffer.from(data)], name, { type: "application/pdf" }));
+      const imported = await readImportedFileTextWithCacheInfo({
+        fileName: name, storageKey: "fixture", fileType: "application/pdf", sourceBytes: data, importMode: "receipt",
+      });
+      for (const text of [direct, imported.text]) assert.equal(parseAirlineTicketReceiptText(text)?.total, "8172.00");
+    }
+    assert.equal(renders, 0);
+  } finally {
+    console.info = info;
+    await shutdownImportOcrWorkers();
+  }
+}
+checkPdfReaders().then(() => console.log("Airline ticket receipt regression passed.")).catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});
