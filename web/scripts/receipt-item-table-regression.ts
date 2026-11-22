@@ -1,7 +1,7 @@
 import { splitBillDraftFromReceiptPreview } from "../lib/split-bill";
 import { mergeReceiptBackup } from "../lib/receipt-backup-preview";
 import assert from "node:assert/strict";
-import { reconcilesReviewedDiscountPhoto, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
+import { hasPrintedQuantityConflict, reconcilesReviewedDiscountPhoto, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "../lib/receipt-price-column";
 import { recordReceiptQuantityCrop, recordReceiptTableCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
@@ -156,6 +156,30 @@ for (const invalid of [
   assert.equal(readReconciledItemTable(invalid), null);
   assert.equal(hasPrintedItemizedTotal(invalid, "100.00", true), false);
 }
+
+const weighedCount = countedUnitPrices.replace("2 Green Tea 42 20.00", "0.100 Green Tea 42 400.00")
+  .replace("1 Rice Bowl 60.00", "0.200 Rice Bowl 300.00").replace("Total Qty\n3", "Total Qty 0.300");
+assert.deepEqual(readReconciledItemTable(weighedCount)?.items.map(item => item.quantity), [0.1, 0.2]);
+assert.equal(hasPrintedItemizedTotal(weighedCount, "100.00", true), true);
+for (const quantity of ["0.299", "0.3001", "0", "1,300"]) {
+  assert.equal(readReconciledItemTable(weighedCount.replace("Qty 0.300", "Qty " + quantity)), null);
+}
+assert.equal(hasPrintedItemizedTotal(weighedCount.replace("400.00", "399.00"), "100.00", true), false);
+
+const weighedSubtotal = weighedCount.replace("Total Qty 0.300\nGross Amount 100.00", "Subtotal 100.00\nTotal Qty 0.300");
+assert.equal(readReconciledItemTable(weighedSubtotal)?.total, "100.00");
+for (const count of ["0.299", "0.301", "0.3001"]) {
+  const conflicting = weighedSubtotal.replace("Qty 0.300", "Qty " + count);
+  assert.equal(readReconciledItemTable(conflicting), null);
+  assert.equal(hasPrintedItemizedTotal(conflicting, "100.00", true), false);
+}
+
+assert.equal(hasPrintedQuantityConflict("Total Qty 0.300", [{quantity: 0.4}, {}]), true);
+assert.equal(hasPrintedQuantityConflict("Total Qty 0.300", [{quantity: 0.1}, {}]), false);
+
+const wrongChange = weighedSubtotal.replace("Change 50.00", "Change 20.00");
+assert.equal(readReconciledItemTable(wrongChange), null);
+assert.equal(hasPrintedItemizedTotal(wrongChange, "100.00", true), false);
 
 // Both clients can deliver a complete transcript even when one digit is wrong.
 for (const source of ["apple_vision", "google_mlkit"]) {

@@ -1,6 +1,6 @@
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
 import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
-import { readCountedGrossTable, receiptNameFirstPriceHeader, readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
+import { hasPrintedQuantityConflict, readCountedGrossTable, receiptNameFirstPriceHeader, readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
@@ -2336,14 +2336,10 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
 
   // A printed unit count includes multiple units on a single purchase row.
   // Use it separately from merchant-specific counts of purchase lines.
-  const unitCounts = [...receiptText.matchAll(/^\s*total[ \t]+(?:qty|quantity)[ \t]*:?[ \t]*(?:\r?\n[ \t]*)?(\d+(?:\.\d{1,3})?)[ \t]*\r?$/gim)];
-  if (unitCounts.length && preview.items.length && preview.items.every(item => item.quantity != null)) {
-    const unitsInThousandths = preview.items.reduce((sum, item) => sum + Math.round(Number(item.quantity) * 1000), 0);
-    if (unitCounts.some(match => Math.round(Number(match[1]) * 1000) !== unitsInThousandths)) {
-      issues.push("Printed total quantity differs from the purchase quantities");
-      severeIssue = true;
-      score -= 3;
-    }
+  if (preview.items.length && hasPrintedQuantityConflict(receiptText, preview.items)) {
+    issues.push("Printed total quantity differs from the purchase quantities");
+    severeIssue = true;
+    score -= 3;
   }
   const purchasedUnits = preview.items.reduce((sum, item) => sum +
     (Number.isSafeInteger(item.quantity) && Number(item.quantity) > 0 ? Number(item.quantity) : 1), 0);

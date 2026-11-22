@@ -58,6 +58,8 @@ function score(labels: Label[], predictions: Prediction[]) {
       Record<typeof core[number], Count & { suppliedForUnobservable: number }>;
     const itemExactness = Object.fromEntries(itemFields.map(field => [field, { exact: 0, labeled: 0 }])) as
       Record<typeof itemFields[number], Count>;
+    const byPrintedRow = Object.fromEntries(itemFields.map(field => [field, { exact: 0, missing: 0, different: 0 }])) as
+      Record<typeof itemFields[number], { exact: number; missing: number; different: number }>;
     const caseSummary: Array<{ photo: number; discrepancies: string[]; matchedItems: number; labeledItems: number; unmatchedOutputItems: number }> = [];
     let automaticCoreExact = 0;
     const allCore = { exact: 0, labeled: 0 }, allObservableCore = { exact: 0, labeled: 0 };
@@ -147,6 +149,19 @@ function score(labels: Label[], predictions: Prediction[]) {
       items.matchedDescriptions += matched;
       if (label.itemCoverage === "complete") {
         items.completePhotos++;
+        // Diagnose value errors independently of spelling. Compare printed positions only
+        // when both lists are complete and equally long. A reordered value can differ here.
+        if (actualItems.length === label.items.length) {
+          for (const [index, item] of label.items.entries()) {
+            for (const field of itemFields) {
+              if (item[field].state !== "observed") continue;
+              const value = normalizeField(field, actualItems[index][field]);
+              if (value === null) byPrintedRow[field].missing++;
+              else if (value === normalizeField(field, item[field].value)) byPrintedRow[field].exact++;
+              else byPrintedRow[field].different++;
+            }
+          }
+        }
         // The historical metric counts unmatched spellings as well as spurious rows.
         items.extraOnCompletePhotos += actualItems.length - matched;
         items.excessRowCount += Math.max(0, actualItems.length - label.items.length);
@@ -159,7 +174,7 @@ function score(labels: Label[], predictions: Prediction[]) {
     return {
       ...(durations.length ? { timingMs: { samples: durations.length, median: durations[Math.ceil(durations.length / 2) - 1], max: durations.at(-1) } } : {}),
       ...(caseSummary.length ? { caseSummary } : {}),
-      route, photos: labels.length, attempted, outcomes, reviewReasons, fields, allCore, automaticCoreExact, allObservableCore, itemExactness,
+      route, photos: labels.length, attempted, outcomes, reviewReasons, fields, allCore, automaticCoreExact, allObservableCore, itemExactness, byPrintedRow,
       items: { ...items, completeness: items.labeled ? items.matchedDescriptions / items.labeled : null },
       reviewRate: attempted ? outcomes.review / attempted : null,
     };

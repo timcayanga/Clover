@@ -5,10 +5,28 @@ import { isReceiptCurrencyCode } from "./receipt-currency-evidence";
 // A purchase table must agree with two independently printed totals before it
 // can replace the general OCR parser's line items.
 export function readReconciledItemTable(text: string) {
+  if (hasConflictingCashSettlement(text)) return null;
   return readQuantityTable(text) ?? readRegisterServiceTable(text) ?? readCountedGrossTable(text);
 }
 
 const purchaseHeader = /^(?:qty|quantity|description|item(?: description)?|product)[ \t]+.*\b(?:amount|total|price)[ \t]*\r?$/im;
+
+// Recognize explicit unit counts separately from counts of purchase rows.
+export function hasPrintedQuantityConflict(text: string, items: readonly {quantity?: number | null}[]) {
+  const labels = text.matchAll(/^[ \t]*total[ \t]+(?:[qo]ty|quantity)\b[ \t]*:?[ \t]*(?:\r?\n[ \t]*)?([^\r\n]*)$/gim);
+  let expected: number | undefined;
+  for (const label of labels) {
+    const value = label[1].trim();
+    if (!/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/.test(value)) return true;
+    const printed = Math.round(Number(value) * 1000);
+    if (!Number.isSafeInteger(printed) || (expected !== undefined && expected !== printed)) return true;
+    expected = printed;
+  }
+  if (expected === undefined) return false;
+  const known = items.reduce((sum, item) => sum + Math.round((item.quantity ?? 0) * 1000), 0);
+  if (!Number.isSafeInteger(known) || known > expected) return true;
+  return items.length > 0 && items.every(item => item.quantity != null) && known !== expected;
+}
 
 // Some tills omit column headings and print the quantity count under the
 // purchases. The count, gross, and separately printed payable must all agree.
@@ -18,10 +36,13 @@ export function readCountedGrossTable(text: string) {
   const counts = lines.filter(line => /^total (?:[qo]ty|quantity)\b/i.test(line));
   if (counts.length !== 1) return null;
   const end = lines.indexOf(counts[0]);
-  const count = lines[end].match(/^total (?:[qo]ty|quantity)\s*:?\s*(\d*)$/i);
+  const count = lines[end].match(/^total (?:[qo]ty|quantity)\s*:?\s*(\d+(?:\.\d{1,3})?)?$/i);
   if (!count) return null;
   const quantity = count[1] || lines[end + 1];
-  if (!/^[1-9]\d*$/.test(quantity ?? "")) return null;
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/.test(quantity ?? "")) return null;
+  const printedUnits = Number(quantity);
+  const thousandths = Math.round(printedUnits * 1000);
+  if (!Number.isSafeInteger(thousandths) || thousandths <= 0) return null;
   const grossIndex = end + (count[1] ? 1 : 2);
   const gross = lines[grossIndex]?.match(/^gross amount\s*:?\s*(\d+(?:,\d{3})*\.\d{2})$/i);
   if (!gross || lines.filter(line => /^gross amount\b/i.test(line)).length !== 1) return null;
@@ -43,6 +64,7 @@ export function readCountedGrossTable(text: string) {
   if (headings.length) {
     if (headings.length !== 1) return null;
     if (/^(?:description|item(?: description)?|product)\s+amount$/i.test(headings[0])) {
+      if (!Number.isInteger(printedUnits)) return null;
       const rows = lines.slice(lines.indexOf(headings[0]) + 1, end);
       const items: PricedItem[] = [];
       for (let i = 0; i < rows.length; i++) {
@@ -53,13 +75,16 @@ export function readCountedGrossTable(text: string) {
         items.push({ description: match[1], amount: match[2].replace(/,/g, "") });
       }
       const cents = items.reduce((sum, item) => sum + Number(item.amount.replace(".", "")), 0);
-      return items.length > 0 && items.length <= Number(quantity) && Number.isSafeInteger(cents) && cents === Number(total.replace(".", ""))
+      return items.length > 0 && items.length <= printedUnits && Number.isSafeInteger(cents) && cents === Number(total.replace(".", ""))
         ? { items, subtotal: total, total, serviceCharge: null } : null;
     }
     if (!/\b(?:qty|quantity)\b/i.test(headings[0])) return null;
     const labeled = readQuantityTable(text, { lines, header: lines.indexOf(headings[0]), end, grossIndex });
-    return labeled && labeled.items.reduce((units, item) => units + item.quantity, 0) === Number(quantity) ? labeled : null;
+    if (!labeled) return null;
+    const units = labeled.items.reduce((sum, item) => sum + Math.round(item.quantity * 1000), 0);
+    return Number.isSafeInteger(units) && units === thousandths ? labeled : null;
   }
+  if (!Number.isInteger(printedUnits)) return null;
   const items: { description: string; quantity: number; amount: string }[] = [];
   for (let i = end - 1; i >= 0; i--) {
     let row = lines[i];
@@ -156,6 +181,7 @@ function readQuantityTable(text: string, counted?: { lines: string[]; header: nu
     const price = takePrice(line);
     return price ? Math.round(Number(price.amount) * 100) : NaN;
   };
+  if (!counted && hasPrintedQuantityConflict(text, items)) return null;
   const subtotal = priceInCents(lines[subtotalIndex]);
   if (!items.length || itemCents !== subtotal) return null;
 
@@ -174,7 +200,7 @@ function readQuantityTable(text: string, counted?: { lines: string[]; header: nu
     if ((printedCount !== items.length && printedCount !== units) || priceInCents(counted) !== subtotal + service) return null;
   }
   if (footer.some(line => /^(?:total paid|amount paid)\b/i.test(line) && priceInCents(line) !== subtotal + service)) return null;
-  const totals = footer.filter(line => /^(?:total (?:amount|due)|bill (?:amount|total)|amount due|grand total|total(?=\s*(?:[:\d₱€£]|[A-Z]{3}\s*\d)))\b/i.test(line)).map(line => {
+  const totals = footer.filter(line => !/^total\s+(?:[qo]ty|quantity)\b/i.test(line) && /^(?:total (?:amount|due)|bill (?:amount|total)|amount due|grand total|total(?=\s*(?:[:\d₱€£]|[A-Z]{3}\s*\d)))\b/i.test(line)).map(line => {
     const amount = priceInCents(line);
     if (Number.isFinite(amount) || !countedTotal) return amount;
     const annotated = line.match(/^total amount\s*:?\s*(\d[\d,]*\.\d{2})\s+[A-Za-z]+$/i);
@@ -523,7 +549,14 @@ function reconcilesTaxAndService(text: string, table: { subtotal: string; servic
     Math.round(subtotal * Number(fee[1]) / 100) === cents(table.serviceCharge);
 }
 
+function hasConflictingCashSettlement(text: string) {
+  // Mixed tenders and currencies are handled by the settlement reader.
+  return /^\s*cash\b/im.test(text) && /^\s*change\b/im.test(text) &&
+    readReceiptSettlementEvidence(text)?.kind === "conflict";
+}
+
 export function hasPrintedItemizedTotal(text: string, total: string, requirePurchaseTable = false) {
+  if (hasConflictingCashSettlement(text)) return false;
   const register = readRegisterServiceTable(text);
   if (register) return register.total === total;
   let paidConflict = false;
@@ -565,7 +598,7 @@ export function hasPrintedItemizedTotal(text: string, total: string, requirePurc
   if (charged) return charged.total === total;
   if (!totals.length) return false;
   const items = readSubtotalItems(text);
-  if (!items) return false;
+  if (!items || hasPrintedQuantityConflict(text, items)) return false;
   if (requirePurchaseTable) {
     const counts = [...text.matchAll(/^total[ \t]+(?:[oqa]ty|quantity)[ \t]*[:：]?[ \t]*(\d+)[ \t]*\r?$/gim)];
     if (counts.length > 1 || (counts.length && Number(counts[0][1]) !==
