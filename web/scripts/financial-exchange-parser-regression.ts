@@ -198,12 +198,6 @@ assert.match(
   /recognized financial export/i
 );
 const workerSource = readFileSync(new URL("../workers/import-processor.ts", import.meta.url), "utf8");
-const fileTextSource = readFileSync(new URL("../lib/import-file-text.server.ts", import.meta.url), "utf8");
-assert.match(
-  fileTextSource,
-  /readImportedFileTextWithCacheInfo[\s\S]{0,12000}?\(\?:ofx\|qfx\|qif\|mt940\|sta\|xml\|json\)[\s\S]{0,500}?TextDecoder/,
-  "queued financial exports should be decoded as text instead of entering the PDF reader"
-);
 assert.match(
   workerSource,
   /const hasFinancialExchangeRows =[\s\S]{0,800}?kind === "financial_exchange_transaction"/,
@@ -225,4 +219,17 @@ assert.match(
   "an explicit non-cash category in a structured JSON export must not create an inferred Cash mirror"
 );
 
-console.log("Financial exchange OFX, QFX, QIF, MT940, CAMT.053, and JSON parser regression passed.");
+async function verifyQueuedExport() {
+  const { readImportedFileTextWithCacheInfo } = await import("../lib/import-file-text.server");
+  const sourceBytes = Buffer.from("\ufeff" + ofx, "utf16le");
+  const result = await readImportedFileTextWithCacheInfo({
+    fileName: "export.ofx", fileType: "application/octet-stream", storageKey: "qa/export", sourceBytes,
+  });
+  assert.equal(result.text, ofx);
+  const blank = { fileName: "empty.ofx", fileType: "application/x-ofx", storageKey: "qa/blank", sourceBytes: Buffer.from("  ") };
+  const initial = await readImportedFileTextWithCacheInfo(blank);
+  assert.equal(initial.text.trim(), "");
+  const retry = await readImportedFileTextWithCacheInfo(blank, undefined, undefined, { skipFreshExtractionOnCacheMiss: true });
+  assert.equal(retry.cacheHit, false, "An empty reading must leave the next scan eligible for a fresh extraction");
+}
+verifyQueuedExport().then(() => console.log("Financial exchange OFX, QFX, QIF, MT940, CAMT.053, and JSON parser regression passed.")).catch(error => { console.error(error); process.exitCode = 1; });

@@ -12,7 +12,8 @@ function readQuantityTable(text: string) {
   const subtotalIndex = lines.findIndex((line, i) => i > header && /^sub[ -]?total\b/i.test(line));
   if (subtotalIndex < 0) return null;
 
-  const items: {description: string; quantity: number; amount: string}[] = [];
+  const hasUnitPrice = /\bunit\s+price\b/i.test(lines[header]);
+  const items: {description: string; quantity: number; amount: string; unitPrice?: string}[] = [];
   let itemCents = 0;
   for (const line of lines.slice(header + 1, subtotalIndex)) {
     if (!items.length && /^(?:dine in|take out|vat items?|vat item\(s\))$/i.test(line)) continue;
@@ -23,7 +24,15 @@ function readQuantityTable(text: string) {
       const amount = row[3].replace(/,/g, "");
       const cents = Math.round(Number(amount) * 100);
       if (!Number.isSafeInteger(cents) || cents <= 0) return null;
-      items.push({description: row[2], quantity, amount});
+      if (hasUnitPrice) {
+        const unitColumn = row[2].match(/^(.+?)\s+(\d+(?:,\d{3})*\.\d{2})$/);
+        if (!unitColumn) return null;
+        const unitPrice = unitColumn[2].replace(/,/g, "");
+        if (quantity * Math.round(Number(unitPrice) * 100) !== cents) return null;
+        items.push({ description: unitColumn[1], quantity, unitPrice, amount });
+      } else {
+        items.push({ description: row[2], quantity, amount });
+      }
       itemCents += cents;
     } else if (items.length && /^[\p{L}][\p{L} '&-]{1,45}$/u.test(line)) {
       items[items.length - 1].description += " " + line;

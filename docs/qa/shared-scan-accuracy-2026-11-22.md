@@ -303,3 +303,21 @@ A file provider can send a JPEG or PDF with a generic MIME type. The import work
 Raw server OCR and device OCR now use the same evidence rules for missing or ambiguous fields. A printed payable can populate the bill even when some items are missing. A conflicting payable or incomplete set of items cannot silently determine a split. Backup recognition must reconcile amounts before supplying item rows and provide printed evidence before filling an unknown currency.
 
 Two additional itemized receipts with uncertain dates or merchant names produced editable previews in 2.27–3.13 seconds locally across the multipart and native upload handlers, with zero backup-reader calls. The 11-photo replay still matched all totals and 51 of 67 item descriptions. These measurements cover local handler execution. Upload, real camera capture and on-device rendering require separate timing.
+
+## Receipt PDFs, file retries and mobile OCR
+
+A one-page PDF with selectable purchase rows could run two rendered OCR passes and acquire a spurious second item. Using the same synthetic EUR 20.00 receipt, the previous reader took 3,415 ms and returned two rows. The revised reader took 60 ms and returned the single printed row, two teas totaling EUR 20.00. The comparison ran sequentially in one local process, with the previous reader first. A regression also counts rasterizations and requires zero for this case. Clover uses this shortcut only for a single intact page with purchase evidence, a reconciled item table and a matching payable. Split Bills now identifies a locked PDF before attempting visual backup or saving an empty draft.
+
+For photos and receipt PDFs, a printed unit-price column is separated from the name when its value times the quantity matches the row amount. An ambiguous numeric date stays open for review across slash, dash and dot separators. A second reader cannot fill it by choosing between the same ambiguous interpretations. The cached reader normalizes file types for duplicate reads of the same source, including PDFs received as generic files. An empty extraction remains eligible for retry. Mobile web reuses the selected blob for small multipart uploads. Tests check the bytes delivered and the number of local file reads.
+
+On the 11 labeled photos, the server matched 11 totals, 8 of 8 observable dates, 7 of 8 observable merchants, 2 of 2 observable currencies and 51 of 67 item descriptions. Three complete item tables matched every labeled field. It still proposed one date the reference could not establish. The unresolved item spellings, wrapped name and missing rows described above persist.
+
+| iOS Simulator OCR configuration | Correct totals / 11 | Exact item descriptions / 67 |
+| --- | ---: | ---: |
+| Current 2,000-pixel image | 6 | 18 |
+| Language correction enabled | 4 | 11 |
+| 2,800-pixel image | 5 | 21 |
+
+The iOS comparison ran the same 11 original images through Apple Vision with structured line evidence. The existing setting retained the most correct payable totals. The iOS PDF probes reported two readable pages for the complete document and withheld completion for the partially unreadable document. Android host tests covered upload bytes, pickers, previews, queue retention and OCR retry. The Android emulator refused to boot due to insufficient free storage. No physical camera or installed-app latency was measured.
+
+The final local photo replay measured 4.44 seconds at the median and 18.80 seconds at the maximum for the shared server reader. These times exclude file transfer and app rendering. The statement suite passed 44 private fixtures and a separate 104-row China Bank check. A disposable database test verified the PDF cache hit across picker types, workspace isolation and the review payload.

@@ -24,3 +24,5 @@ A leading merchant header may end in a three-digit (or longer) branch/name suffi
 The integer-only unknown-currency reader must recognize decimal `Total Amount` and `Bill Amount` summaries and defer them to the existing decimal reader. Do not turn a decimal receipt into a blank integer preview because an earlier `Total Qty` OCR fragment was mistaken for the financial total. Missing currency evidence still requires review.
 
 When a recognizer returns a separate column of standalone prices, use positioned rows only when the printed settlement independently reconciles. Preserve the original transcript and keep conflicting totals under review. Interpret a leading number as a purchased quantity when the table identifies its quantity column. Preserve numeric product names otherwise.
+
+On printed quantity tables with a unit-price heading, separate the unit price from the description when quantity times unit price equals the extended amount. A digital receipt with one intact page, a reconciled purchase table and a matching payable can use its native PDF text directly. Ambiguous day/month dates remain open for review unless independent printed evidence resolves them.

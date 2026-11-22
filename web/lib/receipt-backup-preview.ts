@@ -1,3 +1,5 @@
+import { hasOnlyAmbiguousNumericDates } from "./receipt-date-evidence";
+import { readReceiptOpticalLayout } from "./local-receipt-ocr-envelope";
 import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { receiptReconciliationIssues, receiptSummaryReconciles } from "./receipt-reconciliation";
 import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseAmountValue, type ReceiptPreviewResult } from "./split-bill";
@@ -148,7 +150,10 @@ export const mergeReceiptBackup = (
     merchantName: localPreview.merchantName && !localMerchantLooksWeak && !/^this document\b|[~_=|]{2,}/i.test(localPreview.merchantName)
       ? localPreview.merchantName
       : asText(backup.merchant_clean) ?? asText(backup.merchant_raw) ?? localPreview.merchantName,
-    billDate: localPreview.billDate ?? asReceiptDate(backup.transaction_date),
+    billDate: localPreview.billDate ?? (
+      backup.transaction_date && hasOnlyAmbiguousNumericDates(readReceiptOpticalLayout(localPreview.receiptText ?? ""))
+        ? null : asReceiptDate(backup.transaction_date)
+    ),
     documentNumber: localPreview.documentNumber ?? asText(backup.document_number),
     invoiceNumber: localPreview.invoiceNumber ?? asText(backup.invoice_number),
     bookingReference: localPreview.bookingReference ?? asText(backup.booking_reference),

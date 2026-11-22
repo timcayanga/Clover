@@ -155,6 +155,24 @@ async function main() {
       "../../shared/import-format-policies": load("../shared/import-format-policies.ts"),
       "../../shared/native-upload": {uploadSizeProblem:()=>null}, "react-native": {Platform:{OS:platform}}
     }, {FormData:platform === "web" ? FormData : NativeForm, fetch:async()=>new Response(photoBytes,{headers:{"content-type":"image/jpeg"}})});
+  let browserReads = 0;
+  const readSelection = async () => {
+    assert.equal(++browserReads, 1, "A multipart upload should read its selection once");
+    return new Response(photoBytes, { headers: { "content-type": "image/jpeg" } });
+  };
+  const browserUpload = load("../mobile/src/upload-selected-file.ts", {
+    "expo-crypto": {}, "./offline/file-storage": {}, "../../shared/receipt-upload": {receiptMultipartLimit:1572864},
+    "react-native": { Platform: { OS: "web" } },
+    "./upload": load("../mobile/src/upload.ts", {
+      "expo-file-system": {}, "react-native": { Platform: { OS: "web" } },
+      "../../shared/import-format-policies": load("../shared/import-format-policies.ts"),
+      "../../shared/native-upload": {uploadSizeProblem:()=>null},
+    }, {FormData, fetch:readSelection}),
+  }, {fetch:readSelection});
+  await browserUpload.uploadSelectedFile("preview", async (_path, {body}) => {
+    assert.deepEqual(new Uint8Array(await body.get("file").arrayBuffer()), photoBytes);
+  }, {uri:"blob:photo", name:"receipt.jpg", mimeType:"image/jpeg"});
+  assert.equal(browserReads, 1);
   for (const platform of ["ios","android","web"]) {
     const form = await loadPhotoUpload(platform).receiptPhotoForm({uri:"file:///cache/123.jpg",name:"receipt.jpg",mimeType:"image/jpeg"});
     let request;

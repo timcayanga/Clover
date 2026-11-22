@@ -250,3 +250,20 @@ assert.equal(partialDraft.total, "60.00");
 assert.equal(partialDraft.subtotal, "");
 assert.equal(partialDraft.items.some(item => item.description === "Tea"), false);
 assert.equal(splitBillDraftFromReceiptPreview({ ...partialBill, total: "35.00" }).total, "");
+
+const pricedTable = [
+  "Fictional Café", "Qty Item Description Unit Price Amount",
+  "2 Jasmine Tea 25.50 51.00", "1 Cake 30.00 30.00", "Subtotal 81.00", "Total Amount 81.00",
+].join("\n");
+const pricedRows = parseReceiptPhotoText(pricedTable).items;
+assert.deepEqual(pricedRows.map(({ description, quantity, unitPrice, amount }) => [description, quantity, unitPrice, amount]), [
+  ["Jasmine Tea", 2, "25.50", "51.00"], ["Cake", 1, "30.00", "30.00"],
+]);
+assert.equal(readReconciledItemTable(pricedTable.replace("25.50", "26.50")), null);
+
+for (const date of ["04/05/2026", "04-05-2026", "04.05.2026"]) {
+  const ambiguous = parseReceiptPhotoText(plainPhoto.replace("04/05/2026", date));
+  assert.equal(ambiguous.billDate, null);
+  assert.equal(mergeReceiptBackup(ambiguous, { ...model, transaction_date: "2026-04-05" }, null, { schemaValidated: true }).billDate, null);
+}
+assert.equal(parseReceiptPhotoText(plainPhoto.replace("04/05/2026", "2026-04-05")).billDate?.slice(0, 10), "2026-04-05");

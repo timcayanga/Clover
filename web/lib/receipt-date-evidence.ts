@@ -63,6 +63,16 @@ export const getExplicitEvidenceDates = (sourceText: string) => {
   return Array.from(dates);
 };
 
+// Keep the separator consistent and avoid matching a fragment of an ISO date.
+export const numericReceiptDatePattern = /\b(\d{1,2})([-/.])(\d{1,2})\2(20\d{2}|\d{2})\b/g;
+
+export function hasOnlyAmbiguousNumericDates(text: string) {
+  const matches = [...text.matchAll(numericReceiptDatePattern)];
+  return matches.length > 0 && matches.every(([, left, , right]) =>
+    Number(left) !== Number(right) && Number(left) >= 1 && Number(left) <= 12 &&
+    Number(right) >= 1 && Number(right) <= 12);
+}
+
 const purchaseDateLabel = /\b(?:purchase|transaction|sale|order)\s+(?:date(?:\s*(?:and|\/|&)\s*time)?|time|timestamp)\b|\b(?:purchased|sold)\s+(?:on|at)\b/iu;
 const otherDateLabel = /\b(?:re\s*-?\s*printed|printed|expires|validity|promo expiry)(?=\s*[:：])|\b(?:(?:re\s*-?\s*print(?:ed)?|print(?:ed)?|payment|settlement|posting|posted|terminal(?: local)?|authorization|authorisation|processing|expiry|expiration|due|invoice)\s+(?:date(?:\s*(?:and|\/|&)\s*time)?|time|timestamp)|(?:re\s*-?\s*printed|printed|paid|settled|posted|authorized|authorised)\s+(?:on|at)|valid\s+(?:until|through|thru|to)|(?:offer|promo(?:tion)?|coupon|voucher)\s+expires|expires(?:\s+on)?|date\s+issued|date\s+of\s+birth)\b/iu;
 const ordinaryDateLabel = /\b(?:date(?:\s*(?:and|\/|&)\s*time)?)\s*[:：]/iu;

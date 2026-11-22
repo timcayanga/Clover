@@ -1,6 +1,6 @@
 import { IMPORT_DISPATCH_DELAY_MS } from "@/lib/import-dispatch";
 import { reserveImportDispatchRecovery } from "@/lib/import-dispatch-recovery";
-import { isUploadPdf } from "../../../../../../shared/native-upload";
+import { isUploadPdf, isUploadPhoto } from "../../../../../../shared/native-upload";
 import { getImportVisibilityTarget } from "@/lib/import-attempts";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
@@ -50,9 +50,7 @@ const STALE_STATEMENT_IMAGE_STAGED_MS = 30 * 1000;
 const STALE_STATEMENT_IMAGE_EMPTY_DONE_MS = 15 * 1000;
 
 const isRecoverableStatementFile = (fileName?: string | null, fileType?: string | null) =>
-  String(fileType ?? "").toLowerCase().startsWith("image/") ||
-  String(fileType ?? "").toLowerCase() === "application/pdf" ||
-  /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif|pdf)$/i.test(String(fileName ?? "").toLowerCase());
+  isUploadPhoto(fileName ?? "", fileType) || isUploadPdf(fileName ?? "", fileType);
 
 const isBackupParserHandoffMessage = (value?: string | null) =>
   /backup parser|double-checking this file|local parse looks incomplete/i.test(String(value ?? ""));

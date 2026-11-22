@@ -15,6 +15,9 @@ function load(path, dependencies, Decoder = TextDecoder) {
   return exports;
 }
 const limits = load('../../shared/native-upload.ts', {});
+assert(limits.isUploadPdf("Document", " Application/PDF ; version=1.7"));
+assert(limits.isUploadPhoto("Photo", " Image/PNG; charset=binary"));
+assert(!limits.isUploadPdf("Document", "application/pdfx"));
 let diskSize = 0;
 const { resolveSelectedFile, fileProblem } = load('../src/upload.ts', {
   '../../shared/native-upload': limits,

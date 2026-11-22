@@ -1,3 +1,4 @@
+import { isUploadPdf as isPdfUpload, isUploadPhoto as isImageUploadFile } from "../../../../../../shared/native-upload";
 import { recoverFailedImportResume } from "@/lib/import-resume-recovery";
 import { prepareImportDispatch } from "@/lib/import-dispatch";
 import { downloadImportObject } from "@/lib/import-storage.server";
@@ -324,13 +325,6 @@ const isTransientDatabaseCapacityError = (error: unknown) => {
 
   return /EMAXCONN|max client connections|too many connections|remaining connection slots|connection limit|timeout exceeded when trying to (?:connect|acquire)|timed out fetching a new connection/i.test(message);
 };
-
-const isPdfUpload = (fileName: string, fileType: string) =>
-  fileType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
-
-const isImageUploadFile = (fileName: string, fileType: string) =>
-  fileType.toLowerCase().startsWith("image/") ||
-  /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(fileName.toLowerCase());
 
 const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) => {
   if (bankHint !== "PNB") {

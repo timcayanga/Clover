@@ -123,7 +123,7 @@ async function main() {
     const fresh = await readImportedFileTextWithCacheInfo(params, undefined, undefined, { awaitFreshCacheWrite: true });
     assert.equal(fresh.cacheHit, false);
     assert.match(fresh.text, /Payroll/);
-    const hit = await readImportedFileTextWithCacheInfo({ ...params, sourceBytes: shortTextPdf.slice() });
+    const hit = await readImportedFileTextWithCacheInfo({ ...params, fileType: "application/octet-stream", sourceBytes: shortTextPdf.slice() });
     assert.equal(hit.cacheHit, true);
     assert.equal(hit.text, fresh.text);
     const persisted = await db.importFileExtractionCache.findFirstOrThrow({ where: { ...cacheIdentity, cacheVersion: currentVersion } });

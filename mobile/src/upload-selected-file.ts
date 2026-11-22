@@ -17,7 +17,7 @@ export async function uploadSelectedFile<T>(
   const problem = fileProblem({ ...file, size });
   if (problem || !size) throw new Error(problem || "The file is empty.");
   if (size <= receiptMultipartLimit)
-    return request<T>(path, { method: "POST", body: await receiptPhotoForm(file) });
+    return request<T>(path, { method: "POST", body: await receiptPhotoForm(file, blob) });
   const id = randomUUID();
   const read = blob ? (index: number) => browserReceiptPart(blob, index) : selectedUploadPartReader(file);
   await stageReceipt(id, { name: file.name, mimeType: file.mimeType || "application/octet-stream", size },

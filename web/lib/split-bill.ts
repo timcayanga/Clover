@@ -3,7 +3,7 @@ import { readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities,
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
-import { resolveReceiptPurchaseDateRoles } from "./receipt-date-evidence";
+import { hasOnlyAmbiguousNumericDates, numericReceiptDatePattern, resolveReceiptPurchaseDateRoles } from "./receipt-date-evidence";
 import { readReceiptMerchantEvidence } from "./receipt-merchant-evidence";
 import { refineReceiptItemWords, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
@@ -2699,15 +2699,13 @@ export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
     }
   }
   if (optical && parsed.billDate) {
-    const slashDates = [...optical.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\b/g)];
-    const ambiguous = slashDates.length && slashDates.every(([, a, b]) =>
-      Number(a) !== Number(b) && Number(a) >= 1 && Number(a) <= 12 && Number(b) >= 1 && Number(b) <= 12);
-    const dateBlocks = readReceiptOpticalEvidence(source).filter(line => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(line.text));
-    const unreadableDigit = slashDates.length === 1 && dateBlocks.length === 1 && (dateBlocks[0].minimumCharacterConfidence ?? 1) < 0.5;
+    const ambiguous = hasOnlyAmbiguousNumericDates(optical);
+    const dateBlocks = readReceiptOpticalEvidence(source).filter(line => /^\d{1,2}([./-])\d{1,2}\1(?:20\d{2}|\d{2})$/.test(line.text.trim()));
+    const unreadableDigit = dateBlocks.length === 1 && [...optical.matchAll(numericReceiptDatePattern)].length === 1 && (dateBlocks[0].minimumCharacterConfidence ?? 1) < 0.5;
     if (unreadableDigit || ambiguous) {
       // A second spelling of the same day can corroborate it. Removing all
       // day-first/month-first tokens prevents a weak reading confirming itself.
-      const independent = optical.replace(/\b\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})\b/g, "");
+      const independent = optical.replace(numericReceiptDatePattern, "");
       if (parseBillDateFromText(independent) !== parsed.billDate) {
         parsed = { ...parsed, billDate: null, requiresReview: true };
       }

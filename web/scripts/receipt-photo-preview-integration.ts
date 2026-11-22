@@ -1,4 +1,5 @@
 // Run against the supplied Spirits Library JPEG. No database, provider, or object store is contacted.
+import { statementPdf } from "./fixtures/synthetic-statement-pdf";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -12,6 +13,7 @@ async function verify() {
   assert(process.argv[2], "Pass the original Spirits Library JPEG path");
   const bytes = Uint8Array.from(await readFile(process.argv[2]));
   let retained = 0;
+  let expectedBytes: Uint8Array = bytes;
   let networkCalls = 0;
   globalThis.fetch = async () => { networkCalls++; throw new Error("Unexpected network call"); };
   process.env.OPENAI_API_KEY = "offline-test-only";
@@ -27,7 +29,7 @@ async function verify() {
     "../lib/clover-token-usage": { mayUseImportCloudAi: async () => false },
     "../lib/prisma": { prisma: { workspace: { findFirst: async () => ({ id: "qa" }) } } },
     "../lib/s3": { uploadObject: async (_key: string, original: Uint8Array) => {
-      assert.deepEqual(original, bytes);
+      assert.deepEqual(original, expectedBytes);
       retained++;
     } },
   };
@@ -60,6 +62,34 @@ async function verify() {
     console.log("PASS " + method + " split receipt preview, printed total, items, date and retained photo in", Math.round(performance.now() - start), "ms");
   }
   assert.equal(retained, 2);
+  async function uploadPdf(source: Uint8Array) {
+    const form = new FormData();
+    form.set("file", new File([Buffer.from(source)], "receipt.pdf", {type:"application/octet-stream"}));
+    const upload = new Request(request.url, {method:"POST", headers:{origin:"https://clover.ph"}, body:form});
+    return withMobileRequestContext("qa", upload, () => POST(upload));
+  }
+  expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "04-05-2026", "Currency: EUR", "Qty Item Description Amount", "2 Tea 20.00", "Subtotal 20.00", "Total Amount 20.00"]);
+  let rasterizations = 0;
+  const info = console.info;
+  console.info = (...args) => {
+    if (args[0] === "[import-performance] PDF rasterization requested") rasterizations++;
+    info(...args);
+  };
+  const pdf = await uploadPdf(expectedBytes).finally(() => { console.info = info; });
+  assert.equal(rasterizations, 0, "A complete one-page digital receipt should return its reconciled native text");
+  assert.equal(pdf.status, 200);
+  const {preview} = await pdf.json();
+  assert.equal(preview.billDate, null);
+  assert.equal(preview.total, "20.00");
+  assert.deepEqual(preview.items.map((item: { description: string }) => item.description), ["Tea"]);
+  assert.equal(retained, 3);
+  if (process.argv[3]) {
+    const locked = await uploadPdf(await readFile(process.argv[3]));
+    assert.equal(locked.status, 422);
+    assert.equal((await locked.json()).code, "IMPORT_PASSWORD_REQUIRED");
+    assert.equal(retained, 3);
+  }
+  console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }
 
 verify().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {

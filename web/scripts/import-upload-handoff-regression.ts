@@ -853,7 +853,7 @@ const main = async () => {
   );
   assert.match(
     statusRouteSource,
-    /const isRecoverableStatementFile[\s\S]{0,300}application\/pdf[\s\S]{0,300}avif\|pdf/,
+    /const isRecoverableStatementFile[\s\S]{0,180}isUploadPhoto\(fileName \?\? "", fileType\) \|\| isUploadPdf\(fileName \?\? "", fileType\)/,
     "Import status recovery must include PDF statements, not only screenshots."
   );
   const staleStatementReconcilingSource = section(

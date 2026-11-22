@@ -6,7 +6,7 @@ import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
 import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { after, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
+import { isPdfPasswordError, normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
 import { parseImportTextWithOpenAIFallback, type OpenAIImportModelUsage } from "@/lib/openai-import-parser";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { assessReceiptPreviewQuality, parseReceiptPhotoText, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
@@ -198,8 +198,13 @@ export async function POST(request: Request) {
         fileType: selectedFile.type,
       });
       if (rejection) throw rejection;
-      localPreview = isReceiptImage(selectedFile) ? parseReceiptPhotoText(receiptText) : parseReceiptText(receiptText);
+      localPreview = isReceiptImage(selectedFile) || isReceiptPdf(selectedFile)
+        ? parseReceiptPhotoText(receiptText) : parseReceiptText(receiptText);
     } catch (error) {
+      if (isReceiptPdf(selectedFile) && isPdfPasswordError(error)) {
+        return NextResponse.json({ error: "This receipt PDF needs a password. Choose an unlocked copy to add the bill.",
+          code: "IMPORT_PASSWORD_REQUIRED" }, { status: 422 });
+      }
       if (error instanceof NonFinancialUploadError) {
         if (workspace) await prisma.auditLog.create({ data: {
           workspaceId: workspace.id, actorUserId: user.id,

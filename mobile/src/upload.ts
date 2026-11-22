@@ -41,11 +41,10 @@ export function fileProblem(file: SelectedFile) {
 }
 
 // Expo fetch serializes a File's bytes. Picker URI descriptors alone have no file body.
-export async function receiptPhotoForm(file: SelectedFile) {
+export async function receiptPhotoForm(file: SelectedFile, selectedBlob?: Blob | null) {
   const form = new FormData();
   if (Platform.OS === "web") {
-    const response = await fetch(file.uri);
-    const blob = await response.blob();
+    const blob = selectedBlob ?? await (await fetch(file.uri)).blob();
     form.append("file", blob, file.name);
   } else {
     const source = new File(file.uri);

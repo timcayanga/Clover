@@ -4,10 +4,10 @@ export const NATIVE_UPLOAD_MAX_SIZE = 25 * 1024 * 1024;
 export const RECEIPT_IMAGE_MAX_EDGE = 2800;
 export const IMPORT_PHOTO_MAX_SIZE = NATIVE_UPLOAD_MAX_SIZE;
 export function isUploadPdf(name: string, mimeType?: string | null) {
-  return /\.pdf$/i.test(name) || /^application\/pdf(?:;|$)/i.test(mimeType ?? "");
+  return /\.pdf$/i.test(name) || /^application\/pdf\s*(?:;|$)/i.test(mimeType?.trim() ?? "");
 }
 export function isUploadPhoto(name: string, mimeType?: string | null) {
-  return /\.(png|jpe?g|webp|hei[cf]|gif|bmp|avif)$/i.test(name) || /^image\//i.test(mimeType ?? "");
+  return /\.(png|jpe?g|webp|hei[cf]|gif|bmp|avif)$/i.test(name) || /^image\//i.test(mimeType?.trim() ?? "");
 }
 export function uploadSizeProblem(name: string, mimeType: string | null | undefined, size: number) {
   return isUploadPhoto(name, mimeType) && size > IMPORT_PHOTO_MAX_SIZE

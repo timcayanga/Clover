@@ -1,6 +1,6 @@
-import { isDelimitedImport, importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
+import { isDelimitedImport, importDocumentMediaType, importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
 import { readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
-import { canPreviewLocalReceiptItems } from "./receipt-item-table";
+import { canPreviewLocalReceiptItems, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
 import { measureImportReader, recordImportReaderTiming, recordImportWork, reportImportReaderEvent } from "./import-timing";
@@ -256,7 +256,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v14";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v15";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -1076,6 +1076,17 @@ export function hasVerifiedPdfNativeLedger(data: Uint8Array, selectedText: strin
   return Boolean(pages && pages.join("\n").trim() === selectedText.trim() && !/[\uFFFD\uE000-\uF8FF]|\(cid:\d+\)/u.test(selectedText) &&
     hasCompletePdfNativeLedger(pages) &&
     assessPdfStatementCoverage(pages, [], selectedText, pdfOriginalLayoutReads.get(data)).complete);
+}
+
+// A short digital receipt can have a complete text layer even when it falls
+// below the length threshold for statements. Limit this to one verified page.
+function hasVerifiedPdfReceipt(data: Uint8Array, text: string) {
+  const pages = pdfNativePageReads.get(data);
+  if (pages?.length !== 1 || pages[0].trim() !== text.trim() ||
+      !/\breceipt\b/i.test(text) || /[\uFFFD\uE000-\uF8FF]|\(cid:\d+\)/u.test(text)) return false;
+  const table = readReconciledItemTable(text);
+  return Boolean(table && resolvePositiveImportDocumentRoute(text)?.mode === "receipt" &&
+    parseReceiptPhotoText(text).total === table.total);
 }
 
 export async function verifyPdfStatementPageCoverage(data: Uint8Array, selectedText: string, password?: string, baseUrl?: string | null) {
@@ -2130,7 +2141,7 @@ const extractTextFromPdfBytesWithRenderFirstFallback = async (
   let nativeText: string | undefined;
   try {
     nativeText = await extractTextFromPdfBytes(data, password, baseUrl);
-    if (heldSourceReviewReason(nativeText) || hasVerifiedPdfNativeLedger(data, nativeText) ||
+    if (heldSourceReviewReason(nativeText) || hasVerifiedPdfNativeLedger(data, nativeText) || hasVerifiedPdfReceipt(data, nativeText) ||
       (deferHybridRecovery && hybridPdfRecoveryPlan(data, nativeText).length) ||
       (shouldAvoidPdfRenderForServerless(fileName) && gcashBillsReceiptTextLayerIsComplete(nativeText) &&
         knownStatementNativeTextIsComplete(nativeText, fileName))) {
@@ -2894,7 +2905,7 @@ const extractTextFromPdfBytesWithOcrFallback = async (
 
   const textLayerDurationMs = Date.now() - textLayerStartedAt;
 
-  if (hasVerifiedPdfNativeLedger(data, extractedText) || (deferHybridRecovery && hybridPdfRecoveryPlan(data, extractedText).length) ||
+  if (hasVerifiedPdfNativeLedger(data, extractedText) || hasVerifiedPdfReceipt(data, extractedText) || (deferHybridRecovery && hybridPdfRecoveryPlan(data, extractedText).length) ||
     pdfTextLayerLooksSufficientForParsing(extractedText, fileName)) {
     console.info("[import-performance] PDF extraction used native text", {
       profile,
@@ -3271,26 +3282,26 @@ export const readImportedFileTextWithCacheInfo = async (
     awaitFreshCacheWrite?: boolean;
   }
 ): Promise<ImportedFileTextWithCacheInfo> => {
-  const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
-  const isPdf = isUploadPdf(params.fileName, params.fileType);
-  const mediaType = importMediaType(params.fileType);
+  const fileType = importDocumentMediaType(params.fileName, params.fileType);
+  const lowerName = `${fileType} ${params.fileName}`.toLowerCase();
+  const isPdf = isUploadPdf(params.fileName, fileType);
   const financialExport = FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS.some(extension => params.fileName.toLowerCase().endsWith(extension)) ||
-    FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES.has(mediaType);
+    FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES.has(fileType);
   const oldRouteWasDelimited = /csv|tab-separated-values/i.test(params.fileName) &&
-    !isDelimitedImport(params.fileName, params.fileType);
+    !isDelimitedImport(params.fileName, fileType);
   const baseVersion = resolveImportFileExtractionCacheVersion(params.fileName);
-  const familyVersion = isDelimitedImport(params.fileName, mediaType) ? baseVersion + ":unicode-table-v2"
+  const familyVersion = isDelimitedImport(params.fileName, fileType) ? baseVersion + ":unicode-table-v2"
     : oldRouteWasDelimited ? baseVersion + ":file-type-v2" : baseVersion;
   const cacheVersion = isPdf
     ? pdfTextCacheVersion(params.fileName, familyVersion)
-    : isUploadPhoto(params.fileName ?? "", params.fileType)
+    : isUploadPhoto(params.fileName ?? "", fileType)
       ? `${familyVersion}:${IMPORT_IMAGE_OCR_CACHE_VERSION}`
       : financialExport ? `${familyVersion}:export-encoding-v2` : familyVersion;
   const useMemoryCache = !isPdf || Boolean(params.workspaceId);
   const deferHybridRecovery = Boolean(params.workspaceId && (params.importMode ?? "statement") === "statement");
   const aggressiveProfile = shouldUseAggressivePdfOcrProfile(params.fileName) ? "aggressive" : "standard";
   const imageProfile = resolveImageNormalizationProfile({
-    fileType: params.fileType,
+    fileType,
     fileName: params.fileName,
     importMode: params.importMode,
   });
@@ -3317,18 +3328,18 @@ export const readImportedFileTextWithCacheInfo = async (
   const recordKey = makeImportFileTextCacheRecordKey({
     workspaceId: params.workspaceId ?? null,
     fileFingerprint,
-    fileType: params.fileType,
+    fileType,
     importMode: params.importMode ?? "statement",
     cacheVersion,
   });
   const knownStatementImageFallbackText = resolveKnownStatementImageFallbackText({
     fileName: params.fileName,
-    fileType: params.fileType,
+    fileType,
     importMode: params.importMode ?? "statement",
     fileFingerprint,
   });
   const knownStatementPdfFallbackText = resolveKnownStatementPdfFallbackText({
-    fileType: params.fileType,
+    fileType,
     importMode: params.importMode ?? "statement",
     fileFingerprint,
   });
@@ -3353,7 +3364,7 @@ export const readImportedFileTextWithCacheInfo = async (
     void storeImportedFileTextCacheRecord({
       workspaceId: params.workspaceId ?? null,
       fileFingerprint,
-      fileType: params.fileType,
+      fileType,
       importMode: params.importMode ?? "statement",
       extractedText: knownStatementFallbackText,
       statementFingerprint: null,
@@ -3380,7 +3391,7 @@ export const readImportedFileTextWithCacheInfo = async (
       cachedRecord = await readImportedFileTextCacheRecord({
         workspaceId: params.workspaceId,
         fileFingerprint,
-        fileType: params.fileType,
+        fileType,
         importMode: params.importMode ?? "statement",
         cacheVersion,
       });
@@ -3399,11 +3410,11 @@ export const readImportedFileTextWithCacheInfo = async (
   const persistentCache = await readImportedFileTextCacheRecord({
     workspaceId: params.workspaceId ?? null,
     fileFingerprint,
-    fileType: params.fileType,
+    fileType,
     importMode: params.importMode ?? "statement",
     cacheVersion,
   });
-  if (persistentCache?.extractedText) {
+  if (persistentCache?.extractedText?.trim()) {
     recordImportWork("text_cache_hit_persistent");
     const resolvedText = String(persistentCache.extractedText ?? "");
     const cachedTextPromise = Promise.resolve(resolvedText);
@@ -3411,7 +3422,7 @@ export const readImportedFileTextWithCacheInfo = async (
     void storeImportedFileTextCacheRecord({
       workspaceId: params.workspaceId ?? null,
       fileFingerprint,
-      fileType: params.fileType,
+      fileType,
       importMode: params.importMode ?? "statement",
       extractedText: resolvedText,
       statementFingerprint: persistentCache.statementFingerprint ?? null,
@@ -3455,32 +3466,32 @@ export const readImportedFileTextWithCacheInfo = async (
 
   recordImportWork("text_cache_miss");
   const extraction = (async () => {
-    if (lowerName.endsWith('.docx') || mediaType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    if (lowerName.endsWith('.docx') || fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       return decodeWordGrabReceiptBytes(bytes);
     }
 
-    if (isDelimitedImport(params.fileName, params.fileType)) {
+    if (isDelimitedImport(params.fileName, fileType)) {
       return decodeStructuredDelimitedBytes(bytes);
     }
 
     if (
       /\.(?:ofx|qfx|qif|mt940|sta|xml|json)$/.test(lowerName) ||
-      /(?:x-ofx|intu\.qfx|application\/qif|text\/qif|mt940|application\/xml|text\/xml|application\/json)/.test(mediaType)
+      /(?:x-ofx|intu\.qfx|application\/qif|text\/qif|mt940|application\/xml|text\/xml|application\/json)/.test(fileType)
     ) {
       return decodeStructuredDelimitedBytes(bytes);
     }
 
     if (
       /\.(?:xlsx|xls|xlsm|xlsb|ods)$/.test(lowerName) ||
-      /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/.test(mediaType)
+      /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/.test(fileType)
     ) {
       return decodeSpreadsheetWorkbookBytes(bytes);
     }
 
-    if (isUploadPhoto(params.fileName ?? "", params.fileType)) {
+    if (isUploadPhoto(params.fileName ?? "", fileType)) {
       const knownStatementImageText = resolveKnownStatementImageFallbackText({
         fileName: params.fileName,
-        fileType: params.fileType,
+        fileType,
         importMode: params.importMode ?? "statement",
         fileFingerprint,
       });
@@ -3495,11 +3506,11 @@ export const readImportedFileTextWithCacheInfo = async (
           actorUserId: params.classificationActorUserId,
           fileFingerprint,
           fileName: params.fileName,
-          fileType: params.fileType,
+          fileType,
           importMode: params.importMode ?? "statement",
           evidenceSource: "server_ocr",
         },
-        fileType: params.fileType,
+        fileType,
         fileName: params.fileName,
         importMode: params.importMode,
       });
@@ -3545,7 +3556,7 @@ export const readImportedFileTextWithCacheInfo = async (
 
   try {
     const text = await extraction;
-    if (isPdf && !text.trim()) {
+    if (!text.trim()) {
       // Empty text can mean a transient OCR failure. Give a retry a fresh read.
       if (useMemoryCache) importedFileTextCache.delete(cacheKey);
       return { fileFingerprint, text, cacheHit: false, cacheRecord: null };
@@ -3566,7 +3577,7 @@ export const readImportedFileTextWithCacheInfo = async (
     const cacheWrite = storeImportedFileTextCacheRecord({
       workspaceId: params.workspaceId ?? null,
       fileFingerprint,
-      fileType: params.fileType,
+      fileType,
       importMode: params.importMode ?? "statement",
       extractedText: text,
       statementFingerprint: null,
