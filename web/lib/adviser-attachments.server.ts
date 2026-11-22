@@ -1,3 +1,4 @@
+import { readLocalReceiptOcrText } from "./local-receipt-ocr-envelope";
 import { randomUUID, createHash } from "node:crypto";
 import { uploadObject } from "./s3";
 import { deleteImportObject } from "./s3-delete";
@@ -55,11 +56,12 @@ export async function storeAdviserAttachment(
   const problem = adviserFileProblem(file);
   if (problem) throw new Error(problem);
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const text = /\.(txt|md)$/i.test(file.name)
+  const extracted = /\.(txt|md)$/i.test(file.name)
     ? new TextDecoder("utf-8", { fatal: true }).decode(bytes)
     : await (
         await import("@/lib/import-file-text.server")
-      ).readUploadedFileText(file);
+      ).readUploadedFileText(file, undefined, {sourceBytes:bytes});
+  const text = readLocalReceiptOcrText(extracted) ?? extracted;
   if (!text.trim())
     throw new Error(
       "No readable text was found. Try a clearer image or a text-based file.",

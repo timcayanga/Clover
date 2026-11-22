@@ -4151,8 +4151,8 @@ const main = async () => {
   if (mainBarReceiptPreview.billDate?.slice(0, 10) !== "2024-12-23") {
     throw new Error(`expected main bar receipt to resolve 2024-12-23, got ${mainBarReceiptPreview.billDate ?? "null"}`);
   }
-  if (mainBarReceiptPreview.merchantName !== "Main Bar") {
-    throw new Error(`expected main bar receipt to resolve Main Bar, got ${mainBarReceiptPreview.merchantName ?? "null"}`);
+  if (mainBarReceiptPreview.merchantName !== null) {
+    throw new Error(`receipt with no printed merchant was assigned ${mainBarReceiptPreview.merchantName ?? "null"}`);
   }
   if (mainBarReceiptPreview.total !== "2004.29") {
     throw new Error(`expected main bar receipt to resolve 2004.29, got ${mainBarReceiptPreview.total ?? "null"}`);

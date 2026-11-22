@@ -8,7 +8,7 @@ import { cookies } from "next/headers";
 import { normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
 import { parseImportTextWithOpenAIFallback, type OpenAIImportModelUsage } from "@/lib/openai-import-parser";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
-import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseAmountValue, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
+import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseAmountValue, parseReceiptPhotoText, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 import { isLocalDevHost } from "@/lib/auth";
 import { validateImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -19,7 +19,7 @@ import { NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
-import { getCloverTokenLimitError, getCloverTokenUsage } from "@/lib/clover-token-usage";
+import { mayUseImportCloudAi } from "@/lib/clover-token-usage";
 import { estimateLocalParserTokens } from "@/lib/import-token-usage";
 
 export const dynamic = "force-dynamic";
@@ -64,8 +64,9 @@ const asReceiptDate = (value: unknown) => {
     : null;
 };
 
-const isVisualReceiptFile = (file: File) =>
-  file.type.startsWith("image/") || file.type === "application/pdf" || /\.(?:jpe?g|png|webp|heic|heif|pdf)$/i.test(file.name);
+const isReceiptImage = (file: File) =>
+  file.type.startsWith("image/") || /\.(?:jpe?g|png|webp|heic|heif)$/i.test(file.name);
+const isReceiptPdf = (file: File) => file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 
 const mergeReceiptBackup = (
   localPreview: ReceiptPreviewResult,
@@ -181,13 +182,19 @@ const tryReceiptBackup = async (params: {
   preview: ReceiptPreviewResult;
   onUsage?: (usage: OpenAIImportModelUsage) => void;
 }) => {
-  const isImage = params.file.type.startsWith("image/");
-  const isPdf = params.file.type === "application/pdf" || /\.pdf$/i.test(params.file.name);
-  if (!process.env.OPENAI_API_KEY?.trim() || (params.preview.total && params.preview.merchantName && params.preview.billDate && params.preview.currency !== "MIXED" && readReconciledItemTable(readLocalReceiptOcrText(params.receiptText) ?? params.receiptText)?.total === params.preview.total) || !assessReceiptPreviewQuality(params.preview).issues.length || (!isImage && !isPdf)) {
+  const isImage = isReceiptImage(params.file);
+  const isPdf = isReceiptPdf(params.file);
+  if (!process.env.OPENAI_API_KEY?.trim() || (!isImage && !isPdf) || !assessReceiptPreviewQuality(params.preview).issues.length) {
+    return params.preview;
+  }
+  const { total, merchantName, billDate, currency } = params.preview;
+  if (total && merchantName && billDate && currency !== "MIXED" &&
+      readReconciledItemTable(readLocalReceiptOcrText(params.receiptText) ?? params.receiptText)?.total === total) {
     return params.preview;
   }
 
   try {
+    if (!(await mayUseImportCloudAi(params.consentUserId))) return params.preview;
     const { bytes } = params;
     const pageImages = isImage
       ? [{
@@ -265,11 +272,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Invalid receipt upload." }, { status: 400 });
       return await nativeUploadRequest(request, uploadId, user.clerkUserId, workspace.id, action);
     }
-    const tokenUsage = await getCloverTokenUsage(user);
-    const tokenLimitError = getCloverTokenLimitError(tokenUsage);
-    if (tokenLimitError) {
-      return NextResponse.json(tokenLimitError, { status: 429 });
-    }
     const recordUsage = workspace
       ? (usage: OpenAIImportModelUsage) => {
           after(async () => {
@@ -326,14 +328,14 @@ export async function POST(request: Request) {
     let receiptText = "";
     let localPreview: ReceiptPreviewResult;
     try {
-      receiptText = await readUploadedFileText(selectedFile, undefined, {importMode:"receipt", preferReceiptTable:true, sourceBytes:validationInput.bytes});
+      receiptText = await readUploadedFileText(selectedFile, undefined, {importMode:"receipt", sourceBytes:validationInput.bytes});
       const rejection = getClearLocalPhotoRejection({
         text: readLocalReceiptOcrText(receiptText) ?? receiptText,
         fileName: selectedFile.name,
         fileType: selectedFile.type,
       });
       if (rejection) throw rejection;
-      localPreview = parseReceiptText(receiptText);
+      localPreview = isReceiptImage(selectedFile) ? parseReceiptPhotoText(receiptText) : parseReceiptText(receiptText);
     } catch (error) {
       if (error instanceof NonFinancialUploadError) {
         if (workspace) await prisma.auditLog.create({ data: {
@@ -343,7 +345,7 @@ export async function POST(request: Request) {
         } }).catch(() => null);
         return NextResponse.json({ error: error.message, code: "I-108", ...getUploadRejectionDetails(error), retryable: false }, { status: 422 });
       }
-      if (!isVisualReceiptFile(selectedFile)) {
+      if (!isReceiptImage(selectedFile) && !isReceiptPdf(selectedFile)) {
         throw error;
       }
       console.warn("Local receipt extraction failed; trying backup parser", error);

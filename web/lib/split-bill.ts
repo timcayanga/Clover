@@ -4,7 +4,7 @@ import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
 import { resolveReceiptPurchaseDateRoles } from "./receipt-date-evidence";
 import { readReceiptMerchantEvidence } from "./receipt-merchant-evidence";
-import { readLocalReceiptOcrText, readReceiptOpticalLayout } from "./local-receipt-ocr-envelope";
+import { readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 import { joinReceiptSettlementLines } from "./receipt-summary-lines";
 import { readMerchantPaymentConfirmation } from "./merchant-payment-confirmation";
@@ -2566,7 +2566,8 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   } : settled;
   const table = readReconciledItemTable(opticalText ?? receiptText);
   if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
-    return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || opticalText !== null};
+    return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || opticalText !== null,
+      confidence:opticalText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};
   }
   return opticalText === null ? paymentDetails : { ...paymentDetails, receiptText, requiresReview: true, confidence: Math.min(45, paymentDetails.confidence) };
 };
@@ -2595,7 +2596,7 @@ export function hasUnreadableReceiptPhotoTotal(source: string) {
 
 export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
   const parsed = parseReceiptText(source);
-  if (!hasUnreadableReceiptPhotoTotal(source)) return parsed;
+  if (!hasUnreadableReceiptPhotoTotal(source) && !hasConflictingReceiptTotalReading(readReceiptOpticalEvidence(source))) return parsed;
   return { ...parsed, total: null, requiresReview: true, confidence: Math.min(45, parsed.confidence) };
 }
 
@@ -2623,16 +2624,21 @@ const parseReceiptTextCore = (
     currencyMentions.length > 1 ? `Mixed currencies detected: ${currencyMentions.join(", ")}` :
       currency === "MIXED" ? "Currency is not shown. Confirm it against the original receipt." : null;
   const walletCounterparty = detectWalletTransferCounterpartyFromText(lines);
-  const isMainBarReceipt = /\b(?:rice\s+is\s+nice|dirty\s+sorbetes?|dounua|total\s+amount\s+2004\.29)\b/i.test(normalized);
-  const billDate = isMainBarReceipt ? "2024-12-23T00:00:00.000Z" : parseBillDateFromText(normalized);
+  const billDate = parseBillDateFromText(normalized);
   const tableBounds = findReceiptTableBounds(lines);
   const merchantEvidence = readReceiptMerchantEvidence(normalized);
-  const merchantHeader = merchantEvidence.hasRoles ? merchantEvidence.header : tableBounds ? lines.slice(0, tableBounds.startIndex) : lines;
+  const quantityHeader = lines.findIndex(line => /^(?:qty|quantity)\s+(?:ite(?:m)?|description|product)\b/i.test(line));
+  const header = merchantEvidence.hasRoles ? merchantEvidence.header
+    : quantityHeader >= 0 ? lines.slice(0, quantityHeader)
+    : tableBounds ? lines.slice(0, tableBounds.startIndex - 1) : lines;
+  const merchantHeader = header.filter(line =>
+    !/^(?:don['’]t live life without it\b|transaction type\s*:|table\s*:)/i.test(line) &&
+    !isReceiptAdministrativeLine(line) && !/^\d{1,4}[-/]\d{1,2}[-/]\d{2,4}\b/.test(line));
   const rankedMerchant = sanitizeReceiptMerchantName(detectReceiptMerchantNameFromLines(merchantHeader) ?? "");
   const detectedMerchantName = merchantEvidence.ambiguous ? null
     : merchantEvidence.explicit ?? (merchantEvidence.hasRoles ? rankedMerchant ?? merchantEvidence.issuer
-      : isMainBarReceipt ? "Main Bar" : rankedMerchant ??
-        lines.find(line => line.length > 2 && !isSummaryLine(line) && !isNoiseLine(line) && parseAmountFromLine(line) === null) ?? null);
+      : rankedMerchant ??
+        merchantHeader.find(line => line.length > 2 && !isSummaryLine(line) && !isNoiseLine(line) && parseAmountFromLine(line) === null) ?? null);
 
   const subtotalLine = [...lines].reverse().find((line) =>
     /^[+\-*•]?\s*sub\s*-?\s*total\b/i.test(line)
@@ -2680,16 +2686,7 @@ const parseReceiptTextCore = (
   }
   const items = filteredItems;
   const { allocations, participants } = splitAllocationsFromText(lines, currency, total !== null ? total.toFixed(2) : null);
-  const receiptAccountMatch =
-    detectReceiptAccountMatchFromText(normalized) ??
-    (isMainBarReceipt
-      ? {
-          accountName: "Mixed",
-          accountLast4: null,
-          confidence: 60,
-          reason: "Wallet / card / mixed payments inferred",
-        }
-      : null);
+  const receiptAccountMatch = detectReceiptAccountMatchFromText(normalized);
   const paymentMethod = detectReceiptPaymentMethodFromText(lines, receiptAccountMatch);
   const receiptPayerName = detectReceiptPayerNameFromText(lines);
   const receiptType = classifyReceiptTypeFromText(normalized, paymentMethod);

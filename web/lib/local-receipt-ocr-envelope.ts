@@ -1,3 +1,4 @@
+import { readReconciledItemTable } from "./receipt-item-table";
 import { normalizeOpticalTextLines, type OpticalTextLine } from "../../shared/device-text-evidence";
 
 // Keep optical evidence separate from reconstructed reading-order text. The
@@ -45,6 +46,34 @@ export function readReceiptOpticalLines(source: string): OpticalTextLine[] {
   return lines.length && tokens(lines.map(line => line.text).join(" ")) === tokens(text) ? lines : [];
 }
 
+/** Only a crop of the same printed block can arbitrate conflicting year digits. */
+export function receiptDateDisagreements(lines: OpticalTextLine[]) {
+  const date = /^(\d{1,2}[./-]\d{1,2}[./-])(\d{4}|\d{2})$/;
+  return lines.flatMap(line => {
+    const primary = date.exec(line.text);
+    if (!primary) return [];
+    const alternatives = (line.alternatives ?? []).filter(candidate => {
+      const match = date.exec(candidate.text);
+      return match && match[1] === primary[1] && match[2] !== primary[2] && match[2].length === primary[2].length &&
+        (line.confidence === undefined || candidate.confidence === undefined || line.confidence - candidate.confidence <= 0.2);
+    });
+    return alternatives.length ? [{line, candidates:[line.text, ...alternatives.map(entry => entry.text)]}] : [];
+  });
+}
+
+export function recordReceiptDateCheck(source: string, line: OpticalTextLine, selected: string | null) {
+  const text = readLocalReceiptOcrText(source);
+  if (!text || text.split(line.text).length !== 2) return source;
+  const metadata = JSON.parse(source.slice(PREFIX.length, source.indexOf(SEPARATOR)));
+  const replacement = selected ?? "[unclear date]";
+  const opticalLines = readReceiptOpticalEvidence(source).map(block =>
+    block.text === line.text && block.box.every((v,i) => v === line.box[i])
+      ? {text:replacement,box:block.box} : block);
+  return encodeLocalReceiptOcr({...metadata, opticalLines,
+    dateCheck:{original:line, selected, engine:"tesseract-date-crop"},
+    text:text.replace(line.text,replacement)});
+}
+
 /** Keep OCR alternatives as source evidence. They cannot replace the primary
  * reading without independent evidence. */
 export function hasConflictingReceiptTotalReading(lines: OpticalTextLine[]) {
@@ -71,7 +100,11 @@ export function hasConflictingReceiptTotalReading(lines: OpticalTextLine[]) {
 /** Use box order for layout decisions while retaining the original OCR text. */
 export function readReceiptOpticalLayout(source: string): string {
   const lines = readReceiptOpticalLines(source);
-  return lines.length ? orderReceiptOpticalLines(lines) : readLocalReceiptOcrText(source) ?? source;
+  const text = readLocalReceiptOcrText(source);
+  // The recognizer corrects for page skew. Horizontal box grouping can
+  // separate every price from its drink on a tilted receipt.
+  if (lines.length && text && readReconciledItemTable(text)) return text;
+  return lines.length ? orderReceiptOpticalLines(lines) : text ?? source;
 }
 
 export function orderReceiptOpticalLines(lines: OpticalTextLine[]): string {

@@ -1,5 +1,5 @@
 import type { DeviceTextEvidence } from "../../shared/device-text-evidence";
-import { encodeLocalReceiptOcr, hasConflictingReceiptTotalReading, readReceiptOpticalLayout, readReceiptOpticalLines } from "./local-receipt-ocr-envelope";
+import { encodeLocalReceiptOcr, receiptDateDisagreements, hasConflictingReceiptTotalReading, readReceiptOpticalLayout, readReceiptOpticalLines } from "./local-receipt-ocr-envelope";
 import { findReceiptImageRegion } from "./receipt-image-region";
 import { hasReceiptPhotoEvidence } from "./receipt-intake";
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
@@ -18,6 +18,7 @@ export function qualifyDeviceReceiptReading(
   const fullLayout = readReceiptOpticalLayout(source);
   const region = findReceiptImageRegion(source);
   const layout = region?.text ?? fullLayout;
+  if (receiptDateDisagreements(device.opticalLines ?? []).length) return null;
   if (hasConflictingReceiptTotalReading(region?.opticalLines ?? readReceiptOpticalLines(source))) return null;
   if (!hasReceiptPhotoEvidence(layout) || isTransactionHistoryScreenshotText(fullLayout) ||
       inspectBankingScreenshot(fullLayout).kind !== "unknown" ||

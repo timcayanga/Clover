@@ -56,6 +56,7 @@ function score(labels: Label[], predictions: Prediction[]) {
       Record<typeof core[number], Count & { suppliedForUnobservable: number }>;
     const itemExactness = Object.fromEntries(itemFields.map(field => [field, { exact: 0, labeled: 0 }])) as
       Record<typeof itemFields[number], Count>;
+    const caseSummary: Array<{ photo: number; discrepancies: string[]; matchedItems: number; labeledItems: number; unmatchedOutputItems: number }> = [];
     let automaticCoreExact = 0;
     const allCore = { exact: 0, labeled: 0 }, allObservableCore = { exact: 0, labeled: 0 };
     const items = { matchedDescriptions: 0, labeled: 0, extraOnCompletePhotos: 0, completePhotos: 0, allItemsExact: 0 };
@@ -71,11 +72,15 @@ function score(labels: Label[], predictions: Prediction[]) {
       if (outcome === "unavailable") continue;
       const hasOutput = outcome === "extracted" || outcome === "review";
       const got = hasOutput ? result?.core : undefined;
+      const discrepancies: string[] = [];
       let checked = 0, correct = 0;
       for (const field of core) {
         const observed = normalizeField(field, got?.[field]);
         if (label[field].state !== "observed") {
-          if (observed) fields[field].suppliedForUnobservable++;
+          if (observed) {
+            fields[field].suppliedForUnobservable++;
+            discrepancies.push(field + " supplied without an observable label");
+          }
           continue;
         }
         checked++;
@@ -83,6 +88,8 @@ function score(labels: Label[], predictions: Prediction[]) {
         if (observed !== null && observed === normalizeField(field, label[field].value)) {
           fields[field].exact++;
           correct++;
+        } else {
+          discrepancies.push(field + (observed === null ? " missing" : " mismatch"));
         }
       }
       if (checked === core.length) {
@@ -130,6 +137,11 @@ function score(labels: Label[], predictions: Prediction[]) {
           if (consume(values, JSON.stringify([name, field, normalizeField(field, item[field].value)]))) itemExactness[field].exact++;
         }
       }
+      if (process.argv.includes("--case-summary")) {
+        caseSummary.push({ photo: labels.indexOf(label) + 1, discrepancies, matchedItems: matched,
+          labeledItems: label.items.filter(item => item.description.state === "observed").length,
+          unmatchedOutputItems: actualItems.length - matched });
+      }
       items.matchedDescriptions += matched;
       if (label.itemCoverage === "complete") {
         items.completePhotos++;
@@ -139,6 +151,7 @@ function score(labels: Label[], predictions: Prediction[]) {
     }
     const attempted = labels.length - outcomes.unavailable;
     return {
+      ...(caseSummary.length ? { caseSummary } : {}),
       route, photos: labels.length, attempted, outcomes, reviewReasons, fields, allCore, automaticCoreExact, allObservableCore, itemExactness,
       items: { ...items, completeness: items.labeled ? items.matchedDescriptions / items.labeled : null },
       reviewRate: attempted ? outcomes.review / attempted : null,
@@ -212,7 +225,7 @@ async function main() {
   }));
   globalThis.fetch = async () => { throw new Error("Receipt corpus evaluation runs locally"); };
   const { readUploadedFileText, shutdownImportOcrWorkers } = await import("../lib/import-file-text.server");
-  const { parseReceiptText } = await import("../lib/split-bill");
+  const { parseReceiptPhotoText } = await import("../lib/split-bill");
   const { getBoundedImportImagePreview } = await import("../lib/import-image-validation.server");
   const { readLocalReceiptImage } = await import("../lib/local-receipt-ocr.server");
   const results: Prediction[] = [];
@@ -243,7 +256,7 @@ async function main() {
             results.push({ id: source.id, route, outcome: route === "server_local_ppocr" ? "unavailable" : "failed" });
             continue;
           }
-          const parsed = parseReceiptText(text);
+          const parsed = parseReceiptPhotoText(text);
           const reviewReasons: NonNullable<Prediction["reviewReasons"]> = [];
           if (readLocalReceiptOcrText(text) !== null) reviewReasons.push("optical_preview_policy");
           else if (parsed.requiresReview) reviewReasons.push("parser_review");
