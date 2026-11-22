@@ -128,3 +128,44 @@ function groupReceiptOpticalLines(lines: OpticalTextLine[]): OpticalTextLine[][]
   }
   return rows.map(row => row.sort((a, b) => a.box[0] - b.box[0]));
 }
+
+/** Apply same-image spelling evidence only to proposed purchase descriptions.
+ * Keep the original transcript, dates, account identifiers and amounts intact. */
+export function receiptWordReplacements(source: string) {
+  const replacements = new Map<string, string>();
+  if (!source.startsWith(PREFIX)) return replacements;
+  const end = source.indexOf(SEPARATOR, PREFIX.length);
+  if (end < 0 || !source.slice(PREFIX.length, end).includes('"itemWordCorrections":')) return replacements;
+  let suggestions: unknown;
+  try {
+    const metadata = JSON.parse(source.slice(PREFIX.length, end));
+    if (metadata.engine !== "ppocr-v5-local") return replacements;
+    suggestions = metadata.itemWordCorrections;
+  } catch {
+    return replacements;
+  }
+  if (!Array.isArray(suggestions) || suggestions.length > 300) return replacements;
+  for (const entry of suggestions) {
+    if (typeof entry?.original !== "string" || typeof entry.corrected !== "string" || entry.original.length > 200 ||
+        !/^[\p{L} '&.,()’/-]+$/u.test(entry.original) || !/^[\p{L} '&.,()’/-]+$/u.test(entry.corrected) ||
+        entry.original.length !== entry.corrected.length) continue;
+    // Conflicting suggestions for the same printed phrase must go to review.
+    replacements.set(entry.original, replacements.has(entry.original) && replacements.get(entry.original) !== entry.corrected ? "" : entry.corrected);
+  }
+  return replacements;
+}
+
+export function refineReceiptItemWords<T extends { description: string }>(source: string, items: T[]) {
+  if (!items.length) return items;
+  const replacements = receiptWordReplacements(source);
+  if (!replacements.size) return items;
+  return items.map(item => {
+    const padded = " " + item.description + " ";
+    for (const [original, corrected] of replacements) {
+      if (corrected && padded.includes(" " + original + " ")) {
+        return { ...item, description: padded.replace(" " + original + " ", " " + corrected + " ").trim() };
+      }
+    }
+    return item;
+  });
+}

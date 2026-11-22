@@ -130,16 +130,30 @@ function modelDictionary(bytes) {
     }
   throw new Error("OCR alphabet missing");
 }
-function tensor(rgb, width, height, detection, paddedWidth = width) {
+// The source values are bytes. A lookup preserves the original Float32
+// preprocessing exactly, including the intermediate rounding of the alternate
+// recognition pass, without reading and transforming an entire tensor twice.
+function byteChannels(means, deviations, unitRange = false) {
+  return means.map((mean, channel) => Float32Array.from({ length: 256 }, (_, value) => {
+    const centered = Math.fround((value / 255 - mean) / deviations[channel]);
+    return unitRange ? (centered + 1) / 2 : centered;
+  }));
+}
+const detectionBytes = byteChannels([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]);
+const recognitionBytes = byteChannels([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]);
+const alternateBytes = byteChannels([0.5, 0.5, 0.5], [0.5, 0.5, 0.5], true);
+
+function tensor(rgb, width, height, detection, paddedWidth = width, normalize = true) {
   const data = new Float32Array(3 * height * paddedWidth);
-  const mean = detection ? [0.485, 0.456, 0.406] : [0.5, 0.5, 0.5];
-  const std = detection ? [0.229, 0.224, 0.225] : [0.5, 0.5, 0.5];
-  for (let c = 0; c < 3; c++)
-    for (let y = 0; y < height; y++)
-      for (let x = 0; x < width; x++) {
-        data[c * height * paddedWidth + y * paddedWidth + x] =
-          (rgb[(y * width + x) * 3 + (2 - c)] / 255 - mean[c]) / std[c];
-      }
+  const channels = detection ? detectionBytes : normalize ? recognitionBytes : alternateBytes;
+  for (let c = 0; c < 3; c++) {
+    const lookup = channels[c];
+    for (let y = 0; y < height; y++) {
+      let src = y * width * 3 + 2 - c;
+      let dest = (c * height + y) * paddedWidth;
+      for (let x = 0; x < width; x++, src += 3) data[dest++] = lookup[rgb[src]];
+    }
+  }
   return new ort.Tensor("float32", data, [1, 3, height, paddedWidth]);
 }
 async function infer(model, input) {
@@ -306,17 +320,8 @@ async function recognize(lines, language, normalize = true) {
       48,
       false,
       Math.max(320, line.width),
+      normalize,
     );
-    if (!normalize)
-      for (let c = 0; c < 3; c++)
-        for (let y = 0; y < 48; y++)
-          for (let x = 0; x < line.width; x++) {
-            const i =
-              c * 48 * Math.max(320, line.width) +
-              y * Math.max(320, line.width) +
-              x;
-            input.data[i] = (input.data[i] + 1) / 2;
-          }
     const output = await infer(model, input);
     try {
       const classes = output.dims[2];
@@ -427,6 +432,33 @@ function rows(lines) {
     )
     .join("\n");
 }
+// Only resolve competing alphabetic words. Numerical fields keep their
+// separate optical disagreement checks. Never invent a word from a dictionary.
+function corroborateWords(best, other, independent, printedElsewhere) {
+  if (!other || !independent || independent.confidence < 0.7 || /[0-9]/.test(best.text)) return best;
+  const words = best.text.split(/\s+/);
+  const alternative = other.text.trim().split(/\s+/);
+  const witness = independent.text.trim().split(/\s+/).filter(word => /\p{L}/u.test(word));
+  const tokens = words.filter(word => /\p{L}/u.test(word));
+  const candidates = alternative.filter(word => /\p{L}/u.test(word));
+  if (tokens.length !== witness.length || tokens.length !== candidates.length) return best;
+  let index = 0;
+  const text = words.map(word => {
+    if (!/\p{L}/u.test(word)) return word;
+    const corroborated = witness[index];
+    const competing = candidates[index++];
+    if (!/^[A-Za-z]{4,}$/.test(word) || !/^[A-Za-z]+$/.test(corroborated) || word.length !== corroborated.length) return word;
+    const candidate = corroborated.toLowerCase();
+    const old = word.toLowerCase();
+    if (candidate === old || Array.from(old).filter((c,i) => c !== candidate[i]).length !== 1) return word;
+    if (competing.toLowerCase() === candidate) return competing;
+    // Two variants from the same recognizer can share a spelling error.
+    // Require this exact spelling in a different, high-confidence printed row.
+    const boxes = printedElsewhere.get(candidate);
+    return boxes && (boxes.size > 1 || !boxes.has(best.box)) ? corroborated : word;
+  }).join(" ");
+  return text !== words.join(" ") ? { ...best, text, originalText: best.text } : best;
+}
 async function run(preview, timings) {
   const runtimeStarted = performance.now();
   if (!cvModule.Mat)
@@ -441,8 +473,15 @@ async function run(preview, timings) {
   const ocrStarted = performance.now();
   if (timings) timings.modelInitMs = ocrStarted - modelsStarted;
   const lineImages = await crops(cv, image, await detect(cv, image, 1536));
-  const latin = await recognize(lineImages, "latin"),
-    korean = await recognize(lineImages, "korean");
+  const latin = await recognize(lineImages, "latin");
+  // A confident standalone price offers no useful script evidence. Keep it
+  // for the selected recognizer, and check every box on any Korean signal.
+  const priceBoxes = new Set(latin.filter(line => line.minConfidence >= 0.97 &&
+    /^\s*\d[\d,]*\.\d{2}\s*$/.test(line.text)).map(line => line.box));
+  const korean = await recognize(lineImages.filter(line => !priceBoxes.has(line.box)), "korean");
+  if (priceBoxes.size && korean.some(line => line.confidence > 0.65 && /[가-힣]{2}/.test(line.text))) {
+    korean.push(...await recognize(lineImages.filter(line => priceBoxes.has(line.box)), "korean"));
+  }
   const score = (lines) =>
     lines.reduce(
       (sum, l) => sum + l.confidence * Math.min(30, l.text.length),
@@ -459,10 +498,25 @@ async function run(preview, timings) {
   const first = language === "korean" ? korean : latin;
   const alternate = await recognize(lineImages, language, false);
   const alternateByBox = new Map(alternate.map(line => [line.box, line]));
+  const independentByBox = new Map((language === "latin" ? korean : []).map(line => [line.box, line]));
+  const printedWords = new Map();
+  for (const line of first) {
+    if (line.confidence < 0.95) continue;
+    for (const word of line.text.toLowerCase().split(/\s+/)) {
+      if (!/^[a-z]{4,}$/.test(word)) continue;
+      if (!printedWords.has(word)) printedWords.set(word, new Set());
+      printedWords.get(word).add(line.box);
+    }
+  }
+  const itemWordCorrections = [];
   const lines = first.map((line) => {
     const other = alternateByBox.get(line.box);
     const best = other?.confidence > line.confidence ? other : line;
     const runnerUp = best === line ? other : line;
+    const supported = corroborateWords(best, runnerUp, independentByBox.get(line.box), printedWords);
+    if (supported !== best && best.confidence >= 0.5) {
+      itemWordCorrections.push({ original: best.text.trim(), corrected: supported.text.trim() });
+    }
     return {
       ...best,
       alternatives: runnerUp && /\d/.test(best.text) && runnerUp.text.trim() !== best.text.trim()
@@ -490,11 +544,12 @@ async function run(preview, timings) {
     language,
     text,
     opticalLines,
+    ...(itemWordCorrections.length ? { itemWordCorrections } : {}),
     lines,
     confidence: score(lines),
   };
 }
-module.exports = { run, rows, modelDictionary, tensor };
+module.exports = { run, rows, modelDictionary, tensor, corroborateWords };
 if (parentPort)
   parentPort.on("message", async (input) => {
     const timings = input.measure ? {} : undefined;

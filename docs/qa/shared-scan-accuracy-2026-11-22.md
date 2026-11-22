@@ -133,3 +133,30 @@ The same 11 labeled photos yielded the following shared-reader results. All 11 s
 | 11 | 0/8 | 2 | currency missing |
 
 Spelling, punctuation and word breaks still account for mismatches. Photo 6 also has a suggested date that the independent label could not establish. Photo 11 has two readable prices with imperfect names and no verified currency. Further work on these examples needs clearer source pixels or independent corroboration. This was a diagnostic replay on familiar images.
+
+## Fourth pass on spelling and recognition time
+
+On the same 11 byte-verified photos, some alternate readings already contained the right word. Choosing the most confident whole line discarded it. Clover now considers a one-letter substitution in an item word when another recognizer supports it and either the competing reading agrees or a separate high-confidence printed line contains the same spelling. The correction affects the proposed item description. The original transcript remains available. A word containing a number is excluded from this rule. On the diagnostic receipts this recovered “Katsudon”, “Jamon” and “Paella”.
+
+Generic Add, Transactions, account, recurring and investment receipt uploads use the shared import worker. Main and scoped Split Bills and Circles use the shared receipt preview. Ask Clover attachments now use corroborated item spellings when the phrase occurs once and the shared parser used it for a purchased item. The attachment retains the original transcript and file. Ordinary text attachments keep their literal contents. Bank statements, investment holdings and trades continue through their own parsers.
+
+| Shared server reader, same 11 photos | Previous pass | This pass |
+| --- | ---: | ---: |
+| Exact printed total | 11/11 | 11/11 |
+| Exact labeled date | 8/8 | 8/8 |
+| Exact labeled merchant | 7/8 | 7/8 |
+| Exact labeled currency | 1/2 | 1/2 |
+| Exact item description | 48/67 | 51/67 |
+| Exact quantity on matched items | 28/67 | 31/67 |
+| Exact unit price on matched items | 13/15 | 14/15 |
+| Exact amount on matched items | 48/67 | 51/67 |
+| Unmatched output descriptions | 13 | 10 |
+| Fully exact item tables | 3/11 | 3/11 |
+| Median local elapsed | 4.24 s | 4.22 s |
+| Slowest local elapsed | 9.83 s | 10.11 s |
+
+All the item names matched on photos 1–5, 9 and 10. Photo 6 matched six of nine names, with three spelling discrepancies and a suggested date that the label could not verify. Photo 7 retained a split word (one of two names exact). Photo 8 retained four name discrepancies (two of six exact). Photo 11 retained two imperfect names out of eight labeled items, with the currency unresolved. Photo 3's merchant still differs in punctuation. A correct amount alone does not validate an item name. All 11 previews went to review.
+
+Recognition now calculates normalized pixel values with lookup tables checked against the original Float32 arithmetic for every possible byte value. High-confidence price-only boxes can skip the script-identification pass. A Korean signal triggers recognition of the remaining prices, verified with a synthetic Korean receipt image. Directly resizing crops during perspective correction lost three correct totals in a replay and was discarded. A batching experiment also did not establish a consistent speed advantage. The median and worst-case observations above do not establish a further end-to-end speed improvement.
+
+The supplied Spirits Library photo passed the local Split Bills preview in 3.16 seconds with the three printed drinks, 120.54 service charge and 1,470.54 total. An offline Ask Clover attachment test verified the corrected text and retained raw evidence. The regression suites checked bank/investment screenshot routing, PDF coverage, receipt intake and settlements. Production traffic, device capture and upload latency were outside this run.

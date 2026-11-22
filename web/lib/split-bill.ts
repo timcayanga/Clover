@@ -5,7 +5,7 @@ import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
 import { resolveReceiptPurchaseDateRoles } from "./receipt-date-evidence";
 import { readReceiptMerchantEvidence } from "./receipt-merchant-evidence";
-import { readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
+import { refineReceiptItemWords, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 import { joinReceiptSettlementLines } from "./receipt-summary-lines";
 import { readMerchantPaymentConfirmation } from "./merchant-payment-confirmation";
@@ -2518,6 +2518,12 @@ export const parseAirlineTicketReceiptText = (receiptText: string): ReceiptPrevi
 export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => parseReceiptSource(receiptText, false);
 
 function parseReceiptSource(receiptText: string, photo: boolean): ReceiptPreviewResult {
+  const receipt = parseReceiptSourceFields(receiptText, photo);
+  const items = refineReceiptItemWords(receiptText, receipt.items);
+  return items === receipt.items ? receipt : { ...receipt, items };
+}
+
+function parseReceiptSourceFields(receiptText: string, photo: boolean): ReceiptPreviewResult {
   if (detectMultipleReceipts(receiptText)) {
     return {
       receiptText, receiptType: "generic_receipt", merchantName: null, billDate: null,

@@ -117,3 +117,36 @@ const edited = replaceLocalReceiptOcrText(original, "TL 19,000");
 assert.equal(readLocalReceiptOcrText(edited), "TL 19,000");
 assert.equal(edited.slice(0, edited.indexOf("[[OCR_TEXT]]")), original.slice(0, original.indexOf("[[OCR_TEXT]]")), "editing displayed text preserves raw OCR evidence");
 assert.equal(replaceLocalReceiptOcrText("manual text", "new notes"), "new notes");
+
+const { corroborateWords } = require("../lib/receipt-ocr-worker.cjs");
+const box = {};
+const best = { text: "ROASTED CAPROT", confidence: 0.96, box };
+const other = { text: "ROASTED CARROT" };
+const witness = { text: "ROASTED CARROT", confidence: 0.93 };
+assert.equal(corroborateWords(best, other, witness, new Map()).text, other.text);
+assert.equal(corroborateWords(best, best, witness, new Map()), best);
+assert.equal(corroborateWords(best, best, witness, new Map([["carrot", new Set([box])]])), best);
+assert.equal(corroborateWords(best, best, witness, new Map([["carrot", new Set([{}])]])).text, other.text);
+assert.equal(corroborateWords({ ...best, text: "ITEM 58" }, other, witness, new Map()).text, "ITEM 58");
+const receipt = wrap("Cafe\nOfficial Receipt\n2026-11-19\nQty Item Description Amount\n1 ROASTED CAPROT 25.00\n1 Coffee 10.00\nSubtotal 35.00\nTotal Amount 35.00");
+const raw = readLocalReceiptOcrText(receipt)!;
+const supported = encodeLocalReceiptOcr({ engine: "ppocr-v5-local", text: raw, itemWordCorrections: [{ original:best.text, corrected:other.text }] });
+assert.equal(parseReceiptText(supported).items[0].description, "ROASTED CARROT");
+assert.equal(parseReceiptText(supported).total, "35.00");
+assert.equal(readLocalReceiptOcrText(parseReceiptText(supported).receiptText), raw);
+
+const { tensor } = require("../lib/receipt-ocr-worker.cjs");
+const pixels = Uint8Array.from({ length: 256 * 3 }, (_, i) => i % 256);
+for (const [detection, normalize] of [[true,true],[false,true],[false,false]]) {
+  const input = tensor(pixels, 256, 1, detection, 260, normalize);
+  for (let c = 0; c < 3; c++) {
+    const mean = detection ? [0.485,0.456,0.406][c] : 0.5;
+    const deviation = detection ? [0.229,0.224,0.225][c] : 0.5;
+    for (let x = 0; x < 256; x++) {
+      const v = Math.fround((pixels[x*3 + 2-c] / 255 - mean) / deviation);
+      assert.equal(input.data[c*260+x], normalize ? v : Math.fround((v+1)/2));
+    }
+    assert.equal(input.data[c*260+259], 0);
+  }
+  input.dispose();
+}

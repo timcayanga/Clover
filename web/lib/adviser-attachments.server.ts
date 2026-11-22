@@ -1,4 +1,4 @@
-import { readLocalReceiptOcrText } from "./local-receipt-ocr-envelope";
+import { readLocalReceiptOcrText, receiptWordReplacements } from "./local-receipt-ocr-envelope";
 import { randomUUID, createHash } from "node:crypto";
 import { uploadObject } from "./s3";
 import { deleteImportObject } from "./s3-delete";
@@ -56,12 +56,27 @@ export async function storeAdviserAttachment(
   const problem = adviserFileProblem(file);
   if (problem) throw new Error(problem);
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const extracted = /\.(txt|md)$/i.test(file.name)
+  const isPlainText = /\.(txt|md)$/i.test(file.name);
+  const extracted = isPlainText
     ? new TextDecoder("utf-8", { fatal: true }).decode(bytes)
     : await (
         await import("@/lib/import-file-text.server")
       ).readUploadedFileText(file, undefined, {sourceBytes:bytes});
-  const text = readLocalReceiptOcrText(extracted) ?? extracted;
+  const rawOcrText = isPlainText ? null : readLocalReceiptOcrText(extracted);
+  let text = rawOcrText ?? extracted;
+  const replacements = rawOcrText ? receiptWordReplacements(extracted) : null;
+  if (replacements?.size) {
+    const { parseReceiptPhotoText } = await import("./split-bill");
+    const { items } = parseReceiptPhotoText(extracted);
+    for (const [original, corrected] of replacements) {
+      // Limit the change to a uniquely located phrase that the shared receipt
+      // parser actually used for a purchase. Keep the transcript for audit.
+      if (corrected && text.split(original).length === 2 &&
+          items.some(item => (" " + item.description + " ").includes(" " + corrected + " "))) {
+        text = text.replace(original, corrected);
+      }
+    }
+  }
   if (!text.trim())
     throw new Error(
       "No readable text was found. Try a clearer image or a text-based file.",
@@ -92,6 +107,7 @@ export async function storeAdviserAttachment(
           size: file.size,
           storageKey,
           text,
+          ...(rawOcrText && rawOcrText !== text ? { rawOcrText } : {}),
           sha256: createHash("sha256").update(bytes).digest("hex"),
         },
       },
