@@ -287,9 +287,16 @@ export function readChargedReceiptTable(source: string, blocks: OpticalBlock[] =
   const counted = quantities.reduce((sum, match) => sum + (match ? Number(match[2]) : 1), 0);
   const verifiedColumn = count && counted === Number(count[1]) &&
     quantities.filter(Boolean).length >= Math.max(2, Math.ceil(ordered.length / 2));
+  // With one missing quantity, the printed total fixes its value. Keep
+  // ambiguous multi-row gaps and conflicting count summaries unresolved.
+  const singleGap = verifiedColumn && !hasLeadingQuantity && quantities.filter(match => !match).length === 1 &&
+    lines.filter(line => /^total\s+(?:[oqa]ty|quantity)\b/i.test(line)).length === 1 &&
+    ordered.every(item => Number(item.amount) > 0 && !/\b(?:void|return|refund|discount)\b/i.test(item.description)) &&
+    quantities.every((match, index) => match || !/\d[.,]\d|\s[+-]?\d+[.°]?$/.test(ordered[index].description));
   const purchases = verifiedColumn ? ordered.map((item, index) => {
     const match = quantities[index];
-    return match ? { ...item, description: match[1], quantity: Number(match[2]) } : item;
+    if (match) return { ...item, description: match[1], quantity: Number(match[2]) };
+    return singleGap && item.quantity === undefined ? { ...item, quantity: 1 } : item;
   }) : ordered;
   return { items: readMarginQuantities(purchases, blocks), serviceCharge: (service / 100).toFixed(2), subtotal: (subtotal / 100).toFixed(2), total };
 }
@@ -341,6 +348,28 @@ function reconcilesDiscountedVatReceipt(text: string, total: string) {
   return !!items?.length && items.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0) === gross;
 }
 
+// When the merchant is cropped, verify the charged table against two
+// independent printed rates before returning it for review.
+function reconcilesTaxAndService(text: string, table: { subtotal: string; serviceCharge: string }) {
+  const lines = text.split(/\r?\n/).map(line => line.trim());
+  const one = (label: RegExp, format: RegExp) => {
+    const rows = lines.filter(line => label.test(line));
+    return rows.length === 1 ? rows[0].match(format) : null;
+  };
+  const fee = one(/^(?:\d+(?:\.\d+)?%\s*)?service\s*ch/i, /^(\d{1,2})%\s*service\s*ch(?:arge|rge)\s*:\s*[\d,]+\.\d{2}$/i);
+  const sales = one(/^vat(?:able)? sales\b/i, /^vat(?:able)? sales\s*:?\s*([\d,]+\.\d{2})$/i);
+  const tax = one(/^\d+(?:\.\d+)?%\s*vat\b/i, /^(\d{1,2})%\s*vat\s*:?\s*([\d,]+\.\d{2})$/i);
+  if (!fee || !sales || !tax || !Number(fee[1]) || !Number(tax[1])) return false;
+  if (lines.some(line => /^(?:total|grand total|balance|discount|rounding|tip|gratuity|refund|amount paid|sub[ -]?total)\b/i.test(line))) return false;
+  if (lines.some(line => /^(?:[vu]at[ -]exempt|zero[ -]rated) sales/i.test(line) && !/\s0\.00$/.test(line))) return false;
+  if (lines.filter(line => /^(?:amo(?:unt)?|bill am(?:ount|a))\b/i.test(line)).length !== 1) return false;
+  const cents = (value: string) => Number(value.replace(/[,.]/g, ""));
+  const base = cents(sales[1]), vat = cents(tax[2]), subtotal = cents(table.subtotal);
+  return [base, vat, subtotal].every(Number.isSafeInteger) && base > 0 && vat > 0 &&
+    base + vat === subtotal && Math.round(base * Number(tax[1]) / 100) === vat &&
+    Math.round(subtotal * Number(fee[1]) / 100) === cents(table.serviceCharge);
+}
+
 export function hasPrintedItemizedTotal(text: string, total: string, requirePurchaseTable = false) {
   const register = readRegisterServiceTable(text);
   if (register) return register.total === total;
@@ -352,6 +381,8 @@ export function hasPrintedItemizedTotal(text: string, total: string, requirePurc
   if (reconcilesDiscountedVatReceipt(text, total)) return true;
   const quantityTable = readQuantityTable(text);
   if (quantityTable) return quantityTable.total === total;
+  const charged = readChargedReceiptTable(text);
+  if (requirePurchaseTable && charged?.total === total && reconcilesTaxAndService(text, charged)) return true;
   if (requirePurchaseTable) {
     // A separate, legible subtotal plus a matching printed payable can
     // establish the purchase amount even if the name or date needs review.
@@ -360,8 +391,7 @@ export function hasPrintedItemizedTotal(text: string, total: string, requirePurc
     if (totals.length !== 1 || payableLabels?.length !== 1 || gross.length !== 1 || gross[0][1].replace(/,/g, "") !== total ||
         /^(?:service charge|s\. charge|discount|tip|rounding|balance due|total no\.? of items|\d+ item\(s\))/im.test(text)) return false;
   }
-  const reconciled = readChargedReceiptTable(text);
-  if (reconciled) return reconciled.total === total;
+  if (charged) return charged.total === total;
   if (!totals.length) return false;
   const items = readSubtotalItems(text);
   if (!items) return false;

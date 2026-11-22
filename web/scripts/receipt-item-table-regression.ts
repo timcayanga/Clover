@@ -145,6 +145,22 @@ for (const [index, [text, price]] of [["Tea", "100.00"], ["Lime Juice", "200.00"
 assert.deepEqual(readChargedReceiptTable(marginTable, marginBlocks)?.items[0], { description: "Tea", amount: "100.00", quantity: 1 });
 assert.equal(readChargedReceiptTable(marginTable, marginBlocks.slice(1))?.items[0].description, "1 Tea");
 
+const countedGap = "Tea 2 12.00\nCoffee 1 5.00\nCake 9.00\nTotal Qty 4\nGross Amount 26.00\nService Charge 2.60\nBill Amount 28.60";
+assert.equal(readChargedReceiptTable(countedGap)?.items[2].quantity, 1);
+for (const uncertain of [
+  countedGap.replace("Qty 4", "Qty 5"), countedGap.replace("Coffee 1", "Coffee"),
+  countedGap + "\nTotal Qty 3", countedGap.replace("Cake 9.00", "Cake 0.5 9.00"),
+]) assert.equal(readChargedReceiptTable(uncertain)?.items[2].quantity, undefined);
+
+const croppedIdentity = { merchantName: null, billDate: "2026-11-19", total: "123.20" };
+const taxedService = "Tea 45.00\nCake 67.00\n10%ServiceChrge: 11.20\nAmo 123=20\nVAT Sales 100.00\nVAT Exempt Sales 0.00\n12% VAT 12.00";
+assert.ok(canPreviewLocalReceiptItems(taxedService, croppedIdentity));
+for (const conflicting of [
+  taxedService.replace("67.00", "66.00"), taxedService.replace("10%", "11%"), taxedService.replace("12%", "13%"),
+  taxedService.replace("VAT Sales 100.00", "VAT Sales 90.00"), taxedService.replace("Sales 0.00", "Sales 10.00"),
+  taxedService + "\nDiscount 10.00", taxedService + "\nTotal 130.00", taxedService + "\nVAT Sales 100.00",
+]) assert.equal(canPreviewLocalReceiptItems(conflicting, croppedIdentity), false);
+
 const grossBill = "Tea 10.00\nCoffee 20.00\nGross Amount 30.00\nBill Amount 30.00";
 assert.ok(hasPrintedItemizedTotal(grossBill, "30.00"));
 assert.ok(!hasPrintedItemizedTotal(grossBill.replace("Bill Amount 30", "Bill Amount 45"), "45.00"));
