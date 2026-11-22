@@ -436,6 +436,22 @@ function rows(lines) {
 // separate optical disagreement checks. Never invent a word from a dictionary.
 function corroborateWords(best, other, independent, printedElsewhere) {
   if (!other || !independent || independent.confidence < 0.7 || /[0-9]/.test(best.text)) return best;
+  // Two independent readings must agree on a single missing or extra space.
+  // Restrict this to letters so a quantity or product code cannot be joined.
+  const preferred = best.text.trim();
+  const agreed = other.text.trim();
+  if (other.confidence >= 0.75 && agreed.toLowerCase() === independent.text.trim().toLowerCase() &&
+      /^[A-Za-z]+(?: [A-Za-z]+)*$/.test(preferred) && /^[A-Za-z]+(?: [A-Za-z]+)*$/.test(agreed) &&
+      Math.abs(preferred.length - agreed.length) === 1) {
+    const shorter = preferred.length < agreed.length ? preferred : agreed;
+    const longer = preferred.length < agreed.length ? agreed : preferred;
+    const a = longer.toLowerCase(), b = shorter.toLowerCase();
+    let index = 0;
+    while (index < b.length && a[index] === b[index]) index++;
+    if (a[index] === " " && a.slice(index + 1) === b.slice(index)) {
+      return { ...best, text: agreed, originalText: best.text };
+    }
+  }
   const words = best.text.split(/\s+/);
   const alternative = other.text.trim().split(/\s+/);
   const witness = independent.text.trim().split(/\s+/).filter(word => /\p{L}/u.test(word));

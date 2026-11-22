@@ -46,6 +46,13 @@ assert.equal(
   false
 );
 
+for (const [token, expected] of [
+  ["/#45#6E#63#72#79#70#74", true], ["/Encryption", false], ["/Encr#7", false],
+  ["/Encr#7Zpt", false], ["/EncryptedID /Encrypt/ID", true],
+] as const) {
+  assert.equal(hasPdfEncryptionMarker(new TextEncoder().encode(token)), expected, token);
+}
+
 assert.equal(
   normalizeBatchImportProgress({ fileTotal: 4, completedFiles: 0, fileProgress: 100, fileSettled: false }),
   25,

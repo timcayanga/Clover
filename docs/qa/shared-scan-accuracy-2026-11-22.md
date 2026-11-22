@@ -178,3 +178,20 @@ Host-side Android and iOS adapter tests passed for Expo form encoding, file sele
 The format suite checked 22 accepted extensions and parsed 15 structured formats through multipart upload and native queue fixtures. It verified that preloaded bytes produce the same parser result without rereading the file. The 69 offline checks passed, including completed OCR arriving after the partial result during upload. PDF page coverage, layout, text-layer routing and password retry checks passed. Two local bank PDFs with usable text layers returned text in 73 and 29 ms. A scanned sample needed a multi-page OCR pass. Those samples lack independent row labels in this checkout, so extraction is the extent of the real-statement claim.
 
 The supplied receipt passed the local Split Bills preview in 3.20 seconds. The timer excludes camera, network and app rendering. No production latency distribution was measured.
+
+## Follow-up on statement uploads and native OCR
+
+| Observed failure | Correction and verification |
+|---|---|
+| File validation rejected an OFX 2 document with an XML declaration. UTF-16 financial exports could also be rejected or garbled. | The validator recognizes the OFX document after its declaration. Validation, direct extraction and stored extraction now use the existing encoding-aware financial text decoder. Byte-level fixtures include XML OFX, UTF-16LE OFX and UTF-16BE MT940. |
+| A workbook named “export-from-csv.xlsx” could reach the CSV decoder after upload. | Delimited-file selection now checks the extension and MIME type. The upload regression compares direct and stored text across 18 fixtures, including workbooks whose names contain “csv”. Changed extraction routes use fresh cache versions. |
+| A PDF could be labeled fully read when a page produced no text. | Both native readers count pages yielding text. A simulator test of the iOS module’s PDF code reported two readable pages for a two-page sample and one readable page with incomplete coverage when the second page was blank. |
+| Minor word-spacing errors could persist despite two agreeing readings. | Allow a one-space correction in a letter-only item phrase when the alternate and independent readings agree. Tests cover agreement, disagreement and low confidence. The 11-photo replay still had 51/67 exact descriptions, so this change demonstrates no aggregate accuracy gain on this sample. |
+
+PDF password detection now scans bytes directly. Across 12 original local statement PDFs (6,422,143 bytes), the old and new probes agreed on every result. Median total marker-scan time across nine repetitions with Uint8Array inputs was 11.2 ms before and 9.0 ms after. This measures the password check only.
+
+The shared reader returned 11/11 exact receipt totals with a 4.03-second median and 9.90-second maximum. Every receipt remained reviewable. The original Spirits Library photo passed the local Split Bills preview in 3.26 seconds in an isolated run and 6.63 seconds during concurrent tests. These observations do not establish a production latency improvement.
+
+On the booted iOS 27.2 simulator, the native Vision recognizer ran on all 11 original photos. Only one proposed total matched using its output on its own. With the module’s bounding boxes and alternative readings passed through Clover’s device-evidence qualification, all 11 were routed to further processing. This tested the recognition and selection stages independently of upload and screen rendering.
+
+The Android Kotlin OCR module compiled against the Android SDK, Expo and ML Kit dependencies. Mobile picker, byte handling, upload navigation and offline regression tests passed on the host. The Android emulator refused to boot due to insufficient host disk space. Android ML Kit recognition and picker interaction still need runtime verification. No physical devices, store packages or production writes were used.

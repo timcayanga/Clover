@@ -127,6 +127,11 @@ assert.equal(corroborateWords(best, other, witness, new Map()).text, other.text)
 assert.equal(corroborateWords(best, best, witness, new Map()), best);
 assert.equal(corroborateWords(best, best, witness, new Map([["carrot", new Set([box])]])), best);
 assert.equal(corroborateWords(best, best, witness, new Map([["carrot", new Set([{}])]])).text, other.text);
+const splitWord = { ...best, text: "Blue berry tart" };
+const joinedWord = { ...other, text: "Blueberry tart", confidence: 0.95 };
+assert.equal(corroborateWords(splitWord, joinedWord, joinedWord, new Map()).text, joinedWord.text);
+assert.equal(corroborateWords(splitWord, joinedWord, splitWord, new Map()), splitWord);
+assert.equal(corroborateWords(splitWord, { ...joinedWord, confidence: 0.4 }, joinedWord, new Map()), splitWord);
 assert.equal(corroborateWords({ ...best, text: "ITEM 58" }, other, witness, new Map()).text, "ITEM 58");
 const receipt = wrap("Cafe\nOfficial Receipt\n2026-11-19\nQty Item Description Amount\n1 ROASTED CAPROT 25.00\n1 Coffee 10.00\nSubtotal 35.00\nTotal Amount 35.00");
 const raw = readLocalReceiptOcrText(receipt)!;

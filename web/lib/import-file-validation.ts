@@ -8,6 +8,7 @@ import {
   TRAINING_IMAGE_CONTENT_TYPES,
   TRAINING_IMAGE_EXTENSIONS,
 } from "@/lib/import-format-policies";
+import { decodeStructuredDelimitedBytes } from "./structured-delimited-decoder";
 import type { ImportImageMode } from "@/lib/import-image-mode";
 
 // Multipart imports must remain below the hosting request ceiling. Mobile
@@ -92,20 +93,20 @@ export const validateImportFileBytes = (params: {
 }) => {
   const name = params.fileName.toLowerCase();
   const bytes = params.bytes;
+  const normalizedContentType = (params.contentType ?? "").trim().toLowerCase();
   const startsWith = (values: number[]) => values.every((value, index) => bytes[index] === value);
-  const isPdf = name.endsWith(".pdf") || params.contentType === "application/pdf";
-  const isPng = name.endsWith(".png") || params.contentType === "image/png";
-  const isJpeg = /\.jpe?g$/.test(name) || params.contentType === "image/jpeg";
-  const isWebp = name.endsWith(".webp") || params.contentType === "image/webp";
+  const isPdf = name.endsWith(".pdf") || normalizedContentType === "application/pdf";
+  const isPng = name.endsWith(".png") || normalizedContentType === "image/png";
+  const isJpeg = /\.jpe?g$/.test(name) || /^image\/jpe?g$/.test(normalizedContentType);
+  const isWebp = name.endsWith(".webp") || normalizedContentType === "image/webp";
   const isHeif =
     /\.(?:heic|heif)$/.test(name) ||
-    /image\/hei[cf](?:-sequence)?/.test(String(params.contentType ?? "").toLowerCase());
+    /image\/hei[cf](?:-sequence)?/.test(normalizedContentType);
   const isCsv =
     /\.(?:csv|tsv)$/.test(name) ||
-    params.contentType === "text/csv" ||
-    params.contentType === "text/tab-separated-values";
+    normalizedContentType === "text/csv" ||
+    normalizedContentType === "text/tab-separated-values";
   const extension = name.slice(name.lastIndexOf("."));
-  const normalizedContentType = String(params.contentType ?? "").toLowerCase();
   const isFinancialExchange =
     FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS.includes(extension as (typeof FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS)[number]) ||
     FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES.has(normalizedContentType);
@@ -132,9 +133,9 @@ export const validateImportFileBytes = (params: {
   }
   if (isCsv && bytes.length === 0) return "The uploaded CSV file is empty.";
   if (isFinancialExchange) {
-    const decoded = new TextDecoder("utf-8", { fatal: false }).decode(bytes).trim();
+    const decoded = decodeStructuredDelimitedBytes(bytes).trim();
     const header = decoded.slice(0, 2_048);
-    const looksOfx = /^(?:OFXHEADER:|<\?OFX|<OFX)/i.test(header);
+    const looksOfx = /^(?:OFXHEADER:|(?:<\?xml\s[^?]*\?>\s*)?(?:<\?OFX\s[^?]*\?>\s*)?<OFX\b)/i.test(header);
     const looksQif = /^!(?:Type:|Account[ \t]*(?:[\r\n]|$)|Option:(?:AutoSwitch|AllXfr)[ \t]*(?:[\r\n]|$))/i.test(header);
     const looksMt940 = /(?:^|\n):20:[^\n]+[\s\S]*?(?:^|\n):25:[^\n]+[\s\S]*?(?:^|\n):61:/m.test(decoded);
     const looksCamt = /<(?:\w+:)?Document\b[\s\S]*?<(?:\w+:)?BkToCstmrStmt\b/i.test(decoded) || /camt\.053/i.test(header);

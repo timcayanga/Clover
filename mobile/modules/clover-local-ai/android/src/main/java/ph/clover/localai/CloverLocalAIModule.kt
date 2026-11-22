@@ -65,17 +65,17 @@ class CloverLocalAIModule : Module() {
       try {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         try {
-          var count=1;var total=1
+          var pagesRead=1;var total=1
           var opticalLines = emptyList<Map<String, Any>>()
           val text=if(file.extension.lowercase()=="pdf") {
             ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
               PdfRenderer(fd).use { renderer ->
-                total=renderer.pageCount;count=minOf(total,5)
-                (0 until count).map { index -> renderer.openPage(index).use { page ->
+                total=renderer.pageCount
+                (0 until minOf(total,5)).map { index -> renderer.openPage(index).use { page ->
                   val scale=minOf(1400f/page.width,1800f/page.height)
                   val bitmap=Bitmap.createBitmap(maxOf(1,(page.width*scale).toInt()),maxOf(1,(page.height*scale).toInt()),Bitmap.Config.ARGB_8888)
                   try {bitmap.eraseColor(android.graphics.Color.WHITE);page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);recognizer.process(InputImage.fromBitmap(bitmap,0)).await().text} finally {bitmap.recycle()}
-                }}.joinToString("\n\n")
+                }}.also { pages -> pagesRead = pages.count { it.isNotBlank() } }.joinToString("\n\n")
               }
             }
           } else {
@@ -122,7 +122,7 @@ class CloverLocalAIModule : Module() {
               result.text
             } finally { if(oriented!==bitmap) oriented.recycle();bitmap.recycle() }
           }
-          mapOf("text" to text.take(40000),"opticalLines" to opticalLines,"pagesRead" to count,"totalPages" to total,"complete" to (!fast && count == total && text.length <= 40000))
+          mapOf("text" to text.take(40000),"opticalLines" to opticalLines,"pagesRead" to pagesRead,"totalPages" to total,"complete" to (!fast && pagesRead > 0 && pagesRead == total && text.length <= 40000))
         } finally {
           recognizer.close()
         }

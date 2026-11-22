@@ -1,3 +1,4 @@
+import { FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
 import { readLocalReceiptOcrText, readReceiptOpticalEvidence, receiptDateDisagreements, recordReceiptDateCheck, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
 import { hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
@@ -256,7 +257,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v5";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v6";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -912,7 +913,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   // Camera and library names carry no document type. Probe common camera
   // formats, but only change routes after full-frame purchase evidence.
   const cameraImage = originalProfile === "generic" &&
-    /(?:image\/(?:jpeg|heic|heif)\b|\.(?:jpe?g|heic|heif)$)/i.test(`${params.fileType ?? ""} ${params.fileName ?? ""}`);
+    /(?:image\/(?:jpe?g|heic|heif)\b|\.(?:jpe?g|heic|heif)$)/i.test(`${params.fileType ?? ""} ${params.fileName ?? ""}`);
   const opticalPreview = preview ?? (cameraImage ? await getBoundedImportImagePreview(params.sourceBytes) : null);
   const firstOptical = opticalPreview ? await readLocalReceiptImage(opticalPreview) : null;
   const verifiedPurchase = async (source: string | null, image: ImagePreview | null) => {
@@ -950,7 +951,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   if (positiveRoute?.mode === "receipt") {
     if (!needsExpandedReceiptText(firstPassText)) return firstPassText;
     receipt = true;
-    preview ??= await getBoundedImportImagePreview(params.sourceBytes);
+    preview ??= opticalPreview ?? await getBoundedImportImagePreview(params.sourceBytes);
   }
   const retry = (text: string) => shouldRetryImageOcrBestEffort({ ...params, firstPassText: text });
   if (!retry(firstPassText) && (!receipt || !needsExpandedReceiptText(firstPassText))) return firstPassText;
@@ -3180,6 +3181,9 @@ export async function readPdfPageEscalation(
 export const renderReceiptPdfPagesForVision = async (bytes: Uint8Array) =>
   renderPdfPageImagesFromBytes(bytes, undefined, 3, 1.5, true);
 
+const isDelimitedImport = (name: string, type: string) =>
+  /\.(?:csv|tsv)$/i.test(name) || /^(?:text\/csv|application\/csv|text\/tab-separated-values)$/i.test(type.split(";")[0].trim());
+
 export const readUploadedFileText = async (
   file: File | ImportFileLike,
   password?: string,
@@ -3194,18 +3198,13 @@ export const readUploadedFileText = async (
     /(?:x-ofx|intu\.qfx|application\/qif|text\/qif|mt940|application\/xml|text\/xml|application\/json)/.test(lowerType)
   ) {
     if (options?.sourceBytes || typeof file.arrayBuffer === "function") {
-      return new TextDecoder("utf-8", { fatal: false }).decode(options?.sourceBytes ?? await file.arrayBuffer!());
+      return decodeStructuredDelimitedBytes(options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer!()));
     }
     if (typeof file.text === "function") return file.text();
     throw new Error("Unable to read imported financial export.");
   }
 
-  if (
-    lowerName.endsWith(".csv") ||
-    lowerName.endsWith(".tsv") ||
-    lowerType.includes("csv") ||
-    lowerType.includes("tab-separated-values")
-  ) {
+  if (isDelimitedImport(lowerName, lowerType)) {
     if (options?.sourceBytes || typeof file.arrayBuffer === "function") {
       return decodeStructuredDelimitedBytes(options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer!()));
     }
@@ -3290,12 +3289,17 @@ export const readImportedFileTextWithCacheInfo = async (
 ): Promise<ImportedFileTextWithCacheInfo> => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   const isPdf = isUploadPdf(params.fileName, params.fileType);
-  const familyVersion = resolveImportFileExtractionCacheVersion(params.fileName);
+  const financialExport = FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS.some(extension => params.fileName.toLowerCase().endsWith(extension)) ||
+    FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES.has(params.fileType.toLowerCase());
+  const oldRouteWasDelimited = /csv|tab-separated-values/i.test(params.fileName) &&
+    !isDelimitedImport(params.fileName, params.fileType);
+  const baseVersion = resolveImportFileExtractionCacheVersion(params.fileName);
+  const familyVersion = oldRouteWasDelimited ? baseVersion + ":file-type-v2" : baseVersion;
   const cacheVersion = isPdf
     ? pdfTextCacheVersion(params.fileName, familyVersion)
     : isImageImportFileName(params.fileType, params.fileName)
       ? `${familyVersion}:${IMPORT_IMAGE_OCR_CACHE_VERSION}`
-      : familyVersion;
+      : financialExport ? `${familyVersion}:export-encoding-v2` : familyVersion;
   const useMemoryCache = !isPdf || Boolean(params.workspaceId);
   const deferHybridRecovery = Boolean(params.workspaceId && (params.importMode ?? "statement") === "statement");
   const aggressiveProfile = shouldUseAggressivePdfOcrProfile(params.fileName) ? "aggressive" : "standard";
@@ -3469,11 +3473,7 @@ export const readImportedFileTextWithCacheInfo = async (
       return decodeWordGrabReceiptBytes(bytes);
     }
 
-    if (
-      lowerName.endsWith(".csv") ||
-      lowerName.endsWith(".tsv") ||
-      /csv|tab-separated-values/.test(`${lowerName} ${params.fileType}`)
-    ) {
+    if (isDelimitedImport(params.fileName, params.fileType)) {
       return decodeStructuredDelimitedBytes(bytes);
     }
 
@@ -3481,7 +3481,7 @@ export const readImportedFileTextWithCacheInfo = async (
       /\.(?:ofx|qfx|qif|mt940|sta|xml|json)$/.test(lowerName) ||
       /(?:x-ofx|intu\.qfx|application\/qif|text\/qif|mt940|application\/xml|text\/xml|application\/json)/.test(params.fileType.toLowerCase())
     ) {
-      return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      return decodeStructuredDelimitedBytes(bytes);
     }
 
     if (

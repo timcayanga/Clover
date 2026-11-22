@@ -8,7 +8,7 @@ import * as receiptFirstAttempt from "../../shared/receipt-first-attempt";
 import { PUBLIC_IMPORT_ACCEPT, PUBLIC_IMPORT_EXTENSIONS } from "@/lib/import-format-policies";
 import { validateImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
 import { validateServerImportFile, withCompletedNativeUpload } from "@/lib/native-upload-validation";
-import { readUploadedFileText } from "@/lib/import-file-text.server";
+import { readImportedFileTextWithCacheInfo, readUploadedFileText } from "@/lib/import-file-text.server";
 import { parseImportText } from "@/lib/import-parser";
 
 // Exercise the installed native file validator/queue without requiring device
@@ -53,14 +53,20 @@ export async function runUploadFormatCoverageRegression() {
     assert(validateImportFile({ fileName: `backup${extension}`, fileSize: 100 }));
   }
 
+  assert(validateImportFileBytes({ fileName: "receipt", contentType: "IMAGE/JPG", bytes: Buffer.from("unreadable image") }));
   const csv = "Migration Source,Date,Description,Amount,Currency,Account,Type,Category\nspreadsheet,2026-09-13,Upload test,12.50,PHP,Upload Checking,Expense,Food";
   const ofx = "OFXHEADER:100\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>PHP<BANKACCTFROM><ACCTID>1234</BANKACCTFROM><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260913<TRNAMT>-12.50<FITID>upload-1<NAME>Upload test</STMTTRN></BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>";
+  const xmlOfx = ofx.replace("OFXHEADER:100", '<?xml version="1.0"?>\n<?OFX OFXHEADER="200"?>')
+    .replace(/<(CURDEF|ACCTID|TRNTYPE|DTPOSTED|TRNAMT|FITID|NAME)>([^<]+)/g, "<$1>$2</$1>");
   const mt940 = ":20:UPLOAD\n:25:1234\n:60F:C260901PHP100,00\n:61:260913D12,50NMSCREF\n:86:Upload test\n:62F:C260913PHP87,50";
   const fixtures: Array<{ extension: string; bytes: Uint8Array; expected?: { amount: number; date: string } }> = [
     { extension: ".csv", bytes: Buffer.from(csv) },
     { extension: ".tsv", bytes: Buffer.from(csv.replaceAll(",", "\t")) },
     { extension: ".ofx", bytes: Buffer.from(ofx) },
     { extension: ".qfx", bytes: Buffer.from(ofx) },
+    { extension: ".ofx", bytes: Buffer.from(xmlOfx) },
+    { extension: ".ofx", bytes: Buffer.from("\ufeff" + ofx, "utf16le") },
+    { extension: ".mt940", bytes: Buffer.from("\ufeff" + mt940, "utf16le").swap16() },
     { extension: ".qif", bytes: Buffer.from("!Account\nNUpload Checking\nTBank\n^\n!Type:Bank\nD2026-09-13\nT-12.50\nPUpload test\nLFood\n^") },
     { extension: ".mt940", bytes: Buffer.from(mt940) },
     { extension: ".sta", bytes: Buffer.from(mt940) },
@@ -102,6 +108,12 @@ export async function runUploadFormatCoverageRegression() {
           arrayBuffer: async () => { throw new Error("Preloaded upload bytes were read twice"); },
         }, undefined, { sourceBytes: receivedBytes });
         assert.equal(cachedText, text, extension);
+        // A provider can preserve "csv" in the name of a converted workbook.
+        const stored = await readImportedFileTextWithCacheInfo({
+          storageKey: "local-fixture", fileName: "export-from-csv" + extension, fileType: received.type,
+          sourceBytes: receivedBytes,
+        });
+        assert.equal(stored.text, text, extension);
         const rows = parseImportText(text, received.name, received.type, { currency: "PHP", accountName: "Upload Checking" });
         assert.equal(rows.length, 1, `${extension}: bytes must reach the parser`);
         assert.equal(Number(rows[0].amount), expected?.amount ?? 12.5); assert.equal(rows[0].date, expected?.date ?? "2026-09-13");
@@ -123,5 +135,5 @@ export async function runUploadFormatCoverageRegression() {
     }
     assert.equal(networkCalls, 0);
   } finally { globalThis.fetch = originalFetch; }
-  console.log(`PASS upload format coverage: ${PUBLIC_IMPORT_EXTENSIONS.length} extensions selectable/accepted; ${fixtures.length} structured formats through multipart bytes, validation, extraction, parsing and native queue; no AI/network calls`);
+  console.log(`PASS upload format coverage: ${PUBLIC_IMPORT_EXTENSIONS.length} extensions selectable/accepted; ${fixtures.length} structured file fixtures through multipart bytes, validation, extraction, parsing and native queue; no AI/network calls`);
 }

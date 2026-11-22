@@ -94,7 +94,8 @@ public class CloverLocalAIModule: Module {
           }
         }
         let text=pages.joined(separator:"\n\n")
-        return ["text":String(text.prefix(40000)),"pagesRead":count,"totalPages":doc.pageCount,"complete":count==doc.pageCount && text.count<=40000]
+        let pagesRead = pages.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+        return ["text":String(text.prefix(40000)),"pagesRead":pagesRead,"totalPages":doc.pageCount,"complete":pagesRead > 0 && pagesRead == doc.pageCount && text.utf16.count <= 40000]
       }
       guard let source=CGImageSourceCreateWithURL(url as CFURL,nil), let cg=CGImageSourceCreateThumbnailAtIndex(source,0,[kCGImageSourceCreateThumbnailFromImageAlways:true,kCGImageSourceCreateThumbnailWithTransform:true,kCGImageSourceThumbnailMaxPixelSize:2000] as CFDictionary) else { throw self.failure("This image format needs online processing.") }
       let result = try self.recognize(cg)

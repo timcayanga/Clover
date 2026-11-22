@@ -148,7 +148,9 @@ export function receiptWordReplacements(source: string) {
   for (const entry of suggestions) {
     if (typeof entry?.original !== "string" || typeof entry.corrected !== "string" || entry.original.length > 200 ||
         !/^[\p{L} '&.,()’/-]+$/u.test(entry.original) || !/^[\p{L} '&.,()’/-]+$/u.test(entry.corrected) ||
-        entry.original.length !== entry.corrected.length) continue;
+        (entry.original.length !== entry.corrected.length &&
+         (Math.abs(entry.original.length - entry.corrected.length) !== 1 ||
+          entry.original.replaceAll(" ", "").toLowerCase() !== entry.corrected.replaceAll(" ", "").toLowerCase()))) continue;
     // Conflicting suggestions for the same printed phrase must go to review.
     replacements.set(entry.original, replacements.has(entry.original) && replacements.get(entry.original) !== entry.corrected ? "" : entry.corrected);
   }
