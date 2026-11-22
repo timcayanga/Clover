@@ -47,16 +47,23 @@ function readQuantityTable(text: string) {
   for (const line of lines.slice(header + 1, subtotalIndex)) {
     if (!items.length && /^(?:dine in|take out|vat items?|vat item\(s\))$/i.test(line)) continue;
     const column = takePrice(line);
-    const row = column?.prefix.match(/^([1-9]\d*(?:[.,]0{1,2})?)\s+(.+)$/);
+    const row = column?.prefix.match(/^((?:[1-9]\d*|0)(?:[.,]\d{1,3})?)\s+(.+)$/);
     if (column && row) {
       const quantity = Number(row[1].replace(",", "."));
-      if (!Number.isSafeInteger(quantity)) return null;
+      if (quantity <= 0 || (!hasUnitPrice && !Number.isSafeInteger(quantity))) return null;
       const amount = column.amount;
       const cents = Math.round(Number(amount) * 100);
       if (!Number.isSafeInteger(cents) || cents <= 0) return null;
       if (hasUnitPrice) {
         const unitColumn = takePrice(row[2]);
-        if (!unitColumn?.prefix || quantity * Math.round(Number(unitColumn.amount) * 100) !== cents) return null;
+        if (!unitColumn?.prefix) return null;
+        // Weighed goods can have three quantity decimals. Compute the
+        // extension in integers, then round once to the printed cent.
+        const [whole, fraction = ""] = row[1].split(/[.,]/);
+        const scale = 10 ** fraction.length;
+        const units = Number(whole + fraction);
+        const extension = units * Math.round(Number(unitColumn.amount) * 100);
+        if (!Number.isSafeInteger(units) || !Number.isSafeInteger(extension) || Math.round(extension / scale) !== cents) return null;
         items.push({ description: unitColumn.prefix, quantity, unitPrice: unitColumn.amount, amount });
       } else {
         items.push({ description: row[2], quantity, amount });
@@ -87,6 +94,7 @@ function readQuantityTable(text: string) {
     const units = items.reduce((sum, item) => sum + item.quantity, 0);
     if ((printedCount !== items.length && printedCount !== units) || priceInCents(counted) !== subtotal + service) return null;
   }
+  if (footer.some(line => /^(?:total paid|amount paid)\b/i.test(line) && priceInCents(line) !== subtotal + service)) return null;
   const totals = footer.filter(line => /^(?:total (?:amount|due)|bill (?:amount|total)|amount due|grand total|total(?=\s*(?:[:\d₱€£]|[A-Z]{3}\s*\d)))\b/i.test(line)).map(line => {
     const amount = priceInCents(line);
     if (Number.isFinite(amount) || !countedTotal) return amount;
@@ -404,11 +412,18 @@ function reconcilesTaxAndService(text: string, table: { subtotal: string; servic
 export function hasPrintedItemizedTotal(text: string, total: string, requirePurchaseTable = false) {
   const register = readRegisterServiceTable(text);
   if (register) return register.total === total;
+  let paidConflict = false;
   const totals = text.split(/\r?\n/).flatMap(line => {
-    const match = line.match(/^\s*(?:grand total|bill (?:amount|total)|amount (?:due|to pay)|total(?: due| amount| paid)?)\s*[:：]?\s*(?:[A-Z]{3}|[₱$€£¥])?\s*(\d[\d,]*\.\d{2})\s*(?:[A-Z]{3}|[₱$€£¥])?\s*$/i);
-    return match ? [match[1].replace(/,/g, "")] : [];
+    const match = line.match(/^\s*(?:grand total|bill (?:amount|total)|amount (?:due|to pay|paid)|total(?: due| amount| paid)?)\s*[:：]?\s*(?:[A-Z]{3}|[₱$€£¥])?\s*(\d[\d,]*\.\d{2})\s*(?:[A-Z]{3}|[₱$€£¥])?\s*$/i);
+    if (!match) return [];
+    const amount = match[1].replace(/,/g, "");
+    if (/^\s*amount paid\b/i.test(line)) {
+      if (amount !== total) paidConflict = true;
+      return [];
+    }
+    return [amount];
   });
-  if (totals.some(value => value !== total)) return false;
+  if (paidConflict || totals.some(value => value !== total)) return false;
   if (reconcilesDiscountedVatReceipt(text, total)) return true;
   const quantityTable = readQuantityTable(text);
   if (quantityTable) return quantityTable.total === total;

@@ -68,6 +68,21 @@ assert.equal(unrelated.merchantName, "PINE CAFE");
 assert.equal(unrelated.receiptAccountMatch?.accountName ?? null, null);
 assert.equal(readReconciledItemTable(text.replace("1 Mocktail", "2 Mocktail"))?.items[0].quantity, 2);
 
+const weighed = "Qty Item Unit Price Amount\n0.375 Coffee Beans 319.99 120.00\n1 Tea 25.00 25.00\nSubtotal 145.00\nTotal Amount 145.00";
+assert.deepEqual(readReconciledItemTable(weighed)?.items[0],
+  { description: "Coffee Beans", quantity: 0.375, unitPrice: "319.99", amount: "120.00" });
+assert.equal(readReconciledItemTable(weighed.replace("319.99", "310.00")), null);
+const halfCent = "Qty Item Unit Price Amount\n0.125 Flour 0.20 0.03\nSubtotal 0.03\nTotal Amount 0.03";
+assert.equal(readReconciledItemTable(halfCent)?.items[0].amount, "0.03");
+assert.equal(readReconciledItemTable(halfCent.replaceAll("0.03", "0.02")), null);
+assert.equal(readReconciledItemTable(weighed.replace("0.375", "0,375"))?.items[0].quantity, 0.375);
+assert.equal(readReconciledItemTable(weighed.replace(" Unit Price", "")), null);
+
+assert.equal(readReconciledItemTable(weighed + "\nTotal Paid 140.00"), null);
+assert.equal(readReconciledItemTable(weighed + "\nTotal Paid 145.00")?.total, "145.00");
+
+assert.equal(hasPrintedItemizedTotal(weighed + "\nAmount Paid 140.00", "145.00", true), false);
+
 const register = "Coffee\n2 @ 4.00 8.00\nTea\n1 @ 3.00 3.00\nSub Total 11.00";
 assert.deepEqual(readSubtotalItems(register)?.map(item => [item.description, item.quantity, item.amount]),
   [["Coffee", 2, "8.00"], ["Tea", 1, "3.00"]]);
