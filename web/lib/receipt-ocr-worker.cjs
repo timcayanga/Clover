@@ -200,7 +200,7 @@ function rectangle(cv, contour, expansion = 0) {
     right = points.slice(2).sort((a, b) => a[1] - b[1]);
   return { box: [left[0], right[0], right[1], left[1]], short: Math.min(w, h) };
 }
-async function detect(cv, image, size) {
+async function detect(cv, image, size, slenderBoxes) {
   const edge = Math.max(image.width, image.height);
   // Small thumbnails can contain text narrower than a detection cell.
   // Enlarge the detection grid only, then recognize crops of the source pixels.
@@ -238,7 +238,7 @@ async function detect(cv, image, size) {
       const contour = contours.get(i);
       try {
         const { box, short } = rectangle(cv, contour, 1.5);
-        if (short < 3) continue;
+        if (short < 2) continue;
         const mapped = box.map(([x, y]) => [
           Math.max(0, Math.min(image.width - 1, (x * image.width) / w)),
           Math.max(0, Math.min(image.height - 1, (y * image.height) / h)),
@@ -246,8 +246,10 @@ async function detect(cv, image, size) {
         if (
           distance(mapped[0], mapped[1]) > 5 &&
           distance(mapped[0], mapped[3]) > 5
-        )
+        ) {
+          if (short < 3) slenderBoxes.add(mapped);
           boxes.push(mapped);
+        }
       } finally {
         contour.delete();
       }
@@ -257,10 +259,14 @@ async function detect(cv, image, size) {
     contours.delete();
     hierarchy.delete();
   }
-  if (boxes.length > 300) throw new Error("OCR page has too many lines");
+  if (boxes.length > 300) {
+    const ordinary = boxes.filter(box => !slenderBoxes.has(box));
+    if (ordinary.length <= 300) return ordinary;
+    throw new Error("OCR page has too many lines");
+  }
   return boxes;
 }
-async function crops(cv, image, boxes) {
+async function crops(cv, image, boxes, slenderBoxes) {
   if (!boxes.length) return [];
   const src = cv.matFromArray(
       image.height,
@@ -283,7 +289,8 @@ async function crops(cv, image, boxes) {
             Math.max(distance(box[0], box[3]), distance(box[1], box[2])),
           ),
         );
-      if (w * h > 3000000 || h > w * 1.5) continue;
+      if (h > w * 1.5) slenderBoxes.add(box);
+      if (w * h > 3000000 || (slenderBoxes.has(box) && (h > w * 3 || Math.max(w, h) > 64))) continue;
       const from = cv.matFromArray(4, 1, cv.CV_32FC2, box.flat()),
         to = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, w, 0, w, h, 0, h]);
       const transform = cv.getPerspectiveTransform(from, to),
@@ -534,14 +541,17 @@ async function run(preview, timings) {
   await Promise.all(Object.keys(modelSpecs).map(getModel));
   const ocrStarted = performance.now();
   if (timings) timings.modelInitMs = ocrStarted - modelsStarted;
-  const lineImages = await crops(cv, image, await detect(cv, image, 1536));
+  const slenderBoxes = new Set();
+  const boxes = await detect(cv, image, 1536, slenderBoxes);
+  const lineImages = await crops(cv, image, boxes, slenderBoxes);
   const latin = await recognize(lineImages, "latin");
   // A confident standalone price offers no useful script evidence. Keep it
   // for the selected recognizer, and check every box on any Korean signal.
   const priceBoxes = new Set(latin.filter(line => line.minConfidence >= 0.97 &&
     /^\s*\d[\d,]*\.\d{2}\s*$/.test(line.text)).map(line => line.box));
   const korean = await recognize(lineImages.filter(line => !priceBoxes.has(line.box)), "korean");
-  if (priceBoxes.size && korean.some(line => line.confidence > 0.65 && /[가-힣]{2}/.test(line.text))) {
+  const hasKoreanText = line => !slenderBoxes.has(line.box) && line.confidence > 0.65 && /[가-힣]{2}/.test(line.text);
+  if (priceBoxes.size && korean.some(hasKoreanText)) {
     korean.push(...await recognize(lineImages.filter(line => priceBoxes.has(line.box)), "korean"));
   }
   const score = (lines) =>
@@ -553,9 +563,7 @@ async function run(preview, timings) {
       1,
       lines.reduce((sum, l) => sum + Math.min(30, l.text.length), 0),
     );
-  const hangul = korean.filter(
-    (l) => l.confidence > 0.65 && /[가-힣]{2}/.test(l.text),
-  ).length;
+  const hangul = korean.filter(hasKoreanText).length;
   const language = hangul >= 3 ? "korean" : "latin";
   const first = language === "korean" ? korean : latin;
   const witnesses = language === "latin" ? korean : latin;
@@ -587,7 +595,11 @@ async function run(preview, timings) {
         ? [{ text: runnerUp.text, confidence: runnerUp.confidence }] : [],
     };
   });
-  const readable = lines.filter(line => line.confidence >= 0.5);
+  // Narrow single digits often sit by themselves in a quantity column.
+  // Discard punctuation and uncertain readings from these extra contours.
+  const readable = lines.filter(line => slenderBoxes.has(line.box)
+    ? line.confidence >= 0.8 && /^[0-9]$/.test(line.text.trim())
+    : line.confidence >= 0.5);
   const clamp = value => Math.max(0, Math.min(1, value));
   const opticalLines = readable.map(line => {
     const x = line.box.map(point => point[0] / image.width);

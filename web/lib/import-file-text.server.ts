@@ -1,4 +1,5 @@
 import { isDelimitedImport, importDocumentMediaType, importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
+import { purchaseInvoiceHeading } from "./purchase-document-payment";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "./receipt-price-column";
 import { recordReceiptPriceCrop, readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
 import { canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
@@ -257,7 +258,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v17";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v18";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -949,8 +950,9 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   let preview = receipt ? await measureImportReader("receipt_region_preview", () => getBoundedImportImagePreview(params.sourceBytes)) : null;
   // Camera and library names carry no document type. Probe common camera
   // formats, but only change routes after full-frame purchase evidence.
+  const exportedCameraPhoto = /^(?:img|dsc|pxl)[_-]?\d[\w.-]*\.(?:png|webp)$/i.test(params.fileName ?? "");
   const cameraImage = originalProfile === "generic" &&
-    /(?:image\/(?:jpe?g|heic|heif)\b|\.(?:jpe?g|heic|heif)$)/i.test(`${params.fileType ?? ""} ${params.fileName ?? ""}`);
+    (exportedCameraPhoto || /(?:image\/(?:jpe?g|heic|heif)\b|\.(?:jpe?g|heic|heif)$)/i.test(`${params.fileType ?? ""} ${params.fileName ?? ""}`));
   const opticalPreview = preview ?? (cameraImage ? await getBoundedImportImagePreview(params.sourceBytes) : null);
   const firstOptical = opticalPreview ? await readLocalReceiptImage(opticalPreview) : null;
   const verifiedPurchase = async (source: string | null, image: ImagePreview | null) => {
@@ -1130,7 +1132,7 @@ export function hasVerifiedPdfNativeLedger(data: Uint8Array, selectedText: strin
 function hasVerifiedPdfReceipt(data: Uint8Array, text: string) {
   const pages = pdfNativePageReads.get(data);
   if (pages?.length !== 1 || pages[0].trim() !== text.trim() ||
-      !(/\breceipt\b/i.test(text) || /^(?:sales|tax) invoice[ \t]*$/im.test(text)) || /[\uFFFD\uE000-\uF8FF]|\(cid:\d+\)/u.test(text)) return false;
+      !(/\breceipt\b/i.test(text) || purchaseInvoiceHeading.test(text)) || /[\uFFFD\uE000-\uF8FF]|\(cid:\d+\)/u.test(text)) return false;
   if (resolvePositiveImportDocumentRoute(text)?.mode !== "receipt") return false;
   const { total } = parseReceiptPhotoText(text);
   if (!total) return false;

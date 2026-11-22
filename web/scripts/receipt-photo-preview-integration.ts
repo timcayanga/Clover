@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { withMobileRequestContext } from "../lib/mobile-request-context";
-import { shutdownImportOcrWorkers } from "../lib/import-file-text.server";
+import { readUploadedFileText, shutdownImportOcrWorkers } from "../lib/import-file-text.server";
 import { readLocalReceiptImage, shutdownLocalReceiptOcr } from "../lib/local-receipt-ocr.server";
 
 const require = createRequire(import.meta.url);
@@ -45,6 +45,12 @@ async function verify() {
   });
   // A completed scan with no text must leave the worker available for the next upload.
   assert.equal(await readLocalReceiptImage({ data: Buffer.alloc(320 * 240 * 3, 255), width: 320, height: 240 }), null);
+  // Generic Add and Transactions uploads can receive camera photos exported as PNG.
+  const png = await require("sharp")(bytes).png().toBuffer();
+  const genericText = await readUploadedFileText(new File([Uint8Array.from(png)], "IMG_0156.png", { type: "image/png" }),
+    undefined, { importMode: "statement", sourceBytes: png });
+  const { parseReceiptPhotoText } = await import("../lib/split-bill");
+  assert.equal(parseReceiptPhotoText(genericText).total, "1470.54");
   const nativeRequest = new Request(request.url + "?uploadId=receipt-fixture&workspaceId=qa", {
     method: "POST", headers: { origin: "https://clover.ph" },
   });
@@ -92,11 +98,13 @@ async function verify() {
     const prefixed = await uploadPdf(expectedBytes);
     assert.equal(prefixed.status, 200);
     assert.equal((await prefixed.json()).preview.items[0]?.unitPrice, "10.00");
-    expectedBytes = statementPdf(["Green Cafe", "Tax Invoice", "Qty Item Amount", "2 Tea 20.00",
-      "Subtotal EUR 20.00", "Total EUR 20.00", "Amount paid EUR 20.00"]);
-    const paidInvoice = await uploadPdf(expectedBytes);
-    assert.equal(paidInvoice.status, 200);
-    assert.equal((await paidInvoice.json()).preview.total, "20.00");
+    for (const heading of ["Tax Invoice", "Commercial Invoice #012"]) {
+      expectedBytes = statementPdf(["Green Cafe", heading, "Qty Item Amount", "2 Tea 20.00",
+        "Subtotal EUR 20.00", "Total EUR 20.00", "Amount paid EUR 20.00"]);
+      const paidInvoice = await uploadPdf(expectedBytes);
+      assert.equal(paidInvoice.status, 200);
+      assert.equal((await paidInvoice.json()).preview.total, "20.00");
+    }
     expectedBytes = quantityReceipt;
     pdf = await uploadPdf(expectedBytes);
   } finally {
@@ -115,12 +123,12 @@ async function verify() {
   const orderDraft = await order.json();
   assert.equal(orderDraft.preview.requiresReview, true);
   assert.equal(orderDraft.reliableForScopedSplit, false);
-  assert.equal(retained, 7);
+  assert.equal(retained, 8);
   if (process.argv[3]) {
     const locked = await uploadPdf(await readFile(process.argv[3]));
     assert.equal(locked.status, 422);
     assert.equal((await locked.json()).code, "IMPORT_PASSWORD_REQUIRED");
-    assert.equal(retained, 7);
+    assert.equal(retained, 8);
   }
   console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }

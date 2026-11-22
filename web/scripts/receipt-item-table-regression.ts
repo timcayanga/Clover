@@ -203,6 +203,22 @@ for (const bad of [registerFee.replace("ITEMS : 3", "ITEMS : 5"), registerFee + 
   assert.ok(!hasPrintedItemizedTotal(bad, "198.00"));
 }
 
+const smudgedQuantity = registerFee.replace("1 @ 80.00", "(0) 80.00");
+assert.equal(readReconciledItemTable(smudgedQuantity)?.items[1].quantity, 1);
+assert.equal(readReconciledItemTable(smudgedQuantity.replace("ITEMS : 3", "ITEMS : 4")), null);
+
+const discountedVat = [
+  "Cafe Tea 65.00", "Rye Toast 47.00", "Sub-total: 112.00", "Price Net of VAT: 100.00",
+  "10% Member: -10.00", "VAT: 10.80", "Total: PHP100.80", "Total Paid: PHP100.80",
+].join("\n");
+assert.ok(hasPrintedItemizedTotal(discountedVat, "100.80", true));
+for (const conflicting of [
+  discountedVat.replace("65.00", "66.00"), discountedVat.replace("10% Member", "20% Member"),
+  discountedVat.replace("VAT: 10.80", "VAT: 11.80"), discountedVat.replace("Paid: PHP", "Paid: EUR"),
+  discountedVat.replace("Paid: PHP100.80", "Paid: PHP99.80"), discountedVat + "\nAmount Due 108.00",
+  discountedVat + "\nVATable Sales: 102.00",
+]) assert.equal(hasPrintedItemizedTotal(conflicting, "100.80", true), false);
+
 const plainPhoto = "CAFE GREEN\nOfficial Receipt\n04/05/2026\nTea 20.00\nTotal EUR 20.00";
 const plain = parseReceiptPhotoText(plainPhoto);
 const enveloped = parseReceiptPhotoText(encodeLocalReceiptOcr({ text: plainPhoto }));

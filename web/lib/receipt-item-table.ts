@@ -203,7 +203,12 @@ function readRegisterServiceTable(source: string) {
   const units = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
   if (Number(counts[0][1] ?? counts[0][2]) !== units ||
       items.reduce((sum, item) => sum + cents(item.amount), 0) !== subtotal) return null;
-  return { items, total: (payable / 100).toFixed(2), subtotal: (subtotal / 100).toFixed(2),
+  // A lost quantity glyph is recoverable when a positive unit price equals
+  // the line amount and those units also reconcile to the printed unit count.
+  const countedItems = items.map(item => item.quantity == null && item.unitPrice != null &&
+    cents(item.unitPrice) > 0 && cents(item.unitPrice) === cents(item.amount)
+    ? { ...item, quantity: 1 } : item);
+  return { items: countedItems, total: (payable / 100).toFixed(2), subtotal: (subtotal / 100).toFixed(2),
     serviceCharge: (fee / 100).toFixed(2) };
 }
 
@@ -295,6 +300,47 @@ export function canPreviewLocalReceiptItems(text: string, draft: { total: string
   return draft.total !== null && hasPrintedItemizedTotal(text, draft.total, !draft.merchantName || !draft.billDate);
 }
 
+// Some registers print VAT-inclusive item prices, apply a percentage to
+// the pre-tax base, then print VAT again at checkout. Both calculations and
+// the separate paid amount must agree before we can skip a full-page reread.
+function reconcilesDiscountedVatReceipt(text: string, total: string) {
+  if (!/^price net of vat[ \t]*:/im.test(text)) return false;
+  const lines = text.split(/\r?\n/).map(line => line.trim());
+  const money = "(\\d+(?:,\\d{3})*\\.\\d{2})";
+  const subtotalPattern = new RegExp("^sub[ -]?total:[ \\t]*" + money + "$", "i");
+  const start = lines.findIndex(line => subtotalPattern.test(line));
+  if (start < 0 || lines.filter(line => subtotalPattern.test(line)).length !== 1) return false;
+  const amount = (offset: number, pattern: string) => {
+    const match = new RegExp("^" + pattern + "[ \\t]*" + money + "$", "i").exec(lines[start + offset] ?? "");
+    return match ? Number(match[1].replace(/[,.]/g, "")) : NaN;
+  };
+  const gross = amount(0, "sub[ -]?total:");
+  const base = amount(1, "price net of vat:");
+  const discount = lines[start + 2]?.match(/^(\d{1,2}(?:\.\d{1,2})?)%[ \t]+[\p{L}][\p{L} .'-]*:[ \t]*-(\d+(?:,\d{3})*\.\d{2})$/u);
+  if (!discount) return false;
+  const reduction = Number(discount[2].replace(/[,.]/g, ""));
+  const scaledDiscount = base * Math.round(Number(discount[1]) * 100);
+  const vat = amount(3, "vat:");
+  const payable = Number(total.replace(".", ""));
+  if (![gross, base, reduction, vat, payable].every(Number.isSafeInteger) ||
+      base <= 0 || gross < base || reduction <= 0 || reduction >= base || vat <= 0 ||
+      !Number.isSafeInteger(scaledDiscount) || Math.round(scaledDiscount / 10000) !== reduction || base - reduction + vat !== payable) return false;
+  const taxableSales = lines.filter(line => /^(?:vatable|taxable) sales\b/i.test(line));
+  if (taxableSales.some(line => {
+    const match = /^(?:vatable|taxable) sales:[ \t]*(\d+(?:,\d{3})*\.\d{2})$/i.exec(line);
+    return !match || Number(match[1].replace(/[,.]/g, "")) !== base - reduction;
+  })) return false;
+  const printed = lines[start + 4]?.match(/^total:[ \t]*(?:([A-Z]{3})[ \t]*)?(\d+(?:,\d{3})*\.\d{2})$/i);
+  if (lines.some((line, i) => i !== start + 4 && /^(?:grand total|bill (?:amount|total)|amount due|total(?: amount| due)?)\s*:/i.test(line))) return false;
+  const paid = lines.slice(start + 5).filter(line => /^total paid:/i.test(line));
+  if (lines.slice(0, start).some(line => /^total paid:/i.test(line))) return false;
+  if (!printed || (printed[1] && !isReceiptCurrencyCode(printed[1].toUpperCase())) ||
+      printed[2].replace(/,/g, "") !== total || paid.length !== 1 ||
+      paid[0].replace(/^total paid:/i, "").replace(/[, \t]/g, "").toUpperCase() !== ((printed[1] ?? "") + total).toUpperCase()) return false;
+  const items = readSubtotalItems(text);
+  return !!items?.length && items.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0) === gross;
+}
+
 export function hasPrintedItemizedTotal(text: string, total: string, requirePurchaseTable = false) {
   const register = readRegisterServiceTable(text);
   if (register) return register.total === total;
@@ -303,6 +349,7 @@ export function hasPrintedItemizedTotal(text: string, total: string, requirePurc
     return match ? [match[1].replace(/,/g, "")] : [];
   });
   if (totals.some(value => value !== total)) return false;
+  if (reconcilesDiscountedVatReceipt(text, total)) return true;
   const quantityTable = readQuantityTable(text);
   if (quantityTable) return quantityTable.total === total;
   if (requirePurchaseTable) {

@@ -3,7 +3,7 @@ import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
 export type UnsettledPurchaseDocument = "unpaid_receipt" | "purchase_order" | "quote" | "unpaid_invoice" | "unverified_invoice";
 
-const invoiceHeading = /^(?:(?:tax|sales|commercial|service|billing|unpaid|overdue)\s+)?invoice(?:\s+(?:no\.?|number|#)\s*[:#]?\s*[\w/-]+|\s*[:#]\s*[\w/-]+)?\s*$/im;
+export const purchaseInvoiceHeading = /^(?:(?:tax|sales|commercial|service|billing|unpaid|overdue)\s+)?invoice(?:\s+(?:no\.?|number|#)\s*[:#]?\s*[\w/-]+|\s*[:#]\s*[\w/-]+)?\s*$/im;
 const quoteHeading = /^(?:pro[ -]?forma invoice|(?:sales\s+|price\s+)?quot(?:e|ation)|(?:cost|price) estimate)(?:\s*(?:[:#]|no\.?\s+|number\s+)\s*[\w/-]+)?\s*$/im;
 const statementHeading = /^(?:(?:bank|credit card|account|billing) statement|statement of account|transaction history)\b|^statement[ \t]*$/im;
 const receiptHeading = /^(?:(?:official|sales|cash|payment|purchase|tax)\s+)?receipt(?:\s+(?:no\.?|number|#)\s*[:#]?\s*[\w/-]+)?\s*$/im;
@@ -38,7 +38,7 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
   const text = splitReceiptPromotionalFooter(joinReceiptColumnSettlement(source)).body.split(/\r?\n/).map((line) => line.trim()).join("\n");
   if (statementHeading.test(text)) return null;
   if (quoteHeading.test(text)) return "quote";
-  if (!invoiceHeading.test(text)) {
+  if (!purchaseInvoiceHeading.test(text)) {
     // Receipt references can quote a PO number. Only a stand-alone order
     // heading without a receipt heading identifies an order document.
     if (/^purchase order(?:[ \t]*(?:[:#]|no\.?|number)[ \t]*[:#]?[ \t]*[\w/-]+)?[ \t]*$/im.test(text) &&
