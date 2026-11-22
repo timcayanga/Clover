@@ -3,11 +3,10 @@ import { isLocalizedReceiptAmountLine, isLocalizedReceiptHeading } from "./local
 import type { OpticalTextLine } from "../../shared/device-text-evidence";
 
 const heading = /^(?:(?:official|sales|cash|purchase)\s+)?receipt(?:\s+(?:no\.?|number|#)\s*[:#]?\s*[\w-]+)?$/i;
-const total = /^(?:grand total|total(?: amount| paid)?|amount paid)\s*[:：]?\s*(?:[A-Z]{3}\s*|[₱$€£¥]\s*)?\d[\d,.]*$/i;
+const total = /^(?:grand total|total(?: amount| paid| due)?|bill (?:amount|total)|amount (?:due|paid|to pay))\s*[:：]?\s*(?:[A-Z]{3}\s*|[₱$€£¥]\s*)?\d[\d,.]*(?:\s*(?:[A-Z]{3}|[₱$€£¥]))?$/i;
 const isHeading = (line: string) => heading.test(line) || isLocalizedReceiptHeading(line);
 
-export function findReceiptImageRegion(source: string) {
-  const lines = readReceiptOpticalLines(source);
+export function findReceiptImageRegion(source: string, lines = readReceiptOpticalLines(source)) {
   const headings = lines.filter(line => isHeading(line.text));
   // A single clearly separated candidate can be read on its own.
   if (headings.length !== 1) return null;
@@ -59,8 +58,7 @@ function distinctReceiptSections(left: string[], right: string[]) {
 }
 
 /** Detect separation before reading-order reconstruction can fold side-by-side receipts together. */
-export function detectMultipleReceipts(source: string): { layout: "side_by_side" | "sequential" } | null {
-  const optical = readReceiptOpticalLines(source);
+export function detectMultipleReceipts(source: string, optical = readReceiptOpticalLines(source)): { layout: "side_by_side" | "sequential" } | null {
   const headers = optical.filter(line => documentHeading(line.text)).sort((a, b) => a.box[0] - b.box[0]);
   for (const [index, left] of headers.entries()) {
     for (const right of headers.slice(index + 1)) {

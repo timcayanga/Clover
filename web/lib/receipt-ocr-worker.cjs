@@ -459,6 +459,15 @@ function corroborateWords(best, other, independent, printedElsewhere) {
   // agree on the complete phrase, including the printed punctuation.
   const preferred = best.text.trim();
   const agreed = other.text.trim();
+  // A period and comma can look alike in a small item-name crop. Require
+  // agreement on the full phrase and change only the separator between words.
+  if (other.confidence >= 0.85 && independent.confidence >= 0.85 &&
+      agreed === independent.text.trim() && preferred !== agreed &&
+      /^[\p{Script=Latin} '.(),-]+$/u.test(preferred) &&
+      preferred.replace(/(?<=\p{L})[.,](?=\s+\p{L})/gu, ",") ===
+        agreed.replace(/(?<=\p{L})[.,](?=\s+\p{L})/gu, ",")) {
+    return { ...best, text: agreed, originalText: best.text };
+  }
   if (other.confidence >= 0.75 && agreed.toLowerCase() === independent.text.trim().toLowerCase() &&
       /^[A-Za-z][A-Za-z '&.,()/-]*$/.test(preferred) && /^[A-Za-z][A-Za-z '&.,()/-]*$/.test(agreed) &&
       Math.abs(preferred.length - agreed.length) === 1) {
@@ -484,7 +493,7 @@ function corroborateWords(best, other, independent, printedElsewhere) {
     if (!/\p{L}/u.test(word)) return word;
     const corroborated = witness[index];
     const competing = candidates[index++];
-    if (!/^[A-Za-z]{4,}$/.test(word) || !/^[A-Za-z]+$/.test(corroborated) || word.length !== corroborated.length) return word;
+    if (!/^\p{Script=Latin}{4,}$/u.test(word) || !/^\p{Script=Latin}+$/u.test(corroborated) || word.length !== corroborated.length) return word;
     const candidate = corroborated.toLowerCase();
     const old = word.toLowerCase();
     if (candidate === old || Array.from(old).filter((c,i) => c !== candidate[i]).length !== 1) return word;
@@ -499,7 +508,7 @@ function corroborateWords(best, other, independent, printedElsewhere) {
 // An identical reading from both recognizers is sufficient for clear words.
 function agreedWordLine(line, witness) {
   return witness && line.text === witness.text && line.minConfidence >= 0.93 &&
-    witness.minConfidence >= 0.93 && /^[A-Za-z][A-Za-z '()-]*$/.test(line.text);
+    witness.minConfidence >= 0.93 && /^\p{Script=Latin}[\p{Script=Latin} '.,()-]*$/u.test(line.text);
 }
 async function run(preview, timings) {
   const runtimeStarted = performance.now();

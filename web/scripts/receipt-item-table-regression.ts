@@ -291,6 +291,20 @@ for (const name of ["Café", "Éclair", "紅茶", "抹茶ラテ", "Orderly Tea",
   }
 }
 
+const priceAmountHeader = "Shop\nOfficial Receipt\nQty Item Price Amount\n2 Tea 10.00 20.00\n1 Coffee 12 15.00 15.00\nSubtotal 35.00\nTOTAL DUE 35.00";
+const pricedItems = readReconciledItemTable(priceAmountHeader)?.items;
+assert.deepEqual(pricedItems, [
+  { description: "Tea", quantity: 2, unitPrice: "10.00", amount: "20.00" },
+  { description: "Coffee 12", quantity: 1, unitPrice: "15.00", amount: "15.00" },
+]);
+for (const source of [priceAmountHeader, encodeLocalReceiptOcr({ text: priceAmountHeader })]) {
+  assert.equal(resolvePositiveImportDocumentRoute(source)?.mode, "receipt");
+  assert.deepEqual(parseReceiptPhotoText(source).items, pricedItems);
+}
+assert.equal(readReconciledItemTable(priceAmountHeader.replace("10.00 20.00", "11.00 20.00")), null);
+assert.equal(readReconciledItemTable(priceAmountHeader + "\nBill Amount 36.00"), null);
+assert.equal(readReconciledItemTable(priceAmountHeader + "\n3 Item(s) Total Amount 35.00\n8 Item(s) Total Amount 35.00"), null);
+
 const missingIdentity = { merchantName: null, billDate: null, total: "30.00" };
 assert.equal(canPreviewLocalReceiptItems(grossBill, missingIdentity), true);
 for (const disputed of [grossBill.replace("Tea 10.00", "Tea 9.00"), grossBill.replace("Gross Amount 30", "Gross Amount 31"),

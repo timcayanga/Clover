@@ -141,7 +141,7 @@ assert.equal(parseReceiptText(supported).items[0].description, "ROASTED CARROT")
 assert.equal(parseReceiptText(supported).total, "35.00");
 assert.equal(readLocalReceiptOcrText(parseReceiptText(supported).receiptText), raw);
 
-for (const [printed, corrected] of [["Choclate tart", "Chocolate tart"], ["Cherry cake (S mall)", "Cherry cake (Small)"]]) {
+for (const [printed, corrected] of [["Café. Glass", "Café, Glass"], ["Éclalr", "Éclair"], ["Choclate tart", "Chocolate tart"], ["Cherry cake (S mall)", "Cherry cake (Small)"]]) {
   const primary = { text: printed, confidence: .96 };
   const witness = { text: corrected, confidence: .93 };
   assert.equal(corroborateWords(primary, witness, witness, new Map()).text, corrected);
@@ -150,6 +150,9 @@ for (const [printed, corrected] of [["Choclate tart", "Chocolate tart"], ["Cherr
     itemWordCorrections: [{ original: printed, corrected }] });
   assert.equal(refineReceiptItemWords(evidence, [{ description: printed }])[0].description, corrected);
 }
+const decimal = { text: "Tea 12.50", confidence: .96 };
+const altered = { text: "Tea 12,50", confidence: .95 };
+assert.equal(corroborateWords(decimal, altered, altered, new Map()), decimal);
 const wrappedItem = encodeLocalReceiptOcr({ engine: "ppocr-v5-local", text: "SALAD CAPROT",
   itemWordCorrections: [
     { original: "CAPROT", corrected: "CARROT" }, { original: "CARROT", corrected: "PARROT" },

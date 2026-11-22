@@ -23,9 +23,9 @@ export async function encodeImportImage(
 
   let maxDimension = 2600;
   let quality = 0.9;
-  for (let attempt = 0; ; attempt += 1) {
+  for (;;) {
     const output = await render(maxDimension, quality);
-    if (output.size <= targetBytes || attempt === 6) return output;
+    if (output.size <= targetBytes || (maxDimension === 1400 && quality === 0.68)) return output;
     maxDimension = Math.max(1400, Math.round(maxDimension * 0.82));
     quality = Math.max(0.68, quality - 0.06);
   }

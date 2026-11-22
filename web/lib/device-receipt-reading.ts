@@ -15,11 +15,12 @@ export function qualifyDeviceReceiptReading(
   if (!device?.complete || device.pagesRead !== 1 || device.totalPages !== 1 ||
       (importMode !== "receipt" && importMode !== "statement")) return null;
   const source = encodeLocalReceiptOcr(device);
-  const fullLayout = readReceiptOpticalLayout(source);
-  const region = findReceiptImageRegion(source);
+  const lines = readReceiptOpticalLines(source);
+  const fullLayout = readReceiptOpticalLayout(source, lines);
+  const region = findReceiptImageRegion(source, lines);
   const layout = region?.text ?? fullLayout;
   if (receiptDateDisagreements(device.opticalLines ?? []).length) return null;
-  if (hasConflictingReceiptTotalReading(region?.opticalLines ?? readReceiptOpticalLines(source))) return null;
+  if (hasConflictingReceiptTotalReading(region?.opticalLines ?? lines)) return null;
   if (!hasReceiptPhotoEvidence(layout) || isTransactionHistoryScreenshotText(fullLayout) ||
       inspectBankingScreenshot(fullLayout).kind !== "unknown" ||
       classifyUnsettledPurchaseDocument(layout)) return null;

@@ -1,5 +1,6 @@
 import {
   importMediaType,
+  isDelimitedImport,
   PUBLIC_IMPORT_CONTENT_TYPES,
   PUBLIC_IMPORT_EXTENSIONS,
   FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES,
@@ -87,6 +88,23 @@ export const validateImportFileMetadata = (params: { fileName: string; contentTy
   return null;
 };
 
+// Walk ordered MT940 fields once, including incomplete multi-statement exports.
+function hasMt940Fields(text: string) {
+  let hasReference = false;
+  let hasAccount = false;
+  for (const field of text.matchAll(/^:(20|25|61):([^\r\n]*)/gm)) {
+    if (field[1] === "20") {
+      hasReference = Boolean(field[2].trim());
+      hasAccount = false;
+    } else if (field[1] === "25") {
+      hasAccount = hasReference && Boolean(field[2].trim());
+    } else if (hasAccount && field[2].trim()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export const validateImportFileBytes = (params: {
   fileName: string;
   contentType?: string | null;
@@ -103,10 +121,7 @@ export const validateImportFileBytes = (params: {
   const isHeif =
     /\.(?:heic|heif)$/.test(name) ||
     /image\/hei[cf](?:-sequence)?/.test(normalizedContentType);
-  const isCsv =
-    /\.(?:csv|tsv)$/.test(name) ||
-    normalizedContentType === "text/csv" ||
-    normalizedContentType === "text/tab-separated-values";
+  const isCsv = isDelimitedImport(name, normalizedContentType);
   const extension = name.slice(name.lastIndexOf("."));
   const isFinancialExchange =
     FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS.includes(extension as (typeof FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS)[number]) ||
@@ -134,11 +149,17 @@ export const validateImportFileBytes = (params: {
   }
   if (isCsv && bytes.length === 0) return "The uploaded CSV file is empty.";
   if (isFinancialExchange) {
-    const decoded = decodeStructuredDelimitedBytes(bytes).trim();
+    let decoded: string;
+    try {
+      decoded = decodeStructuredDelimitedBytes(bytes).trim();
+    } catch {
+      return "This financial export has damaged or unsupported text encoding. Export the original file again.";
+    }
     const header = decoded.slice(0, 2_048);
     const looksOfx = /^(?:OFXHEADER:|(?:<\?xml\s[^?]*\?>\s*)?(?:<\?OFX\s[^?]*\?>\s*)?<OFX\b)/i.test(header);
     const looksQif = /^!(?:Type:|Account[ \t]*(?:[\r\n]|$)|Option:(?:AutoSwitch|AllXfr)[ \t]*(?:[\r\n]|$))/i.test(header);
-    const looksMt940 = /(?:^|\n):20:[^\n]+[\s\S]*?(?:^|\n):25:[^\n]+[\s\S]*?(?:^|\n):61:/m.test(decoded);
+
+    const looksMt940 = !looksOfx && !looksQif && hasMt940Fields(decoded);
     const looksCamt = /<(?:\w+:)?Document\b[\s\S]*?<(?:\w+:)?BkToCstmrStmt\b/i.test(decoded) || /camt\.053/i.test(header);
     const looksFinancialJson = (() => {
       if (!name.endsWith(".json") && normalizedContentType !== "application/json") return false;

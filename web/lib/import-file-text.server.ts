@@ -256,7 +256,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v15";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v16";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 

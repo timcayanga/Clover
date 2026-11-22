@@ -84,7 +84,7 @@ export const optimizeImportImage = async (
   }
 
   // Avoid replacing a compatible original with a larger lossy re-encode.
-  if (isReceiptProfile && file.size <= maxUploadBytes && output.size >= file.size && !isHeicImportImage(file)) {
+  if (file.size <= maxUploadBytes && output.size >= file.size && !isHeicImportImage(file)) {
     return file;
   }
   if (output.size > maxUploadBytes && file.size <= maxUploadBytes) return file;

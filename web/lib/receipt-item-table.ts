@@ -12,7 +12,7 @@ function readQuantityTable(text: string) {
   const subtotalIndex = lines.findIndex((line, i) => i > header && /^sub[ -]?total\b/i.test(line));
   if (subtotalIndex < 0) return null;
 
-  const hasUnitPrice = /\bunit\s+price\b/i.test(lines[header]);
+  const hasUnitPrice = /\bunit\s+price\b|\bprice\s+(?:amount|line total|total)\b/i.test(lines[header]);
   const items: {description: string; quantity: number; amount: string; unitPrice?: string}[] = [];
   let itemCents = 0;
   for (const line of lines.slice(header + 1, subtotalIndex)) {
@@ -52,13 +52,14 @@ function readQuantityTable(text: string) {
   const serviceRows = footer.filter(line => /^service\s+ch\w+\b/i.test(line));
   if (serviceRows.length > 1) return null;
   const service = serviceRows.length ? priceInCents(serviceRows[0]) : 0;
-  const countedTotal = footer.find(line => /^\d+\s+item\(s\)\s+total amount\s*:?\s*\d[\d,]*\.\d{2}$/i.test(line));
-  if (countedTotal) {
-    const printedCount = Number.parseInt(countedTotal, 10);
+  const countedTotals = footer.filter(line => /^\d+\s+item\(s\)\s+total amount\s*:?\s*\d[\d,]*\.\d{2}$/i.test(line));
+  const countedTotal = countedTotals[0];
+  for (const counted of countedTotals) {
+    const printedCount = Number.parseInt(counted, 10);
     const units = items.reduce((sum, item) => sum + item.quantity, 0);
-    if ((printedCount !== items.length && printedCount !== units) || priceInCents(countedTotal) !== subtotal + service) return null;
+    if ((printedCount !== items.length && printedCount !== units) || priceInCents(counted) !== subtotal + service) return null;
   }
-  const totals = footer.filter(line => /^(?:total amount|amount due|grand total|total(?=\s*[:\d]))\b/i.test(line)).map(line => {
+  const totals = footer.filter(line => /^(?:total (?:amount|due)|bill (?:amount|total)|amount due|grand total|total(?=\s*[:\d]))\b/i.test(line)).map(line => {
     const amount = priceInCents(line);
     if (Number.isFinite(amount) || !countedTotal) return amount;
     const annotated = line.match(/^total amount\s*:?\s*(\d[\d,]*\.\d{2})\s+[A-Za-z]+$/i);

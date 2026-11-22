@@ -65,6 +65,15 @@ const main = async () => {
     return new Blob(["jpeg"], { type: "image/jpeg" });
   });
 
+  const encodes = new Set<string>();
+  await encodeImportImage(3200, 2400, false, 1, async (w, h, q) => {
+    const settings = [w, h, q].join(":");
+    assert(!encodes.has(settings), "Avoid repeating the same lossy encoding of a statement photo");
+    encodes.add(settings);
+    return new Blob(["above target"], { type: "image/jpeg" });
+  });
+  assert.equal(encodes.size, 5);
+
   const oriented = await sharp({ create: { width: 3200, height: 400, channels: 3, background: "#234567" } })
     .withMetadata({ orientation: 6 }).jpeg().toBuffer();
   const pending = getBoundedImportImagePreview(oriented);

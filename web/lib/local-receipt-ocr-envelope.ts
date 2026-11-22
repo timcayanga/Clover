@@ -38,10 +38,9 @@ export function readReceiptOpticalEvidence(source: string): OpticalTextLine[] {
   }
 }
 
-export function readReceiptOpticalLines(source: string): OpticalTextLine[] {
+export function readReceiptOpticalLines(source: string, lines = readReceiptOpticalEvidence(source)): OpticalTextLine[] {
   const text = readLocalReceiptOcrText(source);
   if (!text) return [];
-  const lines = readReceiptOpticalEvidence(source);
   const tokens = (value: string) => value.trim().split(/\s+/).sort().join(" ");
   return lines.length && tokens(lines.map(line => line.text).join(" ")) === tokens(text) ? lines : [];
 }
@@ -116,8 +115,7 @@ export function hasConflictingReceiptTotalReading(lines: OpticalTextLine[]) {
 }
 
 /** Use box order for layout decisions while retaining the original OCR text. */
-export function readReceiptOpticalLayout(source: string): string {
-  const lines = readReceiptOpticalLines(source);
+export function readReceiptOpticalLayout(source: string, lines = readReceiptOpticalLines(source)): string {
   const text = readLocalReceiptOcrText(source);
   // The recognizer corrects for page skew. Horizontal box grouping can
   // separate every price from its drink on a tilted receipt.

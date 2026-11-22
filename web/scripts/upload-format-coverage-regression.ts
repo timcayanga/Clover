@@ -54,6 +54,14 @@ export async function runUploadFormatCoverageRegression() {
   }
 
   assert(validateImportFileBytes({ fileName: "receipt", contentType: "IMAGE/JPG", bytes: Buffer.from("unreadable image") }));
+  assert.match(validateImportFileBytes({ fileName: "Activity", contentType: "application/csv", bytes: Buffer.alloc(0) }) ?? "", /empty/);
+  assert.match(validateImportFileBytes({ fileName: "activity.qfx", bytes: Buffer.from([0xff, 0xfe, 0x41]) }) ?? "", /encoding/);
+  const incomplete = ":20:BANK\n:25:ACCOUNT\n".repeat(5000);
+  assert.match(validateImportFileBytes({ fileName: "statement.mt940", bytes: Buffer.from(incomplete) }) ?? "", /not a recognized financial export/);
+  assert.equal(validateImportFileBytes({ fileName: "statement.mt940", bytes: Buffer.from(incomplete + ":61:260913D12,50NMSCREF") }), null);
+  for (const fragment of [":20:NEXT\n:61:260913D12,50NMSCREF", ":61: "]) {
+    assert.match(validateImportFileBytes({ fileName: "statement.mt940", bytes: Buffer.from(incomplete + fragment) }) ?? "", /not a recognized financial export/);
+  }
   const providerFile = { name: "Activity", mimeType: "text/csv; charset=utf-8", size: 42 };
   assert.equal(native.fileProblem(providerFile), null);
   assert.equal(validateImportFile({ fileName: providerFile.name, fileSize: providerFile.size, contentType: providerFile.mimeType }), null);

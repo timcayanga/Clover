@@ -54,6 +54,13 @@ assert.deepEqual(detectMultipleReceipts(firstText + "\n" + secondText), { layout
 assert.equal(parseReceiptText(firstText + "\n" + secondText).total, null);
 assert.deepEqual(detectMultipleReceipts(firstText.replace("Receipt No.", "Official Receipt\nReceipt No.") +
   "\n" + secondText.replace("Receipt No.", "Official Receipt\nReceipt No.")), { layout: "sequential" });
+for (const label of ["Amount Due", "Total Due", "Bill Amount", "Amount to Pay"]) {
+  const pair = firstText + "\n" + secondText.replace("Total PHP 215.00", label + ": 215.00 PHP");
+  assert.deepEqual(detectMultipleReceipts(pair), { layout: "sequential" });
+  assert.equal(parseReceiptText(pair).total, null);
+  assert.equal(findReceiptImageRegion(encode([...receipt, ...background,
+    { text: label + ": 215.00 PHP", box: [.10,.70,.30,.74] }])), null);
+}
 assert.equal(parseReceiptText(firstText).total, "125.00");
 assert.equal(parseReceiptText(secondText).total, "215.00");
 assert.equal(detectMultipleReceipts(firstText + "\nCUSTOMER COPY\n" + firstText), null);

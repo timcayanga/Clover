@@ -5,7 +5,7 @@ import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
 import { hasOnlyAmbiguousNumericDates, validNumericReceiptDates, numericReceiptDatePattern, resolveReceiptPurchaseDateRoles } from "./receipt-date-evidence";
 import { readReceiptMerchantEvidence } from "./receipt-merchant-evidence";
-import { refineReceiptItemWords, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
+import { refineReceiptItemWords, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalLines, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 import { joinReceiptSettlementLines } from "./receipt-summary-lines";
 import { readMerchantPaymentConfirmation } from "./merchant-payment-confirmation";
@@ -2530,8 +2530,14 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult =>
     ? parseReceiptPhotoText(receiptText)
     : parseReceiptSource(receiptText, false);
 
-function parseReceiptSource(receiptText: string, photo: boolean, ordered = readReceiptOpticalLayout(receiptText)): ReceiptPreviewResult {
-  const receipt = parseReceiptSourceFields(receiptText, photo, ordered);
+function receiptOptics(source: string) {
+  const evidence = readReceiptOpticalEvidence(source);
+  const lines = readReceiptOpticalLines(source, evidence);
+  return { evidence, lines, ordered: readReceiptOpticalLayout(source, lines) };
+}
+
+function parseReceiptSource(receiptText: string, photo: boolean, optics = receiptOptics(receiptText)): ReceiptPreviewResult {
+  const receipt = parseReceiptSourceFields(receiptText, photo, optics);
   const items = refineReceiptItemWords(receiptText, receipt.items);
   return items === receipt.items ? receipt : { ...receipt, items };
 }
@@ -2553,8 +2559,8 @@ function hasReconciledOpticalSettlement(layout: string) {
   return subtotals.length === 1 && charges.length <= 1 && subtotals[0] + (charges[0] ?? 0) === totals[0];
 }
 
-function parseReceiptSourceFields(receiptText: string, photo: boolean, ordered: string): ReceiptPreviewResult {
-  if (detectMultipleReceipts(receiptText)) {
+function parseReceiptSourceFields(receiptText: string, photo: boolean, { ordered, lines, evidence }: ReturnType<typeof receiptOptics>): ReceiptPreviewResult {
+  if (detectMultipleReceipts(receiptText, lines)) {
     return {
       receiptText, receiptType: "generic_receipt", merchantName: null, billDate: null,
       documentNumber: null, invoiceNumber: null, bookingReference: null,
@@ -2608,7 +2614,7 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, ordered: 
     paymentMethod: hasSplitReceiptTender(tenders) ? "Mixed" : settled.paymentMethod,
   } : settled;
   const photoText = useOpticalRows ? ordered : opticalText ?? (photo ? receiptText : null);
-  const table = readReconciledItemTable(photoText ?? receiptText) ?? (photoText ? readChargedReceiptTable(photoText, readReceiptOpticalEvidence(receiptText)) : null);
+  const table = readReconciledItemTable(photoText ?? receiptText) ?? (photoText ? readChargedReceiptTable(photoText, evidence) : null);
   if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
     return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || photoText !== null,
       confidence:photoText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};
@@ -2617,7 +2623,7 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, ordered: 
     const items = readSubtotalItems(photoText, useOpticalRows);
     if (items) {
       const subtotalCents = items.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
-      return { ...paymentDetails, items: readOpticalItemQuantities(items, photoText, readReceiptOpticalEvidence(receiptText)), subtotal: (subtotalCents / 100).toFixed(2), receiptText,
+      return { ...paymentDetails, items: readOpticalItemQuantities(items, photoText, evidence), subtotal: (subtotalCents / 100).toFixed(2), receiptText,
         requiresReview: true, confidence: Math.min(45, paymentDetails.confidence) };
     }
   }
@@ -2670,8 +2676,9 @@ function hasClippedSettlementLine(body: string) {
 }
 
 export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
-  const ordered = readReceiptOpticalLayout(source);
-  let parsed = parseReceiptSource(source, true, ordered);
+  const optics = receiptOptics(source);
+  const { ordered, evidence } = optics;
+  let parsed = parseReceiptSource(source, true, optics);
   const transcript = readLocalReceiptOcrText(source);
   const layout = splitReceiptPromotionalFooter(joinReceiptSettlementLines(transcript === null ? ordered : normalizeLocalReceiptOcrText(ordered)));
   // Plain OCR and device envelopes are both readings of the same photo.
@@ -2705,7 +2712,7 @@ export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
   if (optical && parsed.billDate) {
     const dates = validNumericReceiptDates(optical);
     const ambiguous = hasOnlyAmbiguousNumericDates(optical, dates);
-    const dateBlocks = readReceiptOpticalEvidence(source).filter(line => /^\d{1,2}([./-])\d{1,2}\1(?:20\d{2}|\d{2})$/.test(line.text.trim()));
+    const dateBlocks = evidence.filter(line => /^\d{1,2}([./-])\d{1,2}\1(?:20\d{2}|\d{2})$/.test(line.text.trim()));
     const unreadableDigit = dateBlocks.length === 1 && dates.length === 1 && (dateBlocks[0].minimumCharacterConfidence ?? 1) < 0.5;
     if (unreadableDigit || ambiguous) {
       // A second spelling of the same day can corroborate it. Removing all
@@ -2716,7 +2723,7 @@ export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
       }
     }
   }
-  if (!hasClippedSettlementLine(layout.body) && !hasConflictingReceiptTotalReading(readReceiptOpticalEvidence(source))) return parsed;
+  if (!hasClippedSettlementLine(layout.body) && !hasConflictingReceiptTotalReading(evidence)) return parsed;
   return { ...parsed, total: null, requiresReview: true, confidence: Math.min(45, parsed.confidence) };
 }
 
