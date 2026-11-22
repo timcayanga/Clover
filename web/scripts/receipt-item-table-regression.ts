@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "../lib/receipt-price-column";
-import { recordReceiptPriceCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
+import { recordReceiptQuantityCrop, recordReceiptPriceCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
 import { qualifyDeviceReceiptReading } from "../lib/device-receipt-reading";
 import { normalizeDeviceTextEvidence, type OpticalTextLine } from "../../shared/device-text-evidence";
@@ -165,6 +165,40 @@ const grossBill = "Tea 10.00\nCoffee 20.00\nGross Amount 30.00\nBill Amount 30.0
 assert.ok(hasPrintedItemizedTotal(grossBill, "30.00"));
 assert.ok(!hasPrintedItemizedTotal(grossBill.replace("Bill Amount 30", "Bill Amount 45"), "45.00"));
 assert.ok(!hasPrintedItemizedTotal(grossBill + "\nAmount Due 29.00", "30.00"));
+
+const fullyPaid = "Tea 10.00\nCoffee 20.00\nTotal Amount 30.00\nTotal Paid 30.00";
+assert.ok(hasPrintedItemizedTotal(fullyPaid, "30.00", true));
+for (const ambiguous of [fullyPaid.replace("10.00", "11.00"), fullyPaid.replace("Paid 30", "Paid 25"),
+  "Tax 10.00\n" + fullyPaid, fullyPaid + "\nAmount Due 9.00"]) {
+  assert.equal(hasPrintedItemizedTotal(ambiguous, "30.00", true), false);
+}
+
+const tightMargin = [{ text: "2", box: [.056, .2, .115, .24] as OpticalTextLine["box"] },
+  { text: "1", box: [.075, .1, .10, .14] as OpticalTextLine["box"] }, ...marginBlocks.slice(1)];
+const twoMarginRows = marginTable.replace("Lime Juice", "2 Lime Juice");
+assert.equal(readChargedReceiptTable(twoMarginRows, tightMargin)?.items[1].quantity, 2);
+assert.equal(readChargedReceiptTable(twoMarginRows, tightMargin.filter(block => block.text !== "1"))?.items[1].quantity, undefined);
+
+const mergedNameTable = twoMarginRows.replace("Black Coffee", "1 Black Coffee");
+const mergedNameBlocks: OpticalTextLine[] = [
+  ...marginBlocks.filter(block => block.text !== "Black Coffee"),
+  { text: "2", box: [.052,.2,.072,.24] }, { text: "1 Black Coffee", box: [.05,.3,.45,.34] },
+];
+assert.deepEqual(readChargedReceiptTable(mergedNameTable, mergedNameBlocks)?.items[2],
+  { description: "Black Coffee", amount: "300.00", quantity: 1 });
+const numberedProduct = mergedNameBlocks.map(block => block.text === "1 Black Coffee"
+  ? { ...block, box: [.15,.3,.45,.34] as OpticalTextLine["box"] } : block);
+assert.equal(readChargedReceiptTable(mergedNameTable, numberedProduct)?.items[2].description, "1 Black Coffee");
+assert.equal(readChargedReceiptTable(mergedNameTable, mergedNameBlocks.slice(1))?.items[2].quantity, undefined);
+
+const originalMargin = encodeLocalReceiptOcr({ text: marginTable, opticalLines: marginBlocks });
+const recoveredMargin = recordReceiptQuantityCrop(originalMargin, new Map([
+  ["Lime Juice 200.00", { text: "2", box: [.052,.2,.072,.24] }],
+]), [.02,.05,.11,.4]);
+assert.equal(readLocalReceiptOcrText(originalMargin), marginTable);
+assert.equal(readLocalReceiptOcrText(recoveredMargin), twoMarginRows);
+assert.equal(readChargedReceiptTable(twoMarginRows, readReceiptOpticalEvidence(recoveredMargin))?.items[1].quantity, 2);
+assert.ok(recoveredMargin.includes(JSON.stringify(marginTable)), "Keep original row text with the crop evidence");
 
 const weakDate = (other: string) => encodeLocalReceiptOcr({
   text: "Example Cafe\nOfficial Receipt\n6/30/2023\nTea 50.00\n" + other + "\nTotal PHP 50.00",

@@ -101,6 +101,13 @@ async function verify() {
     assert.equal(preview.total, "30.00");
     assert.deepEqual(preview.items.map((item: { description: string }) => item.description), ["Tea", "Coffee"]);
     assert.equal(rasterizations, 0, "Reconciling item prices, gross and payable should skip page rendering");
+    expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "Tea 10.00", "Coffee 20.00", "Total Amount 30.00", "Total Paid 30.00"]);
+    const paid = await uploadPdf(expectedBytes);
+    assert.equal(paid.status, 200);
+    const paidDraft = (await paid.json()).preview;
+    assert.equal(paidDraft.total, "30.00");
+    assert.deepEqual(paidDraft.items.map((item: { description: string }) => item.description), ["Tea", "Coffee"]);
+    assert.equal(rasterizations, 0);
     expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "Currency: EUR", "Qty Item Unit Price Amount",
       "2 Tea EUR 10.00 EUR 20.00", "Subtotal EUR 20.00", "Total Amount EUR 20.00"]);
     const prefixed = await uploadPdf(expectedBytes);
@@ -131,12 +138,12 @@ async function verify() {
   const orderDraft = await order.json();
   assert.equal(orderDraft.preview.requiresReview, true);
   assert.equal(orderDraft.reliableForScopedSplit, false);
-  assert.equal(retained, 8);
+  assert.equal(retained, 9);
   if (process.argv[3]) {
     const locked = await uploadPdf(await readFile(process.argv[3]));
     assert.equal(locked.status, 422);
     assert.equal((await locked.json()).code, "IMPORT_PASSWORD_REQUIRED");
-    assert.equal(retained, 8);
+    assert.equal(retained, 9);
   }
   console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }

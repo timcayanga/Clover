@@ -205,3 +205,17 @@ export function refineReceiptItemWords<T extends { description: string }>(source
     return description === item.description ? item : { ...item, description };
   });
 }
+
+// Preserve the original transcript and the independently read region. Only
+// the verified purchase rows get additional quantity digits in the reading.
+export function recordReceiptQuantityCrop(source: string, rows: Map<string, OpticalTextLine>, bounds: number[]) {
+  const original = readLocalReceiptOcrText(source);
+  if (!original || !rows.size) return source;
+  const metadata = JSON.parse(source.slice(PREFIX.length, source.indexOf(SEPARATOR)));
+  const text = original.split("\n").map(line => {
+    const digit = rows.get(line.trim());
+    return digit ? digit.text + " " + line : line;
+  }).join("\n");
+  return encodeLocalReceiptOcr({ ...metadata, text, opticalLines: [...metadata.opticalLines, ...rows.values()],
+    quantityCrop: { original, bounds } });
+}

@@ -1,8 +1,8 @@
 import { isDelimitedImport, importDocumentMediaType, importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
 import { purchaseInvoiceHeading } from "./purchase-document-payment";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "./receipt-price-column";
-import { recordReceiptPriceCrop, readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
-import { canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
+import { recordReceiptQuantityCrop, recordReceiptPriceCrop, readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
+import { readChargedReceiptTable, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
 import { measureImportReader, recordImportReaderTiming, recordImportWork, reportImportReaderEvent } from "./import-timing";
@@ -258,7 +258,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v19";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v20";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -934,6 +934,81 @@ async function verifyReceiptPriceCrop(source: string, image: ImagePreview) {
   }
 }
 
+// A full-page detector can omit narrow digits even when the rest of the
+// purchase row is clear. Use one small crop only on a verified charged table
+// with a separately boxed quantity establishing the left-hand column.
+async function recoverReceiptMarginQuantities(source: string, image: ImagePreview) {
+  const text = readLocalReceiptOcrText(source);
+  if (!text) return source;
+  const blocks = readReceiptOpticalEvidence(source);
+  const items = readChargedReceiptTable(text, blocks)?.items;
+  if (!items || items.length < 3 || items.length > 40 || items.filter(item => item.quantity == null).length < 2) return source;
+  const rows = text.split(/\r?\n/).map(line => line.trim());
+  const sameRow = (box: number[], other: number[]) =>
+    Math.min(box[3], other[3]) - Math.max(box[1], other[1]) > 0.5 * Math.min(box[3] - box[1], other[3] - other[1]);
+  const purchases = items.flatMap(item => {
+    const names = blocks.filter(b => b.text === item.description &&
+      blocks.some(price => price.box[0] > b.box[2] && sameRow(b.box, price.box) && price.text.replace(/,/g, "") === item.amount));
+    if (names.length !== 1) return [];
+    const name = names[0];
+    const margin = blocks.filter(b => b.box[2] < name.box[0] && sameRow(b.box, name.box));
+    const row = (item.quantity == null ? "" : item.quantity + " ") + name.text + " " + item.amount;
+    return rows.filter(line => line === row).length === 1 ? [{ item, name, margin, row }] : [];
+  });
+  if (purchases.length !== items.length) return source;
+  const seeds = purchases.flatMap(({ item, margin }) => item.quantity != null && margin.length === 1 &&
+    margin[0].text === String(item.quantity) ? margin : []);
+  if (!seeds.length) return source;
+  const seed = seeds[0].box;
+  const width = seed[2] - seed[0];
+  if (width <= 0 || width > 0.04 || seeds.some(b => Math.abs(b.box[0] - seed[0]) > width)) return source;
+  const left = Math.max(0, Math.floor((seed[0] - width * 3.5) * 100) / 100);
+  const right = Math.min(seed[2] + width * 1.5, ...purchases.map(p => p.name.box[0] - 0.003));
+  const top = Math.max(0, Math.floor((Math.min(...purchases.map(p => p.name.box[1])) - 0.012) * 100) / 100);
+  const bottom = Math.min(1, Math.ceil((Math.max(...purchases.map(p => p.name.box[3])) + 0.014) * 100) / 100);
+  if (right < seed[2] || right <= left || bottom <= top) return source;
+  try {
+    const sharp = (await import("sharp")).default;
+    const x = Math.floor(left * image.width), y = Math.floor(top * image.height);
+    const w = Math.ceil(right * image.width) - x, h = Math.ceil(bottom * image.height) - y;
+    const { data, info } = await sharp(image.data, { raw: { width: image.width, height: image.height, channels: 3 } })
+      .extract({ left: x, top: y, width: w, height: h }).resize({ height: 720, width: 400, fit: "inside" })
+      .normalize().raw().toBuffer({ resolveWithObject: true });
+    const crop = await readLocalReceiptImage({ data, width: info.width, height: info.height });
+    if (!crop) return source;
+    const digits = readReceiptOpticalEvidence(crop).map(b => ({ ...b, box: [
+      (x + b.box[0] * w) / image.width, (y + b.box[1] * h) / image.height,
+      (x + b.box[2] * w) / image.width, (y + b.box[3] * h) / image.height,
+    ] as [number, number, number, number] }));
+    const additions = new Map<string, typeof digits[number]>();
+    for (const { item, name, margin, row } of purchases) {
+      const matches = digits.filter(b => sameRow(b.box, name.box));
+      if (matches.length !== 1) continue;
+      const digit = matches[0];
+      if (!/^[1-9]$/.test(digit.text) || (digit.minimumCharacterConfidence ?? 0) < 0.9 ||
+          digit.alternatives?.some(other => other.text.trim() !== digit.text) || digit.characterAlternatives?.length ||
+          name.box[0] - digit.box[2] < (digit.box[2] - digit.box[0]) / 2 || name.box[0] - digit.box[2] > 0.10 ||
+          Math.abs((digit.box[0] + digit.box[2]) - (seed[0] + seed[2])) > width || purchases.filter(p => sameRow(digit.box, p.name.box)).length !== 1) continue;
+      if (item.quantity != null && item.quantity !== Number(digit.text)) return source;
+      if (item.quantity == null && !margin.length) additions.set(row, digit);
+    }
+    if (!additions.size) return source;
+    const amended = recordReceiptQuantityCrop(source, additions, [left, top, right, bottom]);
+    const recovered = readChargedReceiptTable(readLocalReceiptOcrText(amended)!, readReceiptOpticalEvidence(amended));
+    // A digit must improve only its quantity. Discard the crop if table
+    // reconstruction folds a digit into a name or moves it to another row.
+    if (recovered?.items.length !== items.length || purchases.some(({ item, row }, index) => {
+      const next = recovered.items[index];
+      const quantity = additions.get(row)?.text;
+      return next.description !== item.description || next.amount !== item.amount ||
+        next.quantity !== (quantity ? Number(quantity) : item.quantity);
+    })) return source;
+    return amended;
+  } catch {
+    return source;
+  }
+}
+
 const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   sourceBytes: Uint8Array;
   classificationContext?: ClassificationContext;
@@ -983,6 +1058,10 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     }
     const rejection = classifyExactPhotoRejection({ ...params, text }, params.classificationContext);
     if (rejection) throw rejection;
+    if (parsed.items.some(item => item.quantity != null) &&
+        parsed.items.filter(item => item.quantity == null).length >= 2) {
+      verified = await recoverReceiptMarginQuantities(verified, image);
+    }
     return verifyReceiptDateCrop(verified, image);
   };
   const purchase = await verifiedPurchase(firstOptical, opticalPreview);

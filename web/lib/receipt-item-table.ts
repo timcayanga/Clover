@@ -230,14 +230,45 @@ function readMarginQuantities(items: PricedItem[], blocks: OpticalBlock[]) {
         price.text.trim().replace(/,/g, "") === item.amount));
     return names.length === 1 ? { block: names[0], name, prefix: prefix?.[1] } : null;
   });
-  return items.map((item, index) => {
-    const row = rows[index];
-    if (!row?.prefix || item.quantity !== undefined) return item;
+  const margins = rows.map(row => {
+    if (!row?.prefix) return null;
     const left = row.block.box[0];
-    const margin = blocks.filter(block => block.text.trim() === row.prefix && sameRow(row.block, block) &&
-      left - block.box[2] >= block.box[2] - block.box[0] && left - block.box[2] <= 0.10);
+    const matches = blocks.filter(block => block.text.trim() === row.prefix && sameRow(row.block, block) &&
+      left - block.box[2] >= (block.box[2] - block.box[0]) / 2 && left - block.box[2] <= 0.10);
+    return matches.length === 1 ? matches[0].box : null;
+  });
+  return items.map((item, index) => {
+    const row = rows[index], box = margins[index];
+    // Vision sometimes joins a margin digit and the name in one box.
+    // Two other priced rows must establish both column positions.
+    if (!row && item.quantity === undefined) {
+      const prefix = item.description.match(/^([1-9]\d*) (.+)$/u);
+      if (!prefix) return item;
+      const merged = blocks.filter(block => block.text === item.description &&
+        blocks.some(price => price.box[0] > block.box[2] && sameRow(block, price) &&
+          price.text.trim().replace(/,/g, "") === item.amount));
+      if (merged.length !== 1) return item;
+      const start = merged[0].box[0], end = merged[0].box[2];
+      const supporting = margins.flatMap((margin, j) => {
+        const reference = rows[j];
+        if (!margin || !reference?.prefix) return [];
+        const labelStart = reference.block.box[0], width = margin[2] - margin[0];
+        return width > 0 && labelStart - margin[2] >= width && Math.abs(start - margin[0]) <= width * 0.6 &&
+          end > labelStart + width ? [labelStart] : [];
+      });
+      if (supporting.length >= 2 && Math.max(...supporting) - Math.min(...supporting) <= 0.015) {
+        return { ...item, description: prefix[2], quantity: Number(prefix[1]) };
+      }
+    }
+    if (!row?.prefix || !box || item.quantity !== undefined) return item;
+    const left = row.block.box[0];
+    // A padded digit box can approach its product name. Require a separately
+    // spaced digit in the same column before accepting the narrower gap.
+    const anchored = left - box[2] >= box[2] - box[0] || margins.some((other, j) =>
+      other && j !== index && rows[j]!.block.box[0] - other[2] >= other[2] - other[0] &&
+      Math.abs(other[0] + other[2] - box[0] - box[2]) <= other[2] - other[0]);
     const aligned = rows.filter(other => other && other !== row && Math.abs(other.block.box[0] - left) <= 0.015);
-    return margin.length === 1 && aligned.length >= 2 ? { ...item, description: row.name, quantity: Number(row.prefix) } : item;
+    return anchored && aligned.length >= 2 ? { ...item, description: row.name, quantity: Number(row.prefix) } : item;
   });
 }
 
@@ -383,6 +414,14 @@ export function hasPrintedItemizedTotal(text: string, total: string, requirePurc
   if (quantityTable) return quantityTable.total === total;
   const charged = readChargedReceiptTable(text);
   if (requirePurchaseTable && charged?.total === total && reconcilesTaxAndService(text, charged)) return true;
+  if (requirePurchaseTable && totals.length === 2 && totals.every(amount => amount === total)) {
+    // Small digital receipts sometimes end directly with the total and the
+    // paid amount. Require both rows, plus a complete purchase sum.
+    const end = /^total amount[ \t]*[:：]?[ \t]*\d[\d,]*\.\d{2}[ \t]*\r?\n[ \t]*total paid[ \t]*[:：]?[ \t]*\d[\d,]*\.\d{2}\s*$/im.exec(text);
+    if (end && !text.slice(end.index + end[0].length).trim() &&
+        !/^(?:total|grand total|bill amount|amount due|due|balance|tax|vat|service charge|tip|discount|change|cash|refund|sub[ -]?total|gross amount)\b/im.test(text.slice(0, end.index)) &&
+        readSubtotalItems(text)) return true;
+  }
   if (requirePurchaseTable) {
     // A separate, legible subtotal plus a matching printed payable can
     // establish the purchase amount even if the name or date needs review.
