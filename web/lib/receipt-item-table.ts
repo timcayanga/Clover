@@ -459,6 +459,10 @@ export function reconcilesReviewedDiscountPhoto(text: string, draft: ReceiptPrev
 // Some registers print VAT-inclusive item prices, apply a percentage to
 // the pre-tax base, then print VAT again at checkout. Both calculations and
 // the separate paid amount must agree before we can skip a full-page reread.
+export function canUseLocalReceiptPreview(text: string, draft: ReceiptPreviewResult) {
+  return canPreviewLocalReceiptItems(text, draft) || reconcilesReviewedDiscountPhoto(text, draft);
+}
+
 function reconcilesDiscountedVatReceipt(text: string, total: string) {
   if (!/^price net of vat[ \t]*:/im.test(text)) return false;
   const lines = text.split(/\r?\n/).map(line => line.trim());

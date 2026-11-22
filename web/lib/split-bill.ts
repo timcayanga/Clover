@@ -2271,6 +2271,13 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   const merchantPayment = readMerchantPaymentConfirmation(receiptText);
   if (merchantPayment && merchantPayment.merchant === preview.merchantName &&
       merchantPayment.amount === total && preview.billDate?.slice(0,10) === merchantPayment.date) score += 2;
+  const explicitUnitPriceColumn = receiptNameFirstPriceHeader.test(receiptText) ||
+    /^\s*(?:qty|quantity)\b[^\n]*\b(?:unit\s*)?price\s+(?:amount|line total|total)\s*$/im.test(receiptText);
+  if (explicitUnitPriceColumn && preview.items.some(item => !item.complimentary && item.unitPrice == null)) {
+    issues.push("A printed unit price needs review");
+    severeIssue = true;
+    score -= 2;
+  }
   const declaredItemCount = extractDeclaredReceiptItemCount(receiptText);
   const hasExplicitSummaryLine = receiptText.split(/\r?\n/).some((line) =>
     /^\s*(?:sub\s*-?\s*total|amount due|grand total|bill total|total)\b/i.test(line) || /^(?:합계|총합계|총액|결제금액|총결제금액)/.test(line.replace(/\s+/g, ""))
@@ -2327,6 +2334,17 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
     score += 2;
   }
 
+  // A printed unit count includes multiple units on a single purchase row.
+  // Use it separately from merchant-specific counts of purchase lines.
+  const unitCounts = [...receiptText.matchAll(/^\s*total[ \t]+(?:qty|quantity)[ \t]*:?[ \t]*(?:\r?\n[ \t]*)?(\d+(?:\.\d{1,3})?)[ \t]*\r?$/gim)];
+  if (unitCounts.length && preview.items.length && preview.items.every(item => item.quantity != null)) {
+    const unitsInThousandths = preview.items.reduce((sum, item) => sum + Math.round(Number(item.quantity) * 1000), 0);
+    if (unitCounts.some(match => Math.round(Number(match[1]) * 1000) !== unitsInThousandths)) {
+      issues.push("Printed total quantity differs from the purchase quantities");
+      severeIssue = true;
+      score -= 3;
+    }
+  }
   const purchasedUnits = preview.items.reduce((sum, item) => sum +
     (Number.isSafeInteger(item.quantity) && Number(item.quantity) > 0 ? Number(item.quantity) : 1), 0);
   if (
@@ -2626,7 +2644,7 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, { ordered
   }
   // A damaged unit column can survive the general line parser even when the
   // whole table fails reconciliation. Preserve the printed extended amount.
-  if (!payment && (receiptNameFirstPriceHeader.test(body) || /^\s*(?:qty|quantity)\b[^\n]*\bprice\s+(?:amount|line total|total)\b/im.test(body)) &&
+  if (!payment && (receiptNameFirstPriceHeader.test(body) || /^\s*(?:qty|quantity)\b[^\n]*\b(?:unit\s*)?price\s+(?:amount|line total|total)\b/im.test(body)) &&
       !/\b(?:discount|promo|markdown|rebate)\b/i.test(body)) {
     const inconsistentPrice = (item: ReceiptPreviewItem) => item.quantity != null &&
       item.unitPrice != null && item.amount != null &&

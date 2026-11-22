@@ -42,5 +42,5 @@ export function qualifyDeviceReceiptReading(
     requiresReview: false,
   });
   if (!quality.reliableForFastPath) return null;
-  return { source, layout, region };
+  return { source, layout, region, preview: candidate };
 }

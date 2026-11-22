@@ -157,6 +157,22 @@ for (const invalid of [
   assert.equal(hasPrintedItemizedTotal(invalid, "100.00", true), false);
 }
 
+// Both clients can deliver a complete transcript even when one digit is wrong.
+for (const source of ["apple_vision", "google_mlkit"]) {
+  for (const mode of ["statement", "receipt"]) {
+    const read = (text: string) => qualifyDeviceReceiptReading(normalizeDeviceTextEvidence({
+      source, version: 1, complete: true, pagesRead: 1, totalPages: 1, durationMs: 1, text,
+    }), mode, "PHP");
+    const printed = countedUnitPrices.replace("Unit Price", "UnitPrice");
+    assert.equal(read(printed)?.preview.items[0].unitPrice, "20.00");
+    assert.equal(read(printed.replace("Qty\n3", "Qty\n4")), null);
+    const damaged = printed.replace("20.00 40.00", "25.00 40.00");
+    assert.equal(read(damaged), null);
+    assert.equal(parseReceiptPhotoText(damaged).items[0].unitPrice, null);
+    assert.equal(parseReceiptPhotoText(damaged).total, "100.00");
+  }
+}
+
 // Mobile recognizers can emit each column separately. Row geometry and the
 // three printed checks must agree before the server can reuse that evidence.
 const countedColumns = [

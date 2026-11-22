@@ -9708,9 +9708,13 @@ const processImportFileTextImpl = async (
   }
   const regionSource = receiptRegion ? encodeLocalReceiptOcr(receiptRegion) : null;
   const receiptOpticalSource = () => regionSource ?? deviceReading?.source ?? text;
-  const receiptOpticalLayout = () => readReceiptOpticalLayout(receiptOpticalSource());
   const originalOpticalSource = receiptOpticalSource();
-  const opticalPurchaseText = receiptOpticalLayout();
+  const opticalPurchaseText = deviceReading?.source === originalOpticalSource && !deviceReading.region
+    ? deviceReading.layout : readReceiptOpticalLayout(originalOpticalSource);
+  const receiptOpticalLayout = () => {
+    const source = receiptOpticalSource();
+    return source === originalOpticalSource ? opticalPurchaseText : readReceiptOpticalLayout(source);
+  };
   if (imageImport) {
     const opticalEvidence = opticalPurchaseText.trim();
     const quality = !opticalEvidence ? "empty" : hasReceiptPhotoEvidence(opticalEvidence) ? "receipt_evidence" : "limited";
@@ -9819,7 +9823,9 @@ const processImportFileTextImpl = async (
   // and must not force an expensive second image read before the draft appears.
   let localReceiptItemsDeferred = false;
   if (imageImport && importMode === "receipt" && !trainedReceiptDetails && text.trim()) {
-    const localPreview = parseReceiptPhotoText(receiptOpticalSource());
+    const opticalSource = receiptOpticalSource();
+    const localPreview = deviceReading?.preview.receiptText === opticalSource
+      ? deviceReading.preview : parseReceiptPhotoText(opticalSource);
     const itemTotal = localPreview.items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const itemsReconcile = [localPreview.subtotal, localPreview.total].some(value => value !== null && Math.abs(Number(value) - itemTotal) <= .1);
     // OCR may read both a quantity-price expression and its separate amount

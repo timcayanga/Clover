@@ -1,6 +1,6 @@
 import { classifyUnsettledPurchaseDocument } from "@/lib/purchase-document-payment";
 import { mergeReceiptBackup } from "@/lib/receipt-backup-preview";
-import { canPreviewLocalReceiptItems } from "@/lib/receipt-item-table";
+import { canUseLocalReceiptPreview } from "@/lib/receipt-item-table";
 import { assessFinancialUploadScope, getClearLocalPhotoRejection, getUploadRejectionDetails, NonFinancialUploadError } from "@/lib/financial-upload-scope";
 import { validateImportImageDecode } from "@/lib/import-image-validation.server";
 import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
@@ -53,7 +53,7 @@ const tryReceiptBackup = async (params: {
     return params.preview;
   }
   if ((params.preview.currency !== "MIXED" || !params.preview.currencyMentions.length) &&
-      canPreviewLocalReceiptItems(params.receiptText, params.preview)) {
+      canUseLocalReceiptPreview(params.receiptText, params.preview)) {
     return params.preview;
   }
 

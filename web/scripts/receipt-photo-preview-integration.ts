@@ -15,6 +15,7 @@ async function verify() {
   let retained = 0;
   let expectedBytes: Uint8Array = bytes;
   let networkCalls = 0;
+  let allowanceChecks = 0;
   globalThis.fetch = async () => { networkCalls++; throw new Error("Unexpected network call"); };
   process.env.OPENAI_API_KEY = "offline-test-only";
   require("next/server").after = () => {};
@@ -26,7 +27,7 @@ async function verify() {
     } },
     "../lib/auth": { isLocalDevHost: async () => false },
     "../lib/split-bill-access": { getSplitBillCurrentUser: async () => ({ id: "qa", clerkUserId: "qa" }) },
-    "../lib/clover-token-usage": { mayUseImportCloudAi: async () => false },
+    "../lib/clover-token-usage": { mayUseImportCloudAi: async () => { allowanceChecks++; return false; } },
     "../lib/prisma": { prisma: { workspace: { findFirst: async () => ({ id: "qa" }) } } },
     "../lib/s3": { uploadObject: async (_key: string, original: Uint8Array) => {
       assert.deepEqual(original, expectedBytes);
@@ -159,6 +160,22 @@ async function verify() {
     assert.equal(locked.status, 422);
     assert.equal((await locked.json()).code, "IMPORT_PASSWORD_REQUIRED");
     assert.equal(retained, 11);
+  }
+  if (process.env.CLOVER_QA_DISCOUNT_PHOTO) {
+    expectedBytes = new Uint8Array(await readFile(process.env.CLOVER_QA_DISCOUNT_PHOTO));
+    const form = new FormData();
+    form.append("file", new File([Buffer.from(expectedBytes)], "receipt.webp", { type: "image/webp" }));
+    const upload = new Request(request.url, { method: "POST", headers: { origin: "https://clover.ph" }, body: form });
+    const checksBefore = allowanceChecks;
+    const response = await withMobileRequestContext("qa", upload, () => POST(upload));
+    assert.equal(response.status, 200);
+    const { preview, reliableForScopedSplit } = await response.json();
+    assert.equal(preview.total, "896.01");
+    assert.deepEqual(preview.items.map((item: { amount: string }) => item.amount), ["1065.00", "55.00"]);
+    assert.equal(preview.requiresReview, true);
+    assert.equal(reliableForScopedSplit, false);
+    assert.equal(allowanceChecks, checksBefore, "Reconciled discounted purchases can open for review directly");
+    console.log("PASS reconciled discount photo opens for review without a provider allowance check");
   }
   console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }

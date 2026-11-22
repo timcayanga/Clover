@@ -38,7 +38,7 @@ export async function readLocalReceiptImage(
   preview: ImagePreview,
   timings?: LocalReceiptOcrTimings,
 ): Promise<string | null> {
-  if (busy || retiring || Date.now() < cooldownUntil) return null;
+  if (busy || inFlight || retiring || Date.now() < cooldownUntil) return null;
   const paths = [
     join(process.cwd(), "lib/receipt-ocr-worker.cjs"),
     join(process.cwd(), "web/lib/receipt-ocr-worker.cjs"),
@@ -66,16 +66,17 @@ export async function readLocalReceiptImage(
     return await new Promise<string | null>((resolve) => {
       let returned = false;
       const finish = (text: string | null, failed: boolean) => {
+        if (failed) {
+          cooldownUntil = Date.now() + 60000;
+          void shutdownLocalReceiptOcr();
+        }
+        if (!failed && !inFlight) current.unref();
         if (returned) return;
         returned = true;
         clearTimeout(timer);
         console.info("[receipt-local-ocr]", {
           engine: "ppocr-v5-local", outcome: text ? "review_preview" : "fallback", elapsedMs: Date.now() - startedAt,
         });
-        if (failed) {
-          cooldownUntil = Date.now() + 60000;
-          void shutdownLocalReceiptOcr();
-        } else current.unref();
         resolve(text);
       };
       const done = () => {
@@ -91,15 +92,16 @@ export async function readLocalReceiptImage(
         result?: { text: string; [key: string]: unknown };
       }) => {
         done();
-        if (returned) return;
-        if (timings && message.timings) Object.assign(timings, message.timings);
-        finish(message.ok && message.result?.text.trim() ? encodeLocalReceiptOcr(message.result) : null, !message.ok);
+        if (timings && !returned && message.timings) Object.assign(timings, message.timings);
+        finish(!returned && message.ok && message.result?.text.trim() ? encodeLocalReceiptOcr(message.result) : null, !message.ok);
       };
       const onError = () => {
         done();
         finish(null, true);
       };
-      const timer = setTimeout(() => finish(null, true), 25000);
+      // A slow recognition can finish successfully after the caller falls
+      // back. Keep the worker reserved until its reply, then reuse it.
+      const timer = setTimeout(() => finish(null, false), 25000);
       current.once("message", onMessage);
       current.once("error", onError);
       current.once("exit", onError);
