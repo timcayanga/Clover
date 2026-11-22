@@ -132,3 +132,12 @@ const feeReceipt = "Qty Item Amount\n1 Tea\n125.00\n2 Coffee 250.00\n10%ServiceC
 assert.equal(readChargedReceiptTable(feeReceipt)?.items[1].quantity, 2);
 assert.equal(readChargedReceiptTable(feeReceipt.replace("412.50", "422.50")), null);
 assert.equal(readChargedReceiptTable(feeReceipt.replace("Qty Item Amount\n1 Tea", "7 Up"))?.items[0].description, "7 Up");
+
+const marginTable = "1 Tea 100.00\nLime Juice 200.00\nBlack Coffee 300.00\nService Charge: 60.00\nAmo 660.00";
+const marginBlocks: OpticalTextLine[] = [{ text: "1", box: [.05, .1, .07, .14] }];
+for (const [index, [text, price]] of [["Tea", "100.00"], ["Lime Juice", "200.00"], ["Black Coffee", "300.00"]].entries()) {
+  const y = .1 + index * .1;
+  marginBlocks.push({ text, box: [.15, y, .45, y + .04] }, { text: price, box: [.75, y, .9, y + .04] });
+}
+assert.deepEqual(readChargedReceiptTable(marginTable, marginBlocks)?.items[0], { description: "Tea", amount: "100.00", quantity: 1 });
+assert.equal(readChargedReceiptTable(marginTable, marginBlocks.slice(1))?.items[0].description, "1 Tea");

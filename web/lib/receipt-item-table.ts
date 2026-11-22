@@ -130,9 +130,38 @@ export function readSubtotalItems(source: string, allowQuantityRows = false) {
   return items.length >= 2 && sum === expected ? items.reverse() : null;
 }
 
+type OpticalBlock = import("../../shared/device-text-evidence").OpticalTextLine;
+type PricedItem = { description: string; amount: string; quantity?: number };
+
+// A leading number can be part of a product name. Only separate it when its
+// own box is in the margin of a price-verified, aligned description column.
+function readMarginQuantities(items: PricedItem[], blocks: OpticalBlock[]) {
+  if (!blocks.length || !items.some(item => /^\d+ /.test(item.description))) return items;
+  const sameRow = (a: OpticalBlock, b: OpticalBlock) =>
+    Math.min(a.box[3], b.box[3]) - Math.max(a.box[1], b.box[1]) >
+      Math.min(a.box[3] - a.box[1], b.box[3] - b.box[1]) * 0.5;
+  const rows = items.map(item => {
+    const prefix = item.description.match(/^([1-9]\d*) (.+)$/u);
+    const name = prefix?.[2] ?? item.description;
+    const names = blocks.filter(block => block.text.trim() === name &&
+      blocks.some(price => price.box[0] > block.box[2] && sameRow(block, price) &&
+        price.text.trim().replace(/,/g, "") === item.amount));
+    return names.length === 1 ? { block: names[0], name, prefix: prefix?.[1] } : null;
+  });
+  return items.map((item, index) => {
+    const row = rows[index];
+    if (!row?.prefix || item.quantity !== undefined) return item;
+    const left = row.block.box[0];
+    const margin = blocks.filter(block => block.text.trim() === row.prefix && sameRow(row.block, block) &&
+      left - block.box[2] >= block.box[2] - block.box[0] && left - block.box[2] <= 0.10);
+    const aligned = rows.filter(other => other && other !== row && Math.abs(other.block.box[0] - left) <= 0.015);
+    return margin.length === 1 && aligned.length >= 2 ? { ...item, description: row.name, quantity: Number(row.prefix) } : item;
+  });
+}
+
 // A partly damaged payable label can still carry reliable digits. Require the
 // purchase rows plus the separately printed service charge to prove every cent.
-export function readChargedReceiptTable(source: string) {
+export function readChargedReceiptTable(source: string, blocks: OpticalBlock[] = []) {
   const lines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const charge = lines.findIndex(line => /^(?:\d+(?:\.\d+)?%\s*)?service\s*ch(?:arge|rge)\s*:\s*\d[\d,]*\.\d{2}$/i.test(line) ||
     /^service\s+charge\s+\d[\d,]*\.\d{2}$/i.test(line));
@@ -180,7 +209,7 @@ export function readChargedReceiptTable(source: string) {
     const match = quantities[index];
     return match ? { ...item, description: match[1], quantity: Number(match[2]) } : item;
   }) : ordered;
-  return { items: purchases, serviceCharge: (service / 100).toFixed(2), subtotal: (subtotal / 100).toFixed(2), total };
+  return { items: readMarginQuantities(purchases, blocks), serviceCharge: (service / 100).toFixed(2), subtotal: (subtotal / 100).toFixed(2), total };
 }
 
 export function hasPrintedItemizedTotal(text: string, total: string) {

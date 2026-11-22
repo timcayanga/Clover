@@ -14,7 +14,7 @@ import { createAdviserHistoryHook } from "../../shared/use-adviser-history";
 import { AdviserInputTools } from "@/components/adviser-input-tools";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { adviserFileAccept, adviserFileProblem, type AdviserAttachment } from "@/lib/adviser-attachments";
+import { adviserFileAccept, adviserFileProblem, isAdviserPhoto, type AdviserAttachment } from "@/lib/adviser-attachments";
 import { AdviserEntryEditor } from "./adviser-entry-editor";
 import { readAdviserFormContext, clearAdviserFormContext } from "./adviser-form-assist";
 import { entryDraftSchema } from "@/lib/adviser-entry-schema";
@@ -580,7 +580,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
     try {
       const form=new FormData();form.append("file",file);
       const path = `/api/adviser/attachments?workspaceId=${encodeURIComponent(workspaceId)}`;
-      const response = /\.(png|jpe?g|webp|hei[cf])$/i.test(file.name)
+      const response = isAdviserPhoto(file)
         ? await previewReceiptFile(file, path)
         : await fetch(path, { method: "POST", body: form });
       const data=await response.json();

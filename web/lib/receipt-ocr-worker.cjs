@@ -484,6 +484,11 @@ function corroborateWords(best, other, independent, printedElsewhere) {
   }).join(" ");
   return text !== words.join(" ") ? { ...best, text, originalText: best.text } : best;
 }
+// An identical reading from both recognizers is sufficient for clear words.
+function agreedWordLine(line, witness) {
+  return witness && line.text === witness.text && line.minConfidence >= 0.93 &&
+    witness.minConfidence >= 0.93 && /^[A-Za-z][A-Za-z '()-]*$/.test(line.text);
+}
 async function run(preview, timings) {
   const runtimeStarted = performance.now();
   if (!cvModule.Mat)
@@ -521,9 +526,11 @@ async function run(preview, timings) {
   ).length;
   const language = hangul >= 3 ? "korean" : "latin";
   const first = language === "korean" ? korean : latin;
-  const alternate = await recognize(lineImages, language, false);
+  const witnesses = language === "latin" ? korean : latin;
+  const independentByBox = new Map(witnesses.map(line => [line.box, line]));
+  const agreedBoxes = new Set(first.filter(line => agreedWordLine(line, independentByBox.get(line.box))).map(line => line.box));
+  const alternate = await recognize(lineImages.filter(line => !agreedBoxes.has(line.box)), language, false);
   const alternateByBox = new Map(alternate.map(line => [line.box, line]));
-  const independentByBox = new Map((language === "latin" ? korean : []).map(line => [line.box, line]));
   const printedWords = new Map();
   for (const line of first) {
     if (line.confidence < 0.95) continue;
@@ -538,7 +545,7 @@ async function run(preview, timings) {
     const other = alternateByBox.get(line.box);
     const best = other?.confidence > line.confidence ? other : line;
     const runnerUp = best === line ? other : line;
-    const supported = corroborateWords(best, runnerUp, independentByBox.get(line.box), printedWords);
+    const supported = corroborateWords(best, runnerUp, language === "latin" ? independentByBox.get(line.box) : null, printedWords);
     if (supported !== best && best.confidence >= 0.5) {
       itemWordCorrections.push({ original: best.text.trim(), corrected: supported.text.trim() });
     }
@@ -574,7 +581,7 @@ async function run(preview, timings) {
     confidence: score(lines),
   };
 }
-module.exports = { run, rows, modelDictionary, tensor, corroborateWords, mostLikelyClass };
+module.exports = { run, rows, modelDictionary, tensor, corroborateWords, mostLikelyClass, agreedWordLine };
 if (parentPort)
   parentPort.on("message", async (input) => {
     const timings = input.measure ? {} : undefined;

@@ -180,3 +180,13 @@ for (const [detection, normalize] of [[true,true],[false,true],[false,false]]) {
   }
   input.dispose();
 }
+
+const { agreedWordLine } = require("../lib/receipt-ocr-worker.cjs");
+const clearWord = {text: "Black Tea", minConfidence: .99};
+assert.ok(agreedWordLine(clearWord, clearWord));
+assert.ok(!agreedWordLine(clearWord, {...clearWord, text: "Black Pea"}));
+assert.ok(!agreedWordLine(clearWord, {...clearWord, minConfidence: .7}));
+assert.ok(!agreedWordLine(clearWord, undefined));
+for (const text of ["125.00", "Tea 2"]) {
+  assert.ok(!agreedWordLine({...clearWord, text}, {...clearWord, text}));
+}

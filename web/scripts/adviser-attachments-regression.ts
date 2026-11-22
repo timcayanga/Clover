@@ -15,7 +15,14 @@ for (const name of [
   "holdings.xlsx",
 ])
   assert.equal(adviserFileProblem({ name, size: 100 }), null);
+for (const type of ["application/pdf; version=1.7", "text/csv; charset=utf-8", "text/plain",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]) {
+  assert.equal(adviserFileProblem({ name: "Document", size: 100, type }), null);
+}
+assert.equal(adviserFileProblem({ name: "Photo", size: 5_000_000, type: "image/jpeg" }), null);
 for (const file of [
+  { name: "wrong.exe", type: "image/jpeg", size: 100 },
+  { name: "Document", type: "image/svg+xml", size: 100 },
   { name: "a.exe", size: 10 },
   { name: "a.pdf", size: 0 },
   { name: "a.pdf", size: 3_500_001 },

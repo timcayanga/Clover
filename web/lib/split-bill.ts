@@ -2191,7 +2191,10 @@ const looksLikeSplitAllocationWorksheet = (text: string) => {
     .split(/\r?\n+/)
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
-  const rowsWithManyAmounts = lines.filter((line) => (line.match(/\b\d[\d.,]*\b/g) ?? []).length >= 5).length;
+  // A date, timestamp or terminal identifier can contain several numbers
+  // without containing any amount columns.
+  const rowsWithManyAmounts = lines.filter(line =>
+    (line.match(/(?:^|\s)-?\d+(?:,\d{3})*(?:\.\d{2})?(?=\s|$)/g) ?? []).length >= 5).length;
   if (rowsWithManyAmounts >= 2) {
     return true;
   }
@@ -2258,8 +2261,8 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   const suspiciousItemCount = preview.items.filter((item) => isSuspiciousReceiptItemDescription(item.description)).length;
   const cleanItemCount = Math.max(0, preview.items.length - suspiciousItemCount);
   const maxItemAmount = itemAmounts.length > 0 ? Math.max(...itemAmounts) : null;
-  const receiptText = String(preview.receiptText ?? "");
-  const merchantPayment = readMerchantPaymentConfirmation(readLocalReceiptOcrText(receiptText) ?? receiptText);
+  const receiptText = readReceiptOpticalLayout(preview.receiptText ?? "");
+  const merchantPayment = readMerchantPaymentConfirmation(receiptText);
   if (merchantPayment && merchantPayment.merchant === preview.merchantName &&
       merchantPayment.amount === total && preview.billDate?.slice(0,10) === merchantPayment.date) score += 2;
   const declaredItemCount = extractDeclaredReceiptItemCount(receiptText);
@@ -2318,12 +2321,14 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
     score += 2;
   }
 
+  const purchasedUnits = preview.items.reduce((sum, item) => sum +
+    (Number.isSafeInteger(item.quantity) && Number(item.quantity) > 0 ? Number(item.quantity) : 1), 0);
   if (
     declaredItemCount !== null &&
     cleanItemCount > 0 &&
-    declaredItemCount >= cleanItemCount + 2
+    declaredItemCount >= Math.max(cleanItemCount + 2, purchasedUnits + 1)
   ) {
-    issues.push(`declared item count ${declaredItemCount} exceeds parsed items ${cleanItemCount}`);
+    issues.push(`declared item count ${declaredItemCount} exceeds parsed units ${purchasedUnits}`);
     score -= declaredItemCount >= cleanItemCount * 2 ? 5 : 3;
     severeIssue = true;
   }
@@ -2596,7 +2601,7 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean): ReceiptP
     paymentMethod: hasSplitReceiptTender(tenders) ? "Mixed" : settled.paymentMethod,
   } : settled;
   const photoText = useOpticalRows ? ordered : opticalText ?? (photo ? receiptText : null);
-  const table = readReconciledItemTable(photoText ?? receiptText) ?? (photoText ? readChargedReceiptTable(photoText) : null);
+  const table = readReconciledItemTable(photoText ?? receiptText) ?? (photoText ? readChargedReceiptTable(photoText, readReceiptOpticalEvidence(receiptText)) : null);
   if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
     return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || photoText !== null,
       confidence:photoText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};

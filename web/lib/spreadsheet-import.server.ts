@@ -145,10 +145,9 @@ export const decodeSpreadsheetWorkbookBytes = async (bytes: Uint8Array) => {
       const cells = Array.from({ length: columnCount }, (_, offset) =>
         worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset })] as XLSX.CellObject | undefined);
       updateDateColumns(cells, dateColumns, indonesianNumbers);
-      const row = Array.from({ length: columnCount }, (_, offset) => {
-        const address = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset });
-        const cell = worksheet[address];
+      const row = cells.map((cell, offset) => {
         if (cell?.f && (cell.v === undefined || cell.v === null || cell.t === "e")) {
+          const address = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset });
           throw new Error(`Worksheet "${sheetName}" has a formula without a usable saved result at ${address}. Recalculate and save it in Excel, or export values, then upload again.`);
         }
         return worksheetCellToText(cell, dateColumns.has(offset), date1904, indonesianNumbers.has(offset));
