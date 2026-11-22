@@ -6,6 +6,7 @@ import {
   shouldRunSecondaryPdfOcrPass,
   knownStatementNativeTextIsComplete,
 } from "@/lib/import-file-text.server";
+import { parseReceiptPhotoText } from "../lib/split-bill";
 import { pdfjs } from "@/lib/pdfjs.server";
 
 ensurePdfJsTextPolyfills();
@@ -73,6 +74,26 @@ assert.equal(
   true,
   "A complete render with insufficient transaction evidence must retain the secondary OCR pass."
 );
+
+const paidReceipt = [
+  "Green Cafe", "Official Receipt", "2026-11-19", "Qty Description Unit Price Amount",
+  "0.100 Green Tea 42 400.00 40.00", "0.200 Rice Bowl 300.00 60.00", "Total Qty 0.300",
+  "Gross Amount 100.00", "Bill Amount 100.00", "Cash 150.00", "Change 50.00",
+].join("\n");
+const repeatReceiptOcr = (text: string, totalPages = 1) => shouldRunSecondaryPdfOcrPass({
+  primaryOcrText: text, renderedPages: [{ page: 1, totalPages }], fileName: "document.pdf",
+});
+assert.equal(repeatReceiptOcr(paidReceipt), false);
+assert.equal(repeatReceiptOcr(paidReceipt, 2), true);
+assert.equal(repeatReceiptOcr(paidReceipt.replace("Change 50.00", "Change 40.00")), true);
+assert.equal(repeatReceiptOcr(paidReceipt.replace("2026-11-19", "2020-17-79")), true);
+assert.equal(parseReceiptPhotoText(paidReceipt).documentNumber, null);
+for (const label of ["Receipt:12345", "Receipt 12345", "Receipt No.\n12345", "OR No. 12345"]) {
+  assert.equal(parseReceiptPhotoText(paidReceipt.replace("Official Receipt", label)).documentNumber, "12345");
+}
+for (const date of ["2026-11-19", "2026/11/19", "19.11.2026"]) {
+  assert.equal(parseReceiptPhotoText(paidReceipt.replace("Official Receipt\n2026-11-19", "Receipt " + date)).documentNumber, null);
+}
 
 const wiseStatementText = [
   "Wise Pilipinas Inc.",

@@ -1293,6 +1293,15 @@ export function hasVerifiedPdfNativeLedger(data: Uint8Array, selectedText: strin
     assessPdfStatementCoverage(pages, [], selectedText, pdfOriginalLayoutReads.get(data)).complete);
 }
 
+function cashAndChangeMatch(text: string, total: string) {
+  const cash = [...text.matchAll(/^cash[ \t]*[:：]?[ \t]+([\d,]+\.\d{2})[ \t]*$/gim)];
+  const change = [...text.matchAll(/^change[ \t]*[:：]?[ \t]+([\d,]+\.\d{2})[ \t]*$/gim)];
+  if (cash.length !== 1 || change.length !== 1) return false;
+  const cents = (value: string) => Number(value.replace(/[,.]/g, ""));
+  const paid = cents(cash[0][1]), returned = cents(change[0][1]), payable = cents(total);
+  return [paid, returned, payable].every(Number.isSafeInteger) && paid - returned === payable;
+}
+
 // A short digital receipt can have a complete text layer even when it falls
 // below the length threshold for statements. Item tables must occupy one page.
 function hasVerifiedPdfReceipt(data: Uint8Array, text: string) {
@@ -1310,14 +1319,7 @@ function hasVerifiedPdfReceipt(data: Uint8Array, text: string) {
   if (resolvePositiveImportDocumentRoute(text)?.mode !== "receipt") return false;
   const { total } = parseReceiptPhotoText(text);
   if (!total) return false;
-  if (!labeled) {
-    const cash = [...text.matchAll(/^cash[ \t]*[:：]?[ \t]+([\d,]+\.\d{2})[ \t]*$/gim)];
-    const change = [...text.matchAll(/^change[ \t]*[:：]?[ \t]+([\d,]+\.\d{2})[ \t]*$/gim)];
-    if (cash.length !== 1 || change.length !== 1) return false;
-    const cents = (value: string) => Number(value.replace(/[,.]/g, ""));
-    const paid = cents(cash[0][1]), returned = cents(change[0][1]), payable = cents(total);
-    if (![paid, returned, payable].every(Number.isSafeInteger) || paid - returned !== payable) return false;
-  }
+  if (!labeled && !cashAndChangeMatch(text, total)) return false;
   const table = readReconciledItemTable(text);
   return table ? table.total === total : labeled && hasPrintedItemizedTotal(text, total, true);
 }
@@ -3387,6 +3389,15 @@ export const shouldRunSecondaryPdfOcrPass = (params: {
     return true;
   }
 
+  const text = params.primaryOcrText;
+  if (totalPages === 1 && /^[ \t]*(?:official |sales |tax )?receipt[ \t]*$/im.test(text) && /^cash\b/im.test(text) &&
+      singleReceiptDate(text) && resolvePositiveImportDocumentRoute(text)?.mode === "receipt") {
+    const table = readReconciledItemTable(text);
+    if (table && cashAndChangeMatch(text, table.total)) {
+      const draft = parseReceiptPhotoText(text);
+      if (draft.billDate && draft.merchantName && draft.total === table.total) return false;
+    }
+  }
   return !pdfTextLayerLooksSufficientForParsing(params.primaryOcrText, params.fileName);
 };
 

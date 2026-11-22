@@ -2872,7 +2872,8 @@ const parseReceiptTextCore = (
     /\b(?:pnr)\s*[:#-]?\s*([A-Z0-9-]{4,})/i,
   ]);
   const documentNumber = extractReceiptField(normalized, [
-    /\b(?:official receipt|receipt|or no\.?|cash slip)\s*(?:no\.?|#)?\s*[:#-]?\s*([A-Z0-9-]{3,})/i,
+    /\b(?:(?:official receipt|receipt|cash slip)[ \t]*(?:no\b\.?|number\b|#)|or[ \t]+no\.?)\s*[:#.-]?\s*([A-Z0-9-]{3,})/i,
+    /\b(?:official receipt|receipt|cash slip)(?:[ \t]*[:#-][ \t]*|[ \t]+)(?!\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}\b)([A-Z0-9-]{3,})/i,
     /\b(?:ref\.?\s*no\.?|reference)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
     /\b(?:ref(?:erence)?\s*no\.?)\s*[:#-]?\s*(\d{3,}(?:[ \t]+\d{2,}){1,3})\b/i,
     /\b(?:ref(?:erence)?\s*no\.?)\s*[:#-]?\s*([A-Z0-9]+(?:[ \t-]+[A-Z0-9]+){1,})/i,
