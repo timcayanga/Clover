@@ -9,6 +9,28 @@ const invalidImage = "Clover couldn't open this image. Retake the photo or expor
 const oversizedImage = "This image is too large to open. Resize it or take a new photo and upload it again.";
 
 export type ImagePreview = { data: Buffer; width: number; height: number };
+
+// Camera photos typically contain small color differences even on blank paper.
+// Use this inexpensive sample only to order OCR attempts. The document content
+// still has to establish the route and reconcile the financial fields.
+export function hasPhotographicTexture({ width, height, data }: ImagePreview) {
+  const grid = 48;
+  if (width < grid * 2 || height < grid * 2) return false;
+  let textured = 0;
+  for (let row = 0; row < grid; row++) {
+    const y = Math.floor((row + 0.5) * height / grid);
+    for (let column = 0; column < grid; column++) {
+      const x = Math.floor((column + 0.5) * width / grid);
+      const pixel = (y * width + x) * 3;
+      const difference = Math.abs(data[pixel] - data[pixel + 3]) +
+        Math.abs(data[pixel + 1] - data[pixel + 4]) + Math.abs(data[pixel + 2] - data[pixel + 5]);
+      // Ignore uniform fills and sharp text or icon edges.
+      if (difference >= 3 && difference <= 50) textured++;
+    }
+  }
+  return textured > grid * grid / 2;
+}
+
 const previews = new WeakMap<Uint8Array, Promise<ImagePreview>>();
 
 export function getBoundedImportImagePreview(bytes: Uint8Array) {

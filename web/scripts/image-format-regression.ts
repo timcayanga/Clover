@@ -1,5 +1,5 @@
 import { encodeImportImage } from "../lib/import-image-encoding";
-import { getBoundedImportImagePreview, validateImportImageDecode } from "@/lib/import-image-validation.server";
+import { getBoundedImportImagePreview, hasPhotographicTexture, validateImportImageDecode } from "@/lib/import-image-validation.server";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -29,6 +29,12 @@ const fixture = process.env.CLOVER_HEIC_FIXTURE ??
   "/Users/TimCayanga1/Documents/Avocado/Resized Store Photos/Flares & Fragrances/Trevi Series - Gel candle/IMG_8408.HEIC";
 
 const main = async () => {
+  const sample = { width: 96, height: 96, data: Buffer.alloc(96 * 96 * 3, 240) };
+  assert.equal(hasPhotographicTexture(sample), false, "Flat UI backgrounds should keep their normal reader");
+  for (let offset = 0; offset < sample.data.length; offset += 6) sample.data[offset] -= 4;
+  assert.equal(hasPhotographicTexture(sample), true, "Fine tonal variation can prioritize local optical reading");
+  assert.equal(hasPhotographicTexture({ ...sample, width: 95 }), false);
+
   const pixelsWithMargins = { data: Buffer.alloc(400 * 800 * 3, 255), width: 400, height: 800 };
   for (const [x, y] of [[125, 120], [270, 620]]) pixelsWithMargins.data[(y * 400 + x) * 3] = 0;
   assert.deepEqual(findImportImageTextRegion(pixelsWithMargins), { left: 109, top: 104, width: 178, height: 533 });

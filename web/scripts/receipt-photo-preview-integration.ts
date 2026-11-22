@@ -47,10 +47,20 @@ async function verify() {
   assert.equal(await readLocalReceiptImage({ data: Buffer.alloc(320 * 240 * 3, 255), width: 320, height: 240 }), null);
   // Generic Add and Transactions uploads can receive camera photos exported as PNG.
   const png = await require("sharp")(bytes).png().toBuffer();
-  const genericText = await readUploadedFileText(new File([Uint8Array.from(png)], "IMG_0156.png", { type: "image/png" }),
-    undefined, { importMode: "statement", sourceBytes: png });
   const { parseReceiptPhotoText } = await import("../lib/split-bill");
-  assert.equal(parseReceiptPhotoText(genericText).total, "1470.54");
+  const { resolvePositiveImportDocumentRoute } = await import("../lib/positive-import-route");
+  const expectedItems = [
+    ["Mocktail REFRESHING", "350.00"], ["Cavinti Fizz", "480.00"], ["Punch from the Past", "520.00"],
+  ];
+  for (const filename of ["IMG_0156.png", "image.png", "Screenshot 2026.png", "portfolio.png"]) {
+    const file = new File([Uint8Array.from(png)], filename, { type: "image/png" });
+    const text = await readUploadedFileText(file, undefined, { importMode: "statement", sourceBytes: png });
+    assert.equal(resolvePositiveImportDocumentRoute(text)?.mode, "receipt", filename);
+    const parsed = parseReceiptPhotoText(text);
+    assert.equal(parsed.total, "1470.54", filename);
+    assert.equal(parsed.serviceCharge, "120.54", filename);
+    assert.deepEqual(parsed.items.map(item => [item.description, item.amount]), expectedItems, filename);
+  }
   const nativeRequest = new Request(request.url + "?uploadId=receipt-fixture&workspaceId=qa", {
     method: "POST", headers: { origin: "https://clover.ph" },
   });
@@ -63,9 +73,7 @@ async function verify() {
     assert.equal(result.preview.billDate.slice(0, 10), "2026-11-19");
     assert.equal(result.preview.serviceCharge, "120.54");
     assert.equal(result.preview.subtotal, "1350.00");
-    assert.deepEqual(result.preview.items.map((item: { description: string; amount: string }) => [item.description, item.amount]), [
-      ["Mocktail REFRESHING", "350.00"], ["Cavinti Fizz", "480.00"], ["Punch from the Past", "520.00"],
-    ]);
+    assert.deepEqual(result.preview.items.map((item: { description: string; amount: string }) => [item.description, item.amount]), expectedItems);
     assert.equal(networkCalls, 0);
     console.log("PASS " + method + " split receipt preview, printed total, items, date and retained photo in", Math.round(performance.now() - start), "ms");
   }

@@ -15,7 +15,7 @@ import { assessPdfStatementCoverage } from "./pdf-statement-coverage";
 import { resolvePositiveImportDocumentRoute } from "@/lib/positive-import-route";
 import { classifyExactPhotoRejection, type ClassificationContext } from "@/lib/import-classification-cache.server";
 import { findImportImageTextRegion } from "@/lib/import-image-text-region";
-import { getBoundedImportImagePreview, type ImagePreview } from "@/lib/import-image-validation.server";
+import { hasPhotographicTexture, getBoundedImportImagePreview, type ImagePreview } from "@/lib/import-image-validation.server";
 import { MAX_PDF_ESCALATION_PAGES, mergePdfPageBatches, planPdfPageEscalation } from "./pdf-page-escalation";
 import { decodeWordGrabReceiptBytes } from './word-receipt-import.server';
 import { heldSourceReviewReason } from './held-source-review';
@@ -258,7 +258,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v18";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v19";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -953,7 +953,16 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   const exportedCameraPhoto = /^(?:img|dsc|pxl)[_-]?\d[\w.-]*\.(?:png|webp)$/i.test(params.fileName ?? "");
   const cameraImage = originalProfile === "generic" &&
     (exportedCameraPhoto || /(?:image\/(?:jpe?g|heic|heif)\b|\.(?:jpe?g|heic|heif)$)/i.test(`${params.fileType ?? ""} ${params.fileName ?? ""}`));
-  const opticalPreview = preview ?? (cameraImage ? await getBoundedImportImagePreview(params.sourceBytes) : null);
+  const rasterPhoto = /(?:image\/(?:png|webp|jpe?g|heic|heif)\b|\.(?:png|webp|jpe?g|heic|heif)$)/i.test(
+    `${params.fileType ?? ""} ${params.fileName ?? ""}`
+  );
+  let frame = preview;
+  if (!frame && cameraImage) frame = await getBoundedImportImagePreview(params.sourceBytes);
+  if (!frame && rasterPhoto) {
+    // Optional reader selection must preserve the existing decoder fallback.
+    frame = await getBoundedImportImagePreview(params.sourceBytes).catch(() => null);
+  }
+  const opticalPreview = frame && (receipt || cameraImage || hasPhotographicTexture(frame)) ? frame : null;
   const firstOptical = opticalPreview ? await readLocalReceiptImage(opticalPreview) : null;
   const verifiedPurchase = async (source: string | null, image: ImagePreview | null) => {
     if (!source || !image) return null;
