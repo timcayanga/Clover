@@ -70,7 +70,7 @@ async function verify() {
     const upload = new Request(request.url, {method:"POST", headers:{origin:"https://clover.ph"}, body:form});
     return withMobileRequestContext("qa", upload, () => POST(upload));
   }
-  expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "04-05-2026", "Currency: EUR", "Qty Item Description Amount", "2 Tea 20.00", "Subtotal 20.00", "Total Amount 20.00"]);
+  expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "04-05-2026", "Currency: EUR", "Qty Item Unit Price Amount", "2 Tea EUR 10.00 EUR 20.00", "Subtotal EUR 20.00", "Total Amount EUR 20.00"]);
   let rasterizations = 0;
   const info = console.info;
   console.info = (...args) => {

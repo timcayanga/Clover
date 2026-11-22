@@ -2609,7 +2609,7 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, { ordered
     : dated;
   const tenders = readReceiptTenders(body);
   const tenderDifference = splitTenderDifference(tenders, parseAmountValue(settled.total), settled.currency === "MIXED" ? null : settled.currency);
-  const paymentDetails = tenders.length ? { ...settled, tenders,
+  let paymentDetails = tenders.length ? { ...settled, tenders,
     requiresReview: settled.requiresReview || Boolean(tenderDifference),
     paymentMethod: hasSplitReceiptTender(tenders) ? "Mixed" : settled.paymentMethod,
   } : settled;
@@ -2618,6 +2618,18 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, { ordered
   if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
     return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || photoText !== null,
       confidence:photoText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};
+  }
+  // A damaged unit column can survive the general line parser even when the
+  // whole table fails reconciliation. Preserve the printed extended amount.
+  if (!payment && /^\s*(?:qty|quantity)\b[^\n]*\bprice\s+(?:amount|line total|total)\b/im.test(body) &&
+      !/\b(?:discount|promo|markdown|rebate)\b/i.test(body)) {
+    const inconsistentPrice = (item: ReceiptPreviewItem) => item.quantity != null &&
+      item.unitPrice != null && item.amount != null &&
+      Math.round(item.quantity * Number(item.unitPrice) * 100) !== Math.round(Number(item.amount) * 100);
+    if (paymentDetails.items.some(inconsistentPrice)) {
+      paymentDetails = { ...paymentDetails, requiresReview: true, confidence: Math.min(45, paymentDetails.confidence),
+        items: paymentDetails.items.map(item => inconsistentPrice(item) ? { ...item, unitPrice: null } : item) };
+    }
   }
   if (photoText !== null && !payment && !footer && ["generic_receipt", "restaurant_receipt", "tax_invoice", "official_receipt"].includes(paymentDetails.receiptType)) {
     const items = readSubtotalItems(photoText, useOpticalRows);

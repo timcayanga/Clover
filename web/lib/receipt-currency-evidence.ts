@@ -1,6 +1,10 @@
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
 const codes = new Set(Intl.supportedValuesOf("currency"));
+export function isReceiptCurrencyCode(value: string) {
+  return codes.has(value) && value !== "XXX" && value !== "ALL";
+}
+
 const marks: Record<string, string> = {
   "₱": "PHP", "PHP": "PHP", "US$": "USD", "HK$": "HKD", "S$": "SGD",
   "A$": "AUD", "NZ$": "NZD", "C$": "CAD", "NT$": "TWD",
@@ -25,7 +29,7 @@ function currencyMarks(line: string, allowBareMark: boolean, region: string | nu
     // Uppercase ISO codes on generic rows avoid interpreting part of an
     // item name as a currency (e.g. "try 10"). Labelled totals accept OCR case.
     const acceptableCode = allowBareMark || raw === cleaned;
-    let currency = marks[cleaned] ?? (acceptableCode && codes.has(cleaned) && cleaned !== "XXX" && cleaned !== "ALL" ? cleaned : null);
+    let currency = marks[cleaned] ?? (acceptableCode && isReceiptCurrencyCode(cleaned) ? cleaned : null);
     if (raw === "$" && region && dollarRegions.has(region)) currency = region;
     if (raw === "¥" && region && yenRegions.has(region)) currency = region;
     if (currency) matches.set(currency, raw);

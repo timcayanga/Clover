@@ -66,3 +66,7 @@ assert.equal(parseReceiptText(secondText).total, "215.00");
 assert.equal(detectMultipleReceipts(firstText + "\nCUSTOMER COPY\n" + firstText), null);
 assert.equal(detectMultipleReceipts(firstText + "\nPROMO: receipt survey\nTotal rewards 500"), null);
 console.log("Multiple receipt detection blocks side-by-side and sequential receipts with independent totals.");
+
+const resetRegister = secondText.replace("R-120", "R-100").replace("2026-09-11", "2026-09-12");
+assert.deepEqual(detectMultipleReceipts(firstText + "\n" + resetRegister), { layout: "sequential" });
+assert.equal(parseReceiptText(firstText + "\n" + resetRegister).total, null);

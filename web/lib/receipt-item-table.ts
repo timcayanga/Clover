@@ -1,3 +1,5 @@
+import { isReceiptCurrencyCode } from "./receipt-currency-evidence";
+
 // A purchase table must agree with two independently printed totals before it
 // can replace the general OCR parser's line items.
 export function readReconciledItemTable(text: string) {
@@ -13,23 +15,40 @@ function readQuantityTable(text: string) {
   if (subtotalIndex < 0) return null;
 
   const hasUnitPrice = /\bunit\s+price\b|\bprice\s+(?:amount|line total|total)\b/i.test(lines[header]);
+  // Parse printed denomination prefixes only in monetary columns. Keep the
+  // original OCR transcript and numbers embedded in product names intact.
+  const denominations = new Set<string>();
+  const symbols: Record<string, string> = { "₱": "PHP", "€": "EUR", "£": "GBP" };
+  const trailingPrice = /(^|[\s:])(?:(PHP|EUR|GBP|USD|CAD|AUD|SGD|HKD|₱|€|£)\s*)?(\d+(?:,\d{3})*\.\d{2})$/i;
+  function takePrice(value: string) {
+    const price = trailingPrice.exec(value);
+    if (!price) return null;
+    // An unfamiliar ISO prefix can also be an uppercase product word.
+    // Decline the table when its currency cannot be separated safely.
+    if (!price[2]) {
+      const otherCode = value.match(/(?:^|[:\s])([A-Z]{3})\s*\d+(?:,\d{3})*\.\d{2}$/)?.[1];
+      if (otherCode && isReceiptCurrencyCode(otherCode)) return null;
+    }
+    const code = price[2] && (symbols[price[2]] ?? price[2].toUpperCase());
+    if (code) denominations.add(code);
+    return { prefix: value.slice(0, price.index).trimEnd(), amount: price[3].replace(/,/g, "") };
+  }
   const items: {description: string; quantity: number; amount: string; unitPrice?: string}[] = [];
   let itemCents = 0;
   for (const line of lines.slice(header + 1, subtotalIndex)) {
     if (!items.length && /^(?:dine in|take out|vat items?|vat item\(s\))$/i.test(line)) continue;
-    const row = line.match(/^([1-9]\d*(?:\.0{1,2})?)\s+(.+?)\s+(\d+(?:,\d{3})*\.\d{2})$/);
-    if (row) {
+    const column = takePrice(line);
+    const row = column?.prefix.match(/^([1-9]\d*(?:\.0{1,2})?)\s+(.+)$/);
+    if (column && row) {
       const quantity = Number(row[1]);
       if (!Number.isSafeInteger(quantity)) return null;
-      const amount = row[3].replace(/,/g, "");
+      const amount = column.amount;
       const cents = Math.round(Number(amount) * 100);
       if (!Number.isSafeInteger(cents) || cents <= 0) return null;
       if (hasUnitPrice) {
-        const unitColumn = row[2].match(/^(.+?)\s+(\d+(?:,\d{3})*\.\d{2})$/);
-        if (!unitColumn) return null;
-        const unitPrice = unitColumn[2].replace(/,/g, "");
-        if (quantity * Math.round(Number(unitPrice) * 100) !== cents) return null;
-        items.push({ description: unitColumn[1], quantity, unitPrice, amount });
+        const unitColumn = takePrice(row[2]);
+        if (!unitColumn?.prefix || quantity * Math.round(Number(unitColumn.amount) * 100) !== cents) return null;
+        items.push({ description: unitColumn.prefix, quantity, unitPrice: unitColumn.amount, amount });
       } else {
         items.push({ description: row[2], quantity, amount });
       }
@@ -42,8 +61,8 @@ function readQuantityTable(text: string) {
   }
 
   const priceInCents = (line: string) => {
-    const match = line.match(/(?:^|[:\s])(\d+(?:,\d{3})*\.\d{2})$/);
-    return match ? Math.round(Number(match[1].replace(/,/g, "")) * 100) : NaN;
+    const price = takePrice(line);
+    return price ? Math.round(Number(price.amount) * 100) : NaN;
   };
   const subtotal = priceInCents(lines[subtotalIndex]);
   if (!items.length || itemCents !== subtotal) return null;
@@ -52,21 +71,21 @@ function readQuantityTable(text: string) {
   const serviceRows = footer.filter(line => /^service\s+ch\w+\b/i.test(line));
   if (serviceRows.length > 1) return null;
   const service = serviceRows.length ? priceInCents(serviceRows[0]) : 0;
-  const countedTotals = footer.filter(line => /^\d+\s+item\(s\)\s+total amount\s*:?\s*\d[\d,]*\.\d{2}$/i.test(line));
+  const countedTotals = footer.filter(line => /^\d+\s+item\(s\)\s+total amount\b/i.test(line));
   const countedTotal = countedTotals[0];
   for (const counted of countedTotals) {
     const printedCount = Number.parseInt(counted, 10);
     const units = items.reduce((sum, item) => sum + item.quantity, 0);
     if ((printedCount !== items.length && printedCount !== units) || priceInCents(counted) !== subtotal + service) return null;
   }
-  const totals = footer.filter(line => /^(?:total (?:amount|due)|bill (?:amount|total)|amount due|grand total|total(?=\s*[:\d]))\b/i.test(line)).map(line => {
+  const totals = footer.filter(line => /^(?:total (?:amount|due)|bill (?:amount|total)|amount due|grand total|total(?=\s*(?:[:\d₱€£]|[A-Z]{3}\s*\d)))\b/i.test(line)).map(line => {
     const amount = priceInCents(line);
     if (Number.isFinite(amount) || !countedTotal) return amount;
     const annotated = line.match(/^total amount\s*:?\s*(\d[\d,]*\.\d{2})\s+[A-Za-z]+$/i);
     const verified = priceInCents(countedTotal);
     return annotated && Math.round(Number(annotated[1].replace(/,/g, "")) * 100) === verified ? verified : NaN;
   });
-  if (!totals.length || totals.some(total => total !== subtotal + service)) return null;
+  if (denominations.size > 1 || !totals.length || totals.some(total => total !== subtotal + service)) return null;
 
   return {
     items,

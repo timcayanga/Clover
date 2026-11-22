@@ -1,7 +1,7 @@
 // Local PP-OCRv5 inference. Models: PaddlePaddle/RapidAI, Apache-2.0.
 // No uploaded image, transcript or customer identifier leaves this process.
 const { performance } = require("node:perf_hooks");
-const { parentPort } = require("node:worker_threads");
+const { parentPort, threadId } = require("node:worker_threads");
 const { createHash } = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
@@ -68,19 +68,24 @@ async function getModel(name) {
           if (bytes.length > 20 * 1024 * 1024 || hash(bytes) !== sha)
             throw new Error("OCR model integrity check failed");
           await fs.mkdir(dir, { recursive: true });
-          const temp = target + "." + process.pid + ".tmp";
+          const temp = target + "." + process.pid + "." + threadId + ".tmp";
           await fs.writeFile(temp, bytes);
           await fs.rename(temp, target);
         }
+        const dictionary = name === "detection" ? [] : modelDictionary(bytes);
         return {
           session: await ort.InferenceSession.create(bytes, {
             executionProviders: ["cpu"],
             intraOpNumThreads: 2,
             interOpNumThreads: 1,
           }),
-          dictionary: name === "detection" ? [] : modelDictionary(bytes),
+          dictionary,
+          numericGlyphs: dictionary.flatMap((char, index) => index && /^[0-9OoIlSBZ]$/.test(char) ? [index] : []),
         };
-      })(),
+      })().catch(error => {
+        sessions.delete(name);
+        throw error;
+      }),
     );
   return sessions.get(name);
 }
@@ -256,6 +261,7 @@ async function detect(cv, image, size) {
   return boxes;
 }
 async function crops(cv, image, boxes) {
+  if (!boxes.length) return [];
   const src = cv.matFromArray(
       image.height,
       image.width,
@@ -370,9 +376,10 @@ function decodeLine(probabilities, classes, model, numericGlyphs, box) {
 }
 
 async function recognize(lines, language, normalize = true) {
+  if (!lines.length) return [];
   const model = await getModel(language),
     results = [];
-  const numericGlyphs = model.dictionary.flatMap((char, index) => index && /^[0-9OoIlSBZ]$/.test(char) ? [index] : []);
+  const { numericGlyphs } = model;
   for (let start = 0; start < lines.length;) {
     const width = Math.max(320, lines[start].width);
     // Keep the exact original padding. A wider neighbour changes the model's

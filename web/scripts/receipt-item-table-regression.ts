@@ -318,3 +318,24 @@ for (const input of [brokenPrice, encodeLocalReceiptOcr({ text: brokenPrice })])
   assert.equal(result.billDate, null);
   assert.equal(mergeReceiptBackup(result, { ...model, transaction_date: "2026-04-05" }, null, { schemaValidated: true }).billDate, null);
 }
+
+for (const marker of ["₱", "PHP ", "EUR ", "£", "USD "]) {
+  const marked = priceAmountHeader.replace(/\d+\.\d{2}/g, price => marker + price);
+  assert.deepEqual(readReconciledItemTable(marked)?.items, pricedItems);
+  for (const input of [marked, encodeLocalReceiptOcr({ text: marked })]) {
+    assert.deepEqual(parseReceiptPhotoText(input).items, pricedItems);
+  }
+  assert.equal(readReconciledItemTable(marked + "\nTotal EUR 39.00"), null);
+}
+assert.equal(readReconciledItemTable(priceAmountHeader.replace("10.00 20.00", "EUR 10.00 ₱20.00")), null);
+
+const disputedUnit = priceAmountHeader.replace("10.00 20.00", "15.00 20.00");
+for (const input of [disputedUnit, encodeLocalReceiptOcr({ text: disputedUnit })]) {
+  const preview = parseReceiptPhotoText(input);
+  assert.equal(preview.total, "35.00");
+  const tea = preview.items.find(item => item.description === "Tea");
+  assert.equal(tea?.amount, "20.00");
+  assert.equal(tea.unitPrice, null);
+  assert.equal(preview.requiresReview, true);
+}
+assert.equal(readReconciledItemTable(priceAmountHeader.replace("10.00 20.00", "EUR 10.00 EUR 20.00").replace("TOTAL DUE 35.00", "TOTAL INR 35.00")), null);

@@ -53,7 +53,14 @@ function distinctReceiptSections(left: string[], right: string[]) {
   const a = receiptSection(left), b = receiptSection(right);
   if (!a || !b) return false;
   // Merchant and customer copies can repeat the same header and settlement.
-  if (a.identity && b.identity) return a.identity !== b.identity;
+  if (a.identity && b.identity) {
+    if (a.identity !== b.identity) return true;
+    // Register sequences can restart daily. Only override a matching reference
+    // when both copies have different unambiguous dates and different purchases.
+    const isoDay = /^20\d{2}-\d{2}-\d{2}$/;
+    return Boolean(a.date && b.date && isoDay.test(a.date) && isoDay.test(b.date) &&
+      a.date !== b.date && a.items && b.items && a.items !== b.items);
+  }
   return Boolean((a.date && b.date && a.date !== b.date) || (a.items && b.items && a.items !== b.items));
 }
 
