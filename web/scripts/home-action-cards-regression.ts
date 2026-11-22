@@ -11,7 +11,7 @@ import { getTransactionReviewReasons } from "../lib/transaction-review-reasons";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(scriptDir, "..");
-const dashboardSource = readFileSync(join(webRoot, "app", "dashboard", "page.tsx"), "utf8");
+const dashboardSource = readFileSync(join(webRoot, "components", "dashboard-page-content.tsx"), "utf8");
 const cardSource = readFileSync(join(webRoot, "components", "home-recurring-payments-card.tsx"), "utf8");
 const transactionReviewCardSource = readFileSync(join(webRoot, "components", "home-transaction-review-card.tsx"), "utf8");
 const transactionReviewLauncherSource = readFileSync(join(webRoot, "components", "home-transaction-review-launcher.tsx"), "utf8");
@@ -45,6 +45,8 @@ assert.equal(parseCommitmentOccurrenceDate("2026-02-31"), null);
 
 assert.doesNotMatch(dashboardSource, /recurringWatchProgress|recurringWatchCount/);
 assert.match(dashboardSource, /<HomeRecurringPaymentsCard/);
+assert.match(dashboardSource, /My Balance[\s\S]*?<Suspense[^>]*>\s*<HomeDetails\s*\/>/);
+assert.match(dashboardSource, /async function HomeDetails\(\)[\s\S]*?await Promise\.all\(\[\s*getPlannedPaymentSuggestions/);
 assert.match(dashboardSource, /getDashboardTransactionReviewReasons/);
 assert.match(dashboardSource, /<HomeTransactionReviewLauncher/);
 assert.doesNotMatch(dashboardSource, /href=\{`\/transactions\?review=/);

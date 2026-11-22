@@ -242,8 +242,9 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     ]);
   });
 
+  const statementReminders = getUpcomingStatementReminders(workspaceId);
   const [reminders, accounts, transactions, commitments, recurringPatterns, plannedPaymentSuggestions, categoryRows] = await Promise.all([
-    withRecurringEnrichmentTimeout(getUpcomingStatementReminders(workspaceId), [], "statement reminders"),
+    withRecurringEnrichmentTimeout(statementReminders, [], "statement reminders"),
     prisma.account.findMany({
       where: { workspaceId },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
@@ -364,7 +365,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
           },
         })
       : Promise.resolve([]),
-    withRecurringEnrichmentTimeout(getPlannedPaymentSuggestions(workspaceId), [], "payment suggestions"),
+    withRecurringEnrichmentTimeout(getPlannedPaymentSuggestions(workspaceId, statementReminders), [], "payment suggestions"),
     prisma.category.findMany({
       where: { workspaceId, isArchived: false },
       select: { name: true },

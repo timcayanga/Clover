@@ -850,9 +850,12 @@ const buildRecurringDedupKey = (transaction: RecurringSourceTransaction) =>
     toAmount(transaction.amount).toFixed(2),
   ].join("::");
 
-export const getRecurringSourceTransactions = async (workspaceId: string): Promise<RecurringSourceTransaction[]> => {
-  const hasTransactionTable = await hasCompatibleTable("Transaction");
-  const hasParsedTransactionTable = await hasCompatibleTable("ParsedTransaction");
+export const getRecurringSourceTransactions = async (
+  workspaceId: string,
+  transactionTable = hasCompatibleTable("Transaction"),
+): Promise<RecurringSourceTransaction[]> => {
+  const hasTransactionTable = await transactionTable;
+  const hasParsedTransactionTable = !hasTransactionTable && await hasCompatibleTable("ParsedTransaction");
 
   const [transactions, parsedTransactions] = await Promise.all([
     hasTransactionTable

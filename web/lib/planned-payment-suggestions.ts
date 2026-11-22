@@ -774,22 +774,24 @@ export const combineLikelySameRecurringSuggestions = (
   return [...ungrouped, ...combined];
 };
 
-export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
-  const reminders = await getUpcomingStatementReminders(workspaceId);
-  const hasCommitmentTable = await hasCompatibleTable("FinancialCommitment");
-  const hasTransactionTable = await hasCompatibleTable("Transaction");
-  const hasRecurringPatternTable = await hasCompatibleTable("RecurringPattern");
-  const recurringTransactions = await getRecurringSourceTransactions(workspaceId);
-
-  const [existingCommitments, transactions, dismissedPatterns, confirmedRecurringCommitments] = await Promise.all([
-    hasCommitmentTable
+export const getPlannedPaymentSuggestions = async (
+  workspaceId: string,
+  remindersPromise = getUpcomingStatementReminders(workspaceId),
+) => {
+  const hasTransactionTable = hasCompatibleTable("Transaction");
+  const [reminders, recurringTransactions, existingCommitments, transactions, dismissedPatterns] = await Promise.all([
+    remindersPromise,
+    getRecurringSourceTransactions(workspaceId, hasTransactionTable),
+    hasCompatibleTable("FinancialCommitment").then(exists => exists
       ? prisma.financialCommitment.findMany({
           where: {
             workspaceId,
             status: { not: "resolved" },
           },
           select: {
-            id: true,
+            recurrence: true,
+            dueDate: true,
+            nextDueDate: true,
             title: true,
             counterparty: true,
             accountId: true,
@@ -797,16 +799,8 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
             statementCheckpointId: true,
           },
         })
-      : Promise.resolve(
-          [] as Array<{
-            title: string;
-            counterparty: string | null;
-            accountId: string | null;
-            currency: string | null;
-            statementCheckpointId: string | null;
-          }>
-        ),
-    hasTransactionTable
+      : []),
+    hasTransactionTable.then(exists => exists
       ? prisma.transaction.findMany({
           where: {
             workspaceId,
@@ -841,8 +835,8 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
             },
           },
         })
-      : Promise.resolve([] as PlannedPaymentTransactionLike[]),
-    hasRecurringPatternTable
+      : []),
+    hasCompatibleTable("RecurringPattern").then(exists => exists
       ? prisma.recurringPattern.findMany({
           where: {
             workspaceId,
@@ -859,25 +853,7 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
             rawPayload: true,
           },
         })
-      : Promise.resolve([]),
-    hasCommitmentTable
-      ? prisma.financialCommitment.findMany({
-          where: {
-            workspaceId,
-            status: { not: "resolved" },
-            recurrence: { not: "once" },
-          },
-          select: {
-            title: true,
-            counterparty: true,
-            accountId: true,
-            currency: true,
-            recurrence: true,
-            dueDate: true,
-            nextDueDate: true,
-          },
-        })
-      : Promise.resolve([]),
+      : []),
   ]);
 
   const existingCheckpointIds = new Set(
@@ -934,7 +910,8 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
   );
   const confirmedRecurringMemoryByTitle = new Map<string, ConfirmedRecurringMemory[]>();
   const confirmedRecurringMemoryByFamily = new Map<string, ConfirmedRecurringMemory[]>();
-  for (const commitment of confirmedRecurringCommitments) {
+  for (const commitment of existingCommitments) {
+    if (commitment.recurrence === "once") continue;
     const keys = [normalizeKey(commitment.title), normalizeKey(commitment.counterparty ?? "")].filter(Boolean);
     for (const normalizedKey of keys) {
       const baseLabel = commitment.counterparty ?? commitment.title;
