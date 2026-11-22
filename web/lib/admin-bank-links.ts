@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { customerAnalyticsSqlPredicate } from "./analytics-audience-sql";
+import { getAdminDataEnvironment } from "./admin";
 import { adminRealUserSqlPredicate } from "@/lib/admin-data-scope";
 import { summarizeBankLinks } from "@/lib/admin-bank-link-metrics";
 
@@ -7,6 +9,7 @@ import { summarizeBankLinks } from "@/lib/admin-bank-link-metrics";
 // their links; disconnected connections and deleted accounts do not count.
 export async function loadAdminBankLinks(userIds?: string[]) {
   if (userIds?.length === 0) return { summary: summarizeBankLinks([]), counts: new Map<string, number>() };
+  const userScope = userIds ? adminRealUserSqlPredicate("u") : customerAnalyticsSqlPredicate("u", getAdminDataEnvironment());
   const rows = await prisma.$queryRaw<Array<{ userId: string; bankId: string; bankName: string; count: bigint }>>(Prisma.sql`
     SELECT w."userId", COALESCE(NULLIF(c."institutionId", ''), 'name:' || LOWER(TRIM(COALESCE(NULLIF(c."institutionName", ''), NULLIF(a.institution, ''), 'Unknown bank')))) AS "bankId",
       MIN(COALESCE(NULLIF(c."institutionName", ''), NULLIF(a.institution, ''), 'Unknown bank')) AS "bankName",
@@ -16,7 +19,7 @@ export async function loadAdminBankLinks(userIds?: string[]) {
     JOIN "Account" a ON a.id = l."accountId" AND a."workspaceId" = l."workspaceId"
     JOIN "Workspace" w ON w.id = l."workspaceId" AND w."userId" = c."userId"
     JOIN "User" u ON u.id = w."userId"
-    WHERE c.status <> 'disconnected' AND l."unlinkedAt" IS NULL AND ${adminRealUserSqlPredicate("u")}
+    WHERE c.status <> 'disconnected' AND l."unlinkedAt" IS NULL AND ${userScope}
       ${userIds ? Prisma.sql`AND u.id IN (${Prisma.join(userIds)})` : Prisma.empty}
     GROUP BY w."userId", "bankId"
   `);

@@ -1,3 +1,5 @@
+import { customerAnalyticsUserWhere } from "./analytics-audience";
+import { customerAnalyticsSqlPredicate } from "./analytics-audience-sql";
 import { loadAdminBankLinks } from "@/lib/admin-bank-links";
 import type { AdminBankLinkSummary } from "@/lib/admin-bank-link-metrics";
 import { capturePostHogServerEvent } from "./analytics-server";
@@ -6,7 +8,6 @@ import { BillingSubscriptionStatus, Prisma, type FinancialExperienceLevel, type 
 import { prisma } from "@/lib/prisma";
 import { getAdminDataEnvironment } from "@/lib/admin";
 import {
-  adminRealUserSqlPredicate,
   getAdminRealUserWhere,
   getCurrentDeploymentErrorWhere,
 } from "@/lib/admin-data-scope";
@@ -590,7 +591,9 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
   const sevenDaysAgo = daysAgo(7);
   const fourteenDaysAgo = daysAgo(14);
   const thirtyDaysAgo = daysAgo(30);
-  const realUserWhere = getAdminRealUserWhere();
+  const environment = getAdminDataEnvironment();
+  const realUserWhere = await customerAnalyticsUserWhere(environment);
+  const customerUserSql = customerAnalyticsSqlPredicate("u", environment);
 
   const [
     bankLinks,
@@ -643,7 +646,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
       SELECT COALESCE(SUM(GREATEST(COALESCE(a."balance", 0), 0)), 0) AS total
       FROM "Account" a
       INNER JOIN "Workspace" w ON w."id" = a."workspaceId"
-      INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
+      INNER JOIN "User" u ON u."id" = w."userId" AND ${customerUserSql}
       WHERE a."type" = 'investment'::"AccountType"
     `),
     prisma.importFile.count({
@@ -674,14 +677,14 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         SELECT w."userId", t."workspaceId"
         FROM "Transaction" t
         INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
+        INNER JOIN "User" u ON u."id" = w."userId" AND ${customerUserSql}
         WHERE t."date" >= ${thirtyDaysAgo}
           AND t."deletedAt" IS NULL
         UNION
         SELECT w."userId", i."workspaceId"
         FROM "ImportFile" i
         INNER JOIN "Workspace" w ON w."id" = i."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
+        INNER JOIN "User" u ON u."id" = w."userId" AND ${customerUserSql}
         WHERE i."uploadedAt" >= ${thirtyDaysAgo}
           AND i."status" <> 'deleted'
       ) AS source_user
@@ -692,14 +695,14 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         SELECT w."userId"
         FROM "Transaction" t
         INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
+        INNER JOIN "User" u ON u."id" = w."userId" AND ${customerUserSql}
         WHERE t."createdAt" >= ${sevenDaysAgo}
           AND t."deletedAt" IS NULL
         UNION
         SELECT w."userId"
         FROM "ImportFile" i
         INNER JOIN "Workspace" w ON w."id" = i."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
+        INNER JOIN "User" u ON u."id" = w."userId" AND ${customerUserSql}
         WHERE i."uploadedAt" >= ${sevenDaysAgo}
           AND i."status" <> 'deleted'
       ) AS source_user
@@ -710,7 +713,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         SELECT w."userId"
         FROM "Transaction" t
         INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
+        INNER JOIN "User" u ON u."id" = w."userId" AND ${customerUserSql}
         WHERE t."createdAt" >= ${fourteenDaysAgo}
           AND t."createdAt" < ${sevenDaysAgo}
           AND t."deletedAt" IS NULL
@@ -718,7 +721,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         SELECT w."userId"
         FROM "ImportFile" i
         INNER JOIN "Workspace" w ON w."id" = i."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
+        INNER JOIN "User" u ON u."id" = w."userId" AND ${customerUserSql}
         WHERE i."uploadedAt" >= ${fourteenDaysAgo}
           AND i."uploadedAt" < ${sevenDaysAgo}
           AND i."status" <> 'deleted'

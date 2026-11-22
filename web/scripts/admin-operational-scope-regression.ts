@@ -62,8 +62,8 @@ assert.doesNotMatch(
 
 const usersSource = readSource("lib/admin-users.ts");
 assert.match(usersSource, /const ACTIVE_TRANSACTION_WHERE:[\s\S]*?deletedAt: null,[\s\S]*?\};/);
-assert.match(usersSource, /const realUserWhere = getAdminRealUserWhere\(\)/);
-assert.match(usersSource, /adminRealUserSqlPredicate/);
+assert.match(usersSource, /const realUserWhere = await customerAnalyticsUserWhere\(environment\)/);
+assert.match(usersSource, /customerAnalyticsSqlPredicate/);
 assert.match(usersSource, /getCurrentDeploymentErrorWhere/);
 assert.match(
   usersSource,
