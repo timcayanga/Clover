@@ -28,6 +28,8 @@ export function parseUnlocalizedReceiptText(source: string): ReceiptPreviewResul
     const value = line.slice(label[0].length).trim() || lines[index + 1] || "";
     return /^(?:Rp\.?|IDR|PHP|₱|P)?\s*\d[\d,. ]*[.,]\d{1,2}\s*$/i.test(value);
   })) return null;
+  // Decimal-priced lines are stronger evidence than long serial or receipt numbers.
+  if (lines.some(line => /^\d+\s+items?\(s\)\s+total amount\s+\d[\d,]*\.\d{2}$/i.test(line))) return null;
   const amounts = source.match(/\b(?:\d{1,3}(?:[.,]\d{3})+|\d{4,})\b/g) ?? [];
   if (amounts.length < 2) return null;
   // Match whole numeric remainders, so "Total Item 5" and "Total Qty 16"

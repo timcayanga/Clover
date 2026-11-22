@@ -35,6 +35,14 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
     /^(?:approval|authorization|authorisation)\s+(?:code|no\.?|number)\s*[:#]?\s*[\w-]{3,}\s*$/im.test(text) ||
     hasPositiveAmount(text, "cash tendered|amount tendered|cash received|change given|change");
   const amountPaid = hasPositiveAmount(text, "amount paid|payment received");
+  // A POS invoice may print Total and Total Paid separately. Match both
+  // values and currency tokens exactly before treating it as paid in full.
+  const settled = [...text.matchAll(/^total paid[ \t]*[:：]?[ \t]*((?:[A-Z]{3}|[₱$€£¥])?[ \t]*\d[\d,]*\.\d{2})[ \t]*$/gim)];
+  const billed = [...text.matchAll(/^(?:grand total|total(?: amount)?)[ \t]*[:：]?[ \t]*((?:[A-Z]{3}|[₱$€£¥])?[ \t]*\d[\d,]*\.\d{2})[ \t]*$/gim)];
+  const compact = (value: string) => value.toUpperCase().replace(/[ ,\t]/g, "");
+  if (settled.length && billed.length && /[1-9]/.test(settled[0][1]) &&
+      [...settled, ...billed].every(match => compact(match[1]) === compact(settled[0][1])) &&
+      !hasPositiveAmount(text, "amount due")) return null;
   if (paid || (amountPaid && !hasPositiveAmount(text, "amount due")) || receiptHeading.test(text)) return null;
   return amountPaid ? "unpaid_invoice" : "unverified_invoice";
 }

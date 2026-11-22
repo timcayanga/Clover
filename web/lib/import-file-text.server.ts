@@ -1,5 +1,5 @@
 import { readLocalReceiptOcrText, readReceiptOpticalEvidence, receiptDateDisagreements, recordReceiptDateCheck, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
-import { readReconciledItemTable } from "./receipt-item-table";
+import { hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
 import { measureImportReader, recordImportReaderTiming, recordImportWork, reportImportReaderEvent } from "./import-timing";
@@ -256,7 +256,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v2";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v3";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -918,10 +918,11 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   const verifiedPurchase = async (source: string | null, image: ImagePreview | null) => {
     if (!source || !image) return null;
     const text = readLocalReceiptOcrText(source) ?? source;
-    const table = readReconciledItemTable(text);
-    if (!table || resolvePositiveImportDocumentRoute(source)?.mode !== "receipt" ||
-        hasConflictingReceiptTotalReading(readReceiptOpticalEvidence(source)) ||
-        hasUnreadableReceiptPhotoTotal(source) || parseReceiptText(source).total !== table.total) return null;
+    if (resolvePositiveImportDocumentRoute(source)?.mode !== "receipt" ||
+        hasConflictingReceiptTotalReading(readReceiptOpticalEvidence(source)) || hasUnreadableReceiptPhotoTotal(source)) return null;
+    const parsed = parseReceiptText(source);
+    if (!parsed.total || !hasPrintedItemizedTotal(text, parsed.total)) return null;
+    if ((!parsed.billDate || !parsed.merchantName) && !readReconciledItemTable(text)) return null;
     const rejection = classifyExactPhotoRejection({ ...params, text }, params.classificationContext);
     if (rejection) throw rejection;
     return verifyReceiptDateCrop(source, image);

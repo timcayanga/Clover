@@ -1,4 +1,4 @@
-import { readReconciledItemTable } from "@/lib/receipt-item-table";
+import { hasPrintedItemizedTotal } from "@/lib/receipt-item-table";
 import { assessFinancialUploadScope, getClearLocalPhotoRejection, getUploadRejectionDetails, NonFinancialUploadError } from "@/lib/financial-upload-scope";
 import { validateImportImageDecode } from "@/lib/import-image-validation.server";
 import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
@@ -188,8 +188,8 @@ const tryReceiptBackup = async (params: {
     return params.preview;
   }
   const { total, merchantName, billDate, currency } = params.preview;
-  if (total && merchantName && billDate && currency !== "MIXED" &&
-      readReconciledItemTable(readLocalReceiptOcrText(params.receiptText) ?? params.receiptText)?.total === total) {
+  if (total && merchantName && billDate && (currency !== "MIXED" || !params.preview.currencyMentions.length) &&
+      hasPrintedItemizedTotal(readLocalReceiptOcrText(params.receiptText) ?? params.receiptText, total)) {
     return params.preview;
   }
 

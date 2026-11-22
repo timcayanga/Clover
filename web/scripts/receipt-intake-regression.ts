@@ -94,7 +94,7 @@ for (const footer of [
 const opticalLines: OpticalTextLine[] = [
   { text: "CLOVER CAFE", box: [.05, .04, .50, .08] },
   { text: "Official Receipt", box: [.05, .10, .54, .14] },
-  { text: "09/11/2026", box: [.06, .16, .40, .20] },
+  { text: "2026-09-11", box: [.06, .16, .40, .20] },
   { text: "Total", box: [.05, .30, .24, .34] },
   { text: "Take our survey", box: [.05, .45, .60, .50] },
   { text: "Total USD 999.00", box: [.05, .53, .65, .57] },

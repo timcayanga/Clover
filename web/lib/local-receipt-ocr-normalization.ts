@@ -1,3 +1,4 @@
+import { readChargedReceiptTable } from "./receipt-item-table";
 /** Review-only repairs for optical spacing and narrowly bounded label damage.
  * Raw OCR lines and the original image remain in the extraction audit trail.
  * Never repair a digit, infer a currency, or replace a recognized total.
@@ -9,6 +10,7 @@ export function normalizeLocalReceiptOcrText(source: string) {
     .replace(/(\d)([.,])[ \t]+(?=\d{2,3}(?:\D|$))/g, "$1$2")
     .replace(/^(\s*\d[\d,]*[.,])\r?\n[ \t]*(\d{2})[ \t]*$/gm, "$1$2")
     .replace(/^([ \t]*(?:sub[ \t]*total|grand[ \t]+total|total|amount[ \t]+due|vat[ \t]+amount|tax|service[ \t]+charge|discount|tip)[ \t]*[:：]?)[ \t]*\r?\n[ \t]*(\d[\d.,]*)[ \t]*$/gim, "$1 $2");
+  const charged = /^(?:bill\s+ama|amo)\s+\d/im.test(spaced) ? readChargedReceiptTable(spaced) : null;
   const lines = spaced.split(/\r?\n/);
   const strictKoreanTotal =
     /^(?:총결제금액|실결제금액|결제금액|결제액|합계|총합계(?!액))\s*[:：]?\s*\d/m.test(
@@ -16,6 +18,9 @@ export function normalizeLocalReceiptOcrText(source: string) {
     );
   return lines
     .map((line) => {
+      if (charged && /^(?:bill\s+ama|amo)\s+\d[\d,=. ]*\d$/i.test(line.trim())) return "Bill Amount " + charged.total;
+      const due = line.match(/^\s*anount due\s*[:：]?\s*((?:[₱$€£]|P(?=\d)|[A-Z]{3}\s+)?\d[\d,]*\.\d{2})\s*$/i);
+      if (due) return "Amount Due " + due[1];
       // Common l/I/1/r confusion on the final letter. A whole final-total label
       // and a complete integer token are required; never match item descriptions.
       const final = line.match(

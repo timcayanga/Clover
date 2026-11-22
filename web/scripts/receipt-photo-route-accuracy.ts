@@ -16,6 +16,7 @@ type Label = {
 } & Record<typeof core[number], Fact>;
 type Prediction = {
   id: string; route: string; outcome: "extracted" | "review" | "rejected" | "failed" | "unavailable";
+  elapsedMs?: number;
   core?: Field<typeof core[number]>;
   reviewReasons?: Array<"optical_preview_policy" | "missing_merchant" | "missing_date" | "missing_total" | "currency_conflict" | "parser_review">;
   items?: Field<typeof itemFields[number]>[];
@@ -150,7 +151,9 @@ function score(labels: Label[], predictions: Prediction[]) {
       }
     }
     const attempted = labels.length - outcomes.unavailable;
+    const durations = [...results.values()].flatMap(p => p.elapsedMs === undefined ? [] : [p.elapsedMs]).sort((a,b) => a-b);
     return {
+      ...(durations.length ? { timingMs: { samples: durations.length, median: durations[Math.ceil(durations.length / 2) - 1], max: durations.at(-1) } } : {}),
       ...(caseSummary.length ? { caseSummary } : {}),
       route, photos: labels.length, attempted, outcomes, reviewReasons, fields, allCore, automaticCoreExact, allObservableCore, itemExactness,
       items: { ...items, completeness: items.labeled ? items.matchedDescriptions / items.labeled : null },
@@ -251,6 +254,7 @@ async function main() {
       }
       for (const [route, extract] of Object.entries(routes)) {
         try {
+          const started = performance.now();
           const text = await extract();
           if (!text?.trim()) {
             results.push({ id: source.id, route, outcome: route === "server_local_ppocr" ? "unavailable" : "failed" });
@@ -265,7 +269,7 @@ async function main() {
           if (!parsed.total) reviewReasons.push("missing_total");
           if (parsed.currency === "MIXED") reviewReasons.push("currency_conflict");
           results.push({
-            id: source.id, route, reviewReasons,
+            id: source.id, route, reviewReasons, elapsedMs: Math.round(performance.now() - started),
             outcome: reviewReasons.length ? "review" : "extracted",
             core: { merchant: parsed.merchantName, date: parsed.billDate?.slice(0, 10) ?? null, total: parsed.total, currency: parsed.currency === "MIXED" ? null : parsed.currency },
             items: parsed.items.map(item => ({ description: item.description, quantity: item.quantity == null ? null : String(item.quantity), unitPrice: item.unitPrice ?? null, lineAmount: item.amount })),

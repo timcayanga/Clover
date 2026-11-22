@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { readReconciledItemTable } from "../lib/receipt-item-table";
-import { parseReceiptText } from "../lib/split-bill";
+import { readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
+import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
 import { qualifyDeviceReceiptReading } from "../lib/device-receipt-reading";
@@ -59,3 +59,26 @@ assert.equal(unrelated.billDate?.slice(0, 10), "2026-11-19");
 assert.equal(unrelated.merchantName, "PINE CAFE");
 assert.equal(unrelated.receiptAccountMatch?.accountName ?? null, null);
 assert.equal(readReconciledItemTable(text.replace("1 Mocktail", "2 Mocktail"))?.items[0].quantity, 2);
+
+const register = "Coffee\n2 @ 4.00 8.00\nTea\n1 @ 3.00 3.00\nSub Total 11.00";
+assert.deepEqual(readSubtotalItems(register)?.map(item => [item.description, item.quantity, item.amount]),
+  [["Coffee", 2, "8.00"], ["Tea", 1, "3.00"]]);
+assert.equal(readSubtotalItems(register.replace("2 @", "3 @")), null);
+assert.equal(readSubtotalItems(register.replace("11.00", "12.00")), null);
+const charged = "Coffee 8.00\nTea 3.00\nService Charge: 1.10\nAmo 12=10";
+assert.equal(readChargedReceiptTable(charged)?.total, "12.10");
+assert.equal(readChargedReceiptTable(charged.replace("12=10", "12=30")), null);
+assert.equal(readChargedReceiptTable(charged + "\nGrand Total 15.00"), null);
+const ambiguousDate = encodeLocalReceiptOcr({text: "Green Cafe\nOfficial Receipt\n03/04/2026\nTotal PHP 25.00"});
+assert.equal(parseReceiptPhotoText(ambiguousDate).billDate, null);
+assert.equal(parseReceiptPhotoText(ambiguousDate.replace("03/04", "03/24")).billDate?.slice(0,10), "2026-03-24");
+console.log("PASS paired item prices, reconciled charges, conflicting subtotals and ambiguous dates");
+
+const counted = "Cold Brew 2 12.00\nTea 1 5.00\nTotal Qty 3\nGross Amount 17.00\nService Charge 1.70\nBill Amount 18.70";
+assert.deepEqual(readChargedReceiptTable(counted)?.items[0], { description: "Cold Brew", quantity: 2, amount: "12.00" });
+assert.equal(readChargedReceiptTable(counted.replace("Total Qty 3", "Total Qty 4"))?.items[0].description, "Cold Brew 2");
+assert.equal(readChargedReceiptTable(counted.replace("Gross Amount 17.00", "Gross Amount 16.00")), null);
+const foreign = encodeLocalReceiptOcr({text: "GREEN CAFE\n2026-11-19\nCoffee 10.00\nService Charge 1.00\nTotal USD 11.00"});
+assert.equal(parseReceiptPhotoText(foreign).currency, "USD");
+assert.equal(parseReceiptPhotoText(foreign.replace("USD ", "")).currency, "MIXED");
+assert.equal(parseReceiptPhotoText(foreign.replace("USD ", "")).total, "11.00");

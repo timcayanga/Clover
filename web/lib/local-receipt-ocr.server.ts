@@ -48,7 +48,7 @@ export async function readLocalReceiptImage(
     const current = worker;
     return await new Promise<string | null>((resolve) => {
       let settled = false;
-      const finish = (text: string | null) => {
+      const finish = (text: string | null, runtimeFailed = true) => {
         if (settled) return;
         settled = true;
         console.info("[receipt-local-ocr]", {
@@ -60,7 +60,7 @@ export async function readLocalReceiptImage(
         current.removeListener("message", onMessage);
         current.removeListener("error", onError);
         current.removeListener("exit", onExit);
-        if (!text) {
+        if (runtimeFailed) {
           // Do not loop on unavailable models or a broken native runtime.
           cooldownUntil = Date.now() + 60000;
           void shutdownLocalReceiptOcr();
@@ -77,6 +77,7 @@ export async function readLocalReceiptImage(
           message.ok && message.result?.text.trim()
             ? encodeLocalReceiptOcr(message.result)
             : null,
+          !message.ok,
         );
       };
       const onError = () => finish(null);

@@ -160,7 +160,7 @@ export function SplitBillEntry({
       const v = p.preview as ReceiptPreviewResult;
       setTitle(v.merchantName || "Receipt");
       setAmount(String(v.total ?? ""));
-      if (v.currency) setCurrency(v.currency);
+      if (v.currency && /^[A-Z]{3}$/.test(v.currency)) setCurrency(v.currency);
       setDate(v.billDate?.slice(0, 10) || "");
       setReceipt({
         sourceType: "receipt",

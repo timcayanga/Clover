@@ -51,3 +51,44 @@ Photos follow the frozen diagnostic manifest order. The last two columns compare
 | 9 | currency supplied without an observable label | 5/5 | 0 |
 | 10 | merchant supplied without an observable label, currency supplied without an observable label, total mismatch | 4/5 | 1 |
 | 11 | date missing, currency missing, total mismatch | 0/8 | 3 |
+
+## Follow-up on the same 11 original photos
+
+The shared server reader was replayed on the same byte-verified originals and frozen labels before and after the second set of changes. Timing covers local extraction on this Mac. It excludes network upload, cloud processing and time to display the bill on a phone. These photos were used to diagnose the errors and therefore do not provide an independent estimate of accuracy on new receipts.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Printed total | 7/11 | 11/11 |
+| Merchant | 3/8 | 7/8 |
+| Purchase date | 5/8 | 7/8 |
+| Currency | 1/2 | 1/2 |
+| Item description | 23/67 | 47/67 |
+| Quantity | 12/67 | 27/67 |
+| Unit price | 1/15 | 13/15 |
+| Line amount on a matched item | 23/67 | 47/67 |
+| Unmatched output descriptions | 40 | 14 |
+| Photos with every labeled item field exact | 1/11 | 3/11 |
+| Median reader time | 6.56 s | 4.40 s |
+| Slowest reader time | 17.38 s | 10.16 s |
+
+Steeply tilted photos could pair a drink with the price on the next row. The OCR reader now estimates steeper slopes when multiple text regions independently support the angle. The parser can match a printed quantity and price on a separate line to the item above it, check a printed quantity column against the total count, and check purchase rows against a subtotal. It recovers a damaged payable amount only when the visible digits agree with the independently reconciled items and service charge. Explicitly conflicting totals still require review. A paid sales invoice with matching total and payment can be recognized while an outstanding balance continues to block that rule.
+
+Unnecessary second full-image reads also delayed previews. A verified item table and matching printed payable total now allow the reader to return earlier. Blank captures previously triggered the OCR worker's failure cooldown, delaying the next readable upload. A successful scan containing no text now leaves the worker available. Generic service and VAT labels no longer supply a peso currency by themselves. Receipt editors preserve a verified amount when only the currency needs attention.
+
+| Photo | Exact descriptions | Unmatched outputs | Remaining discrepancy or review outcome |
+| --- | ---: | ---: | --- |
+| 1 | 7/7 | 0 | Observable core fields and names matched. |
+| 2 | 3/3 | 0 | Tilted rows recovered. A merchant was suggested where the independent label could not establish one. |
+| 3 | 9/9 | 0 | Merchant punctuation still differs. |
+| 4 | 2/2 | 0 | Observable core fields and names matched. |
+| 5 | 10/11 | 1 | One description still differs from the label. |
+| 6 | 4/9 | 5 | The quantity column is better separated, but five names differ and the reader suggested a date without an observable label. |
+| 7 | 1/2 | 1 | One wrapped description still differs. |
+| 8 | 1/6 | 5 | Five descriptions differ, up from four before. Arithmetic reconciliation established the prices but did not establish the spelling. |
+| 9 | 5/5 | 0 | All names matched. No unsupported currency was supplied. |
+| 10 | 5/5 | 0 | Total and names now match. |
+| 11 | 0/8 | 2 | The total was recovered. Date and currency are missing and none of the eight descriptions matched. |
+
+All 11 results went to review. The next accuracy work should compare the affected item crops with an independent reading, particularly on photos 6, 8 and 11, then check new photos before extending automatic acceptance. Physical capture-to-visible-bill latency remains unmeasured in this replay.
+
+The supplied Spirits Library JPEG also passed through the local Split Bills HTTP preview immediately after a blank capture. The handler returned the three labeled drinks, November 19, 2026, the 120.54 service charge and the 1,470.54 total in 3.52 seconds with offline adapters.

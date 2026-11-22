@@ -1,4 +1,4 @@
-import { readReconciledItemTable } from "./receipt-item-table";
+import { readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { readReceiptOpticalLayout } from "./local-receipt-ocr-envelope";
 import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { hasLocalizedReceiptEvidence, hasLocalizedUnpaidStatus } from "./localized-receipt-cues";
@@ -29,7 +29,7 @@ export function hasReceiptPhotoEvidence(text: string) {
   const retailSettlement = /\bsub\s*total\b/iu.test(source) && /\bamount\s+to\s+pay\b/iu.test(source) &&
     /\b(?:VAT|TIN|GCash|cashier)\b/iu.test(source);
   return !statementTable && settlement && /\d/.test(source) &&
-    (receiptHeader || printedPaidTotal || itemizedBill || cardTerminalSlip || retailSettlement || Boolean(readReconciledItemTable(source)));
+    (receiptHeader || printedPaidTotal || itemizedBill || cardTerminalSlip || retailSettlement || Boolean(readReconciledItemTable(source) || readChargedReceiptTable(source) || (readSubtotalItems(source) && /^total due\s*[:：]?\s*\d[\d,]*\.\d{2}\s*$/im.test(source))));
 }
 
 export function shouldRecoverEmptyStatementImageAsReceipt(params: {

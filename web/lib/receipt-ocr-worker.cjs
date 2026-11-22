@@ -372,9 +372,11 @@ function rows(lines) {
   const slopes = lines
     .filter((l) => distance(l.box[0], l.box[1]) > 60)
     .map((l) => (l.box[1][1] - l.box[0][1]) / (l.box[1][0] - l.box[0][0]))
-    .filter((s) => Math.abs(s) < 0.3)
+    .filter((s) => Math.abs(s) < 1)
     .sort((a, b) => a - b);
-  const slope = slopes[Math.floor(slopes.length / 2)] || 0;
+  const median = slopes[Math.floor(slopes.length / 2)] || 0;
+  const supporting = slopes.filter(s => Math.abs(s - median) < 0.1).length;
+  const slope = Math.abs(median) < 0.3 || supporting >= Math.max(3, slopes.length / 2) ? median : 0;
   const entries = lines
     .map((l) => ({
       ...l,

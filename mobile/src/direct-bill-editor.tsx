@@ -280,11 +280,11 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
       const service = Math.round(Number(p.serviceCharge)*100);
       if (service > 0 && sum + service === Math.round(Number(p.total)*100)) items.push({description:"Service Charge",amount:(service/100).toFixed(2)});
       const reconciled = items.reduce((n, item) => n + Math.round(Number(item.amount) * 100), 0) === Math.round(Number(p.total) * 100);
-      const ambiguousCurrency = Boolean(p.currencyWarning || p.currency === "MIXED");
-      setReviewedItems(reconciled && !ambiguousCurrency ? items : []);
+      const conflictingCurrencies = /mixed currencies|multiple currencies/i.test(p.currencyWarning ?? "");
+      setReviewedItems(reconciled && !conflictingCurrencies ? items : []);
 
       setTitle(p.merchantName || "Receipt");
-      setTotal(ambiguousCurrency ? "" : p.total ?? "");
+      setTotal(conflictingCurrencies ? "" : p.total ?? "");
       if (/^[A-Z]{3}$/.test(p.currency)) setCurrency(p.currency);
       if (p.billDate) setDate(p.billDate.slice(0,10));
       scopedSave.current = (!context?.group && !context?.person && !circleId) ||

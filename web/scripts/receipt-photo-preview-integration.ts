@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { withMobileRequestContext } from "../lib/mobile-request-context";
 import { shutdownImportOcrWorkers } from "../lib/import-file-text.server";
-import { shutdownLocalReceiptOcr } from "../lib/local-receipt-ocr.server";
+import { readLocalReceiptImage, shutdownLocalReceiptOcr } from "../lib/local-receipt-ocr.server";
 
 const require = createRequire(import.meta.url);
 
@@ -36,6 +36,8 @@ async function verify() {
   const request = new Request("https://clover.ph/api/split-bill-receipts/preview", {
     method: "POST", headers: { origin: "https://clover.ph" }, body: data,
   });
+  // A completed scan with no text must leave the worker available for the next upload.
+  assert.equal(await readLocalReceiptImage({ data: Buffer.alloc(320 * 240 * 3, 255), width: 320, height: 240 }), null);
   const start = performance.now();
   const response = await withMobileRequestContext("qa", request, () => POST(request));
   const result = await response.json();

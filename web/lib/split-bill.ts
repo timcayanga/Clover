@@ -1,4 +1,5 @@
-import { readReconciledItemTable } from "./receipt-item-table";
+import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
+import { readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
@@ -558,6 +559,7 @@ const parseBillDateFromText = (text: string) => {
   const datePatterns = [
     /\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/,
     /\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b/,
+    /\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/,
     /\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})\b/,
     /\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{2,4})\b/,
   ];
@@ -2564,10 +2566,18 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
     requiresReview: settled.requiresReview || Boolean(tenderDifference),
     paymentMethod: hasSplitReceiptTender(tenders) ? "Mixed" : settled.paymentMethod,
   } : settled;
-  const table = readReconciledItemTable(opticalText ?? receiptText);
+  const table = readReconciledItemTable(opticalText ?? receiptText) ?? (opticalText ? readChargedReceiptTable(opticalText) : null);
   if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
     return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || opticalText !== null,
       confidence:opticalText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};
+  }
+  if (opticalText !== null && !payment && !footer && ["generic_receipt", "restaurant_receipt", "tax_invoice", "official_receipt"].includes(paymentDetails.receiptType)) {
+    const items = readSubtotalItems(opticalText);
+    if (items) {
+      const subtotalCents = items.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
+      return { ...paymentDetails, items, subtotal: (subtotalCents / 100).toFixed(2), receiptText,
+        requiresReview: true, confidence: Math.min(45, paymentDetails.confidence) };
+    }
   }
   return opticalText === null ? paymentDetails : { ...paymentDetails, receiptText, requiresReview: true, confidence: Math.min(45, paymentDetails.confidence) };
 };
@@ -2575,7 +2585,10 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
 /** A photo with a clipped settlement line is still a receipt. Keep its
  * visible fields while leaving the amount for a second read or review. */
 export function hasUnreadableReceiptPhotoTotal(source: string) {
-  const { body } = splitReceiptPromotionalFooter(joinReceiptSettlementLines(readReceiptOpticalLayout(source)));
+  const optical = readLocalReceiptOcrText(source);
+  const layout = readReceiptOpticalLayout(source);
+  const text = optical === null ? layout : normalizeLocalReceiptOcrText(layout);
+  const { body } = splitReceiptPromotionalFooter(joinReceiptSettlementLines(text));
   const lines = body.normalize("NFKC").split(/\r?\n/);
   const label = /^\s*(?:grand total|bill total|total(?: amount| paid| due)?|amount (?:paid|due|to pay)|sale amount)\b[ :：-]*/i;
   const stripCurrency = (value: string) => value.trim().replace(/^(?:[A-Z]{3}\b|P(?=\s*\d)|[₱$€£¥])\s*/iu, "");
@@ -2595,7 +2608,43 @@ export function hasUnreadableReceiptPhotoTotal(source: string) {
 }
 
 export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
-  const parsed = parseReceiptText(source);
+  let parsed = parseReceiptText(source);
+  const optical = readLocalReceiptOcrText(source);
+  if (optical && parsed.receiptType !== "wallet_transfer" && parsed.receiptType !== "travel_ticket") {
+    // VAT and service charges occur worldwide. A profile may suggest a
+    // currency later, but a photo preview should distinguish printed evidence.
+    const currencySource = /\d\s*@\s*\d/.test(optical)
+      ? optical.replace(/^(\d+(?:\.0+)?)\s+€(?=\d+[.,]\d{2}\s+\d+[.,]\d{2})/gm, "$1 @")
+      : optical;
+    const printed = readPrintedReceiptCurrency(normalizeLocalReceiptOcrText(currencySource));
+    if (printed?.kind === "printed") {
+      parsed = { ...parsed, currency: printed.currency, currencyMentions: [printed.currency], currencyWarning: null };
+    } else if (printed?.kind === "conflict" || (parsed.currency === "PHP" && !printed)) {
+      parsed = { ...parsed, currency: "MIXED", currencyMentions: printed?.currencies ?? [],
+        currencyWarning: printed ? "Mixed currencies detected: " + printed.currencies.join(", ")
+          : "Confirm the currency against the receipt.", requiresReview: true };
+    }
+  }
+  if (optical && parsed.merchantName && parsed.receiptType !== "wallet_transfer" && parsed.receiptType !== "travel_ticket") {
+    const name = parsed.merchantName.toLowerCase();
+    const lines = optical.toLowerCase().split(/\r?\n/);
+    const index = lines.findIndex(line => line.includes(name));
+    const paymentProvider = /\bpayment\s+ne[tl]work\b/i.test(name);
+    const afterPayment = index >= 0 && lines.slice(0, index).some(line => /^(?:grand total|amount due|total paid|vat sales)\b/.test(line.trim()));
+    if (paymentProvider || afterPayment || /^(?:qty|ite[mn]) description\b/i.test(name)) {
+      parsed = { ...parsed, merchantName: null, requiresReview: true };
+    }
+  }
+  if (optical && parsed.billDate) {
+    const slashDates = [...optical.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\b/g)];
+    const ambiguous = slashDates.length && slashDates.every(([, a, b]) =>
+      Number(a) !== Number(b) && Number(a) >= 1 && Number(a) <= 12 && Number(b) >= 1 && Number(b) <= 12);
+    const dateBlocks = readReceiptOpticalEvidence(source).filter(line => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(line.text));
+    const unreadableDigit = slashDates.length === 1 && dateBlocks.length === 1 && (dateBlocks[0].minimumCharacterConfidence ?? 1) < 0.5;
+    if ((unreadableDigit || ambiguous) && !/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*)\b/i.test(optical)) {
+      parsed = { ...parsed, billDate: null, requiresReview: true };
+    }
+  }
   if (!hasUnreadableReceiptPhotoTotal(source) && !hasConflictingReceiptTotalReading(readReceiptOpticalEvidence(source))) return parsed;
   return { ...parsed, total: null, requiresReview: true, confidence: Math.min(45, parsed.confidence) };
 }
@@ -2635,9 +2684,16 @@ const parseReceiptTextCore = (
     !/^(?:don['’]t live life without it\b|transaction type\s*:|table\s*:)/i.test(line) &&
     !isReceiptAdministrativeLine(line) && !/^\d{1,4}[-/]\d{1,2}[-/]\d{2,4}\b/.test(line));
   const rankedMerchant = sanitizeReceiptMerchantName(detectReceiptMerchantNameFromLines(merchantHeader) ?? "");
+  const rawHeader = normalized.split(/\r?\n/).map(line => line.trim());
+  const invoiceIndex = rawHeader.findIndex(line => /^(?:sales invoice|official receipt)$/i.test(line));
+  const preceding = invoiceIndex > 0 ? rawHeader[invoiceIndex - 1] : "";
+  const eligibleIssuer = (line: string) => /^[\p{L}][\p{L} .’'&-]{2,60}$/u.test(line) &&
+    !isNoiseLine(line) && !isReceiptAdministrativeLine(line) && !/\s{3,}/.test(line);
+  const issuer = rawHeader.slice(0, 4).find(line => eligibleIssuer(line) && /\b(?:Inc|Ltd|Corp)\.?$/i.test(line)) ??
+    (eligibleIssuer(preceding) ? preceding : null);
   const detectedMerchantName = merchantEvidence.ambiguous ? null
     : merchantEvidence.explicit ?? (merchantEvidence.hasRoles ? rankedMerchant ?? merchantEvidence.issuer
-      : rankedMerchant ??
+      : issuer ?? rankedMerchant ??
         merchantHeader.find(line => line.length > 2 && !isSummaryLine(line) && !isNoiseLine(line) && parseAmountFromLine(line) === null) ?? null);
 
   const subtotalLine = [...lines].reverse().find((line) =>
