@@ -64,6 +64,7 @@ const EXPERIENCE_OPTIONS: ExperienceOption[] = [
 ];
 
 type OnboardingFormProps = {
+  initialTermsAccepted?: boolean;
   workspaceId: string;
   billingCustomerId: string;
   workspaceAccounts: Array<{
@@ -104,6 +105,7 @@ export function OnboardingForm({
   pricingMarket = "global",
   completionUrl = "/dashboard",
   regionalDefaults,
+  initialTermsAccepted = false,
   initialPlanTier = 'free', customerEmail = '', paddleClientToken = null, paddleEnvironment = 'sandbox',
 }: OnboardingFormProps) {
   const router = useRouter();
@@ -135,14 +137,7 @@ export function OnboardingForm({
   const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>(regionalDefaults);
   const [currencyError, setCurrencyError] = useState<string | null>(null);
   const [accepted,setAccepted] = useState(false);
-  const [termsSaved,setTermsSaved] = useState(false);
-  useEffect(() => {
-    let active = true;
-    fetch("/api/settings/ai-consent",{cache:"no-store"}).then(async response => {
-      if (response.ok && (await response.json()).termsAccepted && active) setTermsSaved(true);
-    }).catch(() => {});
-    return () => {active = false;};
-  }, [draftKey]);
+  const [termsSaved, setTermsSaved] = useState(initialTermsAccepted);
   const [isSavingCurrency, setIsSavingCurrency] = useState(false);
 
   const getBrowserRegionalDefaults = () =>

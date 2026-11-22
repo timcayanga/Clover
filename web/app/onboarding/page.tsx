@@ -1,3 +1,4 @@
+import { hasAcceptedOnboardingTerms } from "@/lib/ai-consent";
 import { SignupTrialSummary } from "@/components/signup-trial-summary";
 import { getProAccess } from "@/lib/pro-access";
 import { redirect } from "next/navigation";
@@ -91,6 +92,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
         <SignupTrialSummary trial={trialAccess.trial} />
         <OnboardingForm
           key={user.id}
+          initialTermsAccepted={hasAcceptedOnboardingTerms(user.appPreferences)}
           initialPlanTier={trialAccess.planTier}
           customerEmail={user.email}
           paddleClientToken={env.PADDLE_CLIENT_TOKEN ?? null}

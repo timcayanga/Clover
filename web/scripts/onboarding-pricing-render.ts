@@ -8,7 +8,8 @@ require.extensions['.css']=(module:any)=>{module.exports=new Proxy({},{get:(_tar
 const {OnboardingForm}=require('../components/onboarding-form');
 import {normalizeRegionalPreferences} from '@/lib/regional-preferences';
 for(const interval of ['monthly','annual'] as const){
- const render=(initialPlanTier:'free'|'pro'|'premium')=>renderToStaticMarkup(React.createElement(AppRouterContext.Provider,{value:{} as any},React.createElement(OnboardingForm,{workspaceId:'qa',billingCustomerId:'qa',workspaceAccounts:[],initialPlanTier,upgradeInterval:interval,regionalDefaults:normalizeRegionalPreferences({})})));
+ const render=(initialPlanTier:'free'|'pro'|'premium', initialTermsAccepted = true)=>renderToStaticMarkup(React.createElement(AppRouterContext.Provider,{value:{} as any},React.createElement(OnboardingForm,{initialTermsAccepted,workspaceId:'qa',billingCustomerId:'qa',workspaceAccounts:[],initialPlanTier,upgradeInterval:interval,regionalDefaults:normalizeRegionalPreferences({})})));
+ assert.match(render('free', false), /I accept the/);
  const html=render('free');assert.match(html,/Choose Plus or Pro/);assert.match(html,/2 linked bank accounts/);assert.match(html,/5 linked bank accounts/);assert.match(html,/Continue with Free/);assert.match(html,/Loading price/);assert.doesNotMatch(html,/free trial|USD 2\.99|USD 29\.99/i);
  assert.match(html,new RegExp('aria-pressed="true"[^>]*>'+ (interval==='monthly'?'Monthly':'Annually')));
  for(const tier of ['pro','premium'] as const){const paid=render(tier);assert.match(paid,/How comfortable are you/);assert.doesNotMatch(paid,/Continue with Free/);}

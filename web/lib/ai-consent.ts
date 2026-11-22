@@ -3,11 +3,13 @@ import { AI_CONSENT_VERSION, ONBOARDING_TERMS_VERSION, hasCurrentAiConsent, type
 import { z } from "zod";
 export const aiConsentDecision = z.object({ allow: z.boolean(), version: z.literal(AI_CONSENT_VERSION), termsVersion:z.literal(ONBOARDING_TERMS_VERSION).optional() }).strict();
 function object(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+export function hasAcceptedOnboardingTerms(preferences: unknown) {
+  return object(object(preferences).acceptedTerms).version === ONBOARDING_TERMS_VERSION;
+}
 export async function getAiConsent(userId: string) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { appPreferences: true, clerkUserId: true } });
   const consent = object(user.appPreferences).aiConsent;
-  const acceptedTerms = object(object(user.appPreferences).acceptedTerms);
-  return { termsAccepted:acceptedTerms.version === ONBOARDING_TERMS_VERSION, allowed: user.clerkUserId !== "staging-guest" && hasCurrentAiConsent(consent), version: AI_CONSENT_VERSION };
+  return { termsAccepted:hasAcceptedOnboardingTerms(user.appPreferences), allowed: user.clerkUserId !== "staging-guest" && hasCurrentAiConsent(consent), version: AI_CONSENT_VERSION };
 }
 export async function setAiConsent(userId: string, input: unknown) {
   const { allow, termsVersion } = aiConsentDecision.parse(input);
