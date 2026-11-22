@@ -81,3 +81,6 @@ assert.equal(hasUnreadableReceiptPhotoTotal(columnReceipt),false,"Independently 
 assert.equal(parseReceiptPhotoText(columnReceipt).total,"250.00","The photo route must preserve the same verified total");
 assert.equal(hasUnreadableReceiptPhotoTotal(columnReceipt.replace("750.00","749.00")),true,"Conflicting columns stay unreadable");
 assert.equal(parseReceiptPhotoText("SAMPLE STORE\n2026-10-23\nSUBTOTAL P340.00\nTOTAL P374.").total,null,"Clipped peso-prefixed cents remain unresolved");
+
+assert.equal(hasUnreadableReceiptPhotoTotal("Cafe\nOfficial Receipt\nTea 12.50\nTotal 12.5 USD"), true);
+assert.equal(hasUnreadableReceiptPhotoTotal("Cafe\nOfficial Receipt\nTea 12.50\nTotal 12.50 USD"), false);

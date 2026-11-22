@@ -9,7 +9,7 @@ export function delimitedPreview(source: string) {
     throw new Error(
       "This table is too large for local preview. Queue the original for online parsing.",
     );
-  const directive = /^sep=([,;|\t])\r?\n/i.exec(text);
+  const directive = /^sep=([,;|\t])(?:\r\n|[\r\n])/i.exec(text);
   if (directive) text = text.slice(directive[0].length);
   const delimiters = [",", "\t", ";", "|"];
   const hasTransactionHeader = (cells: string[]) => {
@@ -18,18 +18,43 @@ export function delimitedPreview(source: string) {
       names.some(name => ["amount", "debit", "credit"].includes(name)) &&
       names.some(name => ["description", "merchant", "payee", "name"].includes(name));
   };
-  const headerLines = text.split(/\r?\n/, 12);
+  const headerLines = text.split(/\r\n|[\r\n]/, 12);
   const firstLine = headerLines[0] ?? "";
   const delimiter = directive?.[1] ?? delimiters.find(candidate =>
     headerLines.some(line => hasTransactionHeader(line.split(candidate)))) ??
     delimiters.sort((a, b) => firstLine.split(b).length - firstLine.split(a).length)[0];
-  const rows: string[][] = [];
+  let header: string[] | undefined;
+  let recordCount = 0;
+  let dataCount = 0;
+  let lineNumber = directive ? 2 : 1;
+  let recordStart = lineNumber;
+  const previewRows: string[] = [];
+  function finishRecord(cells: string[]) {
+    if (!cells.some(Boolean)) return;
+    recordCount++;
+    if (!header) {
+      if (recordCount <= 12 && hasTransactionHeader(cells)) {
+        if (new Set(cells.map(h => h.trim().toLowerCase())).size !== cells.length)
+          throw new Error("This table needs online review because its columns are inconsistent.");
+        header = cells;
+      }
+      return;
+    }
+    if (cells.length !== header.length)
+      throw new Error("This table needs online review because its columns are inconsistent.");
+    dataCount++;
+    if (previewRows.length < 20) {
+      const names = header;
+      previewRows.push(`Source row ${recordStart}\n` + cells.map((value, j) => `${names[j]}: ${value}`).join("\n"));
+    }
+  }
   let row: string[] = [],
     cell = "",
     quoted = false,
     closed = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
+    if (c === "\r" || (c === "\n" && text[i - 1] !== "\r")) lineNumber++;
     if (quoted) {
       if (c === '"' && text[i + 1] === '"') {
         cell += '"';
@@ -51,7 +76,8 @@ export function delimitedPreview(source: string) {
     } else if (c === "\n" || c === "\r") {
       if (c === "\r" && text[i + 1] === "\n") i++;
       row.push(cell);
-      if (row.some(Boolean)) rows.push(row);
+      finishRecord(row);
+      recordStart = lineNumber;
       row = [];
       cell = "";
       closed = false;
@@ -66,30 +92,9 @@ export function delimitedPreview(source: string) {
       "The table has an unfinished quoted field. Use online parsing.",
     );
   row.push(cell);
-  if (row.some(Boolean)) rows.push(row);
-  const headerIndex = rows.slice(0, 12).findIndex(hasTransactionHeader);
-  if (headerIndex < 0)
-    throw new Error(
-      "No unambiguous transaction table found. Queue the original for full parsing.",
-    );
-  const header = rows[headerIndex],
-    data = rows.slice(headerIndex + 1);
-  if (
-    new Set(header.map((h) => h.trim().toLowerCase())).size !== header.length ||
-    data.some((r) => r.length !== header.length)
-  )
-    throw new Error(
-      "This table needs online review because its columns are inconsistent.",
-    );
-  return (
-    `Local table preview · Needs review\nShowing ${Math.min(data.length, 20)} of ${data.length} source rows. Dates, signs, direction and currency are shown exactly as supplied; no transactions are confirmed.\n\n` +
-    data
-      .slice(0, 20)
-      .map(
-        (r, i) =>
-          `Source row ${headerIndex + i + 2}\n` +
-          r.map((value, j) => `${header[j]}: ${value}`).join("\n"),
-      )
-      .join("\n\n")
-  );
+  finishRecord(row);
+  if (!header)
+    throw new Error("No unambiguous transaction table found. Queue the original for full parsing.");
+  return `Local table preview · Needs review\nShowing ${previewRows.length} of ${dataCount} source rows. Dates, signs, direction and currency are shown exactly as supplied; no transactions are confirmed.\n\n` +
+    previewRows.join("\n\n");
 }

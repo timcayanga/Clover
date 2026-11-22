@@ -10,6 +10,7 @@ import { selectRecentProfile } from "./profile-selection";
 
 import { updateNativePlanAnalytics } from "./analytics";
 import { uploadInParts } from "./offline/resumable-upload";
+import { isUploadPhoto } from "../../shared/native-upload";
 import { prepareSelectedPhoto, readDeviceText } from "./offline/device-text";
 import { FileQueue, type QueuedFile } from "./offline/file-queue";
 import {
@@ -499,7 +500,11 @@ export function SessionProvider({
               cameraPhoto,
               firstReceiptScan,
             };
-            const preparation = cameraPhoto || importMode === "receipt" ? prepareSelectedPhoto(queued, file.uri) : undefined;
+            // Read the selected image while the original is retained. This also
+            // avoids decrypting a second copy for library and file imports.
+            const preparation = isUploadPhoto(queued.name, queued.mimeType)
+              ? prepareSelectedPhoto(queued, file.uri, Boolean(cameraPhoto || importMode === "receipt"))
+              : undefined;
             let uploadQueue = fileQueueRef.current;
             try {
               if (!uploadQueue) {

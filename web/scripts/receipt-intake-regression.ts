@@ -111,6 +111,10 @@ assert.equal(Number(parseReceiptText(boxedReceipt).total), 425);
 assert.equal(parseReceiptText(boxedReceipt).currency, "PHP");
 assert.equal(parseReceiptText(boxedReceipt).receiptText, boxedReceipt);
 assert.equal(readReceiptOpticalLayout(encodeLocalReceiptOcr({ ...deviceOcr, opticalLines: opticalLines.slice(0, -1) })), deviceOcr.text);
+const surveyDateRows = [...opticalLines, { text: "Transaction date: 2027-02-01", box: [.05, .6, .65, .64] }];
+const surveyDateSource = encodeLocalReceiptOcr({ ...deviceOcr, opticalLines: surveyDateRows,
+  text: surveyDateRows.map(line => line.text).join("\n") });
+assert.equal(parseReceiptText(surveyDateSource).billDate?.slice(0, 10), "2026-09-11");
 // Vision can locate an edge glyph just outside the page. Other rows remain usable.
 const edgeBlocks = opticalLines.map((line, index) => index === 0 ? { ...line, box: [-0.001, .04, .50, .08] } : line);
 const clipped = normalizeDeviceTextEvidence({ ...deviceOcr, opticalLines: edgeBlocks });

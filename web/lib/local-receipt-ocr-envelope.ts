@@ -85,14 +85,17 @@ export function recordReceiptDateCheck(source: string, line: OpticalTextLine, se
 /** Keep OCR alternatives as source evidence. They cannot replace the primary
  * reading without independent evidence. */
 export function hasConflictingReceiptTotalReading(lines: OpticalTextLine[]) {
-  const total = /^(?:grand total|total(?: amount| paid| due)?|amount (?:due|paid|to pay)|bill (?:amount|total))\s*[:：]?$/iu;
-  const money = /[0-9][0-9,.]*[.,][0-9]{2}(?=\s*(?:[A-Z]{3}|[₱$£€¥])?\s*$)/u;
-  const digits = (value: string) => value.replace(/[,.]/g, "").replace(/^0+(?=\d)/, "");
+  const total = /^(?:grand total|total(?: amount| paid| due)?|amount (?:due|paid|to pay)|bill (?:amount|total)|합계|결제금액|총액|total bayar|jumlah bayar)\s*[:：]?$/iu;
+  const money = /(?<![\d.,])\d+(?:[., \u00a0\u202f]\d{3})*(?:[.,]\d{2})?(?=\s*(?:[A-Z]{3}|[₱$£€¥₩원])?\s*$)/u;
+  const cents = (value: string) => {
+    const digits = value.replace(/[,.\s]/g, "");
+    return (/[.,]\d{2}$/.test(value) ? digits : digits + "00").replace(/^0+(?=\d)/, "");
+  };
   if (!lines.some(line => line.alternatives?.length || line.characterAlternatives?.length)) return false;
   for (const row of groupReceiptOpticalLines(lines)) {
     // A till can print the currency after the amount, in its own box.
     const last = row.length - 1;
-    const at = /^(?:[A-Z]{3}|[₱$£€¥])$/u.test(row[last].text.trim()) ? last - 1 : last;
+    const at = /^(?:[A-Z]{3}|[₱$£€¥₩원])$/u.test(row[last].text.trim()) ? last - 1 : last;
     if (at < 0) continue;
     const line = row[at];
     const prefix = row.slice(0, at).map(block => block.text).join(" ");
@@ -100,10 +103,10 @@ export function hasConflictingReceiptTotalReading(lines: OpticalTextLine[]) {
     if (!primary) continue;
     const label = `${prefix} ${line.text.slice(0, primary.index)}`.trim();
     // DUE is part of an amount label and can also look like a currency code.
-    if (!total.test(label) && !total.test(label.replace(/(?:\b[A-Z]{3}\b|[₱$£€¥])$/u, "").trim())) continue;
+    if (!total.test(label) && !total.test(label.replace(/(?:\b[A-Z]{3}\b|[₱$£€¥₩원])$/u, "").trim())) continue;
     if (line.alternatives?.some(candidate => {
       const alternate = candidate.text.match(money);
-      return alternate && digits(alternate[0]) !== digits(primary[0]) &&
+      return alternate && cents(alternate[0]) !== cents(primary[0]) &&
         (line.confidence === undefined || candidate.confidence === undefined || line.confidence - candidate.confidence <= 0.2);
     })) return true;
     const startsAt = Array.from(line.text.slice(0, primary.index)).length;

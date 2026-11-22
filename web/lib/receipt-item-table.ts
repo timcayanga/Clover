@@ -40,7 +40,11 @@ export function readReconciledItemTable(text: string) {
   if (serviceRows.length > 1) return null;
   const service = serviceRows.length ? priceInCents(serviceRows[0]) : 0;
   const countedTotal = footer.find(line => /^\d+\s+item\(s\)\s+total amount\s*:?\s*\d[\d,]*\.\d{2}$/i.test(line));
-  if (countedTotal && priceInCents(countedTotal) !== subtotal + service) return null;
+  if (countedTotal) {
+    const printedCount = Number.parseInt(countedTotal, 10);
+    const units = items.reduce((sum, item) => sum + item.quantity, 0);
+    if ((printedCount !== items.length && printedCount !== units) || priceInCents(countedTotal) !== subtotal + service) return null;
+  }
   const totals = footer.filter(line => /^(?:total amount|amount due|grand total|total(?=\s*[:\d]))\b/i.test(line)).map(line => {
     const amount = priceInCents(line);
     if (Number.isFinite(amount) || !countedTotal) return amount;
@@ -213,17 +217,18 @@ export function readChargedReceiptTable(source: string, blocks: OpticalBlock[] =
 }
 
 export function hasPrintedItemizedTotal(text: string, total: string) {
+  const totals = text.split(/\r?\n/).flatMap(line => {
+    const match = line.match(/^\s*(?:grand total|bill (?:amount|total)|amount (?:due|to pay)|total(?: due| amount| paid)?)\s*[:：]?\s*(?:[A-Z]{3}|[₱$€£¥])?\s*(\d[\d,]*\.\d{2})\s*(?:[A-Z]{3}|[₱$€£¥])?\s*$/i);
+    return match ? [match[1].replace(/,/g, "")] : [];
+  });
+  if (totals.some(value => value !== total)) return false;
   const reconciled = readReconciledItemTable(text) ?? readChargedReceiptTable(text);
   if (reconciled) return reconciled.total === total;
+  if (!totals.length) return false;
   const items = readSubtotalItems(text);
   if (!items) return false;
   const itemCents = items.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
-  if (itemCents !== Math.round(Number(total) * 100)) return false;
-  const totals = text.split(/\r?\n/).flatMap(line => {
-    const match = line.match(/^\s*(?:grand total|bill amount|amount due|total(?: due| amount| paid)?)\s*[:：]?\s*(?:[A-Z]{3}|₱)?\s*(\d[\d,]*\.\d{2})\s*$/i);
-    return match ? [match[1].replace(/,/g, "")] : [];
-  });
-  return totals.length > 0 && totals.every(value => value === total);
+  return itemCents === Math.round(Number(total) * 100);
 }
 
 // Recover a separately printed quantity only when its box sits between the

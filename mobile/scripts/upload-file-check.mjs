@@ -154,6 +154,7 @@ for (const [os, initial, expectedReads] of [
   ["ios", {...fullRead, complete:false}, 2],
 ]) {
   let calls = 0;
+  let fullReadUri;
   const reader = load('../src/offline/device-text.ts', {
     'expo-device': {totalMemory: 4 * 1024 ** 3},
     'react-native': {Platform:{OS:os}, AppState:{currentState:'active'}},
@@ -161,7 +162,7 @@ for (const [os, initial, expectedReads] of [
     '../../../shared/native-upload': limits,
     '../../modules/clover-local-ai': {CloverLocalAI:{
       extractPhotoTextFast: async () => { calls++; return initial; },
-      extractText: async () => { calls++; return fullRead; },
+      extractText: async uri => { calls++; fullReadUri = uri; return fullRead; },
     }},
     './file-storage': {},
     './local-ocr-slot': {tryRunLocalOcr: work => work()},
@@ -169,5 +170,11 @@ for (const [os, initial, expectedReads] of [
   const result = await reader.prepareSelectedPhoto({name:"receipt.jpg", mimeType:"image/jpeg", size:40000}, "file:///qa.jpg").full;
   assert.equal(result?.complete, true);
   assert.equal(calls, expectedReads);
+  calls = 0;
+  const selectedStatement = reader.prepareSelectedPhoto({name:"bank.png", mimeType:"image/png", size:40000}, "file:///bank.png", false);
+  assert.equal(selectedStatement.partial, undefined);
+  assert.equal((await selectedStatement.full)?.text, fullRead.text);
+  assert.equal(calls, 1);
+  assert.equal(fullReadUri, "file:///bank.png", "The full read uses the selected URI");
 }
 console.log("PASS selected photo reuses complete Android OCR and retries partial or unreadable readings");

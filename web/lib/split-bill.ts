@@ -2526,8 +2526,8 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult =>
     ? parseReceiptPhotoText(receiptText)
     : parseReceiptSource(receiptText, false);
 
-function parseReceiptSource(receiptText: string, photo: boolean): ReceiptPreviewResult {
-  const receipt = parseReceiptSourceFields(receiptText, photo);
+function parseReceiptSource(receiptText: string, photo: boolean, ordered = readReceiptOpticalLayout(receiptText)): ReceiptPreviewResult {
+  const receipt = parseReceiptSourceFields(receiptText, photo, ordered);
   const items = refineReceiptItemWords(receiptText, receipt.items);
   return items === receipt.items ? receipt : { ...receipt, items };
 }
@@ -2549,7 +2549,7 @@ function hasReconciledOpticalSettlement(layout: string) {
   return subtotals.length === 1 && charges.length <= 1 && subtotals[0] + (charges[0] ?? 0) === totals[0];
 }
 
-function parseReceiptSourceFields(receiptText: string, photo: boolean): ReceiptPreviewResult {
+function parseReceiptSourceFields(receiptText: string, photo: boolean, ordered: string): ReceiptPreviewResult {
   if (detectMultipleReceipts(receiptText)) {
     return {
       receiptText, receiptType: "generic_receipt", merchantName: null, billDate: null,
@@ -2563,7 +2563,6 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean): ReceiptP
   const opticalText = readLocalReceiptOcrText(receiptText);
   const sourceText = opticalText === null ? receiptText : normalizeLocalReceiptOcrText(opticalText);
   const settlementText = joinReceiptSettlementLines(sourceText);
-  const ordered = readReceiptOpticalLayout(receiptText);
   const layoutText = opticalText !== null && ordered !== opticalText
     ? joinReceiptSettlementLines(normalizeLocalReceiptOcrText(ordered))
     : settlementText;
@@ -2586,7 +2585,7 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean): ReceiptP
   // Optical confidence does not establish financial correctness. Until wider
   // field-level validation, this engine always asks the user to review.
   const dateRole = result.receiptType === "wallet_transfer" || result.receiptType === "travel_ticket" || payment
-    ? null : resolveReceiptPurchaseDateRoles(settlementText);
+    ? null : resolveReceiptPurchaseDateRoles(footer || useOpticalRows ? layoutText : settlementText);
   const dated = dateRole
     ? { ...result, billDate: dateRole.date ? (result.billDate?.slice(0, 10) === dateRole.date ? result.billDate : `${dateRole.date}T00:00:00.000Z`) : null,
       requiresReview: result.requiresReview || !dateRole.date }
@@ -2642,10 +2641,15 @@ export function hasUnreadableReceiptPhotoTotal(source: string) {
   const optical = readLocalReceiptOcrText(source);
   const layout = readReceiptOpticalLayout(source);
   const text = optical === null ? layout : normalizeLocalReceiptOcrText(layout);
-  const { body } = splitReceiptPromotionalFooter(joinReceiptSettlementLines(text));
+  return hasClippedSettlementLine(splitReceiptPromotionalFooter(joinReceiptSettlementLines(text)).body);
+}
+
+function hasClippedSettlementLine(body: string) {
   const lines = body.normalize("NFKC").split(/\r?\n/);
   const label = /^\s*(?:grand total|bill total|total(?: amount| paid| due)?|amount (?:paid|due|to pay)|sale amount)\b[ :：-]*/i;
-  const stripCurrency = (value: string) => value.trim().replace(/^(?:[A-Z]{3}\b|P(?=\s*\d)|[₱$€£¥])\s*/iu, "");
+  const stripCurrency = (value: string) => value.trim()
+    .replace(/^(?:[A-Z]{3}\b|P(?=\s*\d)|[₱$€£¥₩])\s*/iu, "")
+    .replace(/(?<=[\d.,])\s*(?:[A-Z]{3}|[₱$€£¥₩원])$/iu, "");
   // Integer totals are valid in several currencies. A trailing decimal
   // separator or a lone digit after it is insufficient evidence.
   const amount = /^(?:\d+|\d{1,3}(?:[,. ]\d{3})+)(?:[.,]\d{2})?$/u;
@@ -2662,10 +2666,11 @@ export function hasUnreadableReceiptPhotoTotal(source: string) {
 }
 
 export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
-  let parsed = parseReceiptSource(source, true);
+  const ordered = readReceiptOpticalLayout(source);
+  let parsed = parseReceiptSource(source, true, ordered);
   const transcript = readLocalReceiptOcrText(source);
-  const layout = transcript && splitReceiptPromotionalFooter(joinReceiptSettlementLines(readReceiptOpticalLayout(source)));
-  const optical = layout && layout.footer ? layout.body : transcript;
+  const layout = splitReceiptPromotionalFooter(joinReceiptSettlementLines(transcript === null ? ordered : normalizeLocalReceiptOcrText(ordered)));
+  const optical = transcript && layout.footer ? layout.body : transcript;
   if (optical && parsed.receiptType !== "wallet_transfer" && parsed.receiptType !== "travel_ticket") {
     // VAT and service charges occur worldwide. A profile may suggest a
     // currency later, but a photo preview should distinguish printed evidence.
@@ -2707,7 +2712,7 @@ export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
       }
     }
   }
-  if (!hasUnreadableReceiptPhotoTotal(source) && !hasConflictingReceiptTotalReading(readReceiptOpticalEvidence(source))) return parsed;
+  if (!hasClippedSettlementLine(layout.body) && !hasConflictingReceiptTotalReading(readReceiptOpticalEvidence(source))) return parsed;
   return { ...parsed, total: null, requiresReview: true, confidence: Math.min(45, parsed.confidence) };
 }
 

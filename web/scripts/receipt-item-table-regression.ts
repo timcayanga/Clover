@@ -165,3 +165,23 @@ assert.ok(!hasConflictingReceiptTotalReading([totalLabel, {...trailingMoney, alt
 for (const source of [weakDate("JANON IBERICO"), ambiguousDate, unpriced, foreign]) {
   assert.deepEqual(parseReceiptText(source), parseReceiptPhotoText(source));
 }
+
+for (const [primary, alternative, conflict] of [
+  ["합계 ₩12,000", "합계 ₩17,000", true],
+  ["Jumlah bayar 50.000 IDR", "Jumlah bayar 80.000 IDR", true],
+  ["Total 1 234,50 EUR", "Total 1 734,50 EUR", true],
+  ["Total 50.00 USD", "Total 50 USD", false],
+  ["Total 50.00 USD", "Total 5000 USD", true],
+  ["Total items 12", "Total items 17", false],
+] as const) {
+  assert.equal(hasConflictingReceiptTotalReading([{ ...trailingMoney, text: primary,
+    alternatives: [{text: alternative, confidence: .9}] }]), conflict, primary);
+}
+
+const itemCountReceipt = "Qty Item Amount\n2 Tea 40.00\n1 Coffee 30.00\nSubtotal 70.00\n3 Item(s) Total Amount 70.00\nTotal Amount 70.00";
+assert.ok(readReconciledItemTable(itemCountReceipt));
+assert.ok(readReconciledItemTable(itemCountReceipt.replace("3 Item(s)", "2 Item(s)")));
+assert.equal(readReconciledItemTable(itemCountReceipt.replace("3 Item(s)", "5 Item(s)")), null);
+assert.ok(hasPrintedItemizedTotal(grossBill.replace("Bill Amount 30.00", "Amount to pay 30.00 EUR"), "30.00"));
+assert.ok(!hasPrintedItemizedTotal(grossBill + "\nBill Total 35.00 EUR", "30.00"));
+assert.ok(!hasPrintedItemizedTotal(itemCountReceipt + "\nBill Total 75.00 PHP", "70.00"));

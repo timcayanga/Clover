@@ -616,6 +616,16 @@ test("statement preview uses the header below the export title", () => {
     assert.match(delimitedPreview(text), /Amount: -12.50/);
   }
 });
+test("preview retains physical row references and validates rows beyond the display limit", () => {
+  const header = "sep=;\rDate;Description;Amount\r\r";
+  const records = Array(25).fill('2026-11-19;"Cafe\rTea";-2.00').join("\r");
+  const preview = delimitedPreview(header + records);
+  assert.match(preview, /Showing 20 of 25/);
+  assert.match(preview, /Source row 4\n/);
+  assert.match(preview, /Source row 42\n/);
+  assert.doesNotMatch(preview, /Source row 44\n/);
+  assert.throws(() => delimitedPreview(header + records + "\rBad;Row"), /inconsistent/);
+});
 test("ambiguous table/encoding fails closed", () => {
   assert.throws(
     () => delimitedPreview('Date,Description,Amount\n2026-09-14,"unfinished,1'),

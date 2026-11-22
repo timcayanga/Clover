@@ -16,7 +16,8 @@ export function readDeviceText(file: QueuedFile, bytes: UploadSource) {
   return prepareDeviceText(file, read => withUploadCopy(file, bytes, read));
 }
 
-export function prepareSelectedPhoto(file: QueuedFile, uri: string) {
+export function prepareSelectedPhoto(file: QueuedFile, uri: string, previewReceipt = true) {
+  if (!previewReceipt) return { full: prepareDeviceText(file, read => read(uri)) };
   let publish!: (result?: DeviceTextEvidence) => void;
   const partial = new Promise<DeviceTextEvidence | undefined>(resolve => { publish = resolve; });
   const full = prepareDeviceText(file, read => read(uri), publish);
