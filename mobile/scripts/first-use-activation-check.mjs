@@ -4,8 +4,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 const compile = file => ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 const homeSource = fs.readFileSync(new URL('../app/(tabs)/index.tsx', import.meta.url), 'utf8');
-assert.ok(homeSource.indexOf('<FirstUseActivation') > 0 && homeSource.indexOf('<FirstUseActivation') < homeSource.indexOf('{!data ? ('),
-  'First-use actions must mount even if the Home balance request is still loading or failed');
+assert.ok(!homeSource.includes('<FirstUseActivation'), 'Home opens with balances');
 const loaders = {}; vm.runInNewContext(compile('../src/screen-refresh.ts'), { exports: loaders, Map, Set, Promise });
 const states = [], routes = [], requests = [], telemetry = []; let stateIndex = 0, focus, cleanup;
 let top = 900, appState = "active";

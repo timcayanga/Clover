@@ -141,6 +141,27 @@ async function main() {
     assert.equal(savedGroup.status, 201);
     assert.deepEqual(await savedPeople(), [{ name: "Alex" }, { name: "Bea" }, { name: "Carlo" }]);
 
+    const {PATCH: editPerson} = await import("../app/api/split-bill-people/[personId]/route");
+    const {POST: addContact} = await import("../app/api/split-bill-people/route");
+    const bea = await db.splitBillPerson.findFirstOrThrow({where:{userId:user.id,name:"Bea"}});
+    const edit = (name:string,email:string|null,phone:string|null) => editPerson(new Request("https://staging.clover.ph/api/split-bill-people/"+bea.id,{
+      method:"PATCH",body:JSON.stringify({name,email,phone})
+    }),{params:Promise.resolve({personId:bea.id})});
+    assert.equal((await edit("Beatrice","bea@example.test","5550101")).status,200);
+    assert.equal((await edit("Carlo",null,null)).status,409);
+    const picked = await addContact(new Request("https://staging.clover.ph/api/split-bill-people",{
+      method:"POST",body:JSON.stringify({name:"Beatrice",fromContacts:true})
+    }));
+    const contact = (await picked.json()).person;
+    assert.equal(contact.id,bea.id);
+    assert.equal(contact.fromContacts,true);
+    assert.equal(contact.phone,"5550101");
+    assert.equal((await edit("Beatrice",null,null)).status,200);
+    const updated = await db.splitBillPerson.findUniqueOrThrow({where:{id:bea.id}});
+    assert.equal(updated.name,"Bea");
+    assert.equal(updated.displayName,"Beatrice");
+    assert.equal(updated.email,null);
+    assert.equal(updated.phone,null);
     assert.equal(await db.splitBill.count({ where: { userId: user.id } }), 1);
     assert.equal(
       await db.transaction.count({ where: { workspaceId: workspace.id } }),

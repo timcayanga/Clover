@@ -77,3 +77,17 @@ for (const rates of [{}, { USD: 58 }] as Record<string, number>[]) {
   assert.deepEqual(directoryPersonBalances(directoryBills, "Viewer", directory, "PHP", rates),
     Object.fromEntries(directory.map(person => [person.id, personBalanceColumns(directoryBills, "Viewer", person.name, "PHP", rates)])));
 }
+
+import { personLedger, netDebtLabel } from "../../shared/split-person-ledger";
+const lunch = { id:"lunch",title:"Lunch",currency:"PHP",recorder:"Alex",settlementStatus:"open",
+  participants:[{id:"1",name:"You"},{id:"2",name:"Mia"}],
+  items:[{description:"Pasta",amount:"125.01",participantIds:["1","2"]}],
+  settlement:{transfers:[{fromParticipantName:"Mia",toParticipantName:"You",amount:62.50}]} };
+const taxi = {...lunch,id:"taxi",settlement:{transfers:[{fromParticipantName:"You",toParticipantName:"Mia",amount:12}]}};
+const ledger = personLedger([lunch,taxi,{...taxi,resolved:true},{...taxi,currency:"USD"}],"Mia","Alex");
+assert.deepEqual(ledger.totals,[{currency:"PHP",owed:1200,owes:6250,net:5050},{currency:"USD",owed:1200,owes:0,net:-1200}]);
+assert.equal(ledger.rows[0].items[0].amount,62.5);
+assert.equal(netDebtLabel("Mia",5050,"₱50.50"),"Mia owes you ₱50.50.");
+assert.equal(netDebtLabel("Mia",-1200,"$12"),"You owe Mia $12.");
+assert.equal(netDebtLabel("Mia",0,"₱0"),"All settled.");
+assert.deepEqual(mobileApiResponse('split-bills',{summary:{},personBalances:{mia:{owed:"$10",owes:"$5",private:"omit"}}}),{summary:{},personBalances:{mia:{owed:"$10",owes:"$5"}}});

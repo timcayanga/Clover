@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import * as consent from '../../shared/ai-consent.ts';
 const code=ts.transpileModule(fs.readFileSync(new URL('../app/onboarding.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
-function harness(fail=false,planTier='pro'){
+async function harness(fail=false,planTier='pro'){
  const states=[],refs=[],requests=[],routes=[];let si=0,ri=0,effects=[];
- const session={data:{needsOnboarding:true,entitlement:{planTier,trial:{startsAt:'2026-10-24T00:00:00.000Z',endsAt:'2026-11-23T00:00:00.000Z',status:'active',remainingDays:30,relyingOnTrial:true,linkedAccounts:2}},currencyChoices:[{code:'PHP',name:'Philippine Peso'}]},completeOnboarding:async(body)=>{requests.push({path:"onboarding",body});if(fail)throw new Error("Setup unavailable");session.data={...session.data,needsOnboarding:false};},refresh:()=>{session.data={...session.data,needsOnboarding:false};}};
+ const session={request:async(path)=>{assert.equal(path,'settings/ai-consent');return {termsAccepted:true};},data:{needsOnboarding:true,entitlement:{planTier,trial:{startsAt:'2026-10-24T00:00:00.000Z',endsAt:'2026-11-23T00:00:00.000Z',status:'active',remainingDays:30,relyingOnTrial:true,linkedAccounts:2}},currencyChoices:[{code:'PHP',name:'Philippine Peso'}]},completeOnboarding:async(body)=>{requests.push({path:"onboarding",body});if(fail)throw new Error("Setup unavailable");session.data={...session.data,needsOnboarding:false};},refresh:()=>{session.data={...session.data,needsOnboarding:false};}};
  const exports={};
  vm.runInNewContext(code,{exports,Intl,Error,require:name=>{
+  if(name.endsWith('/ai-consent'))return consent;
   if(name==='react')return {useState:v=>{const i=si++;if(!(i in states))states[i]=v;return [states[i],v=>{states[i]=v;}];},useRef:v=>{const i=ri++;return refs[i]??=( {current:v});},useEffect:f=>effects.push(f)};
   if(name==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'Fragment'};
   if(name==='expo-router')return {router:{replace:v=>routes.push(v)}};
@@ -23,11 +25,12 @@ function harness(fail=false,planTier='pro'){
   throw new Error(name);
  }});
  function render(){si=0;ri=0;effects=[];const tree=exports.default();for(const f of effects)f();const nodes=[];function walk(x){if(!x)return;if(Array.isArray(x)){x.forEach(walk);return;}if(typeof x==='object'){nodes.push(x);walk(x.props?.children);}}walk(tree);return nodes;}
+ render();await tick();
  return {render,requests,routes,session};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 for(const action of ['skip','connect','manual','file','camera','library']){
- const h=harness();let nodes=h.render();
+ const h=await harness();let nodes=h.render();
  assert.equal(nodes.find(n=>n.type==='SignupTrialSummary').props.trial,h.session.data.entitlement.trial,'Onboarding presents the server trial rather than creating local dates');
  const mascots=nodes.filter(n=>n.type==='CloverMascot');
  assert.equal(mascots.length,1,'Use one mascot in the onboarding brand position');
@@ -55,12 +58,12 @@ for(const action of ['skip','connect','manual','file','camera','library']){
  else if(action==='connect'){assert.equal(h.routes[0].pathname,'/accounts');assert.equal(h.routes[0].params.onboarding,'1');assert.equal(h.routes[0].params.add,'connect');}
  else {assert.equal(h.routes[0].pathname,'/(tabs)/add');assert.equal(h.routes[0].params.picker,action);}
 }
-const h=harness(true);let n=h.render();n.find(x=>x.props.accessibilityRole==='radio').props.onPress();n=h.render();n.find(x=>x.props.title==='Continue').props.onPress();n=h.render();n.find(x=>x.props.title==='Skip for now').props.onPress();await tick();n=h.render();
+const h=await harness(true);let n=h.render();n.find(x=>x.props.accessibilityRole==='radio').props.onPress();n=h.render();n.find(x=>x.props.title==='Continue').props.onPress();n=h.render();n.find(x=>x.props.title==='Skip for now').props.onPress();await tick();n=h.render();
 assert.equal(h.routes.length,0);assert.ok(n.some(x=>x.type==='Notice'&&x.props.children==='Setup unavailable'));
 assert.equal(n.find(x=>x.props.title==='Skip for now').props.disabled,false);
 console.log('PASS native onboarding: fixed artwork order, transparent mark, Free-first selectors and all six destinations, duplicate taps and retryable failure');
 
-const free=harness(false,'free');let freeNodes=free.render();
+const free=await harness(false,'free');let freeNodes=free.render();
 assert(freeNodes.some(n=>n.type==='OnboardingPlanOffers'));assert(!freeNodes.some(n=>n.props.accessibilityRole==='radio'));
 freeNodes.find(n=>n.props.title==='Continue with Free').props.onPress();freeNodes=free.render();
 freeNodes.find(n=>n.props.accessibilityRole==='radio').props.onPress();freeNodes=free.render();freeNodes.find(n=>n.props.title==='Continue').props.onPress();freeNodes=free.render();

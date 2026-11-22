@@ -49,3 +49,13 @@ assert.ok(buildHomeAdviserInsights({ ...insightInput, paymentTitles: ["Rent", "I
 
 assert.equal(buildHomeAdviserInsights({ ...insightInput, hasRecentTransactionActivity: true }).some(i => i.kind === "reminder"), false);
 assert.equal(buildHomeAdviserInsights({ ...insightInput, hasRecentTransactions: false, previousWeeklyExpense: 0, monthNet: 0 })[0]?.actionLabel, "Add a transaction");
+
+const importedReport = buildHomeAdviserInsights({...insightInput,reportEntries:5,importedEntries:4});
+assert.equal(importedReport.filter(i=>i.href.startsWith("/reports?")).length,1);
+assert.match(importedReport[0].parts.join(""),/weekly.*imported transactions/);
+assert.match(buildHomeAdviserInsights({...insightInput,reportEntries:2,importedEntries:0,hasRecentTransactions:false})[0].parts.join(""),/monthly.*recorded transactions/);
+assert.ok(!buildHomeAdviserInsights({...insightInput,reportEntries:0}).some(i=>i.href.startsWith("/reports?")));
+
+const late = buildHomeAdviserInsights({...insightInput,backfilledDate:"2024-02-12"})[0];
+assert.match(late.parts.join(""),/February 2024/);
+assert.match(late.href,/from=2024-02-01&to=2024-02-29/);

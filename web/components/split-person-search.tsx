@@ -15,10 +15,10 @@ export function SplitPersonSearch({ search, onSearch, people, onSaved }: {
   const pending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   const name = draft?.trim() ?? "";
-  const matches = name ? people.filter(p => p.name.toLowerCase().includes(name.toLowerCase())).slice(0, 6) : [];
+  const matches = name ? people.filter(p => (p.displayName || p.name).toLowerCase().includes(name.toLowerCase()) && (p.displayName || p.name).toLowerCase() !== name.toLowerCase()).slice(0, 6) : [];
   function finish(person: SplitBillPersonSummary) {
     onSaved(person);
-    onSearch(person.name);
+    onSearch(person.displayName || person.name);
     setDraft(null);
     setError("");
   }
@@ -29,7 +29,7 @@ export function SplitPersonSearch({ search, onSearch, people, onSaved }: {
       return;
     }
     if (!name || pending.current) return;
-    const existing = people.find(p => p.name.toLowerCase() === name.toLowerCase());
+    const existing = people.find(p => [p.name,p.displayName].some(n=>n?.toLowerCase()===name.toLowerCase()));
     if (existing) return finish(existing);
     pending.current = true;
     setBusy(true);
@@ -55,7 +55,7 @@ export function SplitPersonSearch({ search, onSearch, people, onSaved }: {
     </form>
     {draft !== null && <div>
       {matches.length > 0 && <div className="split-person-matches" aria-label="Matching people">
-        {matches.map(p => <button type="button" disabled={busy} key={p.id} onClick={() => setDraft(p.name)}>{p.name}</button>)}
+        {matches.map(p => <button type="button" disabled={busy} key={p.id} onClick={() => setDraft(p.displayName || p.name)}>{p.displayName || p.name}</button>)}
       </div>}
       <button type="button" className="button button-ghost" disabled={busy} onClick={() => {setDraft(null);setError("");}}>Cancel</button>
     </div>}
@@ -66,31 +66,27 @@ export function SplitPersonSearch({ search, onSearch, people, onSaved }: {
 export function PersonContactDetails({person, onSaved}: {person: SplitBillPersonSummary; onSaved:(person: SplitBillPersonSummary)=>void}) {
   const [error,setError] = useState("");
   const [busy,setBusy] = useState(false);
-  return <div>
-    {person.email && <p><a href={`mailto:${person.email}`}>{person.email}</a></p>}
-    {person.phone && <p><a href={`sms:${person.phone}`}>{person.phone}</a></p>}
-    {(!person.email || !person.phone) && <details><summary>Add Contact Details</summary>
-      <form onSubmit={async e=>{
-        e.preventDefault();
-        if (busy) return;
-        const fields = new FormData(e.currentTarget);
-        const email = String(fields.get("email") || "").trim();
-        const phone = String(fields.get("phone") || "").trim();
-        if (!email && !phone) return;
-        setBusy(true); setError("");
-        try {
-          const res = await fetch("/api/split-bill-people",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:person.name,email:email || undefined,phone:phone || undefined})});
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Unable to save contact details.");
-          onSaved(data.person);
-        } catch(err) { setError(err instanceof Error ? err.message : "Unable to save contact details."); }
-        finally {setBusy(false);}
-      }}>
-        {!person.email && <label>Email<input name="email" type="email" maxLength={254}/></label>}
-        {!person.phone && <label>Phone<input name="phone" type="tel" maxLength={80}/></label>}
-        <button disabled={busy}>Save Contact Details</button>
-        {error && <p role="alert">{error}</p>}
-      </form>
-    </details>}
-  </div>;
+  const [name,setName] = useState(person.displayName || person.name);
+  const [email,setEmail] = useState(person.email || "");
+  const [phone,setPhone] = useState(person.phone || "");
+  const dirty = name.trim() !== (person.displayName || person.name) || email.trim() !== (person.email || "") || phone.trim() !== (person.phone || "");
+  return <form className="split-person-fields" onSubmit={async e=>{
+    e.preventDefault();
+    if (busy || !dirty || !name.trim()) return;
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(`/api/split-bill-people/${encodeURIComponent(person.id)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({name:name.trim(),email:email.trim() || null,phone:phone.trim() || null})});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Unable to save contact details.");
+      onSaved(data.person);
+    } catch(err) {setError(err instanceof Error ? err.message : "Unable to save contact details.");}
+    finally {setBusy(false);}
+  }}>
+    <label>Name<input required maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></label>
+    <label>Email<input type="email" maxLength={254} value={email} onChange={e=>setEmail(e.target.value)}/></label>
+    <label>Phone<input type="tel" maxLength={80} value={phone} onChange={e=>setPhone(e.target.value)}/></label>
+    {dirty && <button className="button button-primary" disabled={busy || !name.trim()}>Save Changes</button>}
+    {error && <p role="alert">{error}</p>}
+  </form>;
 }

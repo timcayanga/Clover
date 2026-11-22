@@ -21,6 +21,8 @@ import { AnimatedTabs } from "@/components/animated-tabs";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { SplitBillHome } from "@/components/split-bill-home";
+import { PersonBillTable } from "./split-person-ledger";
+import { personLedger } from "../../shared/split-person-ledger";
 import { PersonContactDetails } from "./split-person-search";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
 import { SplitBillPaymentTools } from "@/components/split-bill-payment-tools";
@@ -336,12 +338,12 @@ export function SplitBillWorkspace({
   const selectedGroup = selected?.kind === "group" ? groups.find((group) => group.id === selected.id) ?? null : null;
   const selectedPerson = selected?.kind === "person" ? people.find((person) => person.id === selected.id) ?? null : null;
   const selectedGroupBills = selectedGroup ? getSplitBillBillsForGroup(bills, selectedGroup.id) : [];
-  const selectedPersonBills = selectedPerson ? getSplitBillBillsForPerson(bills, selectedPerson.name) : [];
   const selectedGroupBalance = selectedGroup ? getPersonBalanceSummary(selectedGroupBills, currentUserName) : null;
-  const selectedPersonBalance = selectedPerson ? getPersonBalanceSummary(selectedPersonBills, selectedPerson.name) : null;
+  const [detailSearch,setDetailSearch]=useState("");
+  const selectedPersonBills = selectedPerson ? getSplitBillBillsForPerson(bills,selectedPerson.name) : [];
+  const ledger = selectedPerson ? personLedger(bills.filter(b => detailTab !== "bills" || b.title.toLowerCase().includes(detailSearch.toLowerCase())).map(b=>({...b,recorder:b.userId===currentUserId ? currentUserName : b.recorder})),selectedPerson.name,currentUserName) : null;
   const selectedGroupSimplifiedTransfers = selectedGroup ? buildAggregateTransfers(selectedGroupBills) : [];
   const selectedGroupActivity = selectedGroup ? getRecentActivityForBills(selectedGroupBills) : [];
-  const selectedPersonActivity = selectedPerson ? getRecentActivityForBills(selectedPersonBills) : [];
 
   const openBill = (billId: string) => {
     window.history.replaceState(window.history.state, "", "/split-bill");
@@ -726,7 +728,7 @@ export function SplitBillWorkspace({
       return selectedGroup.name;
     }
     if (selectedPerson) {
-      return selectedPerson.name;
+      return selectedPerson.displayName || selectedPerson.name;
     }
     return "";
   }, [selectedBill, selectedGroup, selectedPerson]);
@@ -997,7 +999,7 @@ export function SplitBillWorkspace({
     }
   };
 
-  const [detailSearch,setDetailSearch]=useState("");
+
   useEffect(()=>{if(!selectedGroup&&!selectedPerson)return;const route=(e:Event)=>{const event=e as CustomEvent;if(event.detail?.group||event.detail?.person)return;event.stopImmediatePropagation();window.dispatchEvent(new CustomEvent("clover:open-split-bill-add",{detail:{group:selectedGroup??undefined,person:selectedPerson?.name}}));};window.addEventListener("clover:open-split-bill-add",route,true);return()=>window.removeEventListener("clover:open-split-bill-add",route,true);},[selectedGroup,selectedPerson]);
   const openContextBill=()=>window.dispatchEvent(new CustomEvent("clover:open-split-bill-add",{detail:{group:selectedGroup??undefined,person:selectedPerson?.name}}));
   const renderDetailToolbar=()=> <div className="split-entry-toolbar"><input type="search" aria-label="Search bills in this section" placeholder="Search bills" value={detailSearch} onChange={e=>setDetailSearch(e.target.value)}/><button className="button button-primary" onClick={openContextBill}>Add Bill</button></div>;
@@ -1590,35 +1592,15 @@ export function SplitBillWorkspace({
 
             {selectedPerson ? (
               <div className="split-bill-detail-modal__body">
-                <div className="split-bill-detail-modal__identity">
-                  <SplitBillEntityAvatar name={selectedPerson.name} avatarUrl={selectedPerson.avatarUrl} sizeClass="split-bill-person-avatar--medium" />
-                  <div>
-                    <strong>{selectedPerson.name}</strong>
-                    <PersonContactDetails key={selectedPerson.id} person={selectedPerson} onSaved={person=>upsertPeople([person])} />
-                  </div>
-                </div>
-                {renderDetailTabs()}{renderDetailToolbar()}
-                {detailTab === "overview" ? (
-                  <div className="split-bill-balance-dashboard">
-                    <article>
-                      <span>They owe</span>
-                      <strong>{formatSplitBillAmount(selectedPersonBalance?.owes ?? 0, selectedPersonBills[0]?.currency ?? "PHP")}</strong>
-                    </article>
-                    <article>
-                      <span>They are owed</span>
-                      <strong>{formatSplitBillAmount(selectedPersonBalance?.isOwed ?? 0, selectedPersonBills[0]?.currency ?? "PHP")}</strong>
-                    </article>
-                    <article>
-                      <span>Settled</span>
-                      <strong>{selectedPersonBalance?.settledBills ?? 0}/{selectedPersonBills.length}</strong>
-                    </article>
-                  </div>
-                ) : null}
-                {detailTab === "bills" ? renderBillRows(selectedPersonBills.filter(b=>b.title.toLowerCase().includes(detailSearch.toLowerCase())), selectedPerson.name) : null}
-                {detailTab === "settle" ? renderSettlementBoard(selectedPersonBills, selectedPerson.name) : null}
-                {detailTab === "insights" ? <SplitBillDetailTools bills={selectedPersonBills} label={selectedPerson.name} view="insights" /> : null}
-                {detailTab === "receipts" ? <SplitBillDetailTools bills={selectedPersonBills} label={selectedPerson.name} view="receipts" /> : null}
-                {detailTab === "activity" ? renderActivityList(selectedPersonActivity) : null}
+                <PersonContactDetails key={selectedPerson.id} person={selectedPerson} onSaved={person=>upsertPeople([person])} />
+                {renderDetailTabs()}
+                {detailTab === "bills" && renderDetailToolbar()}
+                {(detailTab === "overview" || detailTab === "bills") && ledger && <PersonBillTable ledger={ledger} name={selectedPerson.displayName || selectedPerson.name} onBill={openBill}/>}
+                {detailTab === "settle" && renderSettlementBoard(selectedPersonBills,selectedPerson.name)}
+                {detailTab === "insights" && <SplitBillDetailTools bills={selectedPersonBills} label={selectedPerson.displayName || selectedPerson.name} view="insights"/>}
+                {detailTab === "receipts" && <SplitBillDetailTools bills={selectedPersonBills} label={selectedPerson.displayName || selectedPerson.name} view="receipts"/>}
+                {detailTab === "activity" && renderActivityList(getRecentActivityForBills(selectedPersonBills))}
+
                 <div className="split-bill-detail-modal__actions">
                   <button className="button button-danger button-small" type="button" onClick={() => void removePerson(selectedPerson.id)}>
                     Delete person

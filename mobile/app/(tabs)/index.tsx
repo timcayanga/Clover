@@ -3,7 +3,6 @@ import { clearWidgetSnapshot, hiddenBalancesKey } from "../../src/widget-snapsho
 import { HomePendingSplitBills } from "../../src/home-pending-split-bills";
 import { calendarDay, dateInTimeZone, paymentCountdown, shortPaymentDate } from "../../../shared/home-return";
 import { nativeStartup } from "../../src/startup-timing";
-import { FirstUseActivation } from "../../src/first-use-activation";
 import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveGrid } from "../../src/adaptive";
 import { mergeHomeDetails, type HomeDetails, type HomeSections } from "../../src/home-sections";
@@ -224,8 +223,6 @@ export default function Home() {
       };
     }, [load, basePath, session.cached, session.request, session.demo, session.profileId, setData]),
   );
-  const activationScroll = { ref: useRef<import("react-native").ScrollViewInstance | null>(null), offset: useRef(0) };
-  const checkActivationVisibility = useRef<(() => void) | null>(null);
   const amount = (value: number | string | null, code = data?.currency ?? profileCurrency) =>
     hidden
       ? "••••"
@@ -233,7 +230,7 @@ export default function Home() {
         ? "Unavailable"
         : money(String(value), code);
   return (
-    <Screen layout="dashboard" scrollController={activationScroll} onScroll={() => checkActivationVisibility.current?.()}>
+    <Screen layout="dashboard">
       <Modal visible={currencyOpen} transparent animationType="fade" onRequestClose={() => setCurrencyOpen(false)}>
         <View style={{ flex: 1, backgroundColor: "#0006", justifyContent: "center", padding: 24 }}>
           <Pressable accessibilityLabel="Close currency selector" onPress={() => setCurrencyOpen(false)} style={{ position: "absolute", inset: 0 }} />
@@ -245,7 +242,6 @@ export default function Home() {
           </View>
         </View>
       </Modal>
-      <FirstUseActivation key={session.profileId} hidden={hidden} viewport={activationScroll.ref} visibilityCheck={checkActivationVisibility} />
       {error ? <Notice>{error}</Notice> : null}
       {!data ? (
         <>

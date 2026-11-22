@@ -449,6 +449,12 @@ async function handle(
       ]);
       return reply({...data,currencies:selection.currencies,netWorth,balances,details});
     }
+    if (operation === "split-person-edit") {
+      return withMobileRequestContext(userId, request, async () => {
+        const { PATCH } = await import("@/app/api/split-bill-people/[personId]/route");
+        return PATCH(request, {params: Promise.resolve({personId: path[1]})});
+      });
+    }
     if (operation === "payment-profile-edit") {
       const {mobilePaymentProfilePatch} = await import("@/lib/split-bill-payment-profile-schema");
       const text=await request.text();
@@ -829,14 +835,14 @@ async function handle(
     if(operation==="split-person-create"||operation==="split-payment-create"){
       const text=await request.text();if(new TextEncoder().encode(text).length>(operation==="split-payment-create"?1_510_000:10_000))return reply({error:"Details are too large."},413);
       const raw=JSON.parse(text);
-      const body=operation==="split-person-create"?z.object({name:z.string().trim().min(1).max(100),email:z.string().trim().email().max(254).optional(),phone:z.string().trim().min(1).max(80).optional()}).strict().parse(raw):(await import("@/lib/split-bill-payment-profile-schema")).splitBillPaymentProfileSchema.parse(raw);
+      const body=operation==="split-person-create"?z.object({name:z.string().trim().min(1).max(100),fromContacts:z.literal(true).optional(),email:z.string().trim().email().max(254).optional(),phone:z.string().trim().min(1).max(80).optional()}).strict().parse(raw):(await import("@/lib/split-bill-payment-profile-schema")).splitBillPaymentProfileSchema.parse(raw);
       const safe=new Request(request.url,{method:"POST",headers:request.headers,body:JSON.stringify(body)});
       const response=await withMobileRequestContext(userId,safe,async()=>operation==="split-person-create"?(await import("@/app/api/split-bill-people/route")).POST(safe):(await import("@/app/api/split-bill-payment-profiles/route")).POST(safe));
       const data=await response.json();
       if (!response.ok) return reply({error:data.error??"Unable to save."},response.status);
       if (operation === "split-person-create") {
-        const {id,name,email,phone,avatarUrl} = data.person;
-        return reply({ok:true,person:{id,name,email,phone,avatarUrl}},response.status);
+        const {id,name,email,phone,avatarUrl,displayName,fromContacts} = data.person;
+        return reply({ok:true,person:{id,name,email,phone,avatarUrl,displayName,fromContacts}},response.status);
       }
       return reply({ok:true},response.status);
     }

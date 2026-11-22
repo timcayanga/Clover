@@ -67671,3 +67671,13 @@ html[data-theme="dark"] .report-v2-summary--accounts .report-v2-summary__cell:fi
 .recurring-redesign .recurring-calendar__event { border:0; border-radius:2px; padding:2px; color:white; }
 .recurring-redesign .recurring-calendar__event :is(span,small) { display:block; color:white; }
 @media(max-width:760px) { .recurring-redesign .recurring-calendar__event :is(span,small) { font-size:10px; } }
+
+.split-person-fields, .split-person-fields label { display: grid; gap: .4rem; }
+.split-person-fields { gap: .9rem; }
+.split-person-ledger { width: 100%; border-collapse: collapse; }
+.split-person-ledger th, .split-person-ledger td { padding: .65rem .25rem; text-align: right; border-bottom: 1px solid var(--stroke); }
+.split-person-ledger :is(th, td):first-child { text-align: left; overflow-wrap: anywhere; }
+.split-person-ledger small { display: block; font-weight: normal; }
+.split-person-ledger button { min-height: 44px; min-width: 44px; }
+
+.split-person-bill-name { display: flex; align-items: center; gap: .4rem; }

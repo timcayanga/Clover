@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { HomeAddTransactionLink } from "./home-feature-grid";
 import { HomePendingSplitBills } from "@/components/home-pending-split-bills";
-import { FirstUseActivation } from "./first-use-activation";
 import { homeCurrencyScope } from "../../shared/home-currency-scope";
 import { HomeCurrencySelector } from "./home-currency-selector";
 import { AdviserHeaderLink } from "./adviser-header-link";
@@ -98,6 +97,7 @@ const loadDashboardExchangeRate = async (baseCurrency: string, quoteCurrency: st
 };
 
 type DashboardTransaction = {
+  importFileId: string | null;
   id: string;
   date: Date;
   amount: unknown;
@@ -591,9 +591,11 @@ async function DashboardStream({
   const recentEntryPromise = shouldLoadTransactions ? prisma.transaction.findFirst({
     where: buildActiveWorkspaceTransactionWhere(workspaceSummary.id, {
       createdAt: { gte: sevenDaysAgo },
+      currency: preferredDashboardCurrency,
       reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
     }),
-    select: { id: true },
+    orderBy: [{createdAt:"desc"},{id:"desc"}],
+    select: { date:true },
   }) : Promise.resolve(null);
   const latestImportPromise = prisma.importFile.findFirst({
     where: { workspaceId: workspaceSummary.id },
@@ -669,6 +671,7 @@ async function DashboardStream({
         }),
         select: {
           id: true,
+          importFileId: true,
           date: true,
           amount: true,
           currency: true,
@@ -960,6 +963,9 @@ async function DashboardStream({
           currency: suggestion.currency,
         }));
       const insightItems = buildHomeAdviserInsights({
+        backfilledDate: recentEntry && recentEntry.date < thirtyDaysAgo ? recentEntry.date.toISOString().slice(0,10) : undefined,
+        reportEntries: currentThirtyDayTransactions.length,
+        importedEntries: currentThirtyDayTransactions.filter(t => t.importFileId).length,
         currency: displayCurrency,
         hasRecentTransactionActivity: Boolean(recentEntry) || currentSevenDayTransactions.length > 0,
         categorySpike: categorySpike ?? null,

@@ -1,5 +1,5 @@
-import { MissingContactDetails } from "./add-split-person";
-import { Linking } from "react-native";
+import { PersonContactFields, type DirectoryPerson } from "./add-split-person";
+import { personLedger, netDebtLabel } from "../../shared/split-person-ledger";
 import { type SavedPerson } from "./split-people-field";
 import { GroupCover } from "./group-cover";
 import { coverNames, geometricCover, resolvedGroupCover } from "../../shared/split-group-cover";
@@ -16,16 +16,16 @@ import { PersonAvatar } from "./person-avatar";
 import { useEffect, useState } from "react";
 import { View, Pressable, TextInput } from "react-native";
 import { useSession } from "./session";
-import { Body, Card, Field, Notice, Screen, money, useTheme } from "./ui";
+import { Body, Card, CategoryMark, Field, Notice, Screen, money, useTheme } from "./ui";
 import { PlanAction, PlanHeader, PlanTabs, usePlanData } from "./plan-ui";
 
-import { DebtList, SimplifyAction, ledgerSample } from "./simplified-debts";
+import { SimplifyAction, ledgerSample } from "./simplified-debts";
 import {
   remainingDebts,
   participantName,
   personKey,
 } from "../../shared/split-debts";
-import { splitItemTotals } from "../../shared/split-bill-experience";
+
 export type SplitGroup = {
   id: string;
   name: string;
@@ -38,6 +38,7 @@ export type SplitGroup = {
 export function SplitGroupDetails({
   group,
   savedPeople = [],
+  onPersonSaved,
   entryScope = "split",
   circleId,
   circleCurrency,
@@ -50,6 +51,7 @@ export function SplitGroupDetails({
   circleId?: string;
   circleCurrency?: string;
   savedPeople?: SavedPerson[];
+  onPersonSaved?: (updated:DirectoryPerson)=>void;
   entryScope?: "split" | "circles";
   person?: string;
   onClose: () => void;
@@ -183,21 +185,20 @@ export function SplitGroupDetails({
   if (detail) {
     const key = personKey(detail);
     const contact = savedPeople.find(p => personKey(p.name) === key);
-    const related = bills.filter((b) =>
-      b.participants?.some(
-        (p) => personKey(participantName(b, p.name)) === key,
-      ),
-    );
+    const label = contact?.displayName || detail;
+    const ledger = personLedger(bills, detail, data?.viewerName ?? "");
+    const amount = (cents:number, currency:string) => money(String(cents / 100), currency);
+    const row = {flexDirection:"row" as const, alignItems:"center" as const, gap:6, paddingVertical:10,
+      borderBottomWidth:1, borderColor:colors.line};
+    const number = {flex:1, textAlign:"right" as const, color:colors.ink};
     return (
       <Screen>
         <PlanHeader
-          title={detail}
+          title={label}
           back={selectedPerson ? () => setSelectedPerson(null) : onClose}
           add={() => setAdding(true)}
         />
-        {contact?.email && <PlanAction title={contact.email} onPress={()=>{void Linking.openURL(`mailto:${contact.email}`).catch(()=>setError("Unable to open email."));}}/>}
-        {contact?.phone && <PlanAction title={contact.phone} onPress={()=>{void Linking.openURL(`sms:${contact.phone}`).catch(()=>setError("Unable to open messages."));}}/>}
-        {contact && <MissingContactDetails key={key} person={{name:contact.name,email:contact.email ?? undefined,phone:contact.phone ?? undefined}} onSaved={onChanged}/> }
+        {contact?.id && <PersonContactFields key={contact.id} person={{...contact,id:contact.id}} onSaved={updated=>{onPersonSaved?.(updated);onChanged();}}/>}
         {adding ? (
           <BillEditor
               context={{
@@ -217,52 +218,21 @@ export function SplitGroupDetails({
         {loadError ? <Notice>{loadError}</Notice> : null}
         {data ? (
           <>
-            <DebtList bills={bills} person={detail} />
-            {related.map((bill) => {
-              const participants = bill.participants ?? [];
-              const person = participants.find(
-                (p) => personKey(participantName(bill, p.name)) === key,
-              );
-              return (
-                <Card key={bill.id}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => onBill(bill.id)}
-                  >
-                    <Body muted={false}>{bill.title} ›</Body>
-                    <Body>{bill.billDate.slice(0, 10)}</Body>
-                  </Pressable>
-                  {remainingDebts([bill])
-                    .filter(
-                      (d) =>
-                        [d.from, d.to].some((n) => personKey(n) === key) &&
-                        [d.from, d.to].some((n) => personKey(n) === viewer),
-                    )
-                    .map((d) => (
-                      <Body key={d.from + d.to}>
-                        {d.from} owes {d.to}{" "}
-                        {money(String(d.cents / 100), d.currency)}
-                      </Body>
-                    ))}
-                  {(bill.items ?? [])
-                    .filter(
-                      (i) => person && i.participantIds.includes(person.id),
-                    )
-                    .map((i) => (
-                      <Body key={i.id}>
-                        {i.description} · {detail}’s share{" "}
-                        {money(
-                          String(
-                            splitItemTotals(participants, [i])[person!.id],
-                          ),
-                          bill.currency,
-                        )}
-                      </Body>
-                    ))}
-                </Card>
-              );
-            })}
-            {!related.length ? <Notice>No shared bills yet.</Notice> : null}
+            <View>
+              <View style={row}><Text style={{flex:1.7,color:colors.muted}}>Bill</Text><Text style={number}>Owed</Text><Text style={number}>Owes</Text><View style={{width:36}}/></View>
+              {ledger.rows.map(bill => <View key={bill.id} style={row}>
+                <View style={{flex:1.7,flexDirection:"row",gap:5}}><CategoryMark name={bill.categoryName} size={18}/><View style={{flex:1,gap:3}}><Text style={{color:colors.ink,fontFamily:"Poppins-SemiBold"}}>{bill.title}</Text>
+                  {bill.items.map((item,index)=><Text key={index} style={{color:colors.muted,fontSize:12}}>{item.name} · {money(String(item.amount),bill.currency)}</Text>)}
+                </View></View>
+                <Text style={number}>{bill.owed ? amount(bill.owed,bill.currency) : "—"}</Text>
+                <Text style={number}>{bill.owes ? amount(bill.owes,bill.currency) : "—"}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Open ${bill.title} details`} onPress={()=>onBill(bill.id)} style={{width:36,minHeight:44,justifyContent:"center"}}><Text style={{textAlign:"center",color:colors.teal}}>•••</Text></Pressable>
+              </View>)}
+              {ledger.totals.map(total=><View key={total.currency} style={row}><Text style={{flex:1.7,color:colors.ink}}>Total{ledger.totals.length>1 ? " · "+total.currency : ""}</Text><Text style={number}>{amount(total.owed,total.currency)}</Text><Text style={number}>{amount(total.owes,total.currency)}</Text><View style={{width:36}}/></View>)}
+            </View>
+            {ledger.totals.filter(t=>t.net).map(t=><Body key={t.currency}>{netDebtLabel(label,t.net,amount(Math.abs(t.net),t.currency))}</Body>)}
+            {ledger.rows.length ? !ledger.totals.some(t=>t.net) && <Body>All settled.</Body> : <Body>No shared bills yet.</Body>}
+
           </>
         ) : null}
       </Screen>

@@ -35,10 +35,7 @@ export const upsertSplitBillPeopleFromNames = async (
     const existing = await tx.splitBillPerson.findFirst({
       where: {
         userId,
-        name: {
-          equals: name,
-          mode: "insensitive",
-        },
+        OR: [{ name: { equals: name, mode: "insensitive" } }, { displayName: { equals: name, mode: "insensitive" } }],
       },
       select: {
         id: true,
@@ -75,7 +72,7 @@ export const upsertSplitBillPeopleFromNames = async (
 // active members visible to this user and preserve their existing contact edits.
 export async function loadSplitBillPeople(userId: string, includeContactDetails = false) {
   const { prisma } = await import("./prisma");
-  const select = { id: true, name: true, avatarUrl: true, email: includeContactDetails, phone: includeContactDetails } as const;
+  const select = { displayName: true, fromContacts: true, id: true, name: true, avatarUrl: true, email: includeContactDetails, phone: includeContactDetails } as const;
   const [contacts, members] = await Promise.all([
     prisma.splitBillPerson.findMany({ where: { userId }, select, orderBy: { name: "asc" } }),
     prisma.circleMembership.findMany({
