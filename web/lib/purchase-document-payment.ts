@@ -1,7 +1,7 @@
 import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
-export type UnsettledPurchaseDocument = "purchase_order" | "quote" | "unpaid_invoice" | "unverified_invoice";
+export type UnsettledPurchaseDocument = "unpaid_receipt" | "purchase_order" | "quote" | "unpaid_invoice" | "unverified_invoice";
 
 const invoiceHeading = /^(?:(?:tax|sales|commercial|service|billing|unpaid|overdue)\s+)?invoice(?:\s+(?:no\.?|number|#)\s*[:#]?\s*[\w/-]+|\s*[:#]\s*[\w/-]+)?\s*$/im;
 const quoteHeading = /^(?:pro[ -]?forma invoice|(?:sales\s+|price\s+)?quot(?:e|ation)|(?:cost|price) estimate)(?:\s*(?:[:#]|no\.?\s+|number\s+)\s*[\w/-]+)?\s*$/im;
@@ -23,7 +23,8 @@ function hasPositiveAmount(text: string, label: string) {
 function invoiceMoneyKey(raw: string) {
   const match = raw.trim().match(/^(?:([A-Z]{3}|[₱$€£¥])\s*)?(\d+(?:,\d{3})*\.\d{2}|\d+(?:\.\d{3})*,\d{2}|\d+)(?:\s*([A-Z]{3}|[₱$€£¥]))?$/i);
   if (!match || !/[1-9]/.test(match[2])) return null;
-  const prefix = match[1]?.toUpperCase(), suffix = match[3]?.toUpperCase();
+  const currency = (mark?: string) => mark === "₱" ? "PHP" : mark === "€" ? "EUR" : mark === "£" ? "GBP" : mark?.toUpperCase();
+  const prefix = currency(match[1]), suffix = currency(match[3]);
   if (prefix && suffix && prefix !== suffix) return null;
   const amount = match[2].includes(",") && match[2].at(-3) === ","
     ? match[2].replace(/\./g, "").replace(",", ".") : match[2].replace(/,/g, "");
@@ -31,7 +32,9 @@ function invoiceMoneyKey(raw: string) {
 }
 
 export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurchaseDocument | null {
-  if (!/\b(?:invoice|quot(?:e|ation)|estimate|purchase[ \t]+order)\b/i.test(source)) return null;
+  const labelledBalanceDue = /^payment[ \t]+status[ \t]*[:：][ \t]*(?:pending|outstanding|due)[ \t]*$/im;
+  const unpaidStatus = /^(?:(?:payment[ \t]+)?status[ \t]*[:：]?[ \t]*)?(?:unpaid|overdue|past due|partially paid|payment pending|pending payment|awaiting payment)[ \t]*[.!]?[ \t]*$/im;
+  if (!/\b(?:invoice|quot(?:e|ation)|estimate|purchase[ \t]+order)\b/i.test(source) && !unpaidStatus.test(source) && !labelledBalanceDue.test(source)) return null;
   const text = splitReceiptPromotionalFooter(joinReceiptColumnSettlement(source)).body.split(/\r?\n/).map((line) => line.trim()).join("\n");
   if (statementHeading.test(text)) return null;
   if (quoteHeading.test(text)) return "quote";
@@ -40,11 +43,11 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
     // heading without a receipt heading identifies an order document.
     if (/^purchase order(?:[ \t]*(?:[:#]|no\.?|number)[ \t]*[:#]?[ \t]*[\w/-]+)?[ \t]*$/im.test(text) &&
         !receiptHeading.test(text)) return "purchase_order";
-    return null;
+    return receiptHeading.test(text) && (unpaidStatus.test(text) || labelledBalanceDue.test(text)) ? "unpaid_receipt" : null;
   }
 
-  const explicitlyUnpaid = /^payment\s+status\s*[:：]\s*(?:pending|outstanding|due)\s*$/im.test(text) ||
-    /^(?:(?:payment\s+)?status\s*[:：]?\s*)?(?:unpaid|past due|overdue|payment pending|pending payment|awaiting payment|partially paid)\s*[.!]?$/im.test(text) ||
+  const explicitlyUnpaid = labelledBalanceDue.test(text) ||
+    unpaidStatus.test(text) ||
     /^(?:unpaid|overdue) invoice\b/im.test(text) ||
     hasPositiveAmount(text, "outstanding(?: balance| amount)?|balance due|remaining balance|remaining amount due");
   const zeroPaid = printedAmounts(text, "amount paid").some((amount) => !/[1-9]/.test(amount));
@@ -69,6 +72,7 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
 }
 
 export const unsettledPurchaseDocumentMessage: Record<UnsettledPurchaseDocument, string> = {
+  unpaid_receipt: "This receipt shows an outstanding payment. Upload the payment confirmation to record the expense.",
   purchase_order: "Purchase order saved. Upload the receipt or payment confirmation to record the expense.",
   quote: "Quote saved. Clover did not add an expense. Upload the receipt after you pay.",
   unpaid_invoice: "Unpaid invoice saved. Clover did not add an expense. Upload proof of payment after you pay.",

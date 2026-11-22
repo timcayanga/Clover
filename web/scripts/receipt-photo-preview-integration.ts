@@ -92,6 +92,11 @@ async function verify() {
     const prefixed = await uploadPdf(expectedBytes);
     assert.equal(prefixed.status, 200);
     assert.equal((await prefixed.json()).preview.items[0]?.unitPrice, "10.00");
+    expectedBytes = statementPdf(["Green Cafe", "Tax Invoice", "Qty Item Amount", "2 Tea 20.00",
+      "Subtotal EUR 20.00", "Total EUR 20.00", "Amount paid EUR 20.00"]);
+    const paidInvoice = await uploadPdf(expectedBytes);
+    assert.equal(paidInvoice.status, 200);
+    assert.equal((await paidInvoice.json()).preview.total, "20.00");
     expectedBytes = quantityReceipt;
     pdf = await uploadPdf(expectedBytes);
   } finally {
@@ -110,12 +115,12 @@ async function verify() {
   const orderDraft = await order.json();
   assert.equal(orderDraft.preview.requiresReview, true);
   assert.equal(orderDraft.reliableForScopedSplit, false);
-  assert.equal(retained, 6);
+  assert.equal(retained, 7);
   if (process.argv[3]) {
     const locked = await uploadPdf(await readFile(process.argv[3]));
     assert.equal(locked.status, 422);
     assert.equal((await locked.json()).code, "IMPORT_PASSWORD_REQUIRED");
-    assert.equal(retained, 6);
+    assert.equal(retained, 7);
   }
   console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }

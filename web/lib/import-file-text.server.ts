@@ -1,5 +1,6 @@
 import { isDelimitedImport, importDocumentMediaType, importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
-import { readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
+import { locateDamagedReceiptPrices, recoverReceiptPrices } from "./receipt-price-column";
+import { recordReceiptPriceCrop, readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
 import { canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
@@ -256,7 +257,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v16";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v17";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -894,6 +895,44 @@ async function verifyReceiptDateCrop(source: string, preview: ImagePreview) {
   return recordReceiptDateCheck(source, line, readDate && candidates.includes(readDate) ? readDate : null);
 }
 
+async function verifyReceiptPriceCrop(source: string, image: ImagePreview) {
+  const text = readLocalReceiptOcrText(source);
+  if (!text || !/\bsub[ -]?total\b/i.test(text)) return source;
+  const plan = locateDamagedReceiptPrices(text, readReceiptOpticalEvidence(source));
+  if (!plan) return source;
+  try {
+    const sharp = (await import("sharp")).default;
+    const [left, top, right, bottom] = plan.bounds;
+    let lastRegion: string | undefined;
+    const readings: string[] = [];
+    // Different crop borders change text detection on faint print. Limit the
+    // second read to a small table that still lacks reconciled prices.
+    for (const grid of [8, 16]) {
+      const x = Math.floor(left * image.width / grid) * grid;
+      const y = Math.floor(top * image.height / grid) * grid;
+      const width = Math.min(image.width, Math.ceil(right * image.width / grid) * grid) - x;
+      const height = Math.min(image.height, Math.ceil(bottom * image.height / grid) * grid) - y;
+      const region = [x, y, width, height].join(",");
+      if (region === lastRegion) break;
+      lastRegion = region;
+      const { data, info } = await sharp(image.data, { raw: { width: image.width, height: image.height, channels: 3 } })
+        .extract({ left: x, top: y, width, height })
+        .resize({ width: 1000, height: 1000, fit: "inside" })
+        .sharpen().raw().toBuffer({ resolveWithObject: true });
+      const crop = await readLocalReceiptImage({ data, width: info.width, height: info.height });
+      if (!crop) break;
+      const reading = readLocalReceiptOcrText(crop);
+      if (!reading) break;
+      readings.push(reading);
+      const items = recoverReceiptPrices(plan, readings);
+      if (items) return recordReceiptPriceCrop(source, plan.original, items, plan.bounds, readings);
+    }
+    return source;
+  } catch {
+    return source;
+  }
+}
+
 const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   sourceBytes: Uint8Array;
   classificationContext?: ClassificationContext;
@@ -920,10 +959,20 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     if (resolvePositiveImportDocumentRoute(source)?.mode !== "receipt") return null;
     // The shared photo parser withholds clipped or conflicting payable amounts.
     const parsed = parseReceiptPhotoText(source);
-    if (!canPreviewLocalReceiptItems(text, parsed)) return null;
+    let verified = source;
+    if (!canPreviewLocalReceiptItems(text, parsed)) {
+      if (!parsed.total || !parsed.subtotal || !parsed.requiresReview) return null;
+      const recovered = await verifyReceiptPriceCrop(source, image);
+      if (recovered === source) return null;
+      const checked = parseReceiptPhotoText(recovered);
+      if (checked.total !== parsed.total || checked.subtotal !== parsed.subtotal ||
+          checked.currency !== parsed.currency || checked.billDate !== parsed.billDate ||
+          checked.merchantName !== parsed.merchantName || checked.items.length <= parsed.items.length) return null;
+      verified = recovered;
+    }
     const rejection = classifyExactPhotoRejection({ ...params, text }, params.classificationContext);
     if (rejection) throw rejection;
-    return verifyReceiptDateCrop(source, image);
+    return verifyReceiptDateCrop(verified, image);
   };
   const purchase = await verifiedPurchase(firstOptical, opticalPreview);
   if (purchase) return purchase;
@@ -1081,7 +1130,7 @@ export function hasVerifiedPdfNativeLedger(data: Uint8Array, selectedText: strin
 function hasVerifiedPdfReceipt(data: Uint8Array, text: string) {
   const pages = pdfNativePageReads.get(data);
   if (pages?.length !== 1 || pages[0].trim() !== text.trim() ||
-      !/\breceipt\b/i.test(text) || /[\uFFFD\uE000-\uF8FF]|\(cid:\d+\)/u.test(text)) return false;
+      !(/\breceipt\b/i.test(text) || /^(?:sales|tax) invoice[ \t]*$/im.test(text)) || /[\uFFFD\uE000-\uF8FF]|\(cid:\d+\)/u.test(text)) return false;
   if (resolvePositiveImportDocumentRoute(text)?.mode !== "receipt") return false;
   const { total } = parseReceiptPhotoText(text);
   if (!total) return false;

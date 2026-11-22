@@ -3,7 +3,8 @@ import { mergeReceiptBackup } from "../lib/receipt-backup-preview";
 import assert from "node:assert/strict";
 import { canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
-import { hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
+import { locateDamagedReceiptPrices, recoverReceiptPrices } from "../lib/receipt-price-column";
+import { recordReceiptPriceCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
 import { qualifyDeviceReceiptReading } from "../lib/device-receipt-reading";
 import { normalizeDeviceTextEvidence, type OpticalTextLine } from "../../shared/device-text-evidence";
@@ -361,3 +362,29 @@ for (const input of [decimalComma, encodeLocalReceiptOcr({ text: decimalComma })
   assert.equal(preview.items[0]?.amount, "2051.00");
 }
 assert.equal(readReconciledItemTable(decimalComma.replace("1.025,50", "1.02,50")), null);
+
+function checkDamagedPriceColumn() {
+  const names = ["Green Tea", "Rye Bread", "Apple Tart", "Black Coffee", "Lemon Cake", "Orange Tea"];
+  const expected = ["10.00", "20.00", "30.00", "40.00", "50.00", "60.00"];
+  const lines = [names[0] + " 10.00", names[1], names[2] + " 3.0", names[3] + " 40.00", names[4], names[5]];
+  const source = ["2026-11-19", ...lines, "Subtotal 210.00", "Total PHP 210.00"].join("\n");
+  const blocks: OpticalTextLine[] = names.map((text,i) => ({text, box:[.1, .2+i*.05, .45, .23+i*.05]}));
+  for (const i of [0,3]) blocks.push({text:expected[i],box:[.7,.2+i*.05,.83,.23+i*.05]});
+  const plan = locateDamagedReceiptPrices(source, blocks);
+  assert.ok(plan);
+  const priced = names.map((name,i) => name + " " + expected[i]).join("\n");
+  assert.equal(recoverReceiptPrices(plan, [priced]), priced);
+  assert.equal(recoverReceiptPrices(plan, [priced.replace("20.00",""), priced.replace("50.00","")]), priced);
+  for (const other of [priced.replace("20.00","80.00"), priced.replace("Rye Bread","A date"), priced.replace("40.00","12.00"),
+    priced.replace("10.00","40.00").replace("Black Coffee 40.00","Black Coffee 10.00"), priced.replace("Apple Tart 30.00\n",""),
+    priced.replace("Rye Bread", "Extra Tea 13.00\nRye Bread")]) {
+    assert.equal(recoverReceiptPrices(plan, [other]), null);
+  }
+  assert.equal(recoverReceiptPrices(plan, [priced, priced.replace("20.00","30.00")]), null);
+  assert.equal(locateDamagedReceiptPrices(source, [...blocks,blocks[0]]), null);
+  const raw = encodeLocalReceiptOcr({text:source, opticalLines:blocks});
+  const repaired = recordReceiptPriceCrop(raw, plan.original, priced, plan.bounds, [priced]);
+  assert.deepEqual(readReceiptOpticalEvidence(repaired), readReceiptOpticalEvidence(raw));
+  assert.equal(readLocalReceiptOcrText(repaired), source.replace(plan.original, priced));
+}
+checkDamagedPriceColumn();

@@ -59,3 +59,15 @@ for (const source of [order, encodeLocalReceiptOcr({text: order})]) {
   assert.equal(draft.requiresReview, true);
   assert.equal(assessReceiptPreviewQuality(draft).reliableForFastPath, false);
 }
+
+for (const [code, symbol] of [["PHP", "₱"], ["EUR", "€"], ["GBP", "£"]]) {
+  assert.equal(classifyUnsettledPurchaseDocument("Sales Invoice\nTotal " + code + " 120.00\nAmount paid 120.00 " + symbol), null);
+}
+assert.equal(classifyUnsettledPurchaseDocument("Tax Invoice\nTotal USD 120.00\nAmount Paid $120.00"), "unverified_invoice");
+const unpaidSlip = "Green Cafe\nOfficial Receipt\nQty Item Amount\n1 Tea 20.00\nSubtotal 20.00\nTotal PHP 20.00\nStatus: Partially paid";
+for (const source of [unpaidSlip, encodeLocalReceiptOcr({ text: unpaidSlip })]) {
+  assert.equal(resolvePositiveImportDocumentRoute(source), null);
+  assert.equal(parseReceiptPhotoText(source).requiresReview, true);
+}
+
+assert.equal(classifyUnsettledPurchaseDocument("Official Receipt\nPayment status: Pending\nTotal PHP 20.00"), "unpaid_receipt");
