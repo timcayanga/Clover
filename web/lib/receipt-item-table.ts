@@ -1,6 +1,10 @@
 // A purchase table must agree with two independently printed totals before it
 // can replace the general OCR parser's line items.
 export function readReconciledItemTable(text: string) {
+  return readQuantityTable(text) ?? readRegisterServiceTable(text);
+}
+
+function readQuantityTable(text: string) {
   const lines = text.split(/\r?\n/).map(line => line.trim());
   const header = lines.findIndex(line => /\b(?:qty|quantity)\b.*\b(?:ite(?:m)?|description)\b/i.test(line));
   if (header < 0) return null;
@@ -134,6 +138,37 @@ export function readSubtotalItems(source: string, allowQuantityRows = false) {
   return items.length >= 2 && sum === expected ? items.reverse() : null;
 }
 
+// Some registers call the purchase subtotal "Total Amount" and print
+// the payable "Total Due" immediately after the service charge.
+function readRegisterServiceTable(source: string) {
+  if (!/^[ \t]*(?:service charge|s\. charge)\b/im.test(source)) return null;
+  const lines = source.split(/\r?\n/).map(line => line.trim());
+  const index = lines.findIndex(line => /^(?:sub[ -]?total|total amount)\b/i.test(line));
+  if (index < 0) return null;
+  const subtotalRow = /^(?:sub[ -]?total|total amount)\s*[:：]?\s*([\d,]+\.\d{2})$/i.exec(lines[index]);
+  const feeRow = /^(?:service charge|s\. charge)(?:\s+(?:\(\d+(?:\.\d+)?%\)|\d+(?:\.\d+)?%))?\s*[:：]?\s*([\d,]+\.\d{2})$/i.exec(lines[index + 1] ?? "");
+  const totalRow = /^(?:total due|amount due|total)\s*[:：]?\s*([\d,]+\.\d{2})$/i.exec(lines[index + 2] ?? "");
+  if (!subtotalRow || !feeRow || !totalRow) return null;
+  const cents = (amount: string) => /^\d+(?:,\d{3})*\.\d{2}$/.test(amount)
+    ? Number(amount.replace(/[,.]/g, "")) : NaN;
+  const [subtotal, fee, payable] = [subtotalRow, feeRow, totalRow].map(row => cents(row[1]));
+  if (!Number.isSafeInteger(payable) || fee <= 0 || subtotal + fee !== payable) return null;
+  const outside = [...lines.slice(0, index), ...lines.slice(index + 3)].join("\n");
+  const countLine = /^(?:total no\.? of items[ \t]*[:：][ \t]*(\d+)|[-=]*[ \t]*(\d+)(?:\.0+)?[ \t]+item\(s\)[ \t]*[-=]*)[ \t]*\r?$/gim;
+  const counts = [...outside.matchAll(countLine)];
+  if (counts.length !== 1) return null;
+  // Extra totals, adjustments and count lines can belong to a different settlement.
+  if (/^\s*(?:grand total|bill (?:amount|total)|amount (?:due|paid|to pay)|balance due|discount|rounding|gratuity|tip|service charge|s\. charge|sub[ -]?total|total)\b/im.test(outside.replace(countLine, ""))) return null;
+  const items = readSubtotalItems(source);
+  if (!items || items.some(item => item.unitPrice == null || (item.quantity ?? 1) < 1 ||
+    (item.quantity == null && Number(item.unitPrice) === 0))) return null;
+  const units = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+  if (Number(counts[0][1] ?? counts[0][2]) !== units ||
+      items.reduce((sum, item) => sum + cents(item.amount), 0) !== subtotal) return null;
+  return { items, total: (payable / 100).toFixed(2), subtotal: (subtotal / 100).toFixed(2),
+    serviceCharge: (fee / 100).toFixed(2) };
+}
+
 type OpticalBlock = import("../../shared/device-text-evidence").OpticalTextLine;
 type PricedItem = { description: string; amount: string; quantity?: number };
 
@@ -217,12 +252,14 @@ export function readChargedReceiptTable(source: string, blocks: OpticalBlock[] =
 }
 
 export function hasPrintedItemizedTotal(text: string, total: string) {
+  const register = readRegisterServiceTable(text);
+  if (register) return register.total === total;
   const totals = text.split(/\r?\n/).flatMap(line => {
     const match = line.match(/^\s*(?:grand total|bill (?:amount|total)|amount (?:due|to pay)|total(?: due| amount| paid)?)\s*[:：]?\s*(?:[A-Z]{3}|[₱$€£¥])?\s*(\d[\d,]*\.\d{2})\s*(?:[A-Z]{3}|[₱$€£¥])?\s*$/i);
     return match ? [match[1].replace(/,/g, "")] : [];
   });
   if (totals.some(value => value !== total)) return false;
-  const reconciled = readReconciledItemTable(text) ?? readChargedReceiptTable(text);
+  const reconciled = readQuantityTable(text) ?? readChargedReceiptTable(text);
   if (reconciled) return reconciled.total === total;
   if (!totals.length) return false;
   const items = readSubtotalItems(text);

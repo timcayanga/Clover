@@ -278,6 +278,10 @@ const positiveStatement = "BANK STATEMENT\nDate Description Debit Credit Balance
 assert.deepEqual(resolvePositiveImportDocumentRoute(positiveStatement), {
   mode: "statement", rule: "statement_heading_columns_and_rows",
 });
+const accountingRows = "Bank statement\nDate Description Amount\n2026-11-12 Cafe (180.50)\n2026-11-13 Refund 180.50 CR";
+assert.equal(resolvePositiveImportDocumentRoute(accountingRows)?.mode, "statement");
+assert.equal(resolvePositiveImportDocumentRoute(accountingRows.replace("(180.50)", "PHP180.50"))?.mode, "statement");
+assert.equal(resolvePositiveImportDocumentRoute(accountingRows.replace("180.50 CR", "180.50 pending")), null);
 assert.equal(resolvePositiveImportDocumentRoute(positiveStatement.replace("2026-11-13 Grocery 25.00", "")), null);
 assert.equal(resolvePositiveImportDocumentRoute(positiveStatement.replace("Deposit", "Opening Balance").replace("Grocery", "Closing Balance")), null);
 assert.equal(resolvePositiveImportDocumentRoute("Recent transactions\n2026-09-15\nCoffee purchase\n-₱125.00\nPosted\nCash deposit\n+₱500.00\nCompleted")?.mode, "statement");

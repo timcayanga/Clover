@@ -185,3 +185,17 @@ assert.equal(readReconciledItemTable(itemCountReceipt.replace("3 Item(s)", "5 It
 assert.ok(hasPrintedItemizedTotal(grossBill.replace("Bill Amount 30.00", "Amount to pay 30.00 EUR"), "30.00"));
 assert.ok(!hasPrintedItemizedTotal(grossBill + "\nBill Total 35.00 EUR", "30.00"));
 assert.ok(!hasPrintedItemizedTotal(itemCountReceipt + "\nBill Total 75.00 PHP", "70.00"));
+
+const registerFee = [
+  "BILL SLIP", "Lime tea", "2 @ 50.00 100.00", "Cake", "1 @ 80.00 80.00",
+  "Total Amount 180.00", "Service Charge (10%) 18.00", "Total Due 198.00", "TOTAL No. of ITEMS : 3",
+].join("\n");
+assert.equal(readReconciledItemTable(registerFee)?.serviceCharge, "18.00");
+assert.ok(hasPrintedItemizedTotal(registerFee, "198.00"));
+assert.equal(parseReceiptPhotoText(encodeLocalReceiptOcr({text: registerFee})).total, "198.00");
+for (const bad of [registerFee.replace("ITEMS : 3", "ITEMS : 5"), registerFee + "\nBill Amount 200.00",
+  registerFee + "\nTotal PHP 180.00", registerFee + "\nTotal Qty 5", registerFee + "\nTip 5.00", registerFee.replace("18.00\nTotal Due", "10.00\nTotal Due"),
+  registerFee.replace("2 @ 50.00", "3 @ 50.00")]) {
+  assert.equal(readReconciledItemTable(bad), null);
+  assert.ok(!hasPrintedItemizedTotal(bad, "198.00"));
+}
