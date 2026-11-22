@@ -15,32 +15,41 @@ function readQuantityTable(text: string) {
   if (subtotalIndex < 0) return null;
 
   const hasUnitPrice = /\bunit\s+price\b|\bprice\s+(?:amount|line total|total)\b/i.test(lines[header]);
-  // Parse printed denomination prefixes only in monetary columns. Keep the
+  // Parse printed denominations only in monetary columns. Keep the
   // original OCR transcript and numbers embedded in product names intact.
   const denominations = new Set<string>();
   const symbols: Record<string, string> = { "₱": "PHP", "€": "EUR", "£": "GBP" };
-  const trailingPrice = /(^|[\s:])(?:(PHP|EUR|GBP|USD|CAD|AUD|SGD|HKD|₱|€|£)\s*)?(\d+(?:,\d{3})*\.\d{2})$/i;
+  const trailingPrice = /(^|[\s:])(?:(PHP|EUR|GBP|USD|CAD|AUD|SGD|HKD|₱|€|£)\s*)?(\d+(?:,\d{3})*\.\d{2}|\d+(?:\.\d{3})*,\d{2})$/i;
   function takePrice(value: string) {
+    const suffix = value.match(/(?<=\d)\s*([A-Z]{3}|₱|€|£)$/u);
+    if (suffix) {
+      const currency = symbols[suffix[1]] ?? suffix[1];
+      if (!isReceiptCurrencyCode(currency)) return null;
+      denominations.add(currency);
+      value = value.slice(0, suffix.index);
+    }
     const price = trailingPrice.exec(value);
     if (!price) return null;
     // An unfamiliar ISO prefix can also be an uppercase product word.
     // Decline the table when its currency cannot be separated safely.
     if (!price[2]) {
-      const otherCode = value.match(/(?:^|[:\s])([A-Z]{3})\s*\d+(?:,\d{3})*\.\d{2}$/)?.[1];
-      if (otherCode && isReceiptCurrencyCode(otherCode)) return null;
+      const otherCode = value.match(/(?:^|[:\s])([A-Z]{3})\s*\d[\d,.]*[.,]\d{2}$/)?.[1];
+      if (otherCode && isReceiptCurrencyCode(otherCode) &&
+          !(suffix && /\d[.,]\d{2}\s+[A-Z]{3}$/.test(value.slice(0, price.index)))) return null;
     }
     const code = price[2] && (symbols[price[2]] ?? price[2].toUpperCase());
     if (code) denominations.add(code);
-    return { prefix: value.slice(0, price.index).trimEnd(), amount: price[3].replace(/,/g, "") };
+    const amount = price[3].at(-3) === "," ? price[3].replace(/\./g, "").replace(",", ".") : price[3].replace(/,/g, "");
+    return { prefix: value.slice(0, price.index).trimEnd(), amount };
   }
   const items: {description: string; quantity: number; amount: string; unitPrice?: string}[] = [];
   let itemCents = 0;
   for (const line of lines.slice(header + 1, subtotalIndex)) {
     if (!items.length && /^(?:dine in|take out|vat items?|vat item\(s\))$/i.test(line)) continue;
     const column = takePrice(line);
-    const row = column?.prefix.match(/^([1-9]\d*(?:\.0{1,2})?)\s+(.+)$/);
+    const row = column?.prefix.match(/^([1-9]\d*(?:[.,]0{1,2})?)\s+(.+)$/);
     if (column && row) {
-      const quantity = Number(row[1]);
+      const quantity = Number(row[1].replace(",", "."));
       if (!Number.isSafeInteger(quantity)) return null;
       const amount = column.amount;
       const cents = Math.round(Number(amount) * 100);

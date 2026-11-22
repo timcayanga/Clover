@@ -61,7 +61,7 @@ function score(labels: Label[], predictions: Prediction[]) {
     const caseSummary: Array<{ photo: number; discrepancies: string[]; matchedItems: number; labeledItems: number; unmatchedOutputItems: number }> = [];
     let automaticCoreExact = 0;
     const allCore = { exact: 0, labeled: 0 }, allObservableCore = { exact: 0, labeled: 0 };
-    const items = { matchedDescriptions: 0, labeled: 0, extraOnCompletePhotos: 0, completePhotos: 0, allItemsExact: 0 };
+    const items = { matchedDescriptions: 0, labeled: 0, extraOnCompletePhotos: 0, excessRowCount: 0, missingRowCount: 0, completePhotos: 0, allItemsExact: 0 };
     const reviewReasons: Record<string, number> = {};
     const outcomes = { extracted: 0, review: 0, rejected: 0, failed: 0, unavailable: 0 };
     for (const label of labels) {
@@ -147,7 +147,10 @@ function score(labels: Label[], predictions: Prediction[]) {
       items.matchedDescriptions += matched;
       if (label.itemCoverage === "complete") {
         items.completePhotos++;
+        // The historical metric counts unmatched spellings as well as spurious rows.
         items.extraOnCompletePhotos += actualItems.length - matched;
+        items.excessRowCount += Math.max(0, actualItems.length - label.items.length);
+        items.missingRowCount += Math.max(0, label.items.length - actualItems.length);
         if (exactItems === label.items.length && actualItems.length === label.items.length) items.allItemsExact++;
       }
     }

@@ -5,7 +5,7 @@ import tesseractPackage from "tesseract.js/package.json";
 // Bump the text revision for changes to PDF decoding, native layout, reader
 // routing or OCR composition. Bump the page revision for changes to targeted
 // rendering, OCR parameters, or the evidence required to reuse a repaired page.
-const textRevision = "pdf-extract-r6";
+const textRevision = "pdf-extract-r7";
 const pageRevision = "pdf-page-r2";
 const readerVersion = `pdfjs-${pdfjsPackage.version}:ocr-${tesseractPackage.version}`;
 

@@ -1,3 +1,6 @@
+import { encodeLocalReceiptOcr } from "../lib/local-receipt-ocr-envelope";
+import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
+import { parseReceiptPhotoText, assessReceiptPreviewQuality } from "../lib/split-bill";
 import { columnReceipt } from "./receipt-column-settlement-regression";
 import assert from "node:assert/strict";
 import { classifyUnsettledPurchaseDocument, type UnsettledPurchaseDocument } from "../lib/purchase-document-payment";
@@ -38,3 +41,21 @@ for (const [source, expected] of examples) {
   }
 }
 console.log(`${examples.length} purchase-document evidence cases passed`);
+
+for (const source of ["Purchase Order", "Purchase Order No. PO-123"]) {
+  assert.equal(classifyUnsettledPurchaseDocument(source + "\nTea PHP 20.00\nTotal PHP 20.00"), "purchase_order");
+  assert.equal(classifyUnsettledPurchaseDocument("Official Receipt\n" + source + "\nTotal PHP 20.00"), null);
+}
+assert.equal(classifyUnsettledPurchaseDocument("Invoice\nTotal PHP 120.00\nAmount Paid PHP 20.00"), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument("Invoice\nTotal PHP 120.00\nAmount Paid USD 120.00"), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument("Invoice\nTotal PHP 120.00\nAmount Paid PHP 120.00"), null);
+assert.equal(classifyUnsettledPurchaseDocument("Sales Invoice\nTotal 1.200,00 EUR\nAmount Paid 1.200,00 EUR"), null);
+assert.equal(classifyUnsettledPurchaseDocument("Invoice\nTotal 1.200,00 EUR\nAmount Paid 20,00 EUR"), "unverified_invoice");
+
+const order = "Green Cafe\nPurchase Order #PO-52\n2026-11-19\nQty Item Amount\n1 Tea 20.00\nSubtotal 20.00\nTotal PHP 20.00";
+for (const source of [order, encodeLocalReceiptOcr({text: order})]) {
+  assert.equal(resolvePositiveImportDocumentRoute(source), null);
+  const draft = parseReceiptPhotoText(source);
+  assert.equal(draft.requiresReview, true);
+  assert.equal(assessReceiptPreviewQuality(draft).reliableForFastPath, false);
+}

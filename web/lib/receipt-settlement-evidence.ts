@@ -12,7 +12,7 @@ const taxHeading = /^(?:tax|vat|gst|ppn)(?:\s+(?:breakdown|summary|details|calcu
 const settlementHeading = /^(?:settlement|payment|tender)(?:\s+(?:summary|details|breakdown))?\s*[:：]?$/iu;
 const breakdownTotal = /^total\s+(?:vat\b|tax\b|gst\b|ppn\b|zero[- ]rated\b|(?:no\.?\s+of\s+)?(?:qty|quantity|items?|points?)\b|savings\b|discount\b|cash\b|tender(?:ed)?\b|change\b|refund\b)/iu;
 const saleLabels = /^(?:grand\s*total|bill total|bill amount|net total|due|du|tl|jumlah bayar|total bayar|total tagihan|결제금액|amount (?:due|paid|payable|to pay)|sale amount|total (?:paid|due|payable))$/iu;
-const currencyMark = /^(?:(?:[A-Z]{3}|P(?=\s*\d)|Rp\.?|RM|(?:US|HK|S|A|C|NZ|NT)\$)\s*|[₱$€£¥฿₩₫₹]\s*)|\s*(?:[A-Z]{3}|원|円|元)$/giu;
+const currencyMark = /^(?:(?:[A-Z]{3}|P(?=\s*\d)|Rp\.?|RM|(?:US|HK|S|A|C|NZ|NT)\$)\s*|[₱$€£¥฿₩₫₹]\s*)|\s*(?:[A-Z]{3}|[₱$€£¥฿₩₫₹원円元])$/giu;
 
 function readAmount(raw: string) {
   let value = raw.trim().replace(/^(?:[:：=]\s*|\.\s+)/u, "").replace(currencyMark, "").trim();

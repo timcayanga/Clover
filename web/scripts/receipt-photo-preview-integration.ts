@@ -70,7 +70,7 @@ async function verify() {
     const upload = new Request(request.url, {method:"POST", headers:{origin:"https://clover.ph"}, body:form});
     return withMobileRequestContext("qa", upload, () => POST(upload));
   }
-  expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "04-05-2026", "Currency: EUR", "Qty Item Unit Price Amount", "2 Tea EUR 10.00 EUR 20.00", "Subtotal EUR 20.00", "Total Amount EUR 20.00"]);
+  expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "04-05-2026", "Currency: EUR", "Qty Item Unit Price Amount", "2 Tea 10,00 EUR 20,00 EUR", "Subtotal 20,00 EUR", "Total Amount 20,00 EUR"]);
   let rasterizations = 0;
   const info = console.info;
   console.info = (...args) => {
@@ -87,6 +87,11 @@ async function verify() {
     assert.equal(preview.total, "30.00");
     assert.deepEqual(preview.items.map((item: { description: string }) => item.description), ["Tea", "Coffee"]);
     assert.equal(rasterizations, 0, "Reconciling item prices, gross and payable should skip page rendering");
+    expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "Currency: EUR", "Qty Item Unit Price Amount",
+      "2 Tea EUR 10.00 EUR 20.00", "Subtotal EUR 20.00", "Total Amount EUR 20.00"]);
+    const prefixed = await uploadPdf(expectedBytes);
+    assert.equal(prefixed.status, 200);
+    assert.equal((await prefixed.json()).preview.items[0]?.unitPrice, "10.00");
     expectedBytes = quantityReceipt;
     pdf = await uploadPdf(expectedBytes);
   } finally {
@@ -98,12 +103,19 @@ async function verify() {
   assert.equal(preview.billDate, null);
   assert.equal(preview.total, "20.00");
   assert.deepEqual(preview.items.map((item: { description: string }) => item.description), ["Tea"]);
-  assert.equal(retained, 4);
+  expectedBytes = statementPdf(["Green Cafe", "Purchase Order No. PO-52", "2026-11-19", "Qty Item Amount",
+    "1 Tea 20.00", "Subtotal 20.00", "Total PHP 20.00"]);
+  const order = await uploadPdf(expectedBytes);
+  assert.equal(order.status, 200);
+  const orderDraft = await order.json();
+  assert.equal(orderDraft.preview.requiresReview, true);
+  assert.equal(orderDraft.reliableForScopedSplit, false);
+  assert.equal(retained, 6);
   if (process.argv[3]) {
     const locked = await uploadPdf(await readFile(process.argv[3]));
     assert.equal(locked.status, 422);
     assert.equal((await locked.json()).code, "IMPORT_PASSWORD_REQUIRED");
-    assert.equal(retained, 4);
+    assert.equal(retained, 6);
   }
   console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }

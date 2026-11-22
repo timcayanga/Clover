@@ -339,3 +339,25 @@ for (const input of [disputedUnit, encodeLocalReceiptOcr({ text: disputedUnit })
   assert.equal(preview.requiresReview, true);
 }
 assert.equal(readReconciledItemTable(priceAmountHeader.replace("10.00 20.00", "EUR 10.00 EUR 20.00").replace("TOTAL DUE 35.00", "TOTAL INR 35.00")), null);
+
+for (const currency of [" EUR", "PHP", " ₱", " INR"]) {
+  const marked = priceAmountHeader.replace(/\d+\.\d{2}/g, value => value + currency);
+  const rows = readReconciledItemTable(marked);
+  assert.deepEqual(rows?.items, pricedItems);
+  for (const input of [marked, encodeLocalReceiptOcr({ text: marked })]) {
+    assert.deepEqual(parseReceiptPhotoText(input).items, pricedItems);
+    assert.equal(parseReceiptPhotoText(input).total, "35.00");
+  }
+}
+assert.equal(readReconciledItemTable(priceAmountHeader.replace("10.00 20.00", "10.00 USD 20.00 EUR")), null);
+
+const decimalComma = ["Fictional Shop", "Qty Item Unit Price Amount", "2,00 Tea 1.025,50 EUR 2.051,00 EUR",
+  "1 Cake 30,00 EUR 30,00 EUR", "Subtotal 2.081,00 EUR", "Total Due 2.081,00 EUR"].join("\n");
+for (const input of [decimalComma, encodeLocalReceiptOcr({ text: decimalComma })]) {
+  const preview = parseReceiptPhotoText(input);
+  assert.equal(preview.total, "2081.00");
+  assert.equal(preview.items[0]?.description, "Tea");
+  assert.equal(preview.items[0]?.unitPrice, "1025.50");
+  assert.equal(preview.items[0]?.amount, "2051.00");
+}
+assert.equal(readReconciledItemTable(decimalComma.replace("1.025,50", "1.02,50")), null);

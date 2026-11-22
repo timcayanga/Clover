@@ -1,3 +1,4 @@
+import { classifyUnsettledPurchaseDocument } from "@/lib/purchase-document-payment";
 import { mergeReceiptBackup } from "@/lib/receipt-backup-preview";
 import { canPreviewLocalReceiptItems } from "@/lib/receipt-item-table";
 import { assessFinancialUploadScope, getClearLocalPhotoRejection, getUploadRejectionDetails, NonFinancialUploadError } from "@/lib/financial-upload-scope";
@@ -220,7 +221,7 @@ export async function POST(request: Request) {
       localPreview = parseReceiptText("");
     }
     const readingText = readLocalReceiptOcrText(receiptText) ?? receiptText;
-    const preview = await tryReceiptBackup({
+    const preview = classifyUnsettledPurchaseDocument(readingText) ? localPreview : await tryReceiptBackup({
       consentUserId: user.id,
       file: selectedFile,
       bytes: validationInput.bytes,

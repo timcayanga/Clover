@@ -383,3 +383,21 @@ The shared photo route matched 11/11 totals and 51/67 exact item names across 11
 The 44 private statement fixtures, inline contracts, 104-row China Bank check, structured upload suite (22 extensions and 18 file fixtures), queued receipt handoff, draft confirmation, native picker and offline checks passed. Investment screenshot and workbook parser checks passed. The GCrypto database-backed import check lacked a configured local database. Android native OCR compiled against the Android SDK and ML Kit. The Android emulator refused startup due to insufficient disk space. Device picker behavior and end-to-end timing on physical devices remain unverified.
 
 After the statement suite finished, the supplied Spirits Library photo took 6.12 seconds through the multipart handler and 5.25 seconds through the assembled mobile-upload handler. Both returned the three named drinks, service charge and printed total. These measurements exclude network transfer and UI rendering.
+
+### Receipt names, localized prices and payment evidence
+
+The previous count of ten extra descriptions measured unmatched spellings. Comparing each returned row with its labeled purchase and amount showed ten misread names and six missing purchases. Those six all came from photo 11, where most prices were unreadable in the OCR transcript. The scorer now reports row-count excess and shortfall alongside the historical unmatched-description count.
+
+| Photo | Remaining discrepancy | Evidence |
+| --- | --- | --- |
+| 3 | Merchant punctuation | The transcript omitted the final period in the registered name. |
+| 6 | Three misspelled descriptions | All nine line amounts matched. For Calamares, two recognition passes preferred the wrong spelling and one read the correct spelling. |
+| 7 | A word split across receipt lines | Both recognizers read “Midnigh” and “t Dream” from separate boxes. The purchase amount and quantity were retained. |
+| 8 | Four punctuation or spelling errors | All six line amounts matched. Multiple passes repeated some errors with high confidence. |
+| 11 | Two misspellings and six missing rows | The two retained amounts matched their purchases. The transcript lacked four prices and returned damaged or inconsistent prices for two more. |
+
+The quantity-table and settlement readers now recognize currency after the price and verified decimal-comma prices. A digital PDF containing these columns returned its items and total without rasterization. Negative fixtures cover conflicting currencies and malformed grouping. Payment-document routing now distinguishes a standalone purchase order from a receipt referencing an order. An invoice with a smaller printed payment or conflicting payment currency requires review. The Split Bills preview integration returned an editable purchase-order draft with automatic scoped splitting disabled.
+
+The revised OCR worker batches narrow text crops together and restores their original order. The old and revised workers produced byte-identical results on three original photos in a paired comparison. Old/new times in seconds were 5.49/4.00, 5.52/4.14 and 3.91/3.88. Other QA processes were running, so these figures characterize those paired calls only. On the final 11-photo replay the shared reader matched 11 totals and 51 of 67 names. Median local processing was 5.17 seconds, maximum 24.37 seconds. The supplied Spirits Library photo produced the correct purchases, service charge and total in 3.00 seconds via multipart and 2.68 seconds via assembled upload. Timings exclude network and UI rendering.
+
+The iOS Simulator Vision-only route matched six totals and 18 names. Android and iOS upload adapter checks passed. The Android emulator still had insufficient free disk space to start. The 44 private statement fixtures and 104-row China Bank check passed, along with the 18-file upload suite, receipt handoff, GCrypto screenshot and investment-summary parser checks.

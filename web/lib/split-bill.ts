@@ -1,3 +1,4 @@
+import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
 import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { detectMultipleReceipts } from "./receipt-image-region";
@@ -2537,7 +2538,11 @@ function receiptOptics(source: string) {
 }
 
 function parseReceiptSource(receiptText: string, photo: boolean, optics = receiptOptics(receiptText)): ReceiptPreviewResult {
-  const receipt = parseReceiptSourceFields(receiptText, photo, optics);
+  const parsed = parseReceiptSourceFields(receiptText, photo, optics);
+  const source = readLocalReceiptOcrText(receiptText) ?? receiptText;
+  const receipt = classifyUnsettledPurchaseDocument(source)
+    ? { ...parsed, requiresReview: true, confidence: Math.min(parsed.confidence, 45) }
+    : parsed;
   const items = refineReceiptItemWords(receiptText, receipt.items);
   return items === receipt.items ? receipt : { ...receipt, items };
 }

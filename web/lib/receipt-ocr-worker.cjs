@@ -377,8 +377,12 @@ function decodeLine(probabilities, classes, model, numericGlyphs, box) {
 
 async function recognize(lines, language, normalize = true) {
   if (!lines.length) return [];
-  const model = await getModel(language),
-    results = [];
+  // Standard-width crops share identical padding. Batch them together even
+  // when the detector interleaves wide rows, then restore detector order.
+  const original = lines;
+  lines = [...lines.filter(line => line.width <= 320), ...lines.filter(line => line.width > 320)];
+  const model = await getModel(language);
+  const results = new Map();
   const { numericGlyphs } = model;
   for (let start = 0; start < lines.length;) {
     const width = Math.max(320, lines[start].width);
@@ -400,14 +404,14 @@ async function recognize(lines, language, normalize = true) {
       for (let i = 0; i < batch; i++) {
         const offset = i * steps * classes;
         const line = decodeLine(values.subarray(offset, offset + steps * classes), classes, model, numericGlyphs, lines[start + i].box);
-        if (line) results.push(line);
+        if (line) results.set(line.box, line);
       }
       start = end;
     } finally {
       output.dispose();
     }
   }
-  return results;
+  return original.map(line => results.get(line.box)).filter(Boolean);
 }
 function rows(lines) {
   // Correct document skew before pairing distant labels and amounts. Reading
