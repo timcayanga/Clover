@@ -43,6 +43,10 @@ export async function uploadInParts(
   // immediately because a part request can fail before finalization is reached.
   const cachedText = normalizeDeviceTextEvidence(file.deviceText);
   const prepared = control.preparedDeviceText;
+  let latestFull: DeviceTextEvidence | undefined;
+  if (prepared && !cachedText?.complete) {
+    void prepared.full.then(value => { latestFull = normalizeDeviceTextEvidence(value) ?? undefined; }, () => {});
+  }
   const reading = cachedText ? null : prepared
     ? prepared.partial ? Promise.race([prepared.full, prepared.partial]) : prepared.full
     : (readDeviceText
@@ -124,13 +128,14 @@ export async function uploadInParts(
     const pdfTiming = isUploadPdf(file.name, file.mimeType) && control.savePdfTiming
       ? { startedAt, transferMs: Math.round(performance.now() - transferStarted), resumed: completed.size > 0 || attemptNumber > 1 } : null;
     if (pdfTiming) await control.savePdfTiming?.(pdfTiming);
-    const deviceText = cachedText ?? (reading
+    await control.progress(file.size, true);
+    const firstAvailable = cachedText ?? (reading
       ? await boundedDeviceText(reading, DEVICE_OCR_FINALIZE_WAIT_MS, control.signal) : undefined);
     if (control.signal.aborted) throw new Error("Upload paused.");
+    // A partial result can arrive first while the photo is still uploading.
+    const deviceText = latestFull?.complete ? latestFull : firstAvailable;
     evidenceHandoff = deviceText ? deviceText.complete ? "complete" : "partial" : "none";
-    if (deviceText && !cachedText) control.saveDeviceText?.(deviceText);
-    await control.progress(file.size, true);
-    if (control.signal.aborted) throw new Error("Upload paused.");
+    if (deviceText && deviceText !== cachedText) control.saveDeviceText?.(deviceText);
     // Finalization must be reconciled with server status if its response is lost;
     // it is intentionally not abortable by a transport pause button.
     stage = "complete";

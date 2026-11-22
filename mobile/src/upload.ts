@@ -1,3 +1,4 @@
+import { PUBLIC_IMPORT_EXTENSIONS, PUBLIC_IMPORT_CONTENT_TYPES } from "../../shared/import-format-policies";
 import { uploadSizeProblem } from "../../shared/native-upload";
 import { Platform } from "react-native";
 import type { DocumentPickerAsset } from "expo-document-picker";
@@ -32,11 +33,9 @@ export function fileProblem(file: SelectedFile) {
     return "This file is empty or its size could not be checked.";
   const sizeProblem = uploadSizeProblem(file.name, file.mimeType, file.size);
   if (sizeProblem) return sizeProblem;
-  if (
-    !/\.(pdf|docx|csv|tsv|xlsx?|xlsm|xlsb|ods|png|jpe?g|webp|hei[cf]|ofx|qfx|qif|mt940|sta|xml|json)$/i.test(
-      file.name,
-    )
-  )
+  const extension = file.name.trim().toLowerCase().match(/\.[^.]+$/)?.[0];
+  if (!PUBLIC_IMPORT_EXTENSIONS.some(allowed => allowed === extension) &&
+      !PUBLIC_IMPORT_CONTENT_TYPES.has((file.mimeType ?? "").trim().toLowerCase()))
     return "Choose a supported financial document, spreadsheet, or image.";
   return null;
 }

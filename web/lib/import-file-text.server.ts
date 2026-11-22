@@ -3193,8 +3193,8 @@ export const readUploadedFileText = async (
     /\.(?:ofx|qfx|qif|mt940|sta|xml|json)$/.test(lowerName) ||
     /(?:x-ofx|intu\.qfx|application\/qif|text\/qif|mt940|application\/xml|text\/xml|application\/json)/.test(lowerType)
   ) {
-    if (typeof file.arrayBuffer === "function") {
-      return new TextDecoder("utf-8", { fatal: false }).decode(await file.arrayBuffer());
+    if (options?.sourceBytes || typeof file.arrayBuffer === "function") {
+      return new TextDecoder("utf-8", { fatal: false }).decode(options?.sourceBytes ?? await file.arrayBuffer!());
     }
     if (typeof file.text === "function") return file.text();
     throw new Error("Unable to read imported financial export.");
@@ -3206,8 +3206,8 @@ export const readUploadedFileText = async (
     lowerType.includes("csv") ||
     lowerType.includes("tab-separated-values")
   ) {
-    if (typeof file.arrayBuffer === "function") {
-      return decodeStructuredDelimitedBytes(new Uint8Array(await file.arrayBuffer()));
+    if (options?.sourceBytes || typeof file.arrayBuffer === "function") {
+      return decodeStructuredDelimitedBytes(options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer!()));
     }
 
     if (typeof file.text === "function") {
@@ -3218,18 +3218,18 @@ export const readUploadedFileText = async (
   }
 
   if (lowerName.endsWith('.docx') || lowerType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    if (typeof file.arrayBuffer !== 'function') throw new Error('Unable to read imported Word receipt.');
-    return decodeWordGrabReceiptBytes(new Uint8Array(await file.arrayBuffer()));
+    if (!options?.sourceBytes && typeof file.arrayBuffer !== 'function') throw new Error('Unable to read imported Word receipt.');
+    return decodeWordGrabReceiptBytes(options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer!()));
   }
 
   if (
     /\.(?:xlsx|xls|xlsm|xlsb|ods)$/.test(lowerName) ||
     /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/.test(lowerType)
   ) {
-    if (typeof file.arrayBuffer !== "function") {
+    if (!options?.sourceBytes && typeof file.arrayBuffer !== "function") {
       throw new Error("Unable to read imported workbook.");
     }
-    return decodeSpreadsheetWorkbookBytes(new Uint8Array(await file.arrayBuffer()));
+    return decodeSpreadsheetWorkbookBytes(options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer!()));
   }
 
   if (lowerName.endsWith(".pdf") || lowerType === "application/pdf") {

@@ -152,6 +152,7 @@ async function main() {
   const photoBytes = Uint8Array.from([255,216,255,224,0,1,254,255,217]);
   const loadPhotoUpload = platform => load("../mobile/src/upload.ts", {
       "expo-file-system": {Paths:{cache:{uri:"file:///cache/"}}, File: class {get size(){return photoBytes.length;} async bytes(){return photoBytes;}}},
+      "../../shared/import-format-policies": load("../shared/import-format-policies.ts"),
       "../../shared/native-upload": {uploadSizeProblem:()=>null}, "react-native": {Platform:{OS:platform}}
     }, {FormData:platform === "web" ? FormData : NativeForm, fetch:async()=>new Response(photoBytes,{headers:{"content-type":"image/jpeg"}})});
   for (const platform of ["ios","android","web"]) {

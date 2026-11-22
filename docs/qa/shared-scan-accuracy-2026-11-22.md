@@ -160,3 +160,21 @@ All the item names matched on photos 1–5, 9 and 10. Photo 6 matched six of nin
 Recognition now calculates normalized pixel values with lookup tables checked against the original Float32 arithmetic for every possible byte value. High-confidence price-only boxes can skip the script-identification pass. A Korean signal triggers recognition of the remaining prices, verified with a synthetic Korean receipt image. Directly resizing crops during perspective correction lost three correct totals in a replay and was discarded. A batching experiment also did not establish a consistent speed advantage. The median and worst-case observations above do not establish a further end-to-end speed improvement.
 
 The supplied Spirits Library photo passed the local Split Bills preview in 3.16 seconds with the three printed drinks, 120.54 service charge and 1,470.54 total. An offline Ask Clover attachment test verified the corrected text and retained raw evidence. The regression suites checked bank/investment screenshot routing, PDF coverage, receipt intake and settlements. Production traffic, device capture and upload latency were outside this run.
+
+## Mobile upload and statement follow-up
+
+Native uploads previously kept the first partial device reading even when the complete reading became available during the transfer. Finalization now prefers completed evidence while retaining the bounded partial fallback. Native file selection also accepts supported MIME types for extensionless files supplied by document providers. Native and web now share the format list. Structured imports reuse preloaded bytes, avoiding a second full file read.
+
+### iOS
+
+Apple Vision in the iOS simulator found the printed 1,470.54 on the supplied photo, and PDFKit read both pages of a fictional statement. Simulator Safari executed Clover’s resumable upload code against a local receiver. The original JPEG, a two-page PDF, CSV, a 5,280,000-byte CSV and a 7,762,071-byte synthetic JPEG all arrived byte-for-byte intact. The large JPEG required five parts. These checks covered OS recognition and transport separately. Native picker and camera interaction remain unverified.
+
+### Android
+
+Host-side Android and iOS adapter tests passed for Expo form encoding, file selection, size checks, cancellation and queue handoff. The Android emulator refused startup due to insufficient host disk space. Android OCR, system pickers and the installed app remain unverified.
+
+### Statements, files and accuracy
+
+The format suite checked 22 accepted extensions and parsed 15 structured formats through multipart upload and native queue fixtures. It verified that preloaded bytes produce the same parser result without rereading the file. The 69 offline checks passed, including completed OCR arriving after the partial result during upload. PDF page coverage, layout, text-layer routing and password retry checks passed. Two local bank PDFs with usable text layers returned text in 73 and 29 ms. A scanned sample needed a multi-page OCR pass. Those samples lack independent row labels in this checkout, so extraction is the extent of the real-statement claim.
+
+The supplied receipt passed the local Split Bills preview in 3.20 seconds. The timer excludes camera, network and app rendering. No production latency distribution was measured.

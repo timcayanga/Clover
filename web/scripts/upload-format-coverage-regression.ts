@@ -33,6 +33,7 @@ export async function runUploadFormatCoverageRegression() {
   const limits = loadNative("../shared/native-upload.ts", {});
   const native = loadNative("../mobile/src/upload.ts", {
     "../../shared/native-upload": limits,
+    "../../shared/import-format-policies": loadNative("../shared/import-format-policies.ts", {}),
     "react-native": { Platform: { OS: "android" } },
     "expo-file-system": {},
   });
@@ -96,6 +97,11 @@ export async function runUploadFormatCoverageRegression() {
         assert.deepEqual(receivedBytes, new Uint8Array(bytes));
         assert.equal(validateImportFileBytes({ fileName: received.name, contentType: received.type, bytes: receivedBytes }), null, extension);
         const text = await readUploadedFileText(received);
+        const cachedText = await readUploadedFileText({
+          name: received.name, type: received.type,
+          arrayBuffer: async () => { throw new Error("Preloaded upload bytes were read twice"); },
+        }, undefined, { sourceBytes: receivedBytes });
+        assert.equal(cachedText, text, extension);
         const rows = parseImportText(text, received.name, received.type, { currency: "PHP", accountName: "Upload Checking" });
         assert.equal(rows.length, 1, `${extension}: bytes must reach the parser`);
         assert.equal(Number(rows[0].amount), expected?.amount ?? 12.5); assert.equal(rows[0].date, expected?.date ?? "2026-09-13");

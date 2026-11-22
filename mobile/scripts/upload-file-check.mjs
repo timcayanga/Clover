@@ -18,6 +18,7 @@ const limits = load('../../shared/native-upload.ts', {});
 let diskSize = 0;
 const { resolveSelectedFile, fileProblem } = load('../src/upload.ts', {
   '../../shared/native-upload': limits,
+  '../../shared/import-format-policies': load('../../shared/import-format-policies.ts', {}),
   'react-native': { Platform: { OS: 'android' } },
   'expo-file-system': { File: class { get size() { return diskSize; } } },
 });
@@ -101,3 +102,8 @@ for (const [name, mimeType, limit] of [['receipt.jpg', 'image/jpeg', limits.IMPO
   assert.match(fileProblem(resolveSelectedFile(picked)), /empty/);
 }
 console.log('PASS native upload: compressed camera/library bytes, absent/stale metadata, bounded reads and preview appends, queue retention, corruption and actual photo/document limits');
+
+for (const mimeType of ['application/pdf', 'image/jpeg', 'text/csv', 'application/x-ofx']) {
+  assert.equal(fileProblem({ name: 'download', mimeType, size: 200 }), null);
+}
+assert.match(fileProblem({ name: 'download', mimeType: 'application/octet-stream', size: 200 }), /supported/);

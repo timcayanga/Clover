@@ -962,27 +962,33 @@ test("finalization takes useful partial evidence without waiting for full OCR", 
   assert.equal(hasUsefulPartialReceiptText("Welcome\nThank you"), false);
   assert.equal(hasUsefulPartialReceiptText("Total 425.00"), false);
   const complete = { ...partial, text: partial.text + "\nDate 2026-11-17", complete: true };
-  for (const fullReady of [true, false]) {
+  for (const fullReady of ["early", "during-transfer", "pending"]) {
+    let finishFull!: (value: typeof complete) => void;
+    const full = fullReady === "early" ? Promise.resolve(complete) : new Promise<typeof complete>(resolve => { finishFull = resolve; });
     let releasePartial!: (value: typeof partial) => void;
     const ready = new Promise<typeof partial>(resolve => { releasePartial = resolve; });
     let handoff: unknown;
     const request = async <T,>(path: string, options?: RequestInit): Promise<T> => {
       if (path.includes("/start")) return { parts: [], state: "uploading" } as T;
-      if (path.includes("/part")) releasePartial(partial);
+      if (path.includes("/part")) {
+        releasePartial(partial);
+        await Promise.resolve();
+        if (fullReady === "during-transfer") finishFull(complete);
+      }
       if (path.includes("/complete")) handoff = JSON.parse(String(options?.body)).deviceText;
       return {} as T;
     };
     await Promise.race([
       uploadInParts(request, file, "b3JpZ2luYWw=", {
         signal: new AbortController().signal, progress: async () => {},
-        preparedDeviceText: { full: fullReady ? Promise.resolve(complete) : new Promise(() => {}), partial: ready },
+        preparedDeviceText: { full, partial: ready },
       }),
       new Promise<never>((_, reject) => {
         const watchdog = setTimeout(() => reject(new Error("Upload waited for full OCR")), 1000);
         watchdog.unref();
       }),
     ]);
-    assert.deepEqual(handoff, fullReady ? complete : partial);
+    assert.deepEqual(handoff, fullReady === "pending" ? partial : complete);
   }
 });
 
