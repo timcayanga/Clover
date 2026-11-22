@@ -1,10 +1,10 @@
 import { isDelimitedImport, importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
-import { readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
-import { hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
+import { readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
+import { canPreviewLocalReceiptItems } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
 import { measureImportReader, recordImportReaderTiming, recordImportWork, reportImportReaderEvent } from "./import-timing";
-import { isUploadPdf, RECEIPT_IMAGE_MAX_EDGE } from "../../shared/native-upload";
+import { isUploadPhoto, isUploadPdf, RECEIPT_IMAGE_MAX_EDGE } from "../../shared/native-upload";
 import { pdfPageOcrCacheVersion, pdfRenderCacheVersion, pdfTextCacheVersion } from "./pdf-extraction-cache.server";
 import { reconstructPdfStatementPages, type PdfStatementContinuation, type PositionedPdfRow } from "./pdf-statement-layout";
 import { hasPdfEncryptionMarker } from "./import-pdf-encryption";
@@ -46,7 +46,7 @@ import {
 } from "@/lib/data-engine";
 import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
-import { assessReceiptPreviewQuality, hasUnreadableReceiptPhotoTotal, parseReceiptText } from "@/lib/split-bill";
+import { assessReceiptPreviewQuality, hasUnreadableReceiptPhotoTotal, parseReceiptPhotoText, parseReceiptText } from "@/lib/split-bill";
 import { decodeStructuredDelimitedBytes } from "@/lib/structured-delimited-decoder";
 import { decodeSpreadsheetWorkbookBytes } from "@/lib/spreadsheet-import.server";
 
@@ -256,7 +256,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v13";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v14";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -268,7 +268,7 @@ export const resolveKnownStatementImageFallbackText = (params: {
   importMode?: string | null;
   fileFingerprint?: string | null;
 }) => {
-  if (params.importMode !== "statement" || !isImageImportFileName(params.fileType, params.fileName)) {
+  if (params.importMode !== "statement" || !isUploadPhoto(params.fileName ?? "", params.fileType)) {
     return null;
   }
 
@@ -865,10 +865,10 @@ const buildReceiptAwareOcrCandidates = async (
 };
 
 export const needsExpandedReceiptText = (text: string) => {
-  const candidate = parseReceiptText(text);
-  return hasUnreadableReceiptPhotoTotal(text) || !candidate.billDate || !candidate.total || candidate.currency === "MIXED" ||
+  const candidate = parseReceiptPhotoText(text);
+  return !candidate.billDate || !candidate.total || candidate.currency === "MIXED" ||
     assessReceiptPreviewQuality(candidate).issues.some(issue =>
-      /declared item count|total inferred|summary does not reconcile|suspicious line items/.test(issue));
+      /declared item count|total inferred|^Receipt (?:total|line items?) differ|suspicious line items/.test(issue));
 };
 
 async function verifyReceiptDateCrop(source: string, preview: ImagePreview) {
@@ -919,11 +919,10 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   const verifiedPurchase = async (source: string | null, image: ImagePreview | null) => {
     if (!source || !image) return null;
     const text = readLocalReceiptOcrText(source) ?? source;
-    if (resolvePositiveImportDocumentRoute(source)?.mode !== "receipt" ||
-        hasConflictingReceiptTotalReading(readReceiptOpticalEvidence(source)) || hasUnreadableReceiptPhotoTotal(source)) return null;
-    const parsed = parseReceiptText(source);
-    if (!parsed.total || !hasPrintedItemizedTotal(text, parsed.total)) return null;
-    if ((!parsed.billDate || !parsed.merchantName) && !readReconciledItemTable(text)) return null;
+    if (resolvePositiveImportDocumentRoute(source)?.mode !== "receipt") return null;
+    // The shared photo parser withholds clipped or conflicting payable amounts.
+    const parsed = parseReceiptPhotoText(source);
+    if (!canPreviewLocalReceiptItems(text, parsed)) return null;
     const rejection = classifyExactPhotoRejection({ ...params, text }, params.classificationContext);
     if (rejection) throw rejection;
     return verifyReceiptDateCrop(source, image);
@@ -2362,14 +2361,6 @@ const decodeBody = async (body: unknown) => {
   throw new Error("Unable to read imported file.");
 };
 
-const isImageImportFileName = (fileType: string | null | undefined, fileName: string | null | undefined) => {
-  const lowerName = `${fileType ?? ""} ${fileName ?? ""}`.toLowerCase();
-  return (
-    lowerName.includes("image/") ||
-    /\.(jpe?g|png|webp|heic|heif)$/i.test(lowerName)
-  );
-};
-
 export const resolveImageNormalizationProfile = (params: {
   fileType?: string | null;
   fileName?: string | null;
@@ -3246,7 +3237,7 @@ export const readUploadedFileText = async (
     return extractTextFromPdfBytesWithOcrFallback(data, password, null, aggressiveProfile, file.name);
   }
 
-  if (isImageImportFileName(lowerType, lowerName)) {
+  if (isUploadPhoto(lowerName, lowerType)) {
     if (!options?.sourceBytes && typeof file.arrayBuffer !== "function") {
       throw new Error("Unable to read imported file.");
     }
@@ -3292,7 +3283,7 @@ export const readImportedFileTextWithCacheInfo = async (
     : oldRouteWasDelimited ? baseVersion + ":file-type-v2" : baseVersion;
   const cacheVersion = isPdf
     ? pdfTextCacheVersion(params.fileName, familyVersion)
-    : isImageImportFileName(params.fileType, params.fileName)
+    : isUploadPhoto(params.fileName ?? "", params.fileType)
       ? `${familyVersion}:${IMPORT_IMAGE_OCR_CACHE_VERSION}`
       : financialExport ? `${familyVersion}:export-encoding-v2` : familyVersion;
   const useMemoryCache = !isPdf || Boolean(params.workspaceId);
@@ -3486,7 +3477,7 @@ export const readImportedFileTextWithCacheInfo = async (
       return decodeSpreadsheetWorkbookBytes(bytes);
     }
 
-    if (isImageImportFileName(params.fileType, params.fileName)) {
+    if (isUploadPhoto(params.fileName ?? "", params.fileType)) {
       const knownStatementImageText = resolveKnownStatementImageFallbackText({
         fileName: params.fileName,
         fileType: params.fileType,

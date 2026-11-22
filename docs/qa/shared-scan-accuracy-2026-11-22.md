@@ -295,3 +295,11 @@ A comparison of unmatched descriptions identified three spelling substitutions o
 After the other suites finished, a sequential replay measured 6.07 → 2.79 seconds and 6.57 → 2.99 seconds for those two photos. Both kept their printed totals and complete item descriptions in the full corpus replay. Across all 11 images, the shared reader matched all totals, eight of eight observable dates, seven of eight observable merchants and 51 of 67 descriptions. Median and maximum parsing times under concurrent verification were 10.76 and 35.95 seconds. These small diagnostic runs do not establish production latency.
 
 The private statement suite passed 44 fixtures and a separate 104-row China Bank check. The upload suite passed 22 format checks and exercised 18 structured file fixtures. iOS Simulator ran receipt recognition and complete/incomplete PDF probes. Android OCR compiled and the host upload and navigation checks passed. The Android emulator required more free disk space than the host had available. Physical camera, picker dismissal and visible draft timings remain unverified on both platforms.
+
+## File picker routing and partial receipt drafts
+
+A file provider can send a JPEG or PDF with a generic MIME type. The import worker now uses the original extension to identify these uploads. The native receipt preview test submitted the Spirits Library JPEG as a generic file. Both preview paths returned the printed ₱1,470.54 and the three purchased drinks. A two-page PDF produced identical extracted text with the explicit and generic MIME types.
+
+Raw server OCR and device OCR now use the same evidence rules for missing or ambiguous fields. A printed payable can populate the bill even when some items are missing. A conflicting payable or incomplete set of items cannot silently determine a split. Backup recognition must reconcile amounts before supplying item rows and provide printed evidence before filling an unknown currency.
+
+Two additional itemized receipts with uncertain dates or merchant names produced editable previews in 2.27–3.13 seconds locally across the multipart and native upload handlers, with zero backup-reader calls. The 11-photo replay still matched all totals and 51 of 67 item descriptions. These measurements cover local handler execution. Upload, real camera capture and on-device rendering require separate timing.

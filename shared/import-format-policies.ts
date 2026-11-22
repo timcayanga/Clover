@@ -1,6 +1,16 @@
 /** Providers can include parameters such as charset in the picker MIME type. */
 export const importMediaType = (value?: string | null) => (value ?? "").split(";", 1)[0].trim().toLowerCase();
 
+/** Document pickers can supply a filename and a generic binary MIME type.
+ * Resolve the parser's media type separately from the retained upload metadata. */
+export function importDocumentMediaType(name: string, type?: string | null) {
+  const mediaType = importMediaType(type);
+  if (mediaType && mediaType !== "application/octet-stream") return mediaType;
+  if (/\.pdf$/i.test(name)) return "application/pdf";
+  const image = name.match(/\.(jpe?g|heic|heif|png|webp)$/i)?.[1].toLowerCase();
+  return image ? "image/" + (image === "jpg" ? "jpeg" : image) : mediaType;
+}
+
 export const isDelimitedImport = (name: string, type?: string | null) =>
   /\.(?:csv|tsv)$/i.test(name) || /^(?:text\/csv|application\/csv|text\/tab-separated-values)$/.test(importMediaType(type));
 

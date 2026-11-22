@@ -2,10 +2,24 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  hasStrongStructuredPdfParse,
   shouldPreferDirectImageStatementVisionPath,
   shouldPreferDirectReceiptVisionPath,
 } from "@/workers/import-processor";
 import { inferImportModeForFile } from "@/lib/import-statement-identity";
+
+import { importDocumentMediaType } from "../../shared/import-format-policies";
+
+for (const type of ["", "application/octet-stream", "Application/PDF; charset=binary"]) {
+  const fileType = importDocumentMediaType("statement.PDF", type);
+  assert.equal(fileType, "application/pdf");
+  assert.ok(hasStrongStructuredPdfParse({ fileType, imageImport: false, importMode: "statement",
+    parsedRowsLength: 8, parsedDateCoverage: 1, metadataConfidence: 90, hasKnownInstitution: true,
+    hasAccountNumber: true, hasMultipleAccountNumbers: false }));
+}
+assert.equal(importDocumentMediaType("IMG_1.JPG", "application/octet-stream"), "image/jpeg");
+assert.equal(importDocumentMediaType("unknown.bin", "application/octet-stream"), "application/octet-stream");
+assert.equal(importDocumentMediaType("ledger.pdf", "text/csv"), "text/csv");
 
 assert.equal(
   inferImportModeForFile({ name: "clover-qa-receipt-2.jpg", type: "image/jpeg" }, "statement"),
@@ -57,6 +71,15 @@ assert.equal(
   "A trained receipt should preserve its deterministic fast path."
 );
 
+// Some Android document providers set only the name. A missing or generic
+// MIME type must reach the same reader as a library pick of the same bytes.
+for (const fileType of ["", "application/octet-stream"]) {
+  const file = { fileName: "IMG_0042.JPEG", fileType };
+  assert.ok(shouldPreferDirectImageStatementVisionPath({ ...file, importMode: "statement" }));
+  assert.ok(shouldPreferDirectReceiptVisionPath({ ...file, importMode: "receipt" }));
+  assert.equal(shouldPreferDirectReceiptVisionPath({ ...file, fileName: "report.pdf", importMode: "receipt" }), false);
+}
+
 const workerSource = readFileSync(join(process.cwd(), "workers/import-processor.ts"), "utf8");
 const parserSource = readFileSync(join(process.cwd(), "lib/openai-import-parser.ts"), "utf8");
 assert.match(
@@ -66,8 +89,8 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /!shouldPreferDirectReceiptVision\s*&&\s*!trainedReceiptDetails/,
-  "Direct multilingual receipt vision must bypass the local OCR fan-out."
+  /if \(imageImport && !trainedReceiptDetails && !canReuseCachedStatementParse && !text\.trim\(\)\) \{[\s\S]*?pageImages\s*=\s*eagerReceiptImages\?\.value\s*\?\?\s*\(await readImportedFileImageDataUrls/,
+  "Only prepare image input when no usable local text or trained receipt is available, reusing any prepared image."
 );
 assert.match(
   parserSource,
@@ -101,12 +124,12 @@ assert.match(
 );
 assert.match(
   parserSource,
-  /schema: isReceiptMode \? openAIReceiptJsonSchema : openAIJsonSchema/,
+  /schema: isReceiptMode\s*\? useReceiptCoreOnly\s*\? openAIReceiptCoreJsonSchema\s*:\s*openAIReceiptJsonSchema\s*:\s*openAIJsonSchema/,
   "Only receipt imports should use the compact response contract."
 );
 assert.match(
   parserSource,
-  /const maxOutputTokens = isReceiptMode\s*\?\s*inferredDifficulty === "hard"\s*\? 2_600\s*:\s*1_600/,
+  /const maxOutputTokens = isReceiptMode\s*\? useReceiptCoreOnly\s*\? 850\s*:\s*inferredDifficulty === "hard"\s*\? 2_600\s*:\s*1_600/,
   "Receipt structured extraction must use a difficulty-aware bounded response budget."
 );
 assert.match(
@@ -126,7 +149,7 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /const transcriptParsed = transcriptPreviewDetails\s*\? null\s*:\s*await parseImportTextWithOpenAIFallback/,
+  /const transcriptParsed = transcriptPreviewDetails\s*\? null\s*:\s*await measureImportTiming\([^\n]+parseWithClassificationCheck\(/,
   "A usable deterministic receipt transcript must skip the extra paid text parse."
 );
 

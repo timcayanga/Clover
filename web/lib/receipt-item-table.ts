@@ -251,7 +251,13 @@ export function readChargedReceiptTable(source: string, blocks: OpticalBlock[] =
   return { items: readMarginQuantities(purchases, blocks), serviceCharge: (service / 100).toFixed(2), subtotal: (subtotal / 100).toFixed(2), total };
 }
 
-export function hasPrintedItemizedTotal(text: string, total: string) {
+// With a missing merchant or date, require an independently reconciled purchase table
+// before showing the editable amount. A second scan should still handle partial rows.
+export function canPreviewLocalReceiptItems(text: string, draft: { total: string | null; merchantName: string | null; billDate: string | null }) {
+  return draft.total !== null && hasPrintedItemizedTotal(text, draft.total, !draft.merchantName || !draft.billDate);
+}
+
+export function hasPrintedItemizedTotal(text: string, total: string, requirePurchaseTable = false) {
   const register = readRegisterServiceTable(text);
   if (register) return register.total === total;
   const totals = text.split(/\r?\n/).flatMap(line => {
@@ -259,7 +265,9 @@ export function hasPrintedItemizedTotal(text: string, total: string) {
     return match ? [match[1].replace(/,/g, "")] : [];
   });
   if (totals.some(value => value !== total)) return false;
-  const reconciled = readQuantityTable(text) ?? readChargedReceiptTable(text);
+  const quantityTable = readQuantityTable(text);
+  if (requirePurchaseTable) return quantityTable?.total === total;
+  const reconciled = quantityTable ?? readChargedReceiptTable(text);
   if (reconciled) return reconciled.total === total;
   if (!totals.length) return false;
   const items = readSubtotalItems(text);

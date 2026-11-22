@@ -1,5 +1,7 @@
+import { splitBillDraftFromReceiptPreview } from "../lib/split-bill";
+import { mergeReceiptBackup } from "../lib/receipt-backup-preview";
 import assert from "node:assert/strict";
-import { hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
+import { canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
@@ -199,3 +201,52 @@ for (const bad of [registerFee.replace("ITEMS : 3", "ITEMS : 5"), registerFee + 
   assert.equal(readReconciledItemTable(bad), null);
   assert.ok(!hasPrintedItemizedTotal(bad, "198.00"));
 }
+
+const plainPhoto = "CAFE GREEN\nOfficial Receipt\n04/05/2026\nTea 20.00\nTotal EUR 20.00";
+const plain = parseReceiptPhotoText(plainPhoto);
+const enveloped = parseReceiptPhotoText(encodeLocalReceiptOcr({ text: plainPhoto }));
+assert.equal(plain.currency, "EUR");
+assert.equal(plain.billDate, null);
+assert.equal(plain.billDate, enveloped.billDate);
+assert.equal(parseReceiptPhotoText(plainPhoto.replace("EUR ", "")).currency, "MIXED");
+const mixed = parseReceiptPhotoText(plainPhoto + "\nCurrency: USD");
+assert.equal(mixed.currency, "MIXED");
+
+const local = { ...plain, items: [], subtotal: "20.00" };
+const model = { currency: "EUR", confidence_score: 90, total: "20.00", subtotal: "20.00",
+  line_items: [{ description: "Tea", amount: "20.00" }] };
+const merged = (changes: Record<string, unknown> = {}, valid = true) =>
+  mergeReceiptBackup(local, { ...model, ...changes }, null, { schemaValidated: valid });
+assert.equal(merged().items[0]?.description, "Tea");
+assert.deepEqual(merged({total: "80.00", tip: "60.00"}).items, []);
+assert.equal(merged({total: "80.00", tip: "60.00"}).tip, local.tip);
+assert.equal(merged({currency: "USD"}).currency, "EUR");
+assert.deepEqual(merged({currency: "USD"}).items, []);
+assert.deepEqual(merged({line_items: [{ description: "VAT", amount: "1.00" }]}).items, []);
+assert.deepEqual(merged({}, false).items, []);
+assert.equal(mergeReceiptBackup(mixed, model, null, {schemaValidated: true}).currency, "MIXED");
+
+assert.deepEqual(merged({line_items: [{ description: "Tea", quantity: 3, unit_price: 10, amount: "20.00" }]}).items, []);
+const brokenItems = { ...local, items: [{description: "Audit check", amount: "803.26"}] };
+assert.equal(mergeReceiptBackup(brokenItems, model, null, {schemaValidated: true}).items[0].description, "Tea");
+const badSummary = { ...model, subtotal: "10.00", line_items: [{description: "Tea", amount: "10.00"}] };
+assert.deepEqual(mergeReceiptBackup({ ...local, subtotal: null }, badSummary, null, {schemaValidated: true}).items, []);
+
+const incompleteIdentity = { merchantName: null, billDate: null, total: "198.00" };
+assert.ok(canPreviewLocalReceiptItems(registerFee, incompleteIdentity));
+assert.equal(canPreviewLocalReceiptItems(registerFee + "\nTotal Due 199.00", incompleteIdentity), false);
+assert.equal(canPreviewLocalReceiptItems(registerFee.replace("ITEMS : 3", "ITEMS : 6"), incompleteIdentity), false);
+assert.equal(canPreviewLocalReceiptItems(registerFee, { ...incompleteIdentity, total: null }), false);
+
+const unknownCurrency = { ...local, currency: "MIXED", currencyMentions: [], currencyWarning: "Confirm the currency." };
+assert.equal(mergeReceiptBackup(unknownCurrency, model, null, {schemaValidated: true}).currency, "MIXED");
+const printedCurrency = mergeReceiptBackup(unknownCurrency, { ...model, currency_source_text: "Total EUR 20.00" }, null, {schemaValidated: true});
+assert.equal(printedCurrency.currency, "EUR");
+assert.equal(printedCurrency.currencyWarning, null);
+
+const partialBill = parseReceiptPhotoText("GREEN CAFE\nOfficial Receipt\n2026-11-19\nTea 20.00\nTotal No of Items: 4\nGrand Total EUR 60.00");
+const partialDraft = splitBillDraftFromReceiptPreview(partialBill);
+assert.equal(partialDraft.total, "60.00");
+assert.equal(partialDraft.subtotal, "");
+assert.equal(partialDraft.items.some(item => item.description === "Tea"), false);
+assert.equal(splitBillDraftFromReceiptPreview({ ...partialBill, total: "35.00" }).total, "");

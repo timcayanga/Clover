@@ -19,7 +19,8 @@ async function verify() {
   const mocks = {
     "../lib/native-upload-store": { readReceiptUpload: async (id: string, user: string, workspace: string) => {
       assert.deepEqual([id, user, workspace], ["receipt-fixture", "qa", "qa"]);
-      return { name: "IMG_1000.jpg", type: "image/jpeg", size: bytes.length, sourceBytes: bytes };
+      // The Android file picker can identify a JPEG only by its filename.
+      return { name: "IMG_1000.JPG", type: "application/octet-stream", size: bytes.length, sourceBytes: bytes };
     } },
     "../lib/auth": { isLocalDevHost: async () => false },
     "../lib/split-bill-access": { getSplitBillCurrentUser: async () => ({ id: "qa", clerkUserId: "qa" }) },

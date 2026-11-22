@@ -1,4 +1,5 @@
-import { hasPrintedItemizedTotal } from "@/lib/receipt-item-table";
+import { mergeReceiptBackup } from "@/lib/receipt-backup-preview";
+import { canPreviewLocalReceiptItems } from "@/lib/receipt-item-table";
 import { assessFinancialUploadScope, getClearLocalPhotoRejection, getUploadRejectionDetails, NonFinancialUploadError } from "@/lib/financial-upload-scope";
 import { validateImportImageDecode } from "@/lib/import-image-validation.server";
 import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
@@ -8,14 +9,14 @@ import { cookies } from "next/headers";
 import { normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
 import { parseImportTextWithOpenAIFallback, type OpenAIImportModelUsage } from "@/lib/openai-import-parser";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
-import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseAmountValue, parseReceiptPhotoText, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
+import { assessReceiptPreviewQuality, parseReceiptPhotoText, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 import { isLocalDevHost } from "@/lib/auth";
 import { validateImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { uploadObject } from "@/lib/s3";
 import { nativeUploadRequest, readReceiptUpload } from "@/lib/native-upload-store";
-import { isUploadPdf, NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
+import { isUploadPhoto, isUploadPdf, NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -33,146 +34,9 @@ const sanitizeReceiptFileName = (value: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 120) || "receipt";
 
-const asText = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
-const asAmount = (value: unknown) => {
-  const parsed = typeof value === "number" ? parseAmountValue(value) : typeof value === "string" ? parseAmountValue(value) : null;
-  return parsed !== null ? parsed.toFixed(2) : null;
-};
-
-const asNumber = (value: unknown) => {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value.trim()) : NaN;
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const asReceiptDate = (value: unknown) => {
-  const raw = asText(value);
-  if (!raw) {
-    return null;
-  }
-
-  const match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (!match) {
-    return null;
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
-    ? parsed.toISOString()
-    : null;
-};
-
 const isReceiptImage = (file: Pick<File, "name" | "type">) =>
-  /^image\//i.test(file.type) || /\.(?:jpe?g|png|webp|heic|heif)$/i.test(file.name);
+  isUploadPhoto(file.name, file.type);
 const isReceiptPdf = (file: Pick<File, "name" | "type">) => isUploadPdf(file.name, file.type);
-
-const mergeReceiptBackup = (
-  localPreview: ReceiptPreviewResult,
-  backup: Record<string, unknown>,
-  backupAccountMatch: unknown,
-  backupAudit: { model?: string | null; promptVersion?: string | null; confidence?: number | null; schemaValidated?: boolean | null; reason?: string | null }
-): ReceiptPreviewResult => {
-  const localMerchantLooksWeak = assessReceiptPreviewQuality(localPreview).issues.includes("merchant looks noisy");
-  const backupItems = Array.isArray(backup.line_items)
-    ? backup.line_items.flatMap((item) => {
-        if (!item || typeof item !== "object") {
-          return [];
-        }
-        const value = item as Record<string, unknown>;
-        const description = asText(value.description);
-        const amount = asAmount(value.amount);
-        return description && amount ? [{
-          description,
-          amount,
-          quantity: asNumber(value.quantity),
-          unitPrice: asAmount(value.unit_price),
-        }] : [];
-      })
-    : [];
-  const backupAllocations = Array.isArray(backup.split_allocations)
-    ? backup.split_allocations.flatMap((allocation) => {
-        if (!allocation || typeof allocation !== "object") {
-          return [];
-        }
-        const value = allocation as Record<string, unknown>;
-        const participantName = asText(value.participant_name);
-        return participantName ? [{
-          participantName,
-          charged: asAmount(value.charged),
-          paid: asAmount(value.paid),
-          due: asAmount(value.due),
-          currency: asText(value.currency) ?? localPreview.currency,
-        }] : [];
-      })
-    : [];
-  const backupConfidence = typeof backup.confidence_score === "number" && Number.isFinite(backup.confidence_score)
-    ? Math.round(backup.confidence_score)
-    : 0;
-  const accountMatch = backupAccountMatch && typeof backupAccountMatch === "object"
-    ? backupAccountMatch as Record<string, unknown>
-    : null;
-  const normalizedAccountMatch = accountMatch && (asText(accountMatch.account_name) || asText(accountMatch.account_last4))
-    ? {
-        accountName: asText(accountMatch.account_name),
-        accountLast4: asText(accountMatch.account_last4),
-        confidence: Math.max(0, Math.min(100, Math.round(asNumber(accountMatch.confidence) ?? 0))),
-        reason: asText(accountMatch.reason),
-      }
-    : null;
-  const backupPaymentMethod = asText(backup.payment_method) ?? (normalizedAccountMatch?.accountName
-    ? normalizedAccountMatch.accountLast4
-      ? `${normalizedAccountMatch.accountName} ending ${normalizedAccountMatch.accountLast4}`
-      : normalizedAccountMatch.accountName
-    : null);
-  const backupType = asText(backup.receipt_type)?.toLowerCase();
-  const receiptType = backupType === "restaurant_receipt" || backupType === "official_receipt" || backupType === "tax_invoice" ||
-    backupType === "travel_ticket" || backupType === "wallet_transfer" ? backupType : localPreview.receiptType;
-  const backupCurrency = asText(backup.currency) ? normalizeCurrencyCode(asText(backup.currency)) : null;
-
-  return {
-    ...localPreview,
-    receiptType,
-    merchantName: localPreview.merchantName && !localMerchantLooksWeak && !/^this document\b|[~_=|]{2,}/i.test(localPreview.merchantName)
-      ? localPreview.merchantName
-      : asText(backup.merchant_clean) ?? asText(backup.merchant_raw) ?? localPreview.merchantName,
-    billDate: localPreview.billDate ?? asReceiptDate(backup.transaction_date),
-    documentNumber: localPreview.documentNumber ?? asText(backup.document_number),
-    invoiceNumber: localPreview.invoiceNumber ?? asText(backup.invoice_number),
-    bookingReference: localPreview.bookingReference ?? asText(backup.booking_reference),
-    currency: backupCurrency ?? localPreview.currency,
-    currencyMentions: localPreview.currencyMentions.length > 0
-      ? localPreview.currencyMentions
-      : backupCurrency
-        ? [backupCurrency]
-        : localPreview.currencyMentions,
-    paymentMethod: localPreview.paymentMethod ?? backupPaymentMethod,
-    receiptPayerName: localPreview.receiptPayerName ?? asText(backup.buyer_name),
-    receiptAccountMatch: localPreview.receiptAccountMatch ?? normalizedAccountMatch,
-    subtotal: localPreview.subtotal ?? asAmount(backup.subtotal),
-    serviceCharge: localPreview.serviceCharge ?? asAmount(backup.service_charge),
-    tax: localPreview.tax ?? asAmount(backup.tax),
-    tip: localPreview.tip ?? asAmount(backup.tip),
-    discount: localPreview.discount ?? asAmount(backup.discount),
-    total: localPreview.total ?? asAmount(backup.total),
-    items: backupItems.length && backupConfidence >= 75 && backupAudit.schemaValidated &&
-      assessReceiptPreviewQuality(localPreview).issues.some(issue => /suspicious line items|does not reconcile|item count/.test(issue)) &&
-      [asAmount(backup.subtotal),asAmount(backup.total)].includes((backupItems.reduce((sum,item)=>sum+Math.round(Number(item.amount)*100),0)/100).toFixed(2))
-      ? backupItems : localPreview.items.length > 0 ? localPreview.items : backupItems,
-    participants: localPreview.participants.length > 0 ? localPreview.participants : backupAllocations.map((allocation) => allocation.participantName),
-    splitAllocations: localPreview.splitAllocations.length > 0 ? localPreview.splitAllocations : backupAllocations,
-    confidence: Math.min(89, Math.max(localPreview.confidence, backupConfidence)),
-    requiresReview: true,
-    backupParser: {
-      model: asText(backupAudit.model),
-      promptVersion: asText(backupAudit.promptVersion),
-      confidence: Math.max(0, Math.min(100, Math.round(asNumber(backupAudit.confidence) ?? backupConfidence))) || null,
-      schemaValidated: typeof backupAudit.schemaValidated === "boolean" ? backupAudit.schemaValidated : null,
-      reason: asText(backupAudit.reason),
-    },
-  };
-};
 
 const tryReceiptBackup = async (params: {
   consentUserId: string;
@@ -187,9 +51,8 @@ const tryReceiptBackup = async (params: {
   if (!process.env.OPENAI_API_KEY?.trim() || (!isImage && !isPdf) || !assessReceiptPreviewQuality(params.preview).issues.length) {
     return params.preview;
   }
-  const { total, merchantName, billDate, currency } = params.preview;
-  if (total && merchantName && billDate && (currency !== "MIXED" || !params.preview.currencyMentions.length) &&
-      hasPrintedItemizedTotal(readLocalReceiptOcrText(params.receiptText) ?? params.receiptText, total)) {
+  if ((params.preview.currency !== "MIXED" || !params.preview.currencyMentions.length) &&
+      canPreviewLocalReceiptItems(params.receiptText, params.preview)) {
     return params.preview;
   }
 

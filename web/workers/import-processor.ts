@@ -1,3 +1,4 @@
+import { importDocumentMediaType } from "../../shared/import-format-policies";
 import { keepVerifiedReceiptFields, receiptBackupQuestions, requireReceiptFieldEvidence } from "@/lib/receipt-field-evidence";
 import { parseReceiptLineItemsFromPayload } from "@/lib/receipt-line-items";
 import { linkReceiptToExistingExpense } from "@/lib/transaction-source-matches";
@@ -5,7 +6,7 @@ import { receiptReconciliationIssues } from "@/lib/receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, reconcileReceiptSettlement, splitTenderDifference, type ReceiptTender } from "@/lib/receipt-settlement-evidence";
 import { reconcileReceiptMerchant } from "@/lib/receipt-merchant-evidence";
 import type { ImportDispatchSource } from "@/lib/import-dispatch";
-import { isUploadPdf } from "../../shared/native-upload";
+import { isUploadPhoto, isUploadPdf } from "../../shared/native-upload";
 import { pdfStatementReviewMessage } from "@/lib/pdf-statement-review";
 import { isStatementDisclosureDescription } from "@/lib/statement-disclosures";
 import { classifyExactImportEvidence, classifyExactPhotoRejection, fingerprintImportClassificationBytes } from "@/lib/import-classification-cache.server";
@@ -1815,7 +1816,7 @@ export const shouldPreferDirectImageStatementVisionPath = (params: {
   textCacheInfo?: ImportFileTextCacheInfo | null;
   trainedReceiptDetails?: unknown;
 }) => {
-  const imageImport = isImageImportFile(params.fileType, params.fileName);
+  const imageImport = isUploadPhoto(params.fileName ?? "", params.fileType);
   const hasKnownStatementImageFallback = Boolean(
     resolveKnownStatementImageFallbackText({
       fileName: params.fileName,
@@ -1840,7 +1841,7 @@ export const shouldPreferDirectReceiptVisionPath = (params: {
   importMode: ImportImageMode;
   trainedReceiptDetails?: unknown;
 }) =>
-  isImageImportFile(params.fileType, params.fileName) &&
+  isUploadPhoto(params.fileName ?? "", params.fileType) &&
   params.importMode === "receipt" &&
   !params.trainedReceiptDetails;
 
@@ -3340,24 +3341,6 @@ const isExplicitJsonTrainingFile = (jsonText: string, fileName: string | null | 
   } catch {
     return false;
   }
-};
-
-const isImageImportFile = (fileType: string | null | undefined, fileName: string | null | undefined) => {
-  const lowerName = `${fileName ?? ""} ${fileType ?? ""}`.toLowerCase();
-  return (
-    lowerName.includes("image/jpeg") ||
-    lowerName.includes("image/jpg") ||
-    lowerName.includes("image/png") ||
-    lowerName.includes("image/webp") ||
-    lowerName.includes("image/heic") ||
-    lowerName.includes("image/heif") ||
-    lowerName.endsWith(".jpg") ||
-    lowerName.endsWith(".jpeg") ||
-    lowerName.endsWith(".png") ||
-    lowerName.endsWith(".webp") ||
-    lowerName.endsWith(".heic") ||
-    lowerName.endsWith(".heif")
-  );
 };
 
 const readParsedRowText = (row: Record<string, unknown>, keys: string[]) => {
@@ -8515,9 +8498,9 @@ const processImportFileTextImpl = async (
   if (!importFile) {
     throw new Error("Import file not found");
   }
-  const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
-  const imageImport = isImageImportFile(fileType, fileName);
+  const fileType = importDocumentMediaType(fileName, importFile.fileType);
+  const imageImport = isUploadPhoto(fileName, fileType);
   const storageKey = String(importFile.storageKey ?? "");
   // Every reader in this processing attempt shares the same bytes. Only a
   // storage-backed attempt needs to wait for persistence before reading.
@@ -9911,7 +9894,7 @@ const processImportFileTextImpl = async (
     shouldValidateCachedRowsAgainstCurrentParser &&
     cachedParsedRows.length > 0 &&
     freshMetadataForParserCacheGate
-      ? parseImportText(text, importFile.fileName, importFile.fileType, {
+      ? parseImportText(text, importFile.fileName, fileType, {
           institution: freshMetadataForParserCacheGate.institution,
           accountName: freshMetadataForParserCacheGate.accountName,
           accountNumber: freshMetadataForParserCacheGate.accountNumber,
@@ -10123,7 +10106,7 @@ const processImportFileTextImpl = async (
   });
   const statementFingerprint =
     cachedParseRecord?.statementFingerprint ??
-    buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
+    buildStatementFingerprint(textForParse, metadata, importFile.fileName, fileType, importMode);
   const statementFamilySignature =
     cachedParseRecord?.statementFamilySignature ??
     buildStatementFamilySignatureFromText(
@@ -10132,7 +10115,7 @@ const processImportFileTextImpl = async (
         institution: metadata.institution ?? null,
         accountType: metadata.accountType ?? null,
       },
-      importFile.fileType
+      fileType
     );
   const existingTemplate = await loadStatementTemplate({
     workspaceId: String(importFile.workspaceId),
@@ -10143,7 +10126,7 @@ const processImportFileTextImpl = async (
       ? await loadScoredStatementTemplatesForInstitution({
           workspaceId: String(importFile.workspaceId),
           institution: metadata.institution,
-          fileType: importFile.fileType,
+          fileType,
           accountType: metadata.accountType ?? null,
           statementFamilySignature,
           limit: 6,
@@ -10238,7 +10221,7 @@ const processImportFileTextImpl = async (
     ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
     : currentParserRowsForCacheGate.length > 0
       ? currentParserRowsForCacheGate
-      : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
+      : parseImportText(textForParse, importFile.fileName, fileType, {
         institution: metadataForParse.institution,
         accountName: metadataForParse.accountName,
         accountNumber: metadataForParse.accountNumber,
@@ -10273,7 +10256,7 @@ const processImportFileTextImpl = async (
   const parsedRowsAfterFallback =
     parsedRowsInitial.length > 0 || !isBpiHybridFallbackCandidate
       ? parsedRowsInitial
-      : parseImportTextGenericOnly(textForParse, importFile.fileName, importFile.fileType, {
+      : parseImportTextGenericOnly(textForParse, importFile.fileName, fileType, {
           institution: metadataForParse.institution ?? "BPI",
           accountName: metadataForParse.accountName,
           accountNumber: metadataForParse.accountNumber,
@@ -10301,7 +10284,7 @@ const processImportFileTextImpl = async (
         (payload as Record<string, unknown>).kind === "financial_exchange_transaction"
       );
     });
-  if (importMode === "statement" && importFile.fileType === "application/pdf" && !hasStructuredWorkbookRows && !hasFinancialExchangeRows && !parsedRows.some(row => ["structured_transaction_csv", "account_snapshot_csv", "wide_account_snapshot_csv", "net_worth_snapshot_csv"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
+  if (importMode === "statement" && fileType === "application/pdf" && !hasStructuredWorkbookRows && !hasFinancialExchangeRows && !parsedRows.some(row => ["structured_transaction_csv", "account_snapshot_csv", "wide_account_snapshot_csv", "net_worth_snapshot_csv"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
     const sourceProof = parseCimbConsolidatedStatement(textForParse) ?? parseBcaTransferProof(textForParse);
     if (sourceProof && sourceProof.rows.length === 0) throw new Error("Clover needs the complete statement or native bank proof to verify these amounts. Nothing was added; review the source pages and fields before retrying.");
   }
@@ -10415,7 +10398,7 @@ const processImportFileTextImpl = async (
     /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
   const preliminaryLooksCharacterSpacedOcr = /(?:\b[A-Z]\s+){8,}[A-Z]\b/.test(textForParse);
   const preliminaryStrongStructuredPdfParse = hasStrongStructuredPdfParse({
-    fileType: importFile.fileType,
+    fileType,
     imageImport,
     importMode,
     parsedRowsLength: parsedRows.length,
@@ -10426,7 +10409,7 @@ const processImportFileTextImpl = async (
     hasMultipleAccountNumbers: preliminaryParsedRowsHaveMultipleAccountNumbers,
   });
   const preliminaryGenericParseLooksSuspicious =
-    (importFile.fileType === "application/pdf" || imageImport) &&
+    (fileType === "application/pdf" || imageImport) &&
     ((preliminaryLooksCharacterSpacedOcr && !preliminaryStrongStructuredPdfParse) ||
       preliminaryGenericIdentityLooksWeak ||
       (metadataForParse.confidence ?? 0) < 75);
@@ -10457,9 +10440,9 @@ const processImportFileTextImpl = async (
       parsedRows.length <= Math.max(1, Math.floor(preliminaryGcashFamilyVisibleEntries * 0.5))
     );
   const preliminarySuspiciousDateCoverage =
-    (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && preliminaryParsedRowsWithDates === 0
+    (fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && preliminaryParsedRowsWithDates === 0
       ? true
-      : (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && preliminaryParsedDateCoverage < 0.25;
+      : (fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && preliminaryParsedDateCoverage < 0.25;
   const preliminaryImageStatementAssessment =
     imageImport && importMode === "statement"
       ? assessImageStatementParse({
@@ -10476,7 +10459,7 @@ const processImportFileTextImpl = async (
       : null;
   const preliminaryImageStatementParseLooksUsable = preliminaryImageStatementAssessment?.parseLooksUsable ?? false;
   const preliminaryHasStrongWisePdfDeterministicParse = hasStrongWisePdfDeterministicParse({
-    fileType: importFile.fileType,
+    fileType,
     imageImport,
     importMode,
     institution: metadataForParse.institution,
@@ -10488,7 +10471,7 @@ const processImportFileTextImpl = async (
   });
   const preliminaryParserRoutingDecision = buildParserRoutingDecision({
     parsedRows: parsedRows as Array<Record<string, unknown>>,
-    fileType: importFile.fileType,
+    fileType,
     imageImport,
     importMode,
     screenshotLikeFile: isLikelyScreenshotImageFile(fileName),
@@ -10994,7 +10977,7 @@ const processImportFileTextImpl = async (
       : null;
   const shouldRunGenericChallenger =
     importMode === "statement" &&
-    (importFile.fileType === "application/pdf" || imageImport) &&
+    (fileType === "application/pdf" || imageImport) &&
     Boolean(textForParse.trim()) &&
     !hasVerifiedHeldNativeRows(textForParse, parsedRows) &&
     !hasVerifiedMariBankNativeRows(textForParse, parsedRows) &&
@@ -11017,7 +11000,7 @@ const processImportFileTextImpl = async (
       layoutDriftAssessment.drifted
     );
   const genericCandidateRows = shouldRunGenericChallenger
-    ? parseImportTextGenericOnly(textForParse, importFile.fileName, importFile.fileType, {
+    ? parseImportTextGenericOnly(textForParse, importFile.fileName, fileType, {
         institution: metadataForParse.institution,
         accountName: metadataForParse.accountName,
         accountNumber: metadataForParse.accountNumber,
@@ -11109,7 +11092,7 @@ const processImportFileTextImpl = async (
     /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
     /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
   const strongStructuredPdfParse = hasStrongStructuredPdfParse({
-    fileType: importFile.fileType,
+    fileType,
     imageImport,
     importMode,
     parsedRowsLength: parsedRows.length,
@@ -11136,7 +11119,7 @@ const processImportFileTextImpl = async (
     (noisyVisionPreferredInstitutions.has(metadataForParse.institution) || isLikelyLowQualityUnionBankStatement) &&
     !hasStrongChinaBankDeterministicParse;
   const genericParseLooksSuspicious =
-    (importFile.fileType === "application/pdf" || imageImport) &&
+    (fileType === "application/pdf" || imageImport) &&
     ((looksCharacterSpacedOcr && !strongStructuredPdfParse) ||
       genericIdentityLooksWeak ||
       (metadataForParse.confidence ?? 0) < 75 ||
@@ -11144,9 +11127,9 @@ const processImportFileTextImpl = async (
       layoutDriftAssessment.drifted);
   const screenshotLikeFile = isLikelyScreenshotImageFile(fileName);
   const suspiciousDateCoverage =
-    (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0
+    (fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0
       ? true
-      : (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
+      : (fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
   const imageStatementAssessment =
     imageImport && importMode === "statement"
       ? assessImageStatementParse({
@@ -11166,7 +11149,7 @@ const processImportFileTextImpl = async (
   const screenshotRowsLookStructurallyWeak = imageStatementAssessment?.screenshotRowsLookStructurallyWeak ?? false;
   const imageStatementParseLooksUsable = imageStatementAssessment?.parseLooksUsable ?? false;
   const hasStrongWiseDeterministicParse = hasStrongWisePdfDeterministicParse({
-    fileType: importFile.fileType,
+    fileType,
     imageImport,
     importMode,
     institution: metadataForParse.institution,
@@ -11206,7 +11189,7 @@ const processImportFileTextImpl = async (
       !suspiciousDateCoverage);
   const parserRoutingDecision = buildParserRoutingDecision({
     parsedRows: parsedRows as Array<Record<string, unknown>>,
-    fileType: importFile.fileType,
+    fileType,
     imageImport,
     importMode,
     screenshotLikeFile,
@@ -12991,7 +12974,7 @@ const processImportFileTextImpl = async (
         institution: resolvedMetadata.institution ?? null,
         accountType: resolvedMetadata.accountType ?? null,
       },
-      importFile.fileType
+      fileType
     ) ??
     buildStatementFamilySignature({
       rows,
@@ -13001,7 +12984,7 @@ const processImportFileTextImpl = async (
         startDate: resolvedMetadata.startDate ?? null,
         endDate: resolvedMetadata.endDate ?? null,
       },
-      fileType: importFile.fileType,
+      fileType,
     });
   const backupLearningSignalsForTemplate = extractBackupParserLearningSignals(
     rows.filter((row) => {
@@ -13553,7 +13536,7 @@ const processImportFileTextImpl = async (
       workspaceId: importFile.workspaceId,
       fingerprint: statementFingerprint,
       metadata: resolvedMetadata,
-      fileType: importFile.fileType,
+      fileType,
       parserConfig: {
         importFileId,
         parserSource: useOpenAiParse ? "backup_parser" : "local_parser",
@@ -13731,7 +13714,7 @@ const processImportFileTextImpl = async (
   if (
     isTrustedMetadataOnlyWiseStatement({
       fileName: String(importFile.fileName ?? ""),
-      fileType: String(importFile.fileType ?? ""),
+      fileType,
       importMode: effectiveImportMode,
       rowCount: rows.length,
       metadata: resolvedMetadata,
@@ -14852,7 +14835,7 @@ export const confirmImportFile = async (
       : null;
   const planReadyAt = Date.now();
   const importMode = readCheckpointImportMode(documentCheckpointRecord?.sourceMetadata) ?? "statement";
-  const imageImport = isImageImportFile(String(importFile.fileType ?? ""), String(importFile.fileName ?? ""));
+  const imageImport = isUploadPhoto(String(importFile.fileName ?? ""), String(importFile.fileType ?? ""));
   const isDocumentImport =
     importMode !== "statement" &&
     (imageImport || importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes");

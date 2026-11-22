@@ -41,6 +41,7 @@ const main = async () => {
 
   const complete = "CLOVER CAFE\nOfficial Receipt\nDate: 2026-11-15\nLatte PHP 125.00\nTotal PHP 125.00";
   assert.equal(needsExpandedReceiptText(complete), false);
+  assert.equal(needsExpandedReceiptText(complete.replace("2026-11-15", "04/05/2026")), true);
   assert.equal(needsExpandedReceiptText(complete.replace("Date: 2026-11-15\n", "")), true);
   assert.equal(needsExpandedReceiptText(complete.replace("Total PHP 125.00", "Total unreadable")), true);
   assert.equal(needsExpandedReceiptText(complete + "\nTotal No of Items: 8"), true);

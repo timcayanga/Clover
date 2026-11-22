@@ -2670,7 +2670,8 @@ export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
   let parsed = parseReceiptSource(source, true, ordered);
   const transcript = readLocalReceiptOcrText(source);
   const layout = splitReceiptPromotionalFooter(joinReceiptSettlementLines(transcript === null ? ordered : normalizeLocalReceiptOcrText(ordered)));
-  const optical = transcript && layout.footer ? layout.body : transcript;
+  // Plain OCR and device envelopes are both readings of the same photo.
+  const optical = transcript === null || layout.footer ? layout.body : transcript;
   if (optical && parsed.receiptType !== "wallet_transfer" && parsed.receiptType !== "travel_ticket") {
     // VAT and service charges occur worldwide. A profile may suggest a
     // currency later, but a photo preview should distinguish printed evidence.
@@ -3378,15 +3379,19 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
     Boolean(usableMerchantName) &&
     qualityAssessment.score >= 2 &&
     preview.confidence >= 75;
-  const shouldResetReviewSummary =
+  const missingItems = qualityAssessment.issues.some(issue => issue.startsWith("declared item count"));
+  const printedSettlement = missingItems ? readReceiptSettlementEvidence(readReceiptOpticalLayout(preview.receiptText)) : null;
+  const verifiedPayable = printedSettlement?.kind === "payable" && printedSettlement.amount === parseAmountValue(preview.total);
+  const discardUnreliableSummary =
     !qualityAssessment.reliableForFastPath &&
     (qualityAssessment.issues.some((issue) =>
-      /summary does not reconcile|total is smaller than subtotal|looks like a note, poster, or screenshot instead of a receipt|looks like a split allocation worksheet, not a receipt|wallet transfer contains line items|declared item count/i.test(
+      /summary does not reconcile|total is smaller than subtotal|looks like a note, poster, or screenshot instead of a receipt|looks like a split allocation worksheet, not a receipt|wallet transfer contains line items/i.test(
         issue
       )
     ) ||
       (preview.receiptType === "wallet_transfer" && !shouldPreserveWalletTransferHints) ||
       (preview.items.length > 0 && cleanPreviewItems.length === 0));
+  const shouldResetReviewSummary = discardUnreliableSummary || missingItems;
   const shouldResetReviewItems =
     !qualityAssessment.reliableForFastPath &&
     (qualityAssessment.issues.some((issue) =>
@@ -3399,7 +3404,7 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
   const shouldPreserveAccountHints = qualityAssessment.reliableForFastPath || shouldPreserveWalletTransferHints;
   const merchantNameForDraft =
     qualityAssessment.reliableForFastPath || shouldPreserveWalletTransferHints ? usableMerchantName : null;
-  const total = shouldResetReviewSummary ? "" : preview.total ?? "";
+  const total = discardUnreliableSummary || (missingItems && !verifiedPayable) ? "" : preview.total ?? "";
   const summarySubtotal = shouldResetReviewSummary ? "" : preview.subtotal ?? "";
   const summaryServiceCharge = shouldResetReviewSummary ? "" : preview.serviceCharge ?? "";
   const summaryTax = shouldResetReviewSummary ? "" : preview.tax ?? "";
