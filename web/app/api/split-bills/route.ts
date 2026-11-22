@@ -594,7 +594,7 @@ export async function GET(request: Request) {
       const { bills, groups, people } = await loadSplitBillWorkspaceData(user.id);
       code = "split_bills_response_failed";
       const currency = normalizeRegionalPreferences(user.regionalPreferences).baseCurrency;
-      const rates = surface === "split_bills_balance_summary" && new Set(bills.map(b=>b.currency)).size > 1
+      const rates = surface === "split_bills_balance_summary" && bills.some(bill => bill.currency !== currency)
         ? Object.fromEntries(await displayRates(bills.map(b=>b.currency),currency)) : {};
       return NextResponse.json(surface === "home_split_bills_summary"
         ? { pending: homePendingSplitBills(bills, { groups, people, currentUserId: user.id, currentUserName: getUserDisplayName(user) }, transactionMerchantLogo) }

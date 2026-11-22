@@ -4,6 +4,7 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { z } from "zod";
 import * as analytics from "../../shared/analytics";
+import { directoryPersonBalances } from "../lib/split-bill-balance-summary";
 import * as splitBillRead from "../../shared/split-bill-read";
 import { PageCache, isPageRead } from "../../mobile/src/page-cache";
 import { homePendingSplitBills } from "../../shared/home-split-bills";
@@ -33,7 +34,7 @@ async function main() {
   const logs = { warn: recordLog, info: recordLog };
   let fault = "";
   let ownsProfile = true;
-  const bill = { userId:"owner", id: "bill", title: "Fixture lunch", currency: "PHP", settlement: { transfers: [{ amount: 125 }] } };
+  const bill = { userId:"owner", id: "bill", title: "Fixture lunch", currency: "PHP", settlement: { transfers: [{ amount: 125, fromParticipantName: "Fixture", toParticipantName: "Alex" }] } };
   const prisma = {
     user: { findUnique: async () => ({ id: "owner" }) },
     workspace: { findFirst: async ({ where }: { where: { userId: string } }) => {
@@ -64,7 +65,7 @@ async function main() {
       if (fault === "summary") throw new Error("private query");
       return { bills: [bill], groups: [], people: [] };
     } },
-    "@/lib/split-bill-balance-summary": { splitBillBalanceSummary: () => ({ youOwe: "₱125.00", owedToYou: "₱0.00" }) },
+    "@/lib/split-bill-balance-summary": { directoryPersonBalances, splitBillBalanceSummary: () => ({ youOwe: "₱125.00", owedToYou: "₱0.00" }) },
     "@/lib/regional-preferences": { normalizeRegionalPreferences: () => ({ baseCurrency: "PHP" }) },
     "@/lib/user-display-name": { getUserDisplayName: () => "Fixture" },
     "@/lib/split-bill": { serializeSplitBillRecord: (row: unknown) => row },
