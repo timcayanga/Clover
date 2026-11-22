@@ -291,7 +291,7 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
   const participantIdMap = new Map(participantEntries.map((entry) => [entry.sourceId, entry.sourceId]));
   const participantIds = participantEntries.map((entry) => entry.sourceId);
 
-  const itemEntries = input.items.length > 0 ? input.items : [{ description: "Total", amount: input.total ?? "0", participantIds: [] }];
+  const itemEntries = input.items.length > 0 ? input.items : input.total ? [{ description: "Total", amount: input.total, participantIds: [] }] : [];
   const normalizedItems = itemEntries.map((item, index) => {
     const itemId = item.id?.trim() || `${billId}-item-${index}`;
     const itemParticipantIds = item.participantIds.length > 0 ? item.participantIds.filter((participantId) => participantIdMap.has(participantId)) : participantIds;

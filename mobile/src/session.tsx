@@ -7,7 +7,7 @@ import { nativeImportIsComplete, needsNativeImportResume } from "../../shared/na
 import { notifyImportQueued } from "./import-handoff";
 import { PageCache, isPageRead } from "./page-cache";
 import { selectRecentProfile } from "./profile-selection";
-import { useCloudAiConsent } from "./ai-consent";
+
 import { updateNativePlanAnalytics } from "./analytics";
 import { uploadInParts } from "./offline/resumable-upload";
 import { prepareSelectedPhoto, readDeviceText } from "./offline/device-text";
@@ -331,12 +331,10 @@ export function SessionProvider({
     });
     return () => { clearInterval(timer); listener.remove(); };
   }, [fileQueue, offlineStatus.online, hasActiveUploads]);
-  const cloudAi = useCloudAiConsent(transport);
-  const cloudAiRef = useRef(cloudAi);
-  cloudAiRef.current = cloudAi;
+
   const request = useCallback(
     async <T,>(path: string, options?: RequestInit, requireNetwork = false) => {
-      if (path.startsWith("adviser/chat") && options?.method === "POST" && !demo && !(await cloudAiRef.current.ensure())) throw new Error("AI permission was not granted. You can enable it in Privacy and Data Use.");
+      if (path.startsWith("adviser/chat") && options?.method === "POST" && !demo && !(await transport<{allowed:boolean}>("settings/ai-consent")).allowed) throw new Error("AI permission was not granted. You can enable it in Privacy and Data Use.");
       if (path.startsWith("settings/ai-consent")) return transport<T>(path, options);
       const engine = await offlineReady.current;
       const read = () => engine ? engine.request<T>(path, options, requireNetwork) : transport<T>(path, options);
@@ -523,7 +521,6 @@ export function SessionProvider({
             void (async () => {
               // Let the native sheet finish dismissing before presenting consent.
               await new Promise(resolve => setTimeout(resolve, 400));
-              if (offlineStatus.online) await cloudAiRef.current.ensure().catch(() => false);
               await retainedQueue.enqueue(id);
               if (offlineStatus.online) await retainedQueue.flush();
             })().catch(() => { /* The retained draft remains resumable in ImportActivity. */ });
@@ -584,7 +581,6 @@ export function SessionProvider({
       }}
     >
       {children}
-      {cloudAi.prompt}
     </Context.Provider>
   );
 }

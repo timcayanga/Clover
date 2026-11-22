@@ -60,6 +60,7 @@ type Bill = {
   settlementStatus: string;
   resolved?: boolean;
   group?: { id: string; name: string } | null;
+  rawPayload?: {receiptNeedsReview?:boolean; directEntryWorkspaceId?: string} | null;
   categoryName?: string | null;
   participants?: { id: string; name: string }[];
   items?: BillItem[];
@@ -462,6 +463,8 @@ export default function SplitBills() {
                             <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 14 }}>{bill.title}</Text>
                             <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
                               <Text style={{ color: colors.muted, fontSize: 12 }}>{bill.billDate.slice(0,10)}</Text>
+                              {bill.rawPayload?.receiptNeedsReview && <Text style={{color:colors.muted}}>⚠ Check receipt details</Text>}
+                              {(!Number(bill.total) || (bill.participants?.length ?? 0) < 2) && <Text style={{color:colors.muted}}>⚠ {Number(bill.total) ? "Add people" : (bill.participants?.length ?? 0) < 2 ? "Add amount and people" : "Add amount"}</Text>}
                               <BillPeople participants={bill.participants ?? []} people={options.data?.people ?? []} demo={session.demo}/>
                             </View>
                           </View>

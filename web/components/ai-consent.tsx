@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { AI_CONSENT_VERSION, AI_CONSENT_TITLE, AI_CONSENT_DESCRIPTION, AI_CONSENT_ALTERNATIVE } from "../../shared/ai-consent";
 import styles from "./ai-consent.module.css";
 let pending: Promise<boolean> | null = null;
-export async function requestAiConsent(): Promise<boolean> {
+export async function requestAiConsent(): Promise<boolean> { return (await readAiConsent()).allowed; }
+async function reviewAiPermission(): Promise<boolean> {
   if (pending) return pending;
   pending = (async () => {
     if ((await readAiConsent()).allowed) return true;
@@ -40,5 +41,5 @@ export async function requestAiConsent(): Promise<boolean> {
 export function AiConsentControl() {
   const [allowed, setAllowed] = useState<boolean | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   useEffect(() => { const refresh = () => { void fetch("/api/settings/ai-consent", { cache: "no-store" }).then(async r => { if(!r.ok) throw new Error(); setAllowed((await r.json()).allowed); }).catch(() => setError("Unable to load AI permission.")); }; refresh(); window.addEventListener("clover-ai-consent-changed", refresh); return () => window.removeEventListener("clover-ai-consent-changed", refresh); }, []);
-  return <section><h4>Cloud AI processing</h4><p>{allowed === null ? "Loading permission…" : allowed ? "Allowed · OpenAI" : "Permission not granted"}</p><p>You control whether Clover sends files, questions and relevant financial records to OpenAI. Manual entry and bank connections remain available.</p><button type="button" className="button button-secondary" disabled={busy || allowed === null} onClick={async () => { setBusy(true); setError(""); try { if(allowed) { const r = await fetch("/api/settings/ai-consent", {method:"POST", headers:{"Content-Type":"application/json"},body:JSON.stringify({allow:false,version:AI_CONSENT_VERSION})}); if(!r.ok) throw new Error("Unable to withdraw permission."); setAllowed(false); } else setAllowed(await requestAiConsent()); } catch(e) {setError(e instanceof Error ? e.message : "Unable to save permission.");} finally {setBusy(false);} }}>{allowed ? "Withdraw permission" : "Review AI permission"}</button>{error ? <p role="alert">{error}</p> : null}</section>;
+  return <section><h4>Cloud AI processing</h4><p>{allowed === null ? "Loading permission…" : allowed ? "Allowed · OpenAI" : "Permission not granted"}</p><p>You control whether Clover sends files, questions and relevant financial records to OpenAI. Manual entry and bank connections remain available.</p><button type="button" className="button button-secondary" disabled={busy || allowed === null} onClick={async () => { setBusy(true); setError(""); try { if(allowed) { const r = await fetch("/api/settings/ai-consent", {method:"POST", headers:{"Content-Type":"application/json"},body:JSON.stringify({allow:false,version:AI_CONSENT_VERSION})}); if(!r.ok) throw new Error("Unable to withdraw permission."); setAllowed(false); } else setAllowed(await reviewAiPermission()); } catch(e) {setError(e instanceof Error ? e.message : "Unable to save permission.");} finally {setBusy(false);} }}>{allowed ? "Withdraw permission" : "Review AI permission"}</button>{error ? <p role="alert">{error}</p> : null}</section>;
 }

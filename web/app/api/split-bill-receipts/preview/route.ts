@@ -1,3 +1,4 @@
+import { readReconciledItemTable } from "@/lib/receipt-item-table";
 import { assessFinancialUploadScope, getClearLocalPhotoRejection, getUploadRejectionDetails, NonFinancialUploadError } from "@/lib/financial-upload-scope";
 import { validateImportImageDecode } from "@/lib/import-image-validation.server";
 import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
@@ -154,7 +155,10 @@ const mergeReceiptBackup = (
     tip: localPreview.tip ?? asAmount(backup.tip),
     discount: localPreview.discount ?? asAmount(backup.discount),
     total: localPreview.total ?? asAmount(backup.total),
-    items: localPreview.items.length > 0 ? localPreview.items : backupItems,
+    items: backupItems.length && backupConfidence >= 75 && backupAudit.schemaValidated &&
+      assessReceiptPreviewQuality(localPreview).issues.some(issue => /suspicious line items|does not reconcile|item count/.test(issue)) &&
+      [asAmount(backup.subtotal),asAmount(backup.total)].includes((backupItems.reduce((sum,item)=>sum+Math.round(Number(item.amount)*100),0)/100).toFixed(2))
+      ? backupItems : localPreview.items.length > 0 ? localPreview.items : backupItems,
     participants: localPreview.participants.length > 0 ? localPreview.participants : backupAllocations.map((allocation) => allocation.participantName),
     splitAllocations: localPreview.splitAllocations.length > 0 ? localPreview.splitAllocations : backupAllocations,
     confidence: Math.min(89, Math.max(localPreview.confidence, backupConfidence)),
@@ -179,7 +183,7 @@ const tryReceiptBackup = async (params: {
 }) => {
   const isImage = params.file.type.startsWith("image/");
   const isPdf = params.file.type === "application/pdf" || /\.pdf$/i.test(params.file.name);
-  if (!process.env.OPENAI_API_KEY?.trim() || !assessReceiptPreviewQuality(params.preview).issues.length || (!isImage && !isPdf)) {
+  if (!process.env.OPENAI_API_KEY?.trim() || (params.preview.total && params.preview.merchantName && params.preview.billDate && params.preview.currency !== "MIXED" && readReconciledItemTable(readLocalReceiptOcrText(params.receiptText) ?? params.receiptText)?.total === params.preview.total) || !assessReceiptPreviewQuality(params.preview).issues.length || (!isImage && !isPdf)) {
     return params.preview;
   }
 
@@ -322,7 +326,7 @@ export async function POST(request: Request) {
     let receiptText = "";
     let localPreview: ReceiptPreviewResult;
     try {
-      receiptText = await readUploadedFileText(selectedFile, undefined, { importMode: "receipt", sourceBytes: validationInput.bytes });
+      receiptText = await readUploadedFileText(selectedFile, undefined, {importMode:"receipt", preferReceiptTable:true, sourceBytes:validationInput.bytes});
       const rejection = getClearLocalPhotoRejection({
         text: readLocalReceiptOcrText(receiptText) ?? receiptText,
         fileName: selectedFile.name,

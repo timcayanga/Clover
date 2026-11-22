@@ -10,6 +10,9 @@ const amount = z
   .refine((v) => Number(v) > 0 && Number(v) <= 1_000_000_000);
 export const mobileBillEdit = z
   .object({
+    billDate: z.string().date().optional(),
+    reviewedReceipt: z.literal(true).optional(),
+    missingTotal: amount.optional(),
     payerId: z.string().min(1).optional(),
     currency: z.string().regex(/^[A-Z]{3,8}$/).optional(),
     title: z.string().trim().min(1).max(100),
@@ -46,7 +49,6 @@ export const mobileBillEdit = z
           })
           .strict(),
       )
-      .min(1)
       .max(500),
   })
   .strict();
@@ -104,8 +106,10 @@ export function mergeMobileBillEdit(
   // Changing items preserves existing tax/tip/discount adjustments.
   const oldItems = bill.items.reduce((sum, i) => sum + Number(i.amount), 0);
   const newItems = body.items.reduce((sum, i) => sum + Number(i.amount), 0);
-  const total = Number(bill.total ?? oldItems) + newItems - oldItems;
-  if (!Number.isFinite(total) || total <= 0)
+  if (body.missingTotal && Number(bill.total) > 0) throw new Error("The amount has already been recorded.");
+  const total = body.missingTotal ? Number(body.missingTotal) : Number(bill.total ?? oldItems) + newItems - oldItems;
+  const incomplete = !Number(bill.total) && !body.missingTotal && !body.items.length;
+  if (!incomplete && (!body.items.length || !Number.isFinite(total) || total <= 0))
     throw new Error("The bill total must remain positive.");
   if (body.payerId && (bill.payments.length || bill.settlementStatus !== "awaiting_payer" || !people.has(body.payerId))) {
     throw new Error("Choose a participant on a bill that still needs a payer.");
@@ -114,13 +118,15 @@ export function mergeMobileBillEdit(
     ...bill,
     ...(body.payerId ? {payments:[{id:crypto.randomUUID(), participantId:body.payerId, amount:total.toFixed(2), note:null}]} : {}),
     title: body.title,
+    billDate: body.billDate ?? bill.billDate,
     currency: body.currency ?? bill.currency,
     participants,
-    total: total.toFixed(2),
+    total: incomplete ? null : total.toFixed(2),
     subtotal: newItems.toFixed(2),
     items: body.items.map((item, index) => ({ ...item, sortOrder: index })),
     rawPayload: {
       ...mergeSplitBillItemSplitMetadata(bill.rawPayload, body.items),
+      ...(body.reviewedReceipt ? {receiptNeedsReview:false} : {}),
       userItemAllocations:
         bill.rawPayload?.userItemAllocations === true ||
         hasSplitBillAllocationChanges(bill, body.items),

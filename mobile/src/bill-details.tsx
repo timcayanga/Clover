@@ -31,6 +31,8 @@ type Transfer = {
   amount: number;
 };
 export type EditableBill = {
+  transactionId?: string | null;
+  rawPayload?: {directEntryWorkspaceId?:string;receiptNeedsReview?:boolean} | null;
   id: string;
   title: string;
   total: string;
@@ -114,6 +116,9 @@ export function BillDetails({
     (profile) => profile.currency === requestCurrency,
   );
   const [currency, setCurrency] = useState(bill.currency);
+  const [billDate,setBillDate] = useState(bill.billDate.slice(0,10));
+  const [reviewedReceipt,setReviewedReceipt] = useState(false);
+  const [missingTotal,setMissingTotal] = useState("");
   const [title, setTitle] = useState(bill.title);
   const [items, setItems] = useState(() =>
     (bill.items ?? []).map((i) => ({
@@ -233,12 +238,15 @@ export function BillDetails({
   const [message, setMessage] = useState("");
   const payload = JSON.stringify({
     title,
+    ...(billDate !== bill.billDate.slice(0,10) ? {billDate} : {}),
+    ...(reviewedReceipt ? {reviewedReceipt:true} : {}),
+    ...(missingTotal ? {missingTotal} : {}),
     ...(currency !== bill.currency ? { currency } : {}),
-    items,
+    items: items.length || !missingTotal ? items : [{id:`${bill.id}-total`,description:title,amount:missingTotal,participantIds:[...(bill.participants ?? []),...addedParticipants].map(person=>person.id),splitMethod:"equal",allocations:[]}],
     ...(addedParticipants.length ? { addedParticipants } : {}),
   });
   const changed =
-    addedParticipants.length > 0 ||
+    reviewedReceipt || Boolean(missingTotal) || billDate !== bill.billDate.slice(0,10) || addedParticipants.length > 0 ||
     currency !== bill.currency ||
     title !== bill.title ||
     JSON.stringify(items) !==
@@ -353,7 +361,11 @@ export function BillDetails({
       <Card>
         <Field label="Bill name" value={title} onChangeText={setTitle} />
         <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 22 }}>{money(bill.total, currency)}</Text>
-        <Body>{bill.billDate.slice(0, 10)}</Body>
+        {!Number(bill.total) && <Field label="Bill Amount" value={missingTotal} keyboardType="decimal-pad" onChangeText={setMissingTotal}/>}
+        {!bill.transactionId && bill.rawPayload?.directEntryWorkspaceId === session.profileId && Number(bill.total) > 0 &&
+          <PlanAction title="Add to Transactions" disabled={busy || changed} onPress={() => void action(`split-bills/${bill.id}`, "PATCH", {addToTransactions:true})}/>}
+        {bill.rawPayload?.receiptNeedsReview && <Pressable accessibilityRole="checkbox" accessibilityState={{checked:reviewedReceipt}} onPress={()=>setReviewedReceipt(!reviewedReceipt)}><Text style={{color:colors.ink}}>{reviewedReceipt ? "☑" : "☐"} I checked the receipt date, items and total</Text></Pressable>}
+        <Field label="Bill Date" value={billDate} onChangeText={setBillDate}/>
         <ChoiceField label="Bill currency" value={currency} onChange={setCurrency}
           options={[...new Set([bill.currency, ...(session.data?.currencyChoices ?? []).map(c => c.code), "PHP", "USD", "EUR", "SGD", "THB", "JPY", "GBP", "IDR"])].map(code => ({ value: code, label: code }))} />
         {currency !== bill.currency ? <Body>Saving changes the bill currency and keeps the amounts you entered.</Body> : null}

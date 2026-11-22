@@ -1,3 +1,4 @@
+import { AI_CONSENT_VERSION, ONBOARDING_TERMS_VERSION } from "../../shared/ai-consent";
 import { SignupTrialSummary } from "../src/signup-trial-summary";
 import { OnboardingPlanOffers } from '../src/onboarding-plan-offers';
 import { onboardingCanConnect } from '../../shared/onboarding-upgrade';
@@ -5,7 +6,7 @@ import { CloverMascot } from "../src/clover-mascot";
 import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
-import { Image, Pressable, View } from "react-native";
+import { Image, Linking, Pressable, View } from "react-native";
 import { useSession } from "../src/session";
 import {
   Body,
@@ -80,6 +81,28 @@ export default function Onboarding() {
       setBusy(false);
     }
   };
+  const [accepted,setAccepted] = useState(false);
+  const [termsSaved,setTermsSaved] = useState(false);
+  useEffect(() => {
+    if (!session.data || session.demo || termsSaved) return;
+    let active = true;
+    session.request<{termsAccepted?:boolean}>("settings/ai-consent").then(status => {
+      if (active && status.termsAccepted) setTermsSaved(true);
+    }).catch(() => {});
+    return () => {active = false;};
+  }, [session.data, session.demo, session.request, termsSaved]);
+  if (!termsSaved) return <Screen><Heading>Terms &amp; Conditions</Heading>
+    <Body>Clover uses OpenAI to read files you choose and answer questions using relevant financial records. You can turn off cloud AI in Settings.</Body>
+    <Button secondary title="Read the Terms & Conditions" onPress={()=>void Linking.openURL("https://clover.ph/terms-of-service#automation")}/>
+    <Pressable accessibilityRole="checkbox" accessibilityState={{checked:accepted}} onPress={()=>setAccepted(!accepted)}><Text style={{color:colors.ink}}>{accepted ? "☑" : "☐"} I accept the Terms &amp; Conditions</Text></Pressable>
+    {error && <Notice>{error}</Notice>}
+    <Button title="Continue" disabled={!accepted || busy || !session.data} onPress={async()=>{
+      setBusy(true);
+      try {
+        if (!session.demo) await session.request("settings/ai-consent",{method:"POST",body:JSON.stringify({allow:true,version:AI_CONSENT_VERSION,termsVersion:ONBOARDING_TERMS_VERSION})});
+        setTermsSaved(true);setError("");
+      } catch {setError("Unable to save acceptance. Please try again.");} finally {setBusy(false);}
+    }}/></Screen>;
   const planOffers = <OnboardingPlanOffers embedded={step === "upload"} pending={checkoutPending} onPending={setCheckoutPending} onBusy={setCheckoutBusy} onVerified={tier => { setPaidTier(tier); setCheckoutPending(false); setCheckoutBusy(false); setStep(step === 'upload' ? 'upload' : 'experience'); }} />;
   return (
     <Screen>

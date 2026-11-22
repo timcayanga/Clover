@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { AI_CONSENT_VERSION, hasCurrentAiConsent } from "../../shared/ai-consent";
+import { AI_CONSENT_VERSION, ONBOARDING_TERMS_VERSION, hasCurrentAiConsent } from "../../shared/ai-consent";
 import { prisma } from "../lib/prisma";
 import { getAiConsent, setAiConsent, maySendToCloudAi, aiConsentDecision } from "../lib/ai-consent";
 import { parseAppPreferences, updateAppPreferences } from "../lib/app-preferences";
@@ -22,7 +22,8 @@ async function main() {
  try {
   assert.equal(await maySendToCloudAi(),false);
   assert.equal((await getAiConsent("fixture")).allowed,false);
-  await setAiConsent("fixture",{allow:true,version:AI_CONSENT_VERSION});
+  await setAiConsent("fixture",{allow:true,version:AI_CONSENT_VERSION,termsVersion:ONBOARDING_TERMS_VERSION});
+  assert.equal((await getAiConsent("fixture")).termsAccepted,true);
   assert.equal(await maySendToCloudAi("fixture"),true);
   identity = "staging-guest";
   assert.equal(await maySendToCloudAi("fixture"),false);
@@ -38,6 +39,9 @@ async function main() {
   assert.equal(await parseImportTextWithOpenAIFallback({consentUserId:"fixture",text:"Sample receipt",detectedMetadata:null,parsedRows:[]}),null);
   assert.equal(await transcribeImportImagesWithOpenAI({consentUserId:"fixture",detectedMetadata:null,pageImages:[{page:1,dataUrl:"data:image/png;base64,AA=="}]}),null);
   assert.equal(networkCalls,0);
+  const resumed = await setAiConsent("fixture",{allow:true,version:AI_CONSENT_VERSION,termsVersion:ONBOARDING_TERMS_VERSION});
+  assert.equal(resumed.allowed,false);
+  assert.equal(resumed.termsAccepted,true);
   assert.equal(audits.length,2);
   Object.assign(prisma.user,{findUniqueOrThrow:async()=>{throw new Error("DB unavailable");}});
   assert.equal(await maySendToCloudAi("fixture"),false);

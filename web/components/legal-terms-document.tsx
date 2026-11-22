@@ -244,7 +244,7 @@ export function TermsOfServiceDocument() {
               <p>
                 Clover uses software rules, optical character recognition,
                 heuristics, and AI services to interpret records and generate
-                suggestions. Results may contain errors, omit information,
+                suggestions. When you use a cloud AI feature, Clover may send the files you select, your questions, and relevant financial records to OpenAI. You can withdraw AI permission in Settings under Privacy and Data Use. Results may contain errors, omit information,
                 duplicate entries, misunderstand a document, or become outdated.
               </p>
               <p>

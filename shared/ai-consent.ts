@@ -8,3 +8,5 @@ export function hasCurrentAiConsent(value: unknown): boolean {
   const consent = value as Partial<AiConsent>;
   return consent.version === AI_CONSENT_VERSION && typeof consent.grantedAt === "string" && Number.isFinite(Date.parse(consent.grantedAt)) && consent.withdrawnAt === null;
 }
+
+export const ONBOARDING_TERMS_VERSION = "2026-11-22";

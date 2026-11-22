@@ -1,3 +1,4 @@
+import { readReconciledItemTable } from "./receipt-item-table";
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
@@ -2563,6 +2564,10 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
     requiresReview: settled.requiresReview || Boolean(tenderDifference),
     paymentMethod: hasSplitReceiptTender(tenders) ? "Mixed" : settled.paymentMethod,
   } : settled;
+  const table = readReconciledItemTable(opticalText ?? receiptText);
+  if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
+    return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || opticalText !== null};
+  }
   return opticalText === null ? paymentDetails : { ...paymentDetails, receiptText, requiresReview: true, confidence: Math.min(45, paymentDetails.confidence) };
 };
 

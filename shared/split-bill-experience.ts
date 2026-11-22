@@ -96,7 +96,7 @@ export function suggestBillCategory(
   const text = [title, ...descriptions].join(" ").toLowerCase();
   const rules = [
     [
-      /\b(food|dining|lunch|dinner|breakfast|restaurant|coffee|cafe|pasta|pizza|chicken|drinks)\b/,
+      /\b(food|dining|lunch|dinner|breakfast|restaurant|coffee|cafe|pasta|pizza|chicken|drinks|mocktails?|cocktails?)\b/,
       "Food & Dining",
     ],
     [/\b(groceries|grocery|supermarket)\b/, "Groceries"],

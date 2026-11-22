@@ -1,4 +1,6 @@
 "use client";
+import { AI_CONSENT_VERSION, ONBOARDING_TERMS_VERSION } from "../../shared/ai-consent";
+
 
 import { getEntryMethodIconSrc } from "@/lib/entry-method-icons";
 
@@ -132,6 +134,15 @@ export function OnboardingForm({
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>(regionalDefaults);
   const [currencyError, setCurrencyError] = useState<string | null>(null);
+  const [accepted,setAccepted] = useState(false);
+  const [termsSaved,setTermsSaved] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/settings/ai-consent",{cache:"no-store"}).then(async response => {
+      if (response.ok && (await response.json()).termsAccepted && active) setTermsSaved(true);
+    }).catch(() => {});
+    return () => {active = false;};
+  }, [draftKey]);
   const [isSavingCurrency, setIsSavingCurrency] = useState(false);
 
   const getBrowserRegionalDefaults = () =>
@@ -372,6 +383,19 @@ export function OnboardingForm({
     <button className={`button button-secondary ${upgradeStyles.free}`} type="button" onClick={() => { setStep(experience && returnStep === 'upload' ? 'upload' : 'experience'); setMessage(null); }}>{checkoutPending ? 'Continue setup' : 'Continue with Free'}</button>
     <p className={upgradeStyles.freeHint}>No card required for Free. You can upgrade later.</p>
   </>;
+
+  if (!termsSaved) return <section className="glass onboarding-card">
+    <h1>Terms &amp; Conditions</h1><p>Clover uses OpenAI to read files you choose and answer questions using relevant financial records. You can turn off cloud AI in Settings.</p>
+    <label><input type="checkbox" checked={accepted} onChange={event=>setAccepted(event.target.checked)}/> I accept the <a href="/terms-of-service#automation" target="_blank" rel="noopener">Terms &amp; Conditions</a></label>
+    <button className="button button-primary" disabled={!accepted || isSavingCurrency} onClick={async()=>{
+      setIsSavingCurrency(true);
+      try {
+        const response=await fetch("/api/settings/ai-consent",{method:"POST",headers:jsonHeaders,body:JSON.stringify({allow:true,version:AI_CONSENT_VERSION,termsVersion:ONBOARDING_TERMS_VERSION})});
+        if (!response.ok) throw Error();
+        setTermsSaved(true);setMessage(null);
+      } catch {setMessage("Unable to save acceptance. Please try again.");} finally {setIsSavingCurrency(false);}
+    }}>Continue</button>{message && <p role="alert">{message}</p>}
+  </section>;
 
   if (isCompleting) {
     return <CloverRouteLoadingScreen label="Clover" viewport />;

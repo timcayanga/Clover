@@ -49,7 +49,7 @@ export const preferencePatch = z
   .strict();
 export function parseAppPreferences(raw: unknown): AppPreferences {
   // Consent is server-managed metadata, not a user-editable preference patch.
-  const input = raw && typeof raw === "object" && !Array.isArray(raw) ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "aiConsent")) : raw;
+  const input = raw && typeof raw === "object" && !Array.isArray(raw) ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "aiConsent" && key !== "acceptedTerms")) : raw;
   const parsed = preferencePatch.safeParse(input);
   const value = parsed.success ? parsed.data : {};
   return {

@@ -142,3 +142,19 @@ export async function createDirectBillExpense(
     data: { transactionId: transaction.id },
   });
 }
+
+export async function linkStandaloneBillExpense(tx: Prisma.TransactionClient, userId: string, billId: string, workspaceId: string) {
+  await tx.$queryRaw`SELECT id FROM "SplitBill" WHERE id = ${billId} AND "userId" = ${userId} FOR UPDATE`;
+  const bill = await tx.splitBill.findFirstOrThrow({where:{id:billId,userId},include:{items:true}});
+  const metadata = bill.rawPayload;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata) ||
+      metadata.directEntryWorkspaceId !== workspaceId || typeof metadata.directEntryAttemptId !== "string") {
+    throw Error("Choose the Profile where this bill was created.");
+  }
+  if (bill.transactionId) return;
+  await createDirectBillExpense(tx,userId,bill,{
+    workspaceId, attemptId:metadata.directEntryAttemptId,
+    accountId:typeof metadata.accountId === "string" ? metadata.accountId : null,
+    categoryId:typeof metadata.categoryId === "string" ? metadata.categoryId : null,
+  },bill.items.map(item => ({description:item.description,amount:item.amount.toString()})),1);
+}

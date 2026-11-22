@@ -4,6 +4,7 @@ import {personBalanceColumns} from "@/lib/split-bill-balance-summary";
 import { transactionMerchantLogo } from "@/lib/transaction-merchant-logo";
 import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { invalidateWorkspaceSummaryCache, invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
+import { suggestBillCategory } from "../../../../shared/split-bill-experience";
 import { createDirectBillExpense } from "@/lib/split-bill-direct-expense";
 import { splitBillReadSurface, type SplitBillReadErrorCode } from "../../../../shared/split-bill-read";
 import { homePendingSplitBills } from "../../../../shared/home-split-bills";
@@ -49,7 +50,7 @@ const paymentSchema = z.object({
 });
 
 const billSchema = z.object({
-  expense: z.object({ workspaceId:z.string().min(1).max(128), attemptId:z.string().uuid(), accountId:z.string().nullable().optional(), categoryId:z.string().nullable().optional() }).optional(),
+  expense: z.object({ workspaceId:z.string().min(1).max(128), attemptId:z.string().uuid(), splitOnly:z.boolean().optional(), accountId:z.string().nullable().optional(), categoryId:z.string().nullable().optional() }).optional(),
   title: z.string().trim().min(1),
   note: z.string().trim().nullable().optional(),
   billDate: z.string().min(1),
@@ -307,7 +308,7 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
   const participantIdMap = new Map(participantEntries.map((entry) => [entry.sourceId, entry.sourceId]));
   const participantIds = participantEntries.map((entry) => entry.sourceId);
 
-  const itemEntries = input.items.length > 0 ? input.items : [{ description: "Total", amount: input.total ?? "0", participantIds: [] }];
+  const itemEntries = input.items.length > 0 ? input.items : input.expense?.splitOnly && !input.total ? [] : [{ description: "Total", amount: input.total ?? "0", participantIds: [] }];
   const normalizedItems = itemEntries.map((item, index) => {
     const itemId = item.id?.trim() || randomUUID();
     const itemParticipantIds = item.participantIds.length > 0 ? item.participantIds.filter((participantId) => participantIdMap.has(participantId)) : participantIds;
@@ -392,11 +393,24 @@ const persistSplitBill = async (
 
   return prisma.$transaction(async (tx) => {
     if(mode === "create" && input.expense){
+      if(input.expense.splitOnly && input.circleId) throw Error("Circle expenses cannot be standalone.");
+      if(input.expense.splitOnly && !await tx.workspace.findFirst({where:{id:input.expense.workspaceId,userId},select:{id:true}})) throw Error("Choose an available Profile.");
       if(input.transactionId)throw Error("An existing transaction cannot also create a new expense.");
       const key=`direct-bill:${userId}`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
       const prior=await tx.splitBill.findFirst({where:{userId,rawPayload:{path:["directEntryAttemptId"],equals:input.expense.attemptId}},include:getBillInclude});
       if(prior){if((prior.rawPayload as Record<string,unknown>|null)?.directEntryWorkspaceId!==input.expense.workspaceId)throw Error("This save attempt belongs to another Profile.");return prior;}
+      if (input.expense.splitOnly) {
+        const { workspaceId, accountId, categoryId } = input.expense;
+        const suggested = suggestBillCategory(input.title, payload.items.map(item => item.description))?.name || "Other";
+        const [account, category] = await Promise.all([
+          tx.account.findFirst({where:{workspaceId, currency:input.currency, ...(accountId ? {id:accountId,type:{not:"investment"}} : {type:"cash"})}, orderBy:{createdAt:"asc"}, select:{id:true,name:true}}),
+          tx.category.findFirst({where:{workspaceId,isArchived:false,...(categoryId ? {id:categoryId} : {name:{equals:suggested,mode:"insensitive"}})},select:{id:true,name:true}}),
+        ]);
+        if (accountId && !account) throw Error("Choose an account in this Profile and currency.");
+        if (categoryId && !category) throw Error("Choose a category in this Profile.");
+        payload.billData.rawPayload = {...(payload.billData.rawPayload as object), accountId:account?.id ?? null, accountName:account?.name ?? "Cash", categoryId:category?.id ?? null, categoryName:category?.name ?? suggested};
+      }
       payload.billData.rawPayload={...(payload.billData.rawPayload as object),directEntryAttemptId:input.expense.attemptId,directEntryWorkspaceId:input.expense.workspaceId};
     }
     if (input.circleId) {
@@ -560,7 +574,7 @@ const persistSplitBill = async (
     }
 
     await upsertSplitBillPeopleFromNames(tx, userId, payload.participants.map(person => person.name));
-    if(mode === "create" && input.expense)await createDirectBillExpense(tx,userId,bill,input.expense,payload.items.map(i=>({description:i.description,amount:String(i.amount)})), input.circleId ? 1 : 2);
+    if(mode === "create" && input.expense && !input.expense.splitOnly)await createDirectBillExpense(tx,userId,bill,input.expense,payload.items.map(i=>({description:i.description,amount:String(i.amount)})), input.circleId ? 1 : 2);
     return tx.splitBill.findUniqueOrThrow({
       where: { id: bill.id },
       include: getBillInclude,
@@ -618,6 +632,7 @@ export async function GET(request: Request) {
           ...bill,
           transferSettlements: transferSettlementsByBillId.get(bill.id) ?? [],
         } as Parameters<typeof serializeSplitBillRecord>[0]),
+        ...(bill.userId === user.id && bill.rawPayload && typeof bill.rawPayload === "object" && "categoryName" in bill.rawPayload && typeof bill.rawPayload.categoryName === "string" ? {categoryName:bill.rawPayload.categoryName} : {}),
         ...(ledger ? {recorder: bill.userId===user.id ? getUserDisplayName(user) : [bill.user?.firstName,bill.user?.lastName].filter(Boolean).join(" ") || undefined} : {}),
       })),
     });

@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import { useUser } from "@clerk/expo";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { Platform, View, TextInput, Pressable } from "react-native";
+import { Platform, View, TextInput, Pressable, type ScrollViewInstance } from "react-native";
 import { SplitItemGrid } from "./split-item-grid";
 import {
   suggestBillCategory,
@@ -14,7 +14,7 @@ import type { Transaction } from "./types";
 import type { SplitGroup } from "./split-group-details";
 import type { BillItem } from "./bill-details";
 import { AddEntryMethods } from "./add-entry-methods";
-import { useCloudAiConsent } from "./ai-consent";
+
 import { removeUploadCopy } from "./upload";
 import { uploadSelectedFile } from "./upload-selected-file";
 import { EntryOverlay } from "./entry-overlay";
@@ -108,10 +108,21 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
   visible: boolean; offset?: number; setVisible: (value: boolean) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollViewInstance|null>(null);
+  const scrollOffset = useRef(0);
+  const [errorSection,setErrorSection] = useState<"fields"|"amount"|"currency"|"date"|"people"|"items"|"payment">("fields");
+  const anchors = useRef<Partial<Record<typeof errorSection, React.ComponentRef<typeof View> | null>>>({});
+  const scrollToIssue = () => {
+    const target=anchors.current[errorSection];
+    const scroll=scrollRef.current;
+    if (target && scroll) {
+      target.measureInWindow((_x,y)=>scroll.measureInWindow((_sx,sy)=>scroll.scrollTo({y:Math.max(0,scrollOffset.current+y-sy-12),animated:true})));
+    } else scroll?.scrollTo({y:0,animated:true});
+  };
   const scopedSave = useRef(false);
   const [uploaded, setUploaded] = useState(0);
   const session = useSession();
-  const receiptConsent = useCloudAiConsent(session.request, true);
+  const [linkExpense, setLinkExpense] = useState(false);
   const circleId = context?.circleId;
   const circleMembers = context?.group?.members ?? [];
   const recorder = context?.group?.recorderName;
@@ -171,6 +182,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
     fileName: string;
     mimeType: string;
     storageKey: string;
+    needsReview?: boolean;
     text: string;
     confidence: number;
     items: { description: string; amount: string }[];
@@ -221,7 +233,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
         file = picked.assets[0];
       }
       copiedUri = file.uri;
-      await receiptConsent.ensure().catch(() => false);
+
       if (!alive.current) return;
       setUploaded(0);
       setReading(true);
@@ -231,10 +243,12 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
         reliableForScopedSplit?: boolean;
         receiptStorageKey: string;
         preview: {
+          requiresReview?: boolean;
           merchantName: string | null;
           billDate: string | null;
           currency: string;
           total: string | null;
+          serviceCharge?: string | null;
           receiptText: string;
           confidence: number;
           currencyWarning?: string | null;
@@ -255,22 +269,26 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
         storageKey: result.receiptStorageKey,
         text: p.receiptText,
         confidence: p.confidence,
+        needsReview:Boolean(p.requiresReview || !p.billDate || p.currencyWarning),
         items: p.items.map((i) => ({
           description: i.description,
           amount: i.amount,
         })),
       });
-      setReviewedItems(
-        p.items.map((item) => ({
-          description: item.description,
-          amount: item.amount,
-        })),
-      );
-      setTitle(p.merchantName ?? "");
-      setTotal(p.total ?? "");
-      setCurrency(p.currency);
-      setDate(p.billDate?.slice(0, 10) || "");
-      scopedSave.current = Boolean((context?.group || context?.person || circleId) && result.reliableForScopedSplit && !p.currencyWarning);
+      const items = p.items.filter(item => item.description && Number(item.amount) > 0).map(({description,amount}) => ({description,amount}));
+      const sum = items.reduce((n,item) => n + Math.round(Number(item.amount)*100),0);
+      const service = Math.round(Number(p.serviceCharge)*100);
+      if (service > 0 && sum + service === Math.round(Number(p.total)*100)) items.push({description:"Service Charge",amount:(service/100).toFixed(2)});
+      const reconciled = items.reduce((n, item) => n + Math.round(Number(item.amount) * 100), 0) === Math.round(Number(p.total) * 100);
+      const ambiguousCurrency = Boolean(p.currencyWarning || p.currency === "MIXED");
+      setReviewedItems(reconciled && !ambiguousCurrency ? items : []);
+
+      setTitle(p.merchantName || "Receipt");
+      setTotal(ambiguousCurrency ? "" : p.total ?? "");
+      if (/^[A-Z]{3}$/.test(p.currency)) setCurrency(p.currency);
+      if (p.billDate) setDate(p.billDate.slice(0,10));
+      scopedSave.current = (!context?.group && !context?.person && !circleId) ||
+        Boolean(result.reliableForScopedSplit && !p.currencyWarning);
       if (p.currencyWarning) setError(p.currencyWarning);
     } catch (e) {
       if (alive.current)
@@ -335,28 +353,28 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
       choose={name => {addNames([name]); setPersonName(""); setAddingPerson(false);}}/>
     </>
   );
+  const standalone = !circleId && !sourceTransaction && !linkExpense;
+  const suggestedCategory = suggestBillCategory(title, reviewedItems.map(item => item.description))?.name;
+  const inferredCategoryId = entryOptions.data?.categories.find(c => c.name === suggestedCategory)?.id;
   const save = async () => {
     if (inFlight.current) return;
-    if (personName.trim()) { setError("Tap + to add the name before creating the bill."); return; }
+    setErrorSection("fields");
+    if (personName.trim()) { setErrorSection("people"); setError("Tap + to add the name before creating the bill."); return; }
     const parsedDate = new Date(`${date}T00:00:00Z`);
-    if (
-      !title.trim() ||
-      !/^\d+(\.\d{1,2})?$/.test(total) ||
-      Number(total) <= 0 ||
-      !/^[A-Z]{3}$/.test(currency) ||
-      participants.length < (circleId ? 1 : 2) ||
-      new Set(participants.map((p) => p.name.toLowerCase())).size !==
-        participants.length ||
-      !Number.isFinite(+parsedDate) ||
-      parsedDate.toISOString().slice(0, 10) !== date
-    ) {
-      setError(
-        circleId ? "Enter a name, a positive amount, a valid date and currency, and at least one Circle member." : "Enter a title, positive amount, valid date/currency and at least two distinct people.",
-      );
+    const issue = !title.trim() ? ["fields","Enter a bill name."] as const
+      : (!(standalone && !total) && (!/^\d+(\.\d{1,2})?$/.test(total) || Number(total) <= 0)) ? ["amount",standalone ? "Enter a positive amount or leave it blank." : "Enter a positive amount."] as const
+      : !/^[A-Z]{3}$/.test(currency) ? ["currency","Enter a three-letter currency code."] as const
+      : participants.length < (circleId || standalone ? 1 : 2) || new Set(participants.map(p => p.name.toLowerCase())).size !== participants.length ? ["people","Choose distinct people for the split."] as const
+      : !Number.isFinite(+parsedDate) || parsedDate.toISOString().slice(0,10) !== date ? ["date","Enter a valid date in YYYY-MM-DD format."] as const
+      : null;
+    if (issue) {
+      setErrorSection(issue[0]);
+      if (issue[0] === "date") setMoreDetails(true);
+      setError(issue[1]);
       return;
     }
     if (
-      (receipt || reviewedItems.length > 0) &&
+      ((!standalone && receipt) || reviewedItems.length > 0) &&
       (!reviewedItems.length ||
         reviewedItems.some(
           (item) =>
@@ -369,6 +387,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
           0,
         ) !== Math.round(Number(total) * 100))
     ) {
+      setMoreDetails(true); setErrorSection("items");
       setError(
         "Review each item and include extra charges so the items match the bill total.",
       );
@@ -380,6 +399,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
     });
     if (multiplePayers && (contributions.some(row => !/^\d+(\.\d{1,2})?$/.test(row.amount)) ||
       contributions.reduce((sum,row) => sum + Math.round(Number(row.amount) * 100), 0) !== Math.round(Number(total) * 100))) {
+      setMoreDetails(true); setErrorSection("payment");
       setError("Enter each contribution so the amounts add up to the bill total.");
       return;
     }
@@ -394,8 +414,9 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
               expense: {
                 workspaceId: session.profileId,
                 attemptId,
+                ...(standalone ? {splitOnly:true} : {}),
                 accountId: accountId || null,
-                categoryId: categoryId || null,
+                categoryId: categoryId || inferredCategoryId || null,
               },
             }),
         ...(circleId ? {circleId} : {}),
@@ -406,7 +427,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
         currency,
         total,
         participants,
-        paidByIndex: multiplePayers ? null : payer,
+        paidByIndex: multiplePayers || !total ? null : payer,
         ...(multiplePayers ? {contributions} : {}),
         ...(receipt ? { receipt } : {}),
         ...(reviewedItems.length
@@ -462,7 +483,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
   }, [receipt, reading, busy]);
   if (!visible) return <View style={{ position: "absolute", left: 12, right: 12, bottom: insets.bottom + 74 + offset, zIndex: 100 }}>
     <Pressable accessibilityRole="button" onPress={() => setVisible(true)} style={{ backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 }}>
-      <Text style={{ color: colors.ink }}>{reading ? (uploaded < 1 ? "Uploading receipt…" : "Preparing receipt draft…") : busy ? "Saving equal split…" : error ? "Receipt needs attention ›" : "Review receipt draft ›"}</Text>
+      <Text style={{ color: error ? "#a31d35" : colors.ink }}>{reading ? (uploaded < 1 ? "Uploading receipt…" : "Preparing receipt draft…") : busy ? "Saving bill…" : error ? "Receipt needs attention ›" : "Review receipt draft ›"}</Text>
       {reading && <View accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:Math.round(uploaded*100)}} style={{ height:4,backgroundColor:colors.line }}>
         <View style={{height:4,width:`${Math.round(uploaded*100)}%`,backgroundColor:colors.teal}}/>
       </View>}
@@ -471,7 +492,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
   return (
     <EntryOverlay onClose={() => reading ? setVisible(false) : !busy && onClose()}>
     <Screen
-      sheet
+      sheet scrollController={{ref:scrollRef,offset:scrollOffset}}
       onDismiss={() => {
         if (reading) setVisible(false); else if (!busy) onClose();
       }}
@@ -482,8 +503,8 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
           if (reading) setVisible(false); else if (!busy) onClose();
         }}
       />
-      {error ? <Notice>{error}</Notice> : null}
-      {receiptConsent.prompt}
+
+
 
         <AddEntryMethods
           key={reviewVersion}
@@ -507,6 +528,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
           }}
           onUploadSource={source => void uploadReceipt(source)}
         >
+          <View collapsable={false} ref={v=>{anchors.current.fields=v;}}/>
           <Field
             label="Name"
             placeholder="Name"
@@ -514,6 +536,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
             onChangeText={setTitle}
             maxLength={100}
           />
+          <View collapsable={false} ref={v=>{anchors.current.amount=v;}}/>
           <Field
             label="Amount"
             placeholder="0.00"
@@ -521,8 +544,10 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
             onChangeText={setTotal}
             keyboardType="decimal-pad"
           />
+          <View collapsable={false} ref={v=>{anchors.current.currency=v;}}/>
           <Field label="Currency" leading={<Text>{currencyMark(currency)}</Text>} value={currency}
             onChangeText={v => { setCurrency(v.toUpperCase()); setAccountId(""); }} maxLength={3} />
+          <View collapsable={false} ref={v=>{anchors.current.people=v;}}/>
           <View style={{ borderWidth: 1, borderRadius: 16, borderColor: colors.line, padding: 12, gap: 8 }}>
             <Body muted={false}>{circleId ? "People" : "People or Group"}</Body>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
@@ -557,6 +582,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
           </Pressable>
           {moreDetails ? (
             <>
+              <View collapsable={false} ref={v=>{anchors.current.items=v;}}/>
               <SplitItemGrid flat wholeItem={circleId ? {description:title, amount:total} : undefined} equalLabel={circleId ? "Equal" : "Equally"}
                 people={participants.map((p) => ({
                   id: p.name,
@@ -576,7 +602,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
                 }))}
                 onChange={(next) => {
                   setReviewedItems(next);
-                  setTotal(
+                  if (!receipt?.storageKey) setTotal(
                     next
                       .reduce(
                         (sum, item) => sum + (Number(item.amount) || 0),
@@ -587,22 +613,10 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
                 }}
               />
               {addingPerson && (circleId ? pickerAtItems && availableMembers.length > 0 && memberPicker : nameInput(true))}
+              <View collapsable={false} ref={v=>{anchors.current.date=v;}}/>
               <Field label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
               {receipt ? <Body>{receipt.fileName}</Body> : null}
-              {suggestBillCategory(
-                title,
-                reviewedItems.map((item) => item.description),
-              ) ? (
-                <Body>
-                  Suggested Category:{" "}
-                  {
-                    suggestBillCategory(
-                      title,
-                      reviewedItems.map((item) => item.description),
-                    )?.name
-                  }
-                </Body>
-              ) : null}
+              <View collapsable={false} ref={v=>{anchors.current.payment=v;}}/>
               {circleId ? <ChoiceField label="Paid By" value={payer === null ? "" : participants[payer]?.name ?? ""} options={[{value:"",label:"Not Paid Yet"}, ...participants.map(p => ({value:p.name,label:p.name}))]}
                 onChange={name => setPayer(name ? participants.findIndex(p => p.name === name) : null)}/> : <>
                 <ChoiceField label="Paid By" value={multiplePayers ? "multiple" : payer === null ? "" : String(payer)}
@@ -623,12 +637,13 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
                 onChangeText={setNote}
                 maxLength={1000}
               />
+              {!circleId && !sourceTransaction && <Pressable accessibilityRole="checkbox" accessibilityState={{checked:linkExpense}} onPress={()=>setLinkExpense(!linkExpense)}><Text style={{color:colors.ink}}>{linkExpense ? "☑" : "☐"} Add to Transactions</Text></Pressable>}
               <ChoiceField label="Account (Optional)" value={accountId} onChange={setAccountId}
-                options={[{ value: "", label: "Default (Cash)", icon: <AccountTypeMark type="cash" size={24} /> },
-                  ...(entryOptions.data?.accounts ?? []).filter(a => a.currency === currency && a.type !== "investment").map(a => ({value:a.id, label:a.name, icon:<AccountTypeMark type={a.type} size={24} />}))]} />
+                options={[{ value: "", label: "Cash", icon: <AccountTypeMark type="cash" size={24} /> },
+                  ...(entryOptions.data?.accounts ?? []).filter(a => a.currency === currency && a.type !== "investment" && !(a.name === "Cash" && a.type === "cash")).map(a => ({value:a.id, label:a.name, icon:<AccountTypeMark type={a.type} size={24} />}))]} />
               <ChoiceField label="Category (Optional)" value={categoryId} onChange={setCategoryId}
-                options={[{ value:"", label:"Automatic", icon:<CategoryMark name="Other" size={24} /> },
-                  ...(entryOptions.data?.categories ?? []).map(c => ({value:c.id,label:c.name,icon:<CategoryMark name={c.name} size={24} />}))]} />
+                options={[{ value:"", label:suggestedCategory || "Other", icon:<CategoryMark name={suggestedCategory || "Other"} size={24} /> },
+                  ...(entryOptions.data?.categories ?? []).filter(c => c.name !== (suggestedCategory || "Other")).map(c => ({value:c.id,label:c.name,icon:<CategoryMark name={c.name} size={24} />}))]} />
             </>
           ) : null}
           <View style={{flexDirection:"row", justifyContent:"space-between", alignItems:"center"}}>
@@ -641,6 +656,11 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
           />
           </View>
         </AddEntryMethods>
-    </Screen></EntryOverlay>
+    </Screen>
+    {!!error && <Pressable accessibilityRole="button" accessibilityLiveRegion="assertive" onPress={scrollToIssue}
+      style={{position:"absolute",left:12,right:12,bottom:Math.max(insets.bottom,12),padding:12,backgroundColor:"#a31d35",borderRadius:10}}>
+      <Text style={{color:"white"}}>{error} ›</Text>
+    </Pressable>}
+    </EntryOverlay>
   );
 }

@@ -888,7 +888,14 @@ async function handle(
               const text = await request.text();
               if (new TextEncoder().encode(text).length > 200000) return reply({error:"Bill edit is too large."},413);
               const { mergeMobileBillEdit } = await import("@/lib/mobile-split-bill-edit");
-              const body = mergeMobileBillEdit(bill,JSON.parse(text));
+              const changes = JSON.parse(text);
+              if (request.method === "PATCH" && changes?.addToTransactions === true) {
+                z.object({addToTransactions:z.literal(true)}).strict().parse(changes);
+                const {linkStandaloneBillExpense} = await import("@/lib/split-bill-direct-expense");
+                await prisma.$transaction(tx => linkStandaloneBillExpense(tx,user.id,path[1],new URL(request.url).searchParams.get("workspaceId") ?? ""));
+                return route.GET(forwarded,params);
+              }
+              const body = mergeMobileBillEdit(bill,changes);
               if (operation === "preview") {
                 const { previewSplitBillItems } = await import("@/lib/split-bill");
                 return reply({ settlement: previewSplitBillItems(body) });

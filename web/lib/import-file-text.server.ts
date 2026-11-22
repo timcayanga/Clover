@@ -1,3 +1,5 @@
+import { readLocalReceiptOcrText } from "./local-receipt-ocr-envelope";
+import { readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
 import { measureImportReader, recordImportReaderTiming, recordImportWork, reportImportReaderEvent } from "./import-timing";
@@ -876,6 +878,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   classificationContext?: ClassificationContext;
   fileType?: string | null;
   fileName?: string | null;
+  preferReceiptTable?: boolean;
   importMode?: string | null;
 }) => {
   const originalProfile = resolveImageNormalizationProfile({
@@ -885,6 +888,13 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   });
   let receipt = originalProfile === "receipt";
   let preview = receipt ? await measureImportReader("receipt_region_preview", () => getBoundedImportImagePreview(params.sourceBytes)) : null;
+  const firstOptical = params.preferReceiptTable && preview ? await readLocalReceiptImage(preview) : null;
+  if (firstOptical && readReconciledItemTable(readLocalReceiptOcrText(firstOptical) ?? firstOptical) &&
+      !hasUnreadableReceiptPhotoTotal(firstOptical) && parseReceiptText(firstOptical).total) {
+    const rejection = classifyExactPhotoRejection({ ...params, text: readLocalReceiptOcrText(firstOptical) ?? firstOptical }, params.classificationContext);
+    if (rejection) throw rejection;
+    return firstOptical;
+  }
   const region = preview ? findImportImageTextRegion(preview) : null;
   const focusedPreview = region
     ? await normalizeImportedImageBytes(params.sourceBytes, params.fileType, params.fileName, params.importMode, "text-region", region)
@@ -942,7 +952,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   }
 
   if (preview && params.importMode === "receipt") {
-    const localText = await measureImportReader("receipt_local_ocr_fallback", () => readLocalReceiptImage(preview));
+    const localText = firstOptical ?? await measureImportReader("receipt_local_ocr_fallback", () => readLocalReceiptImage(preview));
     if (localText) return localText;
   }
 
@@ -3131,7 +3141,7 @@ export const renderReceiptPdfPagesForVision = async (bytes: Uint8Array) =>
 export const readUploadedFileText = async (
   file: File | ImportFileLike,
   password?: string,
-  options?: { importMode?: string | null; sourceBytes?: Uint8Array }
+  options?: { importMode?: string | null; sourceBytes?: Uint8Array; preferReceiptTable?: boolean }
 ) => {
   const lowerName = String(file.name ?? "").toLowerCase();
   const lowerType = String(file.type ?? "").toLowerCase();
@@ -3218,6 +3228,7 @@ export const readUploadedFileText = async (
       normalizedDataUrl: normalized.dataUrl,
       normalizedBuffer: normalized.buffer,
       sourceBytes: originalBytes,
+      preferReceiptTable: options?.preferReceiptTable,
       fileType: lowerType,
       fileName: lowerName,
       importMode,

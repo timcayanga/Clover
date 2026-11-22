@@ -20,7 +20,7 @@ export const mobileCircleInput = z
 
 export const mobileSplitBillInput = z
   .object({
-    expense: z.object({workspaceId:z.string().min(1),attemptId:z.string().uuid(),accountId:z.string().nullable().optional(),categoryId:z.string().nullable().optional()}).optional(),
+    expense: z.object({workspaceId:z.string().min(1),attemptId:z.string().uuid(),splitOnly:z.boolean().optional(),accountId:z.string().nullable().optional(),categoryId:z.string().nullable().optional()}).optional(),
     groupId:z.string().min(1).optional(),
     circleId:z.string().min(1).max(128).optional(),
     transactionId: z.string().min(1).max(200).optional(),
@@ -40,7 +40,7 @@ export const mobileSplitBillInput = z
     total: z
       .string()
       .regex(/^\d+(\.\d{1,2})?$/)
-      .refine((value) => Number(value) > 0 && Number(value) <= 1_000_000_000),
+      .refine((value) => Number(value) > 0 && Number(value) <= 1_000_000_000).or(z.literal("")),
     participants: z
       .array(z.object({ name: z.string().trim().min(1).max(80) }).strict())
       .min(1)
@@ -85,6 +85,7 @@ export const mobileSplitBillInput = z
       .object({
         fileName: z.string().max(240),
         mimeType: z.string().max(100),
+        needsReview:z.boolean().optional(),
         storageKey: z.string().max(600).startsWith("split-bill-receipts/"),
         text: z.string().max(200000),
         confidence: z.number().int().min(0).max(100),
@@ -104,13 +105,16 @@ export const mobileSplitBillInput = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    const standalone = value.expense?.splitOnly && !value.circleId && !value.transactionId;
+    if (!standalone && !value.total) ctx.addIssue({code:"custom", path:["total"], message:"Enter a positive amount."});
+    if (value.expense?.splitOnly && !standalone) ctx.addIssue({code:"custom",path:["expense"],message:"Standalone bills cannot create a Circle expense or link an existing transaction."});
     if (value.contributions) {
       const indexes = value.contributions.map(row => row.participantIndex);
       const cents = value.contributions.reduce((sum, row) => sum + Math.round(Number(row.amount) * 100), 0);
       if (value.circleId || value.paidByIndex !== null || new Set(indexes).size !== indexes.length || indexes.some(i => i >= value.participants.length) || cents !== Math.round(Number(value.total) * 100))
         ctx.addIssue({code:"custom", path:["contributions"], message:"Choose bill participants and enter contributions totaling the bill amount."});
     }
-    if (value.circleId ? !value.expense : value.participants.length < 2)
+    if (value.circleId ? !value.expense : !standalone && value.participants.length < 2)
       ctx.addIssue({code:"custom", message: value.circleId ? "Choose a Circle for this expense." : "Choose at least two people.", path:["participants"]});
     if (
       value.paidByIndex !== null &&
@@ -199,7 +203,7 @@ export function mobileSplitBillPayload(
     note: input.note,
     billDate: input.billDate,
     currency: input.currency,
-    total: input.total,
+    total: input.total || null,
     sourceType: input.receipt ? "receipt" : "manual",
     participants,
     ...(input.receipt
@@ -216,14 +220,15 @@ export function mobileSplitBillPayload(
               items: input.receipt.items,
               confidence: input.receipt.confidence,
             },
-            allocationMethod: input.reviewedItems
+            receiptNeedsReview: input.receipt.needsReview === true,
+            allocationMethod: input.receipt.needsReview ? "receipt-review-pending" : input.reviewedItems
               ? "user-reviewed-items"
               : "user-confirmed-equal-total",
           },
         }
       : {}),
     items: (
-      input.reviewedItems ?? [{ description: input.title, amount: input.total }]
+      input.reviewedItems ?? (input.total ? [{ description: input.title, amount: input.total }] : [])
     ).map((item) => ({
       description: item.description,
       amount: item.amount,
@@ -241,7 +246,7 @@ export function mobileSplitBillPayload(
           : [],
     })),
     payments: input.contributions ? input.contributions.map(row => ({participantId:participants[row.participantIndex].id, amount:row.amount})) :
-      input.paidByIndex === null
+      input.paidByIndex === null || !input.total
         ? []
         : [
             {

@@ -209,6 +209,38 @@ async function main() {
     ]}}});
     await db.splitBillGroup.update({where:{id:group.id},data:{circleId:circle.id}});
     const {mobileSplitBillInput, mobileSplitBillPayload} = await import("../lib/mobile-together-input");
+    const initialCount = await db.transaction.count({where:{workspaceId:workspace.id}});
+    let standaloneId = "";
+    for (const total of ["1470.54", ""]) {
+      const standalone = mobileSplitBillInput.parse({
+        expense:{workspaceId:workspace.id,attemptId:randomUUID(),splitOnly:true,categoryId:category.id},
+        title:"Cafe", total, note:"", currency:"PHP", billDate:"2026-11-19",
+        participants:[{name:"Alex"}], paidByIndex:total ? 0 : null,
+      });
+      const create = () => post(mobileSplitBillPayload(standalone));
+      const response = await create();
+      assert.equal(response.status,201,JSON.stringify(await response.clone().json()));
+      const {bill} = await response.json();
+      assert.equal((await (await create()).json()).bill.id,bill.id);
+      const record = await db.splitBill.findUniqueOrThrow({where:{id:bill.id}});
+      if (total) standaloneId = bill.id;
+      assert.equal(record.transactionId,null);
+      assert.equal(record.total?.toFixed(2) ?? "",total);
+      assert.equal((record.rawPayload as Record<string,unknown>).categoryName,category.name);
+      if (!total) {
+        const {mergeMobileBillEdit} = await import("../lib/mobile-split-bill-edit");
+        const participantIds = bill.participants.map((person:{id:string})=>person.id);
+        const corrected = mergeMobileBillEdit(bill,{title:"Cafe",billDate:"2026-11-19",missingTotal:"1470.54",
+          items:[{id:bill.id+"-total",description:"Cafe",amount:"1470.54",participantIds,splitMethod:"equal",allocations:[]}]});
+        assert.equal(corrected.total,"1470.54");
+        assert.equal(corrected.billDate,"2026-11-19");
+      }
+    }
+    assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),initialCount);
+    const {linkStandaloneBillExpense} = await import("../lib/split-bill-direct-expense");
+    const link = () => db.$transaction(tx => linkStandaloneBillExpense(tx,user.id,standaloneId,workspace.id));
+    await Promise.all([link(),link()]);
+    assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),initialCount + 1);
     const draft = {expense:body().expense, circleId:circle.id, groupId:group.id, title:"Taxi", total:"80.00", note:"",
       currency:"PHP", billDate:"2026-11-20", participants:[{name:"Alex"}], paidByIndex:0};
     assert.equal(mobileSplitBillInput.safeParse({...draft,circleId:undefined}).success,false);

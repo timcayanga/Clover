@@ -301,7 +301,10 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
 
     aiPermissionPending.current = true;
     try {
-      if (!(await requestAiConsent())) return;
+      if (!(await requestAiConsent())) {
+        setError("To use Ask Clover, enable AI processing in Settings.");
+        return;
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to check AI permission.");
       return;
