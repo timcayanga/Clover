@@ -1,18 +1,19 @@
 import { readLocalReceiptOcrText } from "./local-receipt-ocr-envelope";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
-import { assessReceiptPreviewQuality, parseReceiptText } from "./split-bill";
+import { assessReceiptPreviewQuality, parseReceiptPhotoText } from "./split-bill";
 
 const MAX_CORE_TEXT_LENGTH = 1_600;
 export const COMPACT_RECEIPT_VISION_EDGE = 1_120;
 
 export function buildCompactReceiptEvidence(rawText: string) {
-  const text = readLocalReceiptOcrText(rawText) ?? rawText;
+  const transcript = readLocalReceiptOcrText(rawText);
+  const text = transcript ?? rawText;
   const { body: purchaseText } = splitReceiptPromotionalFooter(text);
-  const preview = parseReceiptText(text);
+  if (!purchaseText.trim() || purchaseText.length > MAX_CORE_TEXT_LENGTH) return null;
+  const preview = parseReceiptPhotoText(text);
   const quality = assessReceiptPreviewQuality(preview);
   const total = Number(String(preview.total ?? "").replace(/,/g, ""));
   if (
-    !purchaseText.trim() || purchaseText.length > MAX_CORE_TEXT_LENGTH ||
     !quality.reliableForFastPath || quality.issues.length || preview.currencyWarning ||
     !preview.billDate || !preview.merchantName || !/^[A-Z]{3}$/.test(preview.currency) ||
     !Number.isFinite(total) || total <= 0
@@ -21,6 +22,14 @@ export function buildCompactReceiptEvidence(rawText: string) {
   const hasPrintedCurrency = new RegExp(`\\b${preview.currency}\\b`, "i").test(purchaseText) ||
     (preview.currency === "PHP" && purchaseText.includes("₱"));
   if (!hasPrintedCurrency) return null;
+
+  if (transcript !== null) {
+    // Device alternatives can invalidate an otherwise clear transcript. The
+    // compact package still goes to vision for verification against the image.
+    const optical = parseReceiptPhotoText(rawText);
+    if (optical.total !== preview.total || optical.billDate !== preview.billDate ||
+        optical.merchantName !== preview.merchantName || optical.currency !== preview.currency) return null;
+  }
 
   return {
     text: purchaseText,

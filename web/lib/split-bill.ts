@@ -623,11 +623,13 @@ const isNoiseLine = (line: string) =>
   ) || /^(?:card|visa|mastercard|debit|credit)[ \t]*[:：]?[ \t]*(?:[\d,.]+)?[ \t]*$/i.test(line);
 
 const isReceiptDateLine = (line: string) =>
+  /^(?:(?:transaction\s+|sale\s+|bill\s+)?date\s*[:：]?\s*)?(?:\d{4}([./-])\d{1,2}\1\d{1,2}|\d{1,2}([./-])\d{1,2}\2(?:\d{4}|\d{2}))(?:\s+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?)?\s*$/i.test(line) ||
   /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i.test(line) &&
   /\b\d{1,2}(?:st|nd|rd|th)?\b/.test(line) &&
   /\b\d{2,4}\b/.test(line);
 
 const isReceiptAdministrativeLine = (line: string) =>
+  /^ref(?:erence)?\s*[:：#]\s*(?=[\w/-]*\d)[\w/-]+\s*$/i.test(line) ||
   /\b(?:trans(?:action)?\s*no|trans\s*no|ref(?:erence)?\s*no|permit\s*no|serial\s*n[bo0]|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accred?\.?\s*no|date\s+issued|ptu\s*no|min\s*[:#]|s\/n\s*[:#]|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city|this serves as an official receipt|not valid for payment)\b/i.test(
     line
   ) || /^(?:valid\s+(?:until|through|thru)|expir(?:y|ation)\s+date)\s*[:：]?\s*\d{1,4}[/.\-]\d{1,2}[/.\-]\d{1,4}\b/i.test(line) || /^(?:MIN|S\/N)\s*[:#]/i.test(line) || /^[A-Za-z][A-Za-z ]{0,20}\s*[#:]\s*\d{7,}\s*$/.test(line);
@@ -1400,7 +1402,7 @@ const extractReceiptItemFromLine = (line: string, pendingDescription?: string | 
     return null;
   }
 
-  const description = cleanReceiptDescription(combinedText.replace(/\s+[^\s]*\s*$/, ""));
+  const description = cleanReceiptDescription(combinedText.replace(/\s+(?:(?:PHP|USD|EUR|GBP|SGD|HKD|IDR|MYR|[₱$€£])\s+)?[^\s]*\s*$/, ""));
   if (!hasPendingDescription && (!/\s/.test(normalized) || (/^\d+$/.test(normalized) && !/\./.test(normalized)))) {
     return null;
   }

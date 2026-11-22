@@ -631,14 +631,12 @@ const detectReceiptOcrFamilyFromText = (text: string, profile: ImageNormalizatio
   return profile === "receipt" ? "paper_receipt" : "generic";
 };
 
-const scoreReceiptTextCandidate = (text: string, profile: ImageNormalizationProfile) => {
-  const normalized = String(text ?? "").trim();
-  if (!normalized) {
-    return Number.NEGATIVE_INFINITY;
-  }
-
-  const preview = parseReceiptText(normalized);
-  const quality = assessReceiptPreviewQuality(preview);
+const scoreReceiptTextCandidate = (
+  normalized: string,
+  profile: ImageNormalizationProfile,
+  preview: ReturnType<typeof parseReceiptText>,
+  quality: ReturnType<typeof assessReceiptPreviewQuality>
+) => {
   const compactLength = normalized.replace(/\s+/g, " ").trim().length;
   const lineCount = normalized.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length;
   const suspiciousIssueCount = quality.issues.filter((issue) =>
@@ -674,18 +672,20 @@ export const pickBestReceiptTextCandidate = (
   candidates: Array<{ text: string; label: string }>,
   profile: ImageNormalizationProfile
 ) => {
+  const seen = new Set<string>();
   const scoredCandidates = candidates
     .map((candidate) => {
       const text = candidate.text.trim();
-      if (!text) {
+      if (!text || seen.has(text)) {
         return null;
       }
+      seen.add(text);
       const preview = parseReceiptText(text);
       const quality = assessReceiptPreviewQuality(preview);
       return {
         ...candidate,
         text,
-        score: scoreReceiptTextCandidate(text, profile),
+        score: scoreReceiptTextCandidate(text, profile, preview, quality),
         hasPrintedTotal: Boolean(preview.total) && !quality.issues.includes("total inferred from line items"),
       };
     })

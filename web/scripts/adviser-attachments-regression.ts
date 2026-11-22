@@ -20,12 +20,16 @@ for (const type of ["application/pdf; version=1.7", "text/csv; charset=utf-8", "
   assert.equal(adviserFileProblem({ name: "Document", size: 100, type }), null);
 }
 assert.equal(adviserFileProblem({ name: "Photo", size: 5_000_000, type: "image/jpeg" }), null);
+for (const name of ["statement.pdf", "trades.tsv", "portfolio.xlsx"]) {
+  assert.equal(adviserFileProblem({ name, size: 8_000_000 }), null);
+  assert(adviserFileProblem({ name, size: 25 * 1024 * 1024 + 1 }));
+}
 for (const file of [
   { name: "wrong.exe", type: "image/jpeg", size: 100 },
   { name: "Document", type: "image/svg+xml", size: 100 },
   { name: "a.exe", size: 10 },
   { name: "a.pdf", size: 0 },
-  { name: "a.pdf", size: 3_500_001 },
+  { name: "notes.txt", size: 3_500_001 },
 ])
   assert(adviserFileProblem(file));
 assert(adviserAttachmentIds.safeParse([id]).success);

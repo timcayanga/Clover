@@ -1,3 +1,4 @@
+import { uploadSizeProblem } from "../../shared/native-upload";
 import { importMediaType, isDelimitedImport, SPREADSHEET_IMPORT_CONTENT_TYPES } from "./import-format-policies";
 import { z } from "zod";
 export const MAX_ADVISER_FILE_BYTES = 3_500_000;
@@ -19,12 +20,12 @@ export const isAdviserText = (file: AttachmentFile) => /\.(txt|md)$/i.test(file.
 export function adviserFileProblem(file: AttachmentFile) {
   if (!file.size || file.size < 0) return "Choose a non-empty file.";
   if (isAdviserPhoto(file)) {
-    return file.size <= 25 * 1024 * 1024 ? null : "Choose a photo up to 25 MB.";
+    return uploadSizeProblem(file.name, file.type, file.size);
   }
-  if (file.size > MAX_ADVISER_FILE_BYTES) return "Choose a file up to 3.5 MB.";
+  if (isAdviserText(file)) return file.size > MAX_ADVISER_FILE_BYTES ? "Choose a text file up to 3.5 MB." : null;
   const media = importMediaType(file.type);
-  if (/\.(pdf|csv|tsv|xlsx?|xlsm|xlsb|ods)$/i.test(file.name) || isAdviserText(file) ||
+  if (/\.(pdf|csv|tsv|xlsx?|xlsm|xlsb|ods)$/i.test(file.name) ||
       (!hasExtension(file.name) && (media === "application/pdf" || isDelimitedImport(file.name, media) ||
-        SPREADSHEET_IMPORT_CONTENT_TYPES.has(media)))) return null;
+        SPREADSHEET_IMPORT_CONTENT_TYPES.has(media)))) return uploadSizeProblem(file.name, file.type, file.size);
   return "Choose a PDF, spreadsheet, text file or image.";
 }

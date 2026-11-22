@@ -267,3 +267,16 @@ for (const date of ["04/05/2026", "04-05-2026", "04.05.2026"]) {
   assert.equal(mergeReceiptBackup(ambiguous, { ...model, transaction_date: "2026-04-05" }, null, { schemaValidated: true }).billDate, null);
 }
 assert.equal(parseReceiptPhotoText(plainPhoto.replace("04/05/2026", "2026-04-05")).billDate?.slice(0, 10), "2026-04-05");
+
+for (const header of ["Date: 11/12/2026", "Date: 2026-11-15", "19.11.2026", "Ref: 12345"]) {
+  const text = ["CLOVER CAFE", "Official Receipt", header, "Latte PHP 125.00",
+    "Date Cake 45.00", "Reference Book 80.00", "Total PHP 250.00", "Cash 300.00", "Change 50.00"].join("\n");
+  for (const source of [text, encodeLocalReceiptOcr({ text })]) {
+    const preview = parseReceiptPhotoText(source);
+    assert.deepEqual(preview.items.map(item => [item.description, item.amount]), [
+      ["Latte", "125.00"], ["Date Cake", "45.00"], ["Reference Book", "80.00"],
+    ], header);
+    assert.equal(preview.total, "250.00");
+    assert.equal(preview.subtotal, "250.00");
+  }
+}

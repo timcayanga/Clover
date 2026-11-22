@@ -26,3 +26,5 @@ The integer-only unknown-currency reader must recognize decimal `Total Amount` a
 When a recognizer returns a separate column of standalone prices, use positioned rows only when the printed settlement independently reconciles. Preserve the original transcript and keep conflicting totals under review. Interpret a leading number as a purchased quantity when the table identifies its quantity column. Preserve numeric product names otherwise.
 
 On printed quantity tables with a unit-price heading, separate the unit price from the description when quantity times unit price equals the extended amount. A digital receipt with one intact page, a reconciled purchase table and a matching payable can use its native PDF text directly. Ambiguous day/month dates remain open for review unless independent printed evidence resolves them.
+
+A standalone numeric sale date or labeled reference identifier ends a pending purchase description. Exclude those rows from the item subtotal while keeping the raw transcript. Preserve merchandise names such as “Date Cake” and “Reference Book”. A separated currency marker beside a line price belongs with the price.

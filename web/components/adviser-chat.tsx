@@ -14,7 +14,7 @@ import { createAdviserHistoryHook } from "../../shared/use-adviser-history";
 import { AdviserInputTools } from "@/components/adviser-input-tools";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { adviserFileAccept, adviserFileProblem, isAdviserPhoto, type AdviserAttachment } from "@/lib/adviser-attachments";
+import { adviserFileAccept, adviserFileProblem, isAdviserText, type AdviserAttachment } from "@/lib/adviser-attachments";
 import { AdviserEntryEditor } from "./adviser-entry-editor";
 import { readAdviserFormContext, clearAdviserFormContext } from "./adviser-form-assist";
 import { entryDraftSchema } from "@/lib/adviser-entry-schema";
@@ -578,11 +578,15 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
     if (problem || attachments.length>=3) {setError(problem || "Attach up to three files.");return;}
     attachmentBusy.current=true;setAttaching(true);setError(null);
     try {
-      const form=new FormData();form.append("file",file);
       const path = `/api/adviser/attachments?workspaceId=${encodeURIComponent(workspaceId)}`;
-      const response = isAdviserPhoto(file)
-        ? await previewReceiptFile(file, path)
-        : await fetch(path, { method: "POST", body: form });
+      let response: Response;
+      if (isAdviserText(file)) {
+        const body = new FormData();
+        body.set("file", file);
+        response = await fetch(path, { method: "POST", body });
+      } else {
+        response = await previewReceiptFile(file, path);
+      }
       const data=await response.json();
       if(!response.ok) throw new Error(data.error || "Unable to attach this file.");
       if(attachmentActive.current) setAttachments(current=>[...current,data.attachment]);

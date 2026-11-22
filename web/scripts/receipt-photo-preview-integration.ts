@@ -56,8 +56,10 @@ async function verify() {
     assert.equal(result.preview.total, "1470.54");
     assert.equal(result.preview.billDate.slice(0, 10), "2026-11-19");
     assert.equal(result.preview.serviceCharge, "120.54");
-    assert.deepEqual(result.preview.items.map((item: { description: string }) => item.description),
-      ["Mocktail REFRESHING", "Cavinti Fizz", "Punch from the Past"]);
+    assert.equal(result.preview.subtotal, "1350.00");
+    assert.deepEqual(result.preview.items.map((item: { description: string; amount: string }) => [item.description, item.amount]), [
+      ["Mocktail REFRESHING", "350.00"], ["Cavinti Fizz", "480.00"], ["Punch from the Past", "520.00"],
+    ]);
     assert.equal(networkCalls, 0);
     console.log("PASS " + method + " split receipt preview, printed total, items, date and retained photo in", Math.round(performance.now() - start), "ms");
   }
