@@ -20,7 +20,7 @@ export const isAdminOnlyUserId = (userId: string | null | undefined) => {
   return getAdminOnlyUserIds().has(userId.toLowerCase());
 };
 
-export const isConfiguredAdminEmail = async (userId: string) => {
+const readConfiguredAdminEmail = async (userId: string) => {
   const adminEmails = getAdminEmailSet();
   if (adminEmails.size === 0) {
     return false;
@@ -32,6 +32,17 @@ export const isConfiguredAdminEmail = async (userId: string) => {
   } catch {
     return false;
   }
+};
+
+// Several screens request independent resources on arrival. Share only the
+// outstanding provider read for this identity. Every later request checks again.
+const pendingEmailChecks = new Map<string, Promise<boolean>>();
+export const isConfiguredAdminEmail = (userId: string) => {
+  const pending = pendingEmailChecks.get(userId);
+  if (pending) return pending;
+  const check = readConfiguredAdminEmail(userId).finally(() => pendingEmailChecks.delete(userId));
+  pendingEmailChecks.set(userId, check);
+  return check;
 };
 
 export async function isAssignedAdmin(userId: string) {

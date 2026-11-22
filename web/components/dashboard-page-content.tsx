@@ -22,7 +22,7 @@ import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
-import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
+import { isLiabilityAccountType, SPENDABLE_ACCOUNT_TYPES } from "@/lib/account-types";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardTopActionsLazy } from "@/components/dashboard-top-actions-lazy";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
@@ -663,6 +663,7 @@ async function DashboardStream({
       ? prisma.account.findMany({
           where: {
             workspaceId: workspaceSummary.id,
+            type: { in: [...SPENDABLE_ACCOUNT_TYPES] },
           },
           select: {
             id: true,
@@ -833,7 +834,7 @@ async function DashboardStream({
   };
 
   const spendableAccounts = dashboardAccounts.filter((account) =>
-    isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0]) && (allCurrencies || formatCurrencyCode(account.currency) === selectedCurrency)
+    allCurrencies || formatCurrencyCode(account.currency) === selectedCurrency
   );
   const balanceCurrency = preferredDashboardCurrency;
   const spendableCurrencies = Array.from(

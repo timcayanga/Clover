@@ -100,9 +100,8 @@ async function createOfflineStore(identity: string): Promise<OfflineStore> {
     async keys(prefix) {
       return (
         await db.getAllAsync<{ key: string }>(
-          "SELECT key FROM offline_data WHERE substr(key,1,?)=?",
-          prefix.length,
-          prefix,
+          "SELECT key FROM offline_data WHERE key GLOB ?",
+          prefix.replace(/[[*?]/g, character => "[" + character + "]") + "*",
         )
       ).map((r) => r.key);
     },

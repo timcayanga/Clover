@@ -7,6 +7,9 @@ const { chromium } = require('playwright-core');
 const root = path.resolve(__dirname, '..');
 const react = path.dirname(require.resolve('react', { paths: [root] }));
 const adapters = {
+  'expo-modules-core': 'export const requireOptionalNativeModule=()=>null;',
+  'home-pending-split-bills': 'export const HomePendingSplitBills=()=>null;',
+  'first-use-activation': 'export const FirstUseActivation=()=>null;',
   'react-native': `import React from 'react'; export const Platform={OS:'web'};export const View=({children,accessibilityLabel})=><div aria-label={accessibilityLabel}>{children}</div>;export const ScrollView=View;export const Pressable=({children,onPress,accessibilityLabel})=><button aria-label={accessibilityLabel} onClick={onPress}>{children}</button>;`,
   'expo-router': `import React from 'react';export const router={navigate(){}};const nav={setOptions(){}};export const useNavigation=()=>nav;export const useFocusEffect=cb=>React.useEffect(()=>window.focused?cb():undefined,[cb,window.focused]);`,
   'expo-secure-store': `export const getItemAsync=async()=>null;export const setItemAsync=async()=>{};`,
@@ -19,7 +22,7 @@ const adapters = {
   'home-quick-access': `export const HomeQuickAccess=()=>null;`,
   'session': `export const useSession=()=>window.session;`,
   'api': `export class ApiError extends Error{constructor(message,status){super(message);this.status=status;}}window.TestApiError=ApiError;`,
-  'ui': `import React from 'react';const theme={colors:{},styles:{}};export const useTheme=()=>theme;export const money=(amount,code)=>code+' '+amount;export const Screen=({children})=><main>{children}</main>;export const Body=({children})=><p>{children}</p>;export const Card=Body;export const Heading=Body;export const Notice=({children})=><aside role='alert'>{children}</aside>;export const Button=({title,onPress})=><button onClick={onPress}>{title}</button>;export const Icon=()=>null;export const AppHeader=()=>null;`,
+  'ui': `import React from 'react';const theme={colors:{},styles:{}};export const useTheme=()=>theme;export const money=(amount,code)=>code+' '+amount;export const Screen=({children})=><main>{children}</main>;export const Body=({children})=><p>{children}</p>;export const Card=Body;export const Heading=Body;export const Notice=({children})=><aside role='alert'>{children}</aside>;export const Button=({title,onPress})=><button onClick={onPress}>{title}</button>;export const CategoryMark=()=>null;export const Icon=()=>null;export const AppHeader=()=>null;`,
 };
 (async () => {
   const build = await esbuild.build({

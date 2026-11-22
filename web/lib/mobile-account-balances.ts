@@ -6,7 +6,7 @@ import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from ".
 /** Add read-only current balances without replacing the stored opening balance. */
 export async function mobileAccountBalances(workspaceId: string, ids: string[]) {
   if (!ids.length) return new Map<string, string | null>();
-  const accounts = await prisma.account.findMany({
+  const accountsQuery = prisma.account.findMany({
     where: { workspaceId, id: { in: ids }, OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] },
     select: {
       id: true, source: true, type: true, currency: true, balance: true,
@@ -20,7 +20,7 @@ export async function mobileAccountBalances(workspaceId: string, ids: string[]) 
       },
     },
   });
-  const snapshots = await finverseBalances(workspaceId, ids);
+  const [accounts, snapshots] = await Promise.all([accountsQuery, finverseBalances(workspaceId, ids)]);
   const result = new Map(accounts.map(account => {
     const checkpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
     const balance = deriveReconciledBalance({

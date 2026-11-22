@@ -1059,8 +1059,10 @@ const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => 
 
 export default function InvestmentsPage() {
   const defaultCurrency = useDefaultCurrency();
-  const initialWorkspaceId = readSelectedWorkspaceId();
-  const initialCachedWorkspace = initialWorkspaceId ? getCachedInvestmentWorkspace(initialWorkspaceId).cachedSnapshot : null;
+  const [initialWorkspaceId] = useState(readSelectedWorkspaceId);
+  const [initialCachedWorkspace] = useState(() =>
+    initialWorkspaceId ? getCachedInvestmentWorkspace(initialWorkspaceId).cachedSnapshot : null
+  );
   const initialCachedAccounts = Array.isArray(initialCachedWorkspace?.accounts) ? (initialCachedWorkspace.accounts as Account[]) : [];
   const searchParams = useSearchParams();
   const urlSearchParams = useMemo(() => new URLSearchParams(searchParams?.toString() ?? ""), [searchParams]);
@@ -1281,6 +1283,7 @@ export default function InvestmentsPage() {
         const gsaveTransactions = Array.isArray(gsaveTransactionsPayload?.transactions)
           ? (gsaveTransactionsPayload.transactions as InvestmentTransaction[])
           : [];
+        if (cancelled) return;
         const nextTransactions = Array.from(
           new Map([...investmentOnlyTransactions, ...gsaveTransactions].map((transaction) => [transaction.id, transaction])).values()
         );

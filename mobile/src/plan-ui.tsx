@@ -287,6 +287,7 @@ export function usePlanData<T>(path: string, sample: T) {
         apply: result => { blockedRead.current = null; setData(result); setError(""); },
         error: e => {
           const message = (e as Error).message;
+          if (e instanceof ApiError && (e.status === 401 || e.status === 403)) setData(null);
           if (splitBillsRead && e instanceof ApiError && splitBillReadRequiresAction(e.status)) {
             blockedRead.current = { resource, message };
             setData(null);

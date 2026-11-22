@@ -19,7 +19,7 @@ import {
   resolveEffectiveAccountBalance,
   selectLatestAccountCheckpoint,
 } from "./account-balance-projection";
-import { isSpendableAccountType } from "./account-types";
+import { isSpendableAccountType, SPENDABLE_ACCOUNT_TYPES } from "./account-types";
 import { resolveFinancialTransactionType } from "./transaction-directions";
 
 // Read-only native dashboard. Reuses Clover's balance/checkpoint and direction
@@ -51,7 +51,11 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
           where: {
             deletedAt: null,
             isExcluded: false,
-            account: { OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] },
+            account: {
+              type: { in: [...SPENDABLE_ACCOUNT_TYPES] },
+              ...(allCurrencies ? {} : { currency }),
+              OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }],
+            },
           },
           select: {
             id: true,

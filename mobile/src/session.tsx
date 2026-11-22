@@ -171,7 +171,6 @@ export function SessionProvider({
       try {
         const store = await openOfflineStore(`${apiBase()}:${userId}`);
         engine = new OfflineEngine(store, transport, () => Crypto.randomUUID());
-        await engine.init();
         setupQueue.current = new OnboardingPersistence(store, async choices => {
           const result = await transport<{ completed: boolean; profiles?: Profile[] }>("onboarding", { method: "POST", body: JSON.stringify(choices) });
           if (active && result.completed && result.profiles?.length) {
@@ -185,9 +184,13 @@ export function SessionProvider({
           }
           return result;
         });
-        await setupQueue.current.init();
-        preferredProfile.current = await store.get<string>("selected-profile") ?? "";
-        const cached = await store.get<CacheEntry<Bootstrap>>("cache:bootstrap");
+        const [savedProfile, cached] = await Promise.all([
+          store.get<string>("selected-profile"),
+          store.get<CacheEntry<Bootstrap>>("cache:bootstrap"),
+          engine.init(),
+          setupQueue.current.init(),
+        ]);
+        preferredProfile.current = savedProfile ?? "";
         if (active && verifiedBootstrap.current && !manuallySelectedProfile.current) {
           setProfile(selectRecentProfile(verifiedBootstrap.current.profiles, preferredProfile.current, ""));
         }
@@ -197,7 +200,7 @@ export function SessionProvider({
             if (active) {
               const selected = selectRecentProfile(cached.value.profiles, "", preferredProfile.current);
               const entries = await engine.presentationCache(selected);
-              if (!verifiedBootstrap.current) for (const entry of entries) {
+              if (active && !bootstrapDenied.current && !verifiedBootstrap.current) for (const entry of entries) {
                 if (isPageRead(entry.path)) pageCache.current.seed(entry.path, entry.value, entry.savedAt);
               }
               if (!active) { await engine.dispose(); return null; }

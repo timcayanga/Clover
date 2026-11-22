@@ -55,4 +55,4 @@ export class PageCache {
 
   clear() { this.generation++; this.entries.clear(); this.pending.clear(); }
 }
-export const isPageRead = (path: string) => /^(home|accounts|transactions|reports|recurring|budgeting|goals|investments|options|split-bills)(?:\?|$)/.test(path);
+export const isPageRead = (path: string) => /^(home|accounts|transactions|reports(?:\/workspace)?|recurring|budgeting|budgets(?:\/options)?|circles|together-options|goals|investments|options|split-bills)(?:\?|$)/.test(path);

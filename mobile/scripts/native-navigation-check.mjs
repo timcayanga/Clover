@@ -18,6 +18,10 @@ const delayed=cache.read(path,()=>new Promise(resolve=>{finish=resolve}));
 await Promise.resolve(); cache.clear(); finish(snapshot); await delayed;
 assert.equal(cache.peek(path),null,'An old response must not repopulate cache after mutation/sign-out');
 await cache.read(path,async()=>snapshot); cache.clear();assert.equal(cache.peek(path),null);
+for(const route of ['budgets', 'budgets/options', 'reports/workspace', 'circles', 'together-options']) {
+  assert.equal(isPageRead(route + '?workspaceId=one'), true);
+  assert.equal(isPageRead(route + '/private-detail?workspaceId=one'), false);
+}
 for(const route of ['billing/store','adviser/chat','finverse/sync','bootstrap'])assert.equal(isPageRead(route),false);
 const assets=[
 {id:'1',type:'investment',institution:' GFunds ',currency:'PHP'},

@@ -1,5 +1,6 @@
 import { manualTransactionName, manualTransactionToday, validManualTransactionDate } from "../../../shared/manual-transaction-defaults";
 import { telemetry } from "../../../shared/analytics";
+import { isPageRead } from "../page-cache";
 import { NetworkError } from "../api";
 import type {
   CacheEntry,
@@ -89,7 +90,7 @@ export class OfflineEngine {
   async presentationCache(profile: string) {
     await this.assertLocalAccess(profile);
     const invalidatedAt = await this.store.get<number>("presentation-invalidated-at") ?? 0;
-    const allKeys = (await this.store.keys("cache:")).filter(key => workspace(key.slice(6)) === profile);
+    const allKeys = (await this.store.keys("cache:")).filter(key => isPageRead(key.slice(6)) && workspace(key.slice(6)) === profile);
     const keys = [...new Set([...allKeys.filter(key => key.startsWith("cache:home?")), ...allKeys.slice(-40)])];
     const recent = await Promise.all(keys.map(async key => {
       const entry = await this.store.get<CacheEntry<unknown>>(key);
@@ -265,6 +266,7 @@ export class OfflineEngine {
     const pending = (await this.pending()).filter(
       (p) => p.workspaceId === workspace(path),
     );
+    if (pending.length === 0) return value;
     const data = JSON.parse(JSON.stringify(value));
     const apply = (row: Transaction) => {
       const p = pending.find((p) => p.transactionId === row.id);
