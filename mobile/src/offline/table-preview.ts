@@ -11,12 +11,18 @@ export function delimitedPreview(source: string) {
     );
   const directive = /^sep=([,;|\t])\r?\n/i.exec(text);
   if (directive) text = text.slice(directive[0].length);
-  const first = text.split(/\r?\n/)[0] ?? "";
-  const delimiter =
-    directive?.[1] ??
-    [",", "\t", ";", "|"].sort(
-      (a, b) => first.split(b).length - first.split(a).length,
-    )[0];
+  const delimiters = [",", "\t", ";", "|"];
+  const hasTransactionHeader = (cells: string[]) => {
+    const names = cells.map(cell => cell.trim().replace(/^"(.*)"$/, "$1").toLowerCase());
+    return names.some(name => ["date", "posted date", "transaction date"].includes(name)) &&
+      names.some(name => ["amount", "debit", "credit"].includes(name)) &&
+      names.some(name => ["description", "merchant", "payee", "name"].includes(name));
+  };
+  const headerLines = text.split(/\r?\n/, 12);
+  const firstLine = headerLines[0] ?? "";
+  const delimiter = directive?.[1] ?? delimiters.find(candidate =>
+    headerLines.some(line => hasTransactionHeader(line.split(candidate)))) ??
+    delimiters.sort((a, b) => firstLine.split(b).length - firstLine.split(a).length)[0];
   const rows: string[][] = [];
   let row: string[] = [],
     cell = "",
@@ -61,16 +67,7 @@ export function delimitedPreview(source: string) {
     );
   row.push(cell);
   if (row.some(Boolean)) rows.push(row);
-  const headerIndex = rows
-    .slice(0, 12)
-    .findIndex(
-      (r) =>
-        r.some((c) =>
-          /^(date|posted date|transaction date)$/i.test(c.trim()),
-        ) &&
-        r.some((c) => /^(amount|debit|credit)$/i.test(c.trim())) &&
-        r.some((c) => /^(description|merchant|payee|name)$/i.test(c.trim())),
-    );
+  const headerIndex = rows.slice(0, 12).findIndex(hasTransactionHeader);
   if (headerIndex < 0)
     throw new Error(
       "No unambiguous transaction table found. Queue the original for full parsing.",

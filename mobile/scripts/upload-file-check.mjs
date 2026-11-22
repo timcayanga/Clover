@@ -65,7 +65,8 @@ const large = {
   id: '00000000-0000-4000-8000-000000000001',
   uri: 'file:///cache/large.pdf', name: 'large.pdf', mimeType: 'application/pdf', size: sourceBytes.length,
 };
-await withUploadCopy(large, selectedUploadPartReader(large), async () => {
+await withUploadCopy({ ...large, name: "Document", mimeType: "application/pdf; version=1.7" }, selectedUploadPartReader(large), async uri => {
+  assert.match(uri, /\.pdf$/);
   assert.deepEqual(Buffer.concat(writes), sourceBytes);
 });
 assert.deepEqual(reads, [
@@ -73,6 +74,25 @@ assert.deepEqual(reads, [
   [limits.NATIVE_UPLOAD_PART_SIZE, limits.NATIVE_UPLOAD_PART_SIZE],
   [limits.NATIVE_UPLOAD_PART_SIZE * 2, 5],
 ]);
+
+// Document providers can supply a MIME type without a filename extension.
+const previewReads = [];
+const { previewFile } = load('../src/offline/file-preview.ts', {
+  '../../../shared/import-format-policies': load('../../shared/import-format-policies.ts', {}),
+  '../../../shared/native-upload': limits,
+  './table-preview': load('../src/offline/table-preview.ts', {}),
+  './file-storage': { withUploadCopy: async (_file, _bytes, run) => { previewReads.push('copy'); return run('local-copy'); } },
+  './local-ocr-slot': { tryRunLocalOcr: run => run() },
+  'expo-file-system/legacy': { readAsStringAsync: async () => 'Bank report\nDate\tDescription\tAmount\n2026-11-19\tCafe\t-2.50' },
+  '../../modules/clover-local-ai': { CloverLocalAI: { extractText: async () => ({ text: 'Total 2.50', pagesRead: 1, totalPages: 1, complete: true }) } },
+});
+for (const mimeType of ['application/pdf; version=1.7', 'image/jpeg']) {
+  assert.match(await previewFile({ ...large, name: 'Document', mimeType }, null), /Total 2.50/);
+}
+assert.match(await previewFile({ ...large, name: 'Document', mimeType: 'text/tab-separated-values; charset=utf-8', size: 130 }, null), /Amount: -2.50/);
+const copies = previewReads.length;
+await assert.rejects(previewFile({ ...large, name: 'large.csv' }, null), /too large/);
+assert.equal(previewReads.length, copies, 'Oversized table previews must skip the temporary copy');
 
 // Expo Android may return the original size with a compressed output URI.
 // Exercise selection through encrypted-queue retention, including absent and

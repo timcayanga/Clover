@@ -205,3 +205,27 @@ On the iOS simulator, passing the 11 original photos through Vision and the shar
 The shared server reader matched 11/11 totals, 7/8 labeled merchants, 8/8 labeled dates and 1/2 labeled currencies. It also proposed a date for one photo whose date could not be independently read. It matched 50/67 item descriptions and produced three exact tables. Eleven output descriptions had no exact reference match, including spelling and quantity-prefix differences. The previous run matched 51 descriptions. The stricter quantity rule retains an ambiguous leading “1” on one dish while protecting numeric product names. All 11 previews required review. Median local server reading time was 3.80 seconds and the maximum was 9.40 seconds.
 
 For the original Spirits Library photo, both the multipart preview and the native assembled-byte preview returned the three named purchases, a ₱120.54 service charge, and ₱1,470.54 total while preserving the original bytes. Route times were 3.11 and 3.95 seconds respectively, excluding network and UI. The integration test isolates authentication and storage. A separate store test reassembles and verifies a four-part file larger than 4.5 MiB and rejects a corrupted part. Native receipt and adviser readers now consume the verified bytes directly. Extensionless CSV and DOCX fixtures with parameterized MIME types produced identical text through the immediate and stored readers.
+
+## Follow-up on conflicting readings, item spelling and mobile statement previews
+
+- The amount check stripped uppercase “DUE” as a possible currency code before comparing two OCR readings. It now checks the complete printed label first. An independently reread date can also resolve a disagreement inside a timestamp. The parser retains the printed time and source evidence when the date is uncertain.
+- A focused crop could satisfy the first-pass return condition. The reader now checks full-frame evidence before returning a crop-derived result. Full-frame normalization for the more expensive fallback runs only when needed.
+- Receipt descriptions can include more than one independently supported correction. They are applied in a single pass so a replacement cannot trigger another. Two agreeing readings can repair an interior missing letter or a spacing error in a punctuated description. The item correction path excludes numeric fields.
+- The pinned Latin and Korean recognition networks both end in Softmax. Clover now stops comparing character probabilities once one exceeds one half. A synthetic printed line produced identical winning classes at every position with both decoders. In nine interleaved repetitions, median time for 100 character-decoding passes fell from 3.14 to 0.76 ms (Latin) and from 78.32 to 53.39 ms (Korean). This measures character selection after inference.
+- Mobile offline previews now use the provider MIME type for extensionless photos, PDFs, CSVs and TSVs. Both native PDF readers need a temporary path ending in .pdf. Queued PDFs now receive that suffix. Delimited previews recognize a transaction header below an export title and skip decrypting and copying files that exceed the local text display limit.
+
+### Remaining discrepancies on the 11-photo diagnostic set
+
+| Photo | Finding |
+| --- | --- |
+| 1, 2, 4, 5, 10 | All labeled descriptions and observable core fields matched. Exact description matches do not establish quantities or unit prices. |
+| 3 | The merchant matched apart from the printed final period. All nine descriptions matched. |
+| 6 | Three item spellings differed. The proposed date could not be independently verified against the label. |
+| 7 | An extra space split an item name. |
+| 8 | Four names differed in spelling or punctuation. |
+| 9 | The reader retained a leading “1” where a quantity header was unavailable. |
+| 11 | Two priced rows were returned, both with spelling differences. The reader withheld the other six. The labeled peso marker was missing from the OCR reading. |
+
+All eleven totals matched and all eleven previews required review. An installed Android end-to-end scan remains unverified because the emulator rejected startup for insufficient disk space. Mobile host tests exercise the production picker and queue adapters with filesystem and picker test doubles.
+
+The final local server replay took 4.94 seconds at the median and 12.82 seconds at the maximum, compared with 3.80 and 9.40 seconds in the previous pass. The character-decoder benchmark improved, but these full-path samples do not establish a latency win. The original Spirits Library receipt passed the multipart preview in 4.69 seconds and the assembled mobile-file preview in 3.82 seconds. Both verified the three purchases, service charge, date, total and retained original. The final iOS simulator replay matched six totals, withheld five and qualified one for skipping a second read. The statement and file suites passed 18 structured fixtures, PDF page coverage, native upload password and corruption checks, and 70 offline checks.

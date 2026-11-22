@@ -309,6 +309,21 @@ async function crops(cv, image, boxes) {
   }
   return result;
 }
+// The pinned recognition models output a softmax distribution for each
+// timestep. A class above half the probability mass is the unique winner.
+function mostLikelyClass(probabilities, offset, classes) {
+  let best = 0;
+  let maximum = probabilities[offset];
+  for (let c = 1; c < classes && maximum <= 0.5; c++) {
+    const probability = probabilities[offset + c];
+    if (probability > maximum) {
+      best = c;
+      maximum = probability;
+    }
+  }
+  return best;
+}
+
 async function recognize(lines, language, normalize = true) {
   const model = await getModel(language),
     results = [];
@@ -338,15 +353,7 @@ async function recognize(lines, language, normalize = true) {
       const probabilities = output.data;
       let characterIndex = 0;
       for (let i = 0; i < probabilities.length; i += classes) {
-        let best = 0;
-        let maximum = probabilities[i];
-        for (let c = 1; c < classes; c++) {
-          const value = probabilities[i + c];
-          if (value > maximum) {
-            maximum = value;
-            best = c;
-          }
-        }
+        const best = mostLikelyClass(probabilities, i, classes);
         if (best !== 0 && best !== last) {
           const glyph = model.dictionary[best];
           const p = probabilities[i + best];
@@ -436,19 +443,21 @@ function rows(lines) {
 // separate optical disagreement checks. Never invent a word from a dictionary.
 function corroborateWords(best, other, independent, printedElsewhere) {
   if (!other || !independent || independent.confidence < 0.7 || /[0-9]/.test(best.text)) return best;
-  // Two independent readings must agree on a single missing or extra space.
-  // Restrict this to letters so a quantity or product code cannot be joined.
+  // Accept one omitted space or interior letter when two other readings
+  // agree on the complete phrase, including the printed punctuation.
   const preferred = best.text.trim();
   const agreed = other.text.trim();
   if (other.confidence >= 0.75 && agreed.toLowerCase() === independent.text.trim().toLowerCase() &&
-      /^[A-Za-z]+(?: [A-Za-z]+)*$/.test(preferred) && /^[A-Za-z]+(?: [A-Za-z]+)*$/.test(agreed) &&
+      /^[A-Za-z][A-Za-z '&.,()/-]*$/.test(preferred) && /^[A-Za-z][A-Za-z '&.,()/-]*$/.test(agreed) &&
       Math.abs(preferred.length - agreed.length) === 1) {
     const shorter = preferred.length < agreed.length ? preferred : agreed;
     const longer = preferred.length < agreed.length ? agreed : preferred;
     const a = longer.toLowerCase(), b = shorter.toLowerCase();
     let index = 0;
     while (index < b.length && a[index] === b[index]) index++;
-    if (a[index] === " " && a.slice(index + 1) === b.slice(index)) {
+    const interiorLetter = /[a-z]/.test(a.charAt(index - 1)) && /[a-z]/.test(a.charAt(index)) &&
+      /[a-z]/.test(a.charAt(index + 1)) && independent.confidence >= 0.85 && other.confidence >= 0.85;
+    if ((a[index] === " " || interiorLetter) && a.slice(index + 1) === b.slice(index)) {
       return { ...best, text: agreed, originalText: best.text };
     }
   }
@@ -565,7 +574,7 @@ async function run(preview, timings) {
     confidence: score(lines),
   };
 }
-module.exports = { run, rows, modelDictionary, tensor, corroborateWords };
+module.exports = { run, rows, modelDictionary, tensor, corroborateWords, mostLikelyClass };
 if (parentPort)
   parentPort.on("message", async (input) => {
     const timings = input.measure ? {} : undefined;

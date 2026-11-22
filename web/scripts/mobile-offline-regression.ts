@@ -609,6 +609,13 @@ test("delimited preview preserves quotes, multiline cells and source signs", () 
   assert.match(result, /second line/);
   assert.match(result, /no transactions are confirmed/);
 });
+test("statement preview uses the header below the export title", () => {
+  for (const delimiter of ["\t", ";", "|"]) {
+    const text = ["Activity report, November", ["Date", "Description", "Amount"].join(delimiter),
+      ["2026-11-19", "Cafe", "-12.50"].join(delimiter)].join("\n");
+    assert.match(delimitedPreview(text), /Amount: -12.50/);
+  }
+});
 test("ambiguous table/encoding fails closed", () => {
   assert.throws(
     () => delimitedPreview('Date,Description,Amount\n2026-09-14,"unfinished,1'),

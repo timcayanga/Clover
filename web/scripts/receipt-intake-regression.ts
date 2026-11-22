@@ -154,6 +154,10 @@ assert.equal(hasConflictingReceiptTotalReading([
   { text: "GRAND TOTAL", box: [.1, .4, .4, .45] },
   { text: "425.00", box: [.6, .4, .8, .45], confidence: .8, alternatives: [{ text: "426.00", confidence: .72 }] },
 ]), true, "A distinct amount block aligns to its summary label");
+for (const label of ["AMOUNT DUE", "TOTAL DUE:", "AMOUNT DUE PHP", "TOTAL PAID £"]) {
+  assert(hasConflictingReceiptTotalReading([{ ...totalEvidence, text: label + " 425.00", characterAlternatives: undefined,
+    alternatives: [{ text: label + " 426.00", confidence: .8 }] }]), label);
+}
 const mismatchedTranscript = encodeLocalReceiptOcr({ ...alternateReading, text: "Separate revised reading" });
 assert.equal(readReceiptOpticalLayout(mismatchedTranscript), "Separate revised reading");
 assert.ok(readReceiptOpticalEvidence(mismatchedTranscript).some(line => line.alternatives?.length));

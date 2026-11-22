@@ -4,6 +4,7 @@ import {
   encodeLocalReceiptOcr,
   readLocalReceiptOcrText,
   replaceLocalReceiptOcrText,
+  refineReceiptItemWords,
 } from "../lib/local-receipt-ocr-envelope";
 import { normalizeLocalReceiptOcrText } from "../lib/local-receipt-ocr-normalization";
 import {
@@ -140,6 +141,30 @@ assert.equal(parseReceiptText(supported).items[0].description, "ROASTED CARROT")
 assert.equal(parseReceiptText(supported).total, "35.00");
 assert.equal(readLocalReceiptOcrText(parseReceiptText(supported).receiptText), raw);
 
+for (const [printed, corrected] of [["Choclate tart", "Chocolate tart"], ["Cherry cake (S mall)", "Cherry cake (Small)"]]) {
+  const primary = { text: printed, confidence: .96 };
+  const witness = { text: corrected, confidence: .93 };
+  assert.equal(corroborateWords(primary, witness, witness, new Map()).text, corrected);
+  assert.equal(corroborateWords(primary, witness, primary, new Map()), primary);
+  const evidence = encodeLocalReceiptOcr({ engine: "ppocr-v5-local", text: printed,
+    itemWordCorrections: [{ original: printed, corrected }] });
+  assert.equal(refineReceiptItemWords(evidence, [{ description: printed }])[0].description, corrected);
+}
+const wrappedItem = encodeLocalReceiptOcr({ engine: "ppocr-v5-local", text: "SALAD CAPROT",
+  itemWordCorrections: [
+    { original: "CAPROT", corrected: "CARROT" }, { original: "CARROT", corrected: "PARROT" },
+    { original: "SALAD", corrected: "SALAT" },
+  ],
+});
+assert.deepEqual(refineReceiptItemWords(wrappedItem, [{ description: "SALAD CAPROT", amount: "4.50" }]),
+  [{ description: "SALAT CARROT", amount: "4.50" }]);
+
+const { mostLikelyClass } = require("../lib/receipt-ocr-worker.cjs");
+for (const values of [[.9,.05,.05], [.1,.2,.7], [.4,.4,.2], [.2,.3,.5], [.34,.33,.33]]) {
+  const row = Float32Array.from(values);
+  const padded = Float32Array.from([0, ...row]);
+  assert.equal(mostLikelyClass(padded, 1, row.length), row.indexOf(Math.max(...row)));
+}
 const { tensor } = require("../lib/receipt-ocr-worker.cjs");
 const pixels = Uint8Array.from({ length: 256 * 3 }, (_, i) => i % 256);
 for (const [detection, normalize] of [[true,true],[false,true],[false,false]]) {

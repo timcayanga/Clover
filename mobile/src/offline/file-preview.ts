@@ -1,3 +1,5 @@
+import { isDelimitedImport } from "../../../shared/import-format-policies";
+import { isUploadPhoto, isUploadPdf } from "../../../shared/native-upload";
 import * as FileSystem from "expo-file-system/legacy";
 import { CloverLocalAI } from "../../modules/clover-local-ai";
 import type { QueuedFile, UploadSource } from "./file-queue";
@@ -6,10 +8,13 @@ import { tryRunLocalOcr } from "./local-ocr-slot";
 import { delimitedPreview } from "./table-preview";
 export async function previewFile(file: QueuedFile, bytes: UploadSource) {
   if (file.deviceText) return `Local text preview · Needs review\nOCR may contain errors; no financial rows are confirmed.\n\n${file.deviceText.text}`;
-  if (/\.(csv|tsv)$/i.test(file.name)) {
+  if (isDelimitedImport(file.name, file.mimeType)) {
+    // Even the densest UTF-8 encoding cannot fit this many bytes in the local preview.
+    if (file.size > 200_000 * 4 + 3)
+      throw new Error("This table is too large for local preview. Queue the original for online parsing.");
     return withUploadCopy(file, bytes, async uri => delimitedPreview(await FileSystem.readAsStringAsync(uri)));
   }
-  if (!/\.(pdf|png|jpe?g|webp|hei[cf])$/i.test(file.name)) {
+  if (!isUploadPdf(file.name, file.mimeType) && !isUploadPhoto(file.name, file.mimeType)) {
     throw new Error("This format will be parsed when connected. Its original file stays encrypted on this device.");
   }
   const localAI = CloverLocalAI;

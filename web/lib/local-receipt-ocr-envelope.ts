@@ -46,26 +46,34 @@ export function readReceiptOpticalLines(source: string): OpticalTextLine[] {
   return lines.length && tokens(lines.map(line => line.text).join(" ")) === tokens(text) ? lines : [];
 }
 
-/** Only a crop of the same printed block can arbitrate conflicting year digits. */
+/** A text box may contain a date, its label, and a time on the same line. */
+export function singleReceiptDate(text: string) {
+  const tokens = text.match(/(?<![\w./-])(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.](?:\d{4}|\d{2}))(?![\w./-])/g);
+  return tokens?.length === 1 ? tokens[0] : null;
+}
+
 export function receiptDateDisagreements(lines: OpticalTextLine[]) {
-  const date = /^(\d{1,2}[./-]\d{1,2}[./-])(\d{4}|\d{2})$/;
   return lines.flatMap(line => {
-    const primary = date.exec(line.text);
+    if (!line.alternatives?.length) return [];
+    const primary = singleReceiptDate(line.text);
     if (!primary) return [];
-    const alternatives = (line.alternatives ?? []).filter(candidate => {
-      const match = date.exec(candidate.text);
-      return match && match[1] === primary[1] && match[2] !== primary[2] && match[2].length === primary[2].length &&
-        (line.confidence === undefined || candidate.confidence === undefined || line.confidence - candidate.confidence <= 0.2);
-    });
-    return alternatives.length ? [{line, candidates:[line.text, ...alternatives.map(entry => entry.text)]}] : [];
+    const candidates = new Set([primary]);
+    for (const alternative of line.alternatives) {
+      if (line.confidence !== undefined && alternative.confidence !== undefined &&
+          line.confidence - alternative.confidence > 0.2) continue;
+      const token = singleReceiptDate(alternative.text);
+      if (token && token.replace(/\d/g, "#") === primary.replace(/\d/g, "#")) candidates.add(token);
+    }
+    return candidates.size > 1 ? [{line, candidates:[...candidates]}] : [];
   });
 }
 
 export function recordReceiptDateCheck(source: string, line: OpticalTextLine, selected: string | null) {
   const text = readLocalReceiptOcrText(source);
-  if (!text || text.split(line.text).length !== 2) return source;
+  const primary = singleReceiptDate(line.text);
+  if (!primary || !text || text.split(line.text).length !== 2) return source;
   const metadata = JSON.parse(source.slice(PREFIX.length, source.indexOf(SEPARATOR)));
-  const replacement = selected ?? "[unclear date]";
+  const replacement = line.text.replace(primary, selected ?? "[unclear date]");
   const opticalLines = readReceiptOpticalEvidence(source).map(block =>
     block.text === line.text && block.box.every((v,i) => v === line.box[i])
       ? {text:replacement,box:block.box} : block);
@@ -85,7 +93,10 @@ export function hasConflictingReceiptTotalReading(lines: OpticalTextLine[]) {
     const line = row.at(-1)!;
     const prefix = row.slice(0, -1).map(block => block.text).join(" ");
     const primary = line.text.match(money);
-    if (!primary || !total.test(`${prefix} ${line.text.slice(0, primary.index)}`.replace(/(?:\b[A-Z]{3}\b|[₱$£€¥])\s*$/u, "").trim())) continue;
+    if (!primary) continue;
+    const label = `${prefix} ${line.text.slice(0, primary.index)}`.trim();
+    // DUE is part of an amount label and can also look like a currency code.
+    if (!total.test(label) && !total.test(label.replace(/(?:\b[A-Z]{3}\b|[₱$£€¥])$/u, "").trim())) continue;
     if (line.alternatives?.some(candidate => {
       const alternate = candidate.text.match(money);
       return alternate && digits(alternate[0]) !== digits(primary[0]) &&
@@ -129,6 +140,15 @@ function groupReceiptOpticalLines(lines: OpticalTextLine[]): OpticalTextLine[][]
   return rows.map(row => row.sort((a, b) => a.box[0] - b.box[0]));
 }
 
+function isSingleReceiptTextGap(original: string, corrected: string) {
+  const shorter = (original.length < corrected.length ? original : corrected).toLowerCase();
+  const longer = (original.length < corrected.length ? corrected : original).toLowerCase();
+  let i = 0;
+  while (i < shorter.length && shorter[i] === longer[i]) i++;
+  return (longer[i] === " " || /^[a-z]{3}$/.test(longer.slice(Math.max(0, i - 1), i + 2))) &&
+    longer.slice(i + 1) === shorter.slice(i);
+}
+
 /** Apply same-image spelling evidence only to proposed purchase descriptions.
  * Keep the original transcript, dates, account identifiers and amounts intact. */
 export function receiptWordReplacements(source: string) {
@@ -150,7 +170,7 @@ export function receiptWordReplacements(source: string) {
         !/^[\p{L} '&.,()’/-]+$/u.test(entry.original) || !/^[\p{L} '&.,()’/-]+$/u.test(entry.corrected) ||
         (entry.original.length !== entry.corrected.length &&
          (Math.abs(entry.original.length - entry.corrected.length) !== 1 ||
-          entry.original.replaceAll(" ", "").toLowerCase() !== entry.corrected.replaceAll(" ", "").toLowerCase()))) continue;
+          !isSingleReceiptTextGap(entry.original, entry.corrected)))) continue;
     // Conflicting suggestions for the same printed phrase must go to review.
     replacements.set(entry.original, replacements.has(entry.original) && replacements.get(entry.original) !== entry.corrected ? "" : entry.corrected);
   }
@@ -161,13 +181,15 @@ export function refineReceiptItemWords<T extends { description: string }>(source
   if (!items.length) return items;
   const replacements = receiptWordReplacements(source);
   if (!replacements.size) return items;
+  const phrases = [...replacements.keys()].filter(phrase => replacements.get(phrase))
+    .sort((a, b) => b.length - a.length);
+  if (!phrases.length) return items;
+  // Escape the punctuation allowed in OCR phrases. Match the original once so
+  // a correction cannot become the input to a second correction.
+  const escaped = phrases.map(phrase => phrase.replace(/[().]/g, "\\$&"));
+  const pattern = new RegExp(`(?<!\\S)(?:${escaped.join("|")})(?!\\S)`, "gu");
   return items.map(item => {
-    const padded = " " + item.description + " ";
-    for (const [original, corrected] of replacements) {
-      if (corrected && padded.includes(" " + original + " ")) {
-        return { ...item, description: padded.replace(" " + original + " ", " " + corrected + " ").trim() };
-      }
-    }
-    return item;
+    const description = item.description.replace(pattern, phrase => replacements.get(phrase)!);
+    return description === item.description ? item : { ...item, description };
   });
 }

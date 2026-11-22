@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
-import { NATIVE_UPLOAD_PART_SIZE, nativeUploadPartBytes } from "../../../shared/native-upload";
+import { isUploadPdf, NATIVE_UPLOAD_PART_SIZE, nativeUploadPartBytes } from "../../../shared/native-upload";
 import { readUploadPart, type QueuedFile, type UploadPartReader, type UploadSource } from "./file-queue";
 import type { SelectedFile } from "../upload";
 let temporaryCopySequence = 0;
@@ -19,11 +19,9 @@ export async function withUploadCopy<T>(
 ) {
   if (!/^[a-f0-9-]{36}$/i.test(file.id) || !FileSystem.cacheDirectory)
     throw new Error("Invalid saved file.");
-  const extension =
-    file.name
-      .split(".")
-      .pop()
-      ?.replace(/[^a-z0-9]/gi, "") ?? "bin";
+  // Both native readers dispatch PDFs by the temporary path's extension.
+  const extension = isUploadPdf(file.name, file.mimeType) ? "pdf"
+    : file.name.match(/\.([a-z0-9]{1,12})$/i)?.[1] ?? "bin";
   // A user can open Preview while automatic upload OCR is still reading. Give
   // each reader its own temporary copy so one cleanup cannot delete the other's.
   const uri = `${FileSystem.cacheDirectory}clover-offline-${file.id}-${Date.now()}-${++temporaryCopySequence}.${extension}`;

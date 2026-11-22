@@ -1,5 +1,5 @@
-import { importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
-import { readLocalReceiptOcrText, readReceiptOpticalEvidence, receiptDateDisagreements, recordReceiptDateCheck, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
+import { isDelimitedImport, importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
+import { readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
 import { hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
@@ -257,7 +257,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v7";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v8";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -893,7 +893,8 @@ async function verifyReceiptDateCrop(source: string, preview: ImagePreview) {
   } catch {
     // Keep the rest of the receipt when the date crop cannot be read.
   }
-  return recordReceiptDateCheck(source, line, reading && candidates.includes(reading) ? reading : null);
+  const readDate = reading && singleReceiptDate(reading);
+  return recordReceiptDateCheck(source, line, readDate && candidates.includes(readDate) ? readDate : null);
 }
 
 const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
@@ -930,13 +931,14 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   };
   const purchase = await verifiedPurchase(firstOptical, opticalPreview);
   if (purchase) return purchase;
-  const normalized = await measureImportReader("image_initial_normalization", () =>
+  const normalizeFullFrame = () => measureImportReader("image_initial_normalization", () =>
     normalizeImportedImageBytes(params.sourceBytes, params.fileType, params.fileName, params.importMode));
   const region = preview ? findImportImageTextRegion(preview) : null;
   const focusedPreview = region
     ? await normalizeImportedImageBytes(params.sourceBytes, params.fileType, params.fileName, params.importMode, "text-region", region)
     : null;
-  let firstPassText = await extractTextFromImageBufferWithOcr(focusedPreview?.dataUrl ?? normalized.dataUrl);
+  const firstPreview = focusedPreview ?? await normalizeFullFrame();
+  let firstPassText = await extractTextFromImageBufferWithOcr(firstPreview.dataUrl);
   // A focused crop cannot exclude contrary evidence elsewhere in the file.
   if (!focusedPreview) {
     const rejection = classifyExactPhotoRejection({ ...params, text: firstPassText }, params.classificationContext);
@@ -954,7 +956,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     preview ??= opticalPreview ?? await getBoundedImportImagePreview(params.sourceBytes);
   }
   const retry = (text: string) => shouldRetryImageOcrBestEffort({ ...params, firstPassText: text });
-  if (!retry(firstPassText) && (!receipt || !needsExpandedReceiptText(firstPassText))) return firstPassText;
+  if (!focusedPreview && !retry(firstPassText) && (!receipt || !needsExpandedReceiptText(firstPassText))) return firstPassText;
 
   if (!opticalPreview && !receipt && originalProfile === "generic" && !positiveRoute) {
     const image = await getBoundedImportImagePreview(params.sourceBytes);
@@ -1004,6 +1006,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   const indonesianReceipt = indonesian && /\b(?:struk|tunai|kembalian|nama toko|kuitansi|kwitansi)\b/i.test(firstPassText);
   const profile = receipt || ((koreanReceipt || indonesianReceipt) && originalProfile === "generic") ? "receipt" : originalProfile;
   const family = detectReceiptOcrFamilyFromText(firstPassText, profile);
+  const normalized = focusedPreview ? await normalizeFullFrame() : firstPreview;
   const candidates = await buildReceiptAwareOcrCandidates(normalized.buffer, profile, family);
   const candidatePageSegMode =
     family === "wallet_transfer"
@@ -3180,9 +3183,6 @@ export async function readPdfPageEscalation(
 
 export const renderReceiptPdfPagesForVision = async (bytes: Uint8Array) =>
   renderPdfPageImagesFromBytes(bytes, undefined, 3, 1.5, true);
-
-const isDelimitedImport = (name: string, type: string) =>
-  /\.(?:csv|tsv)$/i.test(name) || /^(?:text\/csv|application\/csv|text\/tab-separated-values)$/i.test(type.split(";")[0].trim());
 
 export const readUploadedFileText = async (
   file: File | ImportFileLike,
