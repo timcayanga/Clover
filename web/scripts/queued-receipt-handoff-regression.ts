@@ -14,7 +14,7 @@ const main = async () => {
   assert.notEqual(end, -1, "Missing document import completion boundary.");
   const documentImportBranch = source.slice(start, end);
 
-  assert.match(documentImportBranch, /await monitorQueuedDocumentImport\(itemId, importFileId, itemImportMode, item\.file\.name\)/);
+  assert.match(documentImportBranch, /await monitorQueuedDocumentImport\(itemId, importFileId, resolvedResponseImportMode, item\.file\.name\)/);
   assert.doesNotMatch(documentImportBranch, /precomputedReceiptSummary/);
   assert.doesNotMatch(documentImportBranch, /inlineReceiptSummary/);
 
