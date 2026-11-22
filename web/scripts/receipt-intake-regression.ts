@@ -145,7 +145,10 @@ assert.equal(totalEvidence.minimumCharacterConfidence, .62);
 assert.deepEqual(totalEvidence.alternatives, [{ text: "PHP 426.00", confidence: .76 }]);
 assert.deepEqual(totalEvidence.characterAlternatives, [{ index: totalEvidence.text.indexOf("5"), text: "6", confidence: .29 }]);
 assert.equal(qualifyDeviceReceiptReading(alternateReading, "receipt", "PHP"), null);
-assert.equal(Number(parseReceiptText(ambiguousSource).total), 425, "Alternatives never replace the primary value");
+const ambiguousPreview = parseReceiptText(ambiguousSource);
+assert.equal(ambiguousPreview.total, null, "Withhold disputed amounts across upload channels");
+assert.equal(ambiguousPreview.requiresReview, true);
+assert.equal(ambiguousPreview.receiptText, ambiguousSource, "Retain the primary value and alternatives for review");
 assert.equal(hasConflictingReceiptTotalReading([{ ...totalEvidence, text: "TOTAL 1,425.00", characterAlternatives: undefined,
   alternatives: [{ text: "TOTAL 1425.00", confidence: .84 }] }]), false, "Equivalent formatting is not a conflict");
 assert.equal(hasConflictingReceiptTotalReading([{ ...totalEvidence, text: "Total PHP 425.00", characterAlternatives: undefined,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
-import { encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
+import { hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
 import { qualifyDeviceReceiptReading } from "../lib/device-receipt-reading";
 import { normalizeDeviceTextEvidence, type OpticalTextLine } from "../../shared/device-text-evidence";
@@ -153,3 +153,15 @@ const weakDate = (other: string) => encodeLocalReceiptOcr({
 });
 assert.equal(parseReceiptPhotoText(weakDate("JANON IBERICO")).billDate, null);
 assert.equal(parseReceiptPhotoText(weakDate("June 30, 2023")).billDate?.slice(0,10), "2023-06-30");
+
+const trailingMoney: OpticalTextLine = {text:"120.00 USD", box:[.5,.1,.8,.15], alternatives:[{text:"720.00 USD",confidence:.90}],confidence:.96};
+const totalLabel: OpticalTextLine = {text:"Bill Total",box:[.1,.1,.35,.15]};
+assert.ok(hasConflictingReceiptTotalReading([totalLabel, trailingMoney]));
+assert.ok(hasConflictingReceiptTotalReading([totalLabel, {...trailingMoney,text:"120.00"}, {text:"USD",box:[.85,.1,.95,.15]}]));
+assert.ok(!hasConflictingReceiptTotalReading([{...totalLabel,text:"Coffee"}, trailingMoney]));
+assert.ok(!hasConflictingReceiptTotalReading([totalLabel, {...trailingMoney, alternatives:[],characterAlternatives:[{index:8,text:"5",confidence:.4}]}]));
+
+// A queued import and a direct photo preview can consume the same optical source.
+for (const source of [weakDate("JANON IBERICO"), ambiguousDate, unpriced, foreign]) {
+  assert.deepEqual(parseReceiptText(source), parseReceiptPhotoText(source));
+}

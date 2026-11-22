@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 
-function load(path, dependencies) {
+function load(path, dependencies, Decoder = TextDecoder) {
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(new URL(path, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  vm.runInNewContext(code, { exports, require: name => {
+  vm.runInNewContext(code, { exports, TextDecoder: Decoder, require: name => {
     assert(name in dependencies, `Unexpected dependency ${name}`);
     return dependencies[name];
   } });
@@ -77,19 +77,37 @@ assert.deepEqual(reads, [
 
 // Document providers can supply a MIME type without a filename extension.
 const previewReads = [];
+const table = "Bank report\nDate\tDescription\tAmount\n2026-11-19\tCafé\t-2.50";
+let tableBytes = Buffer.from(table);
+class MobileUtf8Decoder extends TextDecoder {
+  constructor(encoding, options) {
+    if (encoding !== 'utf-8') throw new RangeError('Unsupported encoding');
+    super(encoding, options);
+  }
+}
 const { previewFile } = load('../src/offline/file-preview.ts', {
   '../../../shared/import-format-policies': load('../../shared/import-format-policies.ts', {}),
   '../../../shared/native-upload': limits,
   './table-preview': load('../src/offline/table-preview.ts', {}),
   './file-storage': { withUploadCopy: async (_file, _bytes, run) => { previewReads.push('copy'); return run('local-copy'); } },
   './local-ocr-slot': { tryRunLocalOcr: run => run() },
-  'expo-file-system/legacy': { readAsStringAsync: async () => 'Bank report\nDate\tDescription\tAmount\n2026-11-19\tCafe\t-2.50' },
+  '../../../shared/unicode-table': load('../../shared/unicode-table.ts', {}, MobileUtf8Decoder),
+  'expo-file-system': { File: class { async bytes() { return tableBytes; } } },
   '../../modules/clover-local-ai': { CloverLocalAI: { extractText: async () => ({ text: 'Total 2.50', pagesRead: 1, totalPages: 1, complete: true }) } },
 });
 for (const mimeType of ['application/pdf; version=1.7', 'image/jpeg']) {
   assert.match(await previewFile({ ...large, name: 'Document', mimeType }, null), /Total 2.50/);
 }
 assert.match(await previewFile({ ...large, name: 'Document', mimeType: 'text/tab-separated-values; charset=utf-8', size: 130 }, null), /Amount: -2.50/);
+for (const be of [false, true]) {
+  for (const bom of [false, true]) {
+    tableBytes = Buffer.from((bom ? '\ufeff' : '') + table, 'utf16le');
+    if (be) tableBytes.swap16();
+    assert.match(await previewFile({ ...large, name: 'bank.tsv', size: tableBytes.length }, null), /Café/);
+  }
+}
+tableBytes = Buffer.from([255, 254, 65]);
+await assert.rejects(previewFile({ ...large, name: 'bank.csv', size: 3 }, null), /Incomplete UTF-16/);
 const copies = previewReads.length;
 await assert.rejects(previewFile({ ...large, name: 'large.csv' }, null), /too large/);
 assert.equal(previewReads.length, copies, 'Oversized table previews must skip the temporary copy');

@@ -85,13 +85,17 @@ export function recordReceiptDateCheck(source: string, line: OpticalTextLine, se
 /** Keep OCR alternatives as source evidence. They cannot replace the primary
  * reading without independent evidence. */
 export function hasConflictingReceiptTotalReading(lines: OpticalTextLine[]) {
-  const total = /^(?:grand total|total(?: amount| paid| due)?|amount (?:due|paid)|bill amount)\s*[:：]?$/iu;
-  const money = /[0-9][0-9,.]*[.,][0-9]{2}$/u;
+  const total = /^(?:grand total|total(?: amount| paid| due)?|amount (?:due|paid|to pay)|bill (?:amount|total))\s*[:：]?$/iu;
+  const money = /[0-9][0-9,.]*[.,][0-9]{2}(?=\s*(?:[A-Z]{3}|[₱$£€¥])?\s*$)/u;
   const digits = (value: string) => value.replace(/[,.]/g, "").replace(/^0+(?=\d)/, "");
   if (!lines.some(line => line.alternatives?.length || line.characterAlternatives?.length)) return false;
   for (const row of groupReceiptOpticalLines(lines)) {
-    const line = row.at(-1)!;
-    const prefix = row.slice(0, -1).map(block => block.text).join(" ");
+    // A till can print the currency after the amount, in its own box.
+    const last = row.length - 1;
+    const at = /^(?:[A-Z]{3}|[₱$£€¥])$/u.test(row[last].text.trim()) ? last - 1 : last;
+    if (at < 0) continue;
+    const line = row[at];
+    const prefix = row.slice(0, at).map(block => block.text).join(" ");
     const primary = line.text.match(money);
     if (!primary) continue;
     const label = `${prefix} ${line.text.slice(0, primary.index)}`.trim();
@@ -103,7 +107,7 @@ export function hasConflictingReceiptTotalReading(lines: OpticalTextLine[]) {
         (line.confidence === undefined || candidate.confidence === undefined || line.confidence - candidate.confidence <= 0.2);
     })) return true;
     const startsAt = Array.from(line.text.slice(0, primary.index)).length;
-    if (line.characterAlternatives?.some(candidate => candidate.index >= startsAt && /^[0-9OoIlSBZ]$/u.test(candidate.text))) return true;
+    if (line.characterAlternatives?.some(candidate => candidate.index >= startsAt && candidate.index < startsAt + primary[0].length && /^[0-9OoIlSBZ]$/u.test(candidate.text))) return true;
   }
   return false;
 }

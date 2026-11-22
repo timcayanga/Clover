@@ -256,7 +256,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v10";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v11";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -3288,7 +3288,8 @@ export const readImportedFileTextWithCacheInfo = async (
   const oldRouteWasDelimited = /csv|tab-separated-values/i.test(params.fileName) &&
     !isDelimitedImport(params.fileName, params.fileType);
   const baseVersion = resolveImportFileExtractionCacheVersion(params.fileName);
-  const familyVersion = oldRouteWasDelimited ? baseVersion + ":file-type-v2" : baseVersion;
+  const familyVersion = isDelimitedImport(params.fileName, mediaType) ? baseVersion + ":unicode-table-v2"
+    : oldRouteWasDelimited ? baseVersion + ":file-type-v2" : baseVersion;
   const cacheVersion = isPdf
     ? pdfTextCacheVersion(params.fileName, familyVersion)
     : isImageImportFileName(params.fileType, params.fileName)

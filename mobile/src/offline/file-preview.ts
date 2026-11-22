@@ -1,6 +1,7 @@
 import { isDelimitedImport } from "../../../shared/import-format-policies";
 import { isUploadPhoto, isUploadPdf } from "../../../shared/native-upload";
-import * as FileSystem from "expo-file-system/legacy";
+import { File } from "expo-file-system";
+import { decodeUnicodeTable } from "../../../shared/unicode-table";
 import { CloverLocalAI } from "../../modules/clover-local-ai";
 import type { QueuedFile, UploadSource } from "./file-queue";
 import { withUploadCopy } from "./file-storage";
@@ -12,7 +13,11 @@ export async function previewFile(file: QueuedFile, bytes: UploadSource) {
     // Even the densest UTF-8 encoding cannot fit this many bytes in the local preview.
     if (file.size > 200_000 * 4 + 3)
       throw new Error("This table is too large for local preview. Queue the original for online parsing.");
-    return withUploadCopy(file, bytes, async uri => delimitedPreview(await FileSystem.readAsStringAsync(uri)));
+    return withUploadCopy(file, bytes, async uri => {
+      const text = decodeUnicodeTable(await new File(uri).bytes());
+      if (text === null) throw new Error("This table encoding needs online processing. The original has been retained.");
+      return delimitedPreview(text);
+    });
   }
   if (!isUploadPdf(file.name, file.mimeType) && !isUploadPhoto(file.name, file.mimeType)) {
     throw new Error("This format will be parsed when connected. Its original file stays encrypted on this device.");

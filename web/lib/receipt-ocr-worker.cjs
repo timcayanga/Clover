@@ -143,17 +143,20 @@ const detectionBytes = byteChannels([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
 const recognitionBytes = byteChannels([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]);
 const alternateBytes = byteChannels([0.5, 0.5, 0.5], [0.5, 0.5, 0.5], true);
 
-function tensor(rgb, width, height, detection, paddedWidth = width, normalize = true) {
-  const data = new Float32Array(3 * height * paddedWidth);
+function writeChannels(data, offset, rgb, width, height, detection, paddedWidth, normalize) {
   const channels = detection ? detectionBytes : normalize ? recognitionBytes : alternateBytes;
   for (let c = 0; c < 3; c++) {
     const lookup = channels[c];
     for (let y = 0; y < height; y++) {
       let src = y * width * 3 + 2 - c;
-      let dest = (c * height + y) * paddedWidth;
+      let dest = offset + (c * height + y) * paddedWidth;
       for (let x = 0; x < width; x++, src += 3) data[dest++] = lookup[rgb[src]];
     }
   }
+}
+function tensor(rgb, width, height, detection, paddedWidth = width, normalize = true) {
+  const data = new Float32Array(3 * height * paddedWidth);
+  writeChannels(data, 0, rgb, width, height, detection, paddedWidth, normalize);
   return new ort.Tensor("float32", data, [1, 3, height, paddedWidth]);
 }
 async function infer(model, input) {
@@ -324,66 +327,75 @@ function mostLikelyClass(probabilities, offset, classes) {
   return best;
 }
 
+function decodeLine(probabilities, classes, model, numericGlyphs, box) {
+  let text = "",
+    sum = 0,
+    count = 0,
+    last = -1,
+    min = 1;
+  const characterAlternatives = [];
+  let characterIndex = 0;
+  for (let i = 0; i < probabilities.length; i += classes) {
+    const best = mostLikelyClass(probabilities, i, classes);
+    if (best !== 0 && best !== last) {
+      const glyph = model.dictionary[best];
+      const p = probabilities[i + best];
+      if (characterAlternatives.length < 8 && p < 0.85 && /^[0-9OoIlSBZ]$/.test(glyph)) {
+        let next = -1;
+        for (const c of numericGlyphs) {
+          if (c !== best && (next === -1 || probabilities[i + c] > probabilities[i + next])) next = c;
+        }
+        if (next !== -1 && probabilities[i + next] >= 0.1 && p - probabilities[i + next] <= 0.25) {
+          characterAlternatives.push({ index: characterIndex, text: model.dictionary[next], confidence: probabilities[i + next] });
+        }
+      }
+      text += glyph;
+      characterIndex += Array.from(glyph).length;
+      sum += p;
+      min = Math.min(min, p);
+      count++;
+    }
+    last = best;
+  }
+  if (!text.trim()) return null;
+  return {
+    text,
+    characterAlternatives: characterAlternatives.map(candidate => ({
+      ...candidate, index: candidate.index - Array.from(text.match(/^\s*/u)?.[0] ?? "").length,
+    })),
+    confidence: count ? sum / count : 0,
+    minConfidence: min,
+    box,
+  };
+}
+
 async function recognize(lines, language, normalize = true) {
   const model = await getModel(language),
     results = [];
   const numericGlyphs = model.dictionary.flatMap((char, index) => index && /^[0-9OoIlSBZ]$/.test(char) ? [index] : []);
-  for (const line of lines) {
-    const input = tensor(
-      line.data,
-      line.width,
-      48,
-      false,
-      Math.max(320, line.width),
-      normalize,
-    );
-    const output = await infer(model, input);
+  for (let start = 0; start < lines.length;) {
+    const width = Math.max(320, lines[start].width);
+    // Keep the exact original padding. A wider neighbour changes the model's
+    // receptive field. Bound each batch, particularly for the Korean alphabet.
+    let end = start + 1;
+    while (width === 320 && end < lines.length && end - start < 4 && lines[end].width <= width) end++;
+    const stride = 3 * 48 * width;
+    const input = new Float32Array((end - start) * stride);
+    for (let i = start; i < end; i++) {
+      writeChannels(input, (i - start) * stride, lines[i].data, lines[i].width, 48, false, width, normalize);
+    }
+    const output = await infer(model, new ort.Tensor("float32", input, [end - start, 3, 48, width]));
     try {
-      const classes = output.dims[2];
-      if (classes !== model.dictionary.length)
-        throw new Error(
-          `OCR alphabet mismatch ${language}: ${classes}/${model.dictionary.length}`,
-        );
-      let text = "",
-        sum = 0,
-        count = 0,
-        last = -1,
-        min = 1;
-      const characterAlternatives = [];
-      const probabilities = output.data;
-      let characterIndex = 0;
-      for (let i = 0; i < probabilities.length; i += classes) {
-        const best = mostLikelyClass(probabilities, i, classes);
-        if (best !== 0 && best !== last) {
-          const glyph = model.dictionary[best];
-          const p = probabilities[i + best];
-          if (characterAlternatives.length < 8 && p < 0.85 && /^[0-9OoIlSBZ]$/.test(glyph)) {
-            let next = -1;
-            for (const c of numericGlyphs) {
-              if (c !== best && (next === -1 || probabilities[i + c] > probabilities[i + next])) next = c;
-            }
-            if (next !== -1 && probabilities[i + next] >= 0.1 && p - probabilities[i + next] <= 0.25) {
-              characterAlternatives.push({ index: characterIndex, text: model.dictionary[next], confidence: probabilities[i + next] });
-            }
-          }
-          text += glyph;
-          characterIndex += Array.from(glyph).length;
-          sum += p;
-          min = Math.min(min, p);
-          count++;
-        }
-        last = best;
+      const [batch, steps, classes] = output.dims;
+      if (batch !== end - start || classes !== model.dictionary.length)
+        throw new Error(`Unexpected OCR output dimensions for ${language}`);
+      const values = output.data;
+      for (let i = 0; i < batch; i++) {
+        const offset = i * steps * classes;
+        const line = decodeLine(values.subarray(offset, offset + steps * classes), classes, model, numericGlyphs, lines[start + i].box);
+        if (line) results.push(line);
       }
-      if (text.trim())
-        results.push({
-          text,
-          characterAlternatives: characterAlternatives.map(candidate => ({
-            ...candidate, index: candidate.index - Array.from(text.match(/^\s*/u)?.[0] ?? "").length,
-          })),
-          confidence: count ? sum / count : 0,
-          minConfidence: min,
-          box: line.box,
-        });
+      start = end;
     } finally {
       output.dispose();
     }

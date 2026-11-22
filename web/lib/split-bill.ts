@@ -2521,7 +2521,10 @@ export const parseAirlineTicketReceiptText = (receiptText: string): ReceiptPrevi
   };
 };
 
-export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => parseReceiptSource(receiptText, false);
+export const parseReceiptText = (receiptText: string): ReceiptPreviewResult =>
+  readLocalReceiptOcrText(receiptText) !== null
+    ? parseReceiptPhotoText(receiptText)
+    : parseReceiptSource(receiptText, false);
 
 function parseReceiptSource(receiptText: string, photo: boolean): ReceiptPreviewResult {
   const receipt = parseReceiptSourceFields(receiptText, photo);
@@ -2660,7 +2663,9 @@ export function hasUnreadableReceiptPhotoTotal(source: string) {
 
 export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
   let parsed = parseReceiptSource(source, true);
-  const optical = readLocalReceiptOcrText(source);
+  const transcript = readLocalReceiptOcrText(source);
+  const layout = transcript && splitReceiptPromotionalFooter(joinReceiptSettlementLines(readReceiptOpticalLayout(source)));
+  const optical = layout && layout.footer ? layout.body : transcript;
   if (optical && parsed.receiptType !== "wallet_transfer" && parsed.receiptType !== "travel_ticket") {
     // VAT and service charges occur worldwide. A profile may suggest a
     // currency later, but a photo preview should distinguish printed evidence.
