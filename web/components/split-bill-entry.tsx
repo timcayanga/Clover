@@ -9,7 +9,7 @@ import { mergeSplitBillItemSplitMetadata } from "@/lib/split-bill";
 import { SplitItemGrid } from "./split-item-grid";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { containDialogFocus } from "@/lib/dialog-focus";
-import type { SplitItem } from "../../shared/split-bill-experience";
+import { receiptServiceChargeItem, type SplitItem } from "../../shared/split-bill-experience";
 import type {
   SplitBillSerializedBill,
   ReceiptPreviewResult,
@@ -170,11 +170,13 @@ export function SplitBillEntry({
         receiptText: v.receiptText,
         receiptConfidence: v.confidence,
       });
+      const purchases = v.items ?? [];
+      const serviceItem = receiptServiceChargeItem(purchases, v.serviceCharge, v.total);
       setItems(
-        (v.items ?? []).map((i, index) => ({
+        (serviceItem ? [...purchases, serviceItem] : purchases).map((i, index) => ({
           id: `receipt-${index}`,
           description: i.description,
-          amount: String(i.amount),
+          amount: i.amount ?? "",
           participantIds: [],
         })),
       );

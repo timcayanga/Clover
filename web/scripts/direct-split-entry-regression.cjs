@@ -312,13 +312,14 @@ async function main() {
     const captured = {uri:"file:///cache/123.jpg",fileName:"receipt.jpg",mimeType:"image/jpeg"};
     let receiptPreviewed = false;
     let reliableForScopedSplit = false;
+    let printedBillDate = "2026-11-20";
     let visible = true;
     const {HostedBillEditor} = load("../mobile/src/direct-bill-editor.tsx", {
       "../../shared/currency-mark": load("../shared/currency-mark.ts"),
       react: {...ui.h,createContext:()=>({})}, "./entry-overlay":{EntryOverlay:"Overlay"}, "react-native-safe-area-context":{useSafeAreaInsets:()=>({bottom:0})}, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
       "@clerk/expo": {useUser:()=>({user:{fullName:"Personal profile name"}})},
       "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]}),launchImageLibraryAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {getDocumentAsync:async()=>({canceled:false,assets:[{...captured,name:"receipt.jpg"}]})},
-      "./split-people-field": {...load("../mobile/src/split-people-field.tsx", {"react/jsx-runtime":jsx,"react-native":{},"./app-text":{},"./ui":{}}), PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": {suggestBillCategory:()=>null},
+      "./split-people-field": {...load("../mobile/src/split-people-field.tsx", {"react/jsx-runtime":jsx,"react-native":{},"./app-text":{},"./ui":{}}), PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": load("../shared/split-bill-experience.ts"),
       "./add-entry-methods": {AddEntryMethods:"Methods"}, "./upload": loadPhotoUpload(platform),
       "./ai-consent": {useCloudAiConsent:()=>({ensure:async()=>true,prompt:null})},
       "./upload-selected-file": load("../mobile/src/upload-selected-file.ts", {"expo-crypto":{}, "./offline/file-storage":{}, "../../shared/receipt-upload":{receiptMultipartLimit:1572864}, "react-native":{Platform:{OS:platform}}, "./upload":loadPhotoUpload(platform)}),
@@ -329,7 +330,7 @@ async function main() {
           assert.equal(file.name,"receipt.jpg");
           assert.deepEqual(new Uint8Array(await file.arrayBuffer()), photoBytes);
           receiptPreviewed=true;
-          return {reliableForScopedSplit,receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:"2026-11-20",currency:"PHP",items:[{description:"Bread",amount:"12.00"}]}};
+          return {reliableForScopedSplit,receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:printedBillDate,currency:"PHP",serviceCharge:"1.25",items:[{description:"Bread",amount:"10.75"}]}};
         }
         saved.push(JSON.parse(opts.body)); return {bill:{id:"saved"}};}})},
       "./ui": {useTheme:()=>({colors:{}}),Field:"Field",Screen:"Screen",Body:"Body",CategoryMark:"CategoryMark"},
@@ -386,10 +387,22 @@ async function main() {
     await flush(); render(); await flush(); render();
     assert.equal(saved.length,3,"A reliable scoped receipt creates exactly one bill in the background");
     assert.equal(saved[2].circleId,"trip");
+    assert.deepEqual(saved[2].reviewedItems.map(i=>[i.description,i.amount]),[["Bread","10.75"],["Service Charge","1.25"]]);
     assert.equal(saved[2].reviewedItems[0].splitMethod,"equal");
     assert.deepEqual(Array.from(saved[2].reviewedItems[0].participantIndexes),[0,1]);
+    printedBillDate = null;
+    visible = true;
+    render().find(n=>n.type==="Methods").props.onUploadSource("file");
+    await flush(); render(); await flush(); render();
+    assert.equal(saved.length,3,"A missing date must not inherit the preceding receipt date");
+    render().find(n=>n.props.accessibilityRole==="button").props.onPress();
+    assert.equal(control("label","Date (YYYY-MM-DD)").props.value,"");
     ui.stop();
   }
+  const {receiptServiceChargeItem} = load("../shared/split-bill-experience.ts");
+  assert.equal(receiptServiceChargeItem([{amount:"90.75"},{amount:"9.25"}],"9.25","100.00"),null);
+  assert.equal(receiptServiceChargeItem([{amount:"90.75"},{amount:null}],"9.25","100.00"),null);
+  assert.equal(receiptServiceChargeItem([{amount:"90.75"}],"9.25","101.00"),null);
   for (const capture of [false, true]) {
     const h = hooks(), selected = [];
     const { UploadSourceButtons } = load("components/upload-source-buttons.tsx", {
@@ -438,7 +451,8 @@ async function main() {
               total: "100",
               confidence: 65,
               receiptText: "Cafe TOTAL PHP 100",
-              items: [{ description: "Meal", amount: "100" }],
+              serviceCharge: "9.25",
+              items: [{ description: "Meal", amount: "90.75" }],
             },
             receiptStorageKey: "owned-receipt",
           }),
@@ -455,6 +469,7 @@ async function main() {
     const { SplitBillEntry } = load(
       "components/split-bill-entry.tsx",
       {
+        "../../shared/split-bill-experience": load("../shared/split-bill-experience.ts"),
         "@/lib/preview-receipt-client": { previewReceiptFile: (file) => {
           const form = new FormData(); form.set("file", file); return fetch("/api/split-bill-receipts/preview",{body:form});
         } },
@@ -539,6 +554,7 @@ async function main() {
     const creates = calls.filter((c) => c.url === "/api/split-bills");
     assert.equal(creates.length, 1, "In-flight saves are coalesced");
     const payload = JSON.parse(creates[0].body);
+    assert.deepEqual(payload.items.map(i=>[i.description,i.amount]),[["Meal","90.75"],["Service Charge","9.25"]]);
     assert.equal(payload.expense.workspaceId, "profile");
     assert.equal(payload.groupId, context.group?.id ?? null);
     assert.deepEqual(

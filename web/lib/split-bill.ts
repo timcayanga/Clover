@@ -1,6 +1,6 @@
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
 import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
-import { readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
+import { receiptNameFirstPriceHeader, readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
@@ -1462,7 +1462,7 @@ const itemCandidatesFromText = (lines: string[], merchantName?: string | null, i
       continue;
     }
 
-    if (isSummaryLine(line) || isNoiseLine(line) || isReceiptAdministrativeLine(line) || isReceiptFooterValueLine(line)) {
+    if (receiptNameFirstPriceHeader.test(line) || isSummaryLine(line) || isNoiseLine(line) || isReceiptAdministrativeLine(line) || isReceiptFooterValueLine(line)) {
       finishPending();
       lastItemIndex = -1;
       continue;
@@ -2626,7 +2626,7 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, { ordered
   }
   // A damaged unit column can survive the general line parser even when the
   // whole table fails reconciliation. Preserve the printed extended amount.
-  if (!payment && /^\s*(?:qty|quantity)\b[^\n]*\bprice\s+(?:amount|line total|total)\b/im.test(body) &&
+  if (!payment && (receiptNameFirstPriceHeader.test(body) || /^\s*(?:qty|quantity)\b[^\n]*\bprice\s+(?:amount|line total|total)\b/im.test(body)) &&
       !/\b(?:discount|promo|markdown|rebate)\b/i.test(body)) {
     const inconsistentPrice = (item: ReceiptPreviewItem) => item.quantity != null &&
       item.unitPrice != null && item.amount != null &&
@@ -3515,7 +3515,7 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
     ...createBlankSplitBillDraft(),
     title: merchantNameForDraft ? `${merchantNameForDraft} receipt` : "Receipt split",
     merchantName: merchantNameForDraft ?? "",
-    billDate: preview.billDate ? preview.billDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
+    billDate: preview.billDate?.slice(0, 10) ?? "",
     currency: preview.currency,
     sourceType: "receipt",
     receiptText: preview.receiptText,

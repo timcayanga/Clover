@@ -6,15 +6,18 @@ export function readReconciledItemTable(text: string) {
   return readQuantityTable(text) ?? readRegisterServiceTable(text);
 }
 
+export const receiptNameFirstPriceHeader = /^[ \t]*(?:item(?:[ \t]+description)?|description)[ \t]+(?:qty|quantity)[ \t]+(?:unit[ \t]+)?price[ \t]+(?:line[ \t]+total|total|amount)[ \t]*\r?$/im;
+
 function readQuantityTable(text: string) {
   const lines = text.split(/\r?\n/).map(line => line.trim());
-  const header = lines.findIndex(line => /\b(?:qty|quantity)\b.*\b(?:ite(?:m)?|description)\b/i.test(line));
+  const header = lines.findIndex(line => receiptNameFirstPriceHeader.test(line) || /\b(?:qty|quantity)\b.*\b(?:ite(?:m)?|description)\b/i.test(line));
   if (header < 0) return null;
 
   const subtotalIndex = lines.findIndex((line, i) => i > header && /^sub[ -]?total\b/i.test(line));
   if (subtotalIndex < 0) return null;
 
-  const hasUnitPrice = /\bunit\s+price\b|\bprice\s+(?:amount|line total|total)\b/i.test(lines[header]);
+  const nameFirst = receiptNameFirstPriceHeader.test(lines[header]);
+  const hasUnitPrice = nameFirst || /\bunit\s+price\b|\bprice\s+(?:amount|line total|total)\b/i.test(lines[header]);
   // Parse printed denominations only in monetary columns. Keep the
   // original OCR transcript and numbers embedded in product names intact.
   const denominations = new Set<string>();
@@ -47,26 +50,30 @@ function readQuantityTable(text: string) {
   for (const line of lines.slice(header + 1, subtotalIndex)) {
     if (!items.length && /^(?:dine in|take out|vat items?|vat item\(s\))$/i.test(line)) continue;
     const column = takePrice(line);
-    const row = column?.prefix.match(/^((?:[1-9]\d*|0)(?:[.,]\d{1,3})?)\s+(.+)$/);
-    if (column && row) {
-      const quantity = Number(row[1].replace(",", "."));
+    const unitColumn = column && hasUnitPrice ? takePrice(column.prefix) : null;
+    const beforePrice = hasUnitPrice ? unitColumn?.prefix : column?.prefix;
+    const row = nameFirst
+      ? beforePrice?.match(/^(?<description>.+?)\s+(?<quantity>(?:[1-9]\d*|0)(?:[.,]\d{1,3})?)$/)
+      : beforePrice?.match(/^(?<quantity>(?:[1-9]\d*|0)(?:[.,]\d{1,3})?)\s+(?<description>.+)$/);
+    if (column && row?.groups) {
+      const { description, quantity: printedQuantity } = row.groups;
+      const quantity = Number(printedQuantity.replace(",", "."));
       if (quantity <= 0 || (!hasUnitPrice && !Number.isSafeInteger(quantity))) return null;
       const amount = column.amount;
       const cents = Math.round(Number(amount) * 100);
       if (!Number.isSafeInteger(cents) || cents <= 0) return null;
       if (hasUnitPrice) {
-        const unitColumn = takePrice(row[2]);
-        if (!unitColumn?.prefix) return null;
+        if (!unitColumn) return null;
         // Weighed goods can have three quantity decimals. Compute the
         // extension in integers, then round once to the printed cent.
-        const [whole, fraction = ""] = row[1].split(/[.,]/);
+        const [whole, fraction = ""] = printedQuantity.split(/[.,]/);
         const scale = 10 ** fraction.length;
         const units = Number(whole + fraction);
         const extension = units * Math.round(Number(unitColumn.amount) * 100);
         if (!Number.isSafeInteger(units) || !Number.isSafeInteger(extension) || Math.round(extension / scale) !== cents) return null;
-        items.push({ description: unitColumn.prefix, quantity, unitPrice: unitColumn.amount, amount });
+        items.push({ description, quantity, unitPrice: unitColumn.amount, amount });
       } else {
-        items.push({ description: row[2], quantity, amount });
+        items.push({ description, quantity, amount });
       }
       itemCents += cents;
     } else if (items.length && /^[\p{L}][\p{L} '&-]{1,45}$/u.test(line)) {

@@ -261,7 +261,7 @@ export function SplitBillImportModal({ open, initialFile, currentUserName, onClo
       const payload = await readJsonResponse<{ preview: ReceiptPreviewResult; receiptStorageKey: string }>(response);
       const quality = assessReceiptPreviewQuality(payload.preview);
 
-      if (!quality.reliableForFastPath) {
+      if (!payload.preview.billDate || !quality.reliableForFastPath) {
         setMessage("Opening the bill editor so you can review Clover's draft...");
         openReceiptEditor(payload.preview, selectedFile, payload.receiptStorageKey);
         return;

@@ -83,6 +83,20 @@ assert.equal(readReconciledItemTable(weighed + "\nTotal Paid 145.00")?.total, "1
 
 assert.equal(hasPrintedItemizedTotal(weighed + "\nAmount Paid 140.00", "145.00", true), false);
 
+const nameFirst = "Description Qty Unit Price Amount\nCoffee Beans 0.375 319.99 120.00\nTea 42 1 25.00 25.00\nSubtotal 145.00\nTotal Amount 145.00";
+assert.deepEqual(readReconciledItemTable(nameFirst)?.items, [
+  { description: "Coffee Beans", quantity: 0.375, unitPrice: "319.99", amount: "120.00" },
+  { description: "Tea 42", quantity: 1, unitPrice: "25.00", amount: "25.00" },
+]);
+assert.equal(readReconciledItemTable(nameFirst.replace("319.99", "300.00")), null);
+const damagedNameFirst = parseReceiptPhotoText("Green Cafe\nOfficial Receipt\n" + nameFirst.replace("319.99", "310.00"));
+assert.equal(damagedNameFirst.items[0].description, "Coffee Beans");
+assert.equal(damagedNameFirst.items[0].unitPrice, null);
+assert.equal(damagedNameFirst.items[0].amount, "120.00");
+assert.ok(damagedNameFirst.requiresReview);
+assert.equal(splitBillDraftFromReceiptPreview(parseReceiptPhotoText(nameFirst)).billDate, "");
+assert.equal(splitBillDraftFromReceiptPreview(parseReceiptPhotoText("Green Cafe\nOfficial Receipt\n2026-11-19\n" + nameFirst)).billDate, "2026-11-19");
+
 const register = "Coffee\n2 @ 4.00 8.00\nTea\n1 @ 3.00 3.00\nSub Total 11.00";
 assert.deepEqual(readSubtotalItems(register)?.map(item => [item.description, item.quantity, item.amount]),
   [["Coffee", 2, "8.00"], ["Tea", 1, "3.00"]]);

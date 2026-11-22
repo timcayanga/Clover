@@ -260,7 +260,7 @@ export async function POST(request: Request) {
       selectedFile.type || "application/octet-stream"
     );
 
-    return NextResponse.json({ preview, receiptStorageKey, reliableForScopedSplit: assessReceiptPreviewQuality(preview).reliableForFastPath });
+    return NextResponse.json({ preview, receiptStorageKey, reliableForScopedSplit: Boolean(preview.billDate) && assessReceiptPreviewQuality(preview).reliableForFastPath });
   } catch (error) {
     return NextResponse.json(
       {

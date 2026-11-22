@@ -108,15 +108,20 @@ async function verify() {
     assert.equal(paidDraft.total, "30.00");
     assert.deepEqual(paidDraft.items.map((item: { description: string }) => item.description), ["Tea", "Coffee"]);
     assert.equal(rasterizations, 0);
-    expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "Qty Item Unit Price Amount",
-      "0.375 Coffee Beans 319.99 120.00", "1 Tea 25.00 25.00", "Subtotal 145.00", "Total Amount 145.00"]);
-    const weighed = await uploadPdf(expectedBytes);
-    assert.equal(weighed.status, 200);
-    const weighedDraft = (await weighed.json()).preview;
-    assert.equal(weighedDraft.total, "145.00");
-    assert.equal(weighedDraft.items[0].quantity, 0.375);
-    assert.equal(weighedDraft.items[0].unitPrice, "319.99");
-    assert.equal(rasterizations, 0);
+    for (const rows of [
+      ["Qty Item Unit Price Amount", "0.375 Coffee Beans 319.99 120.00", "1 Tea 25.00 25.00"],
+      ["Item Qty Unit Price Amount", "Coffee Beans 0.375 319.99 120.00", "Tea 1 25.00 25.00"],
+    ]) {
+      expectedBytes = statementPdf(["Green Cafe", "Official Receipt", ...rows, "Subtotal 145.00", "Total Amount 145.00"]);
+      const weighed = await uploadPdf(expectedBytes);
+      assert.equal(weighed.status, 200);
+      const weighedDraft = (await weighed.json()).preview;
+      assert.equal(weighedDraft.total, "145.00");
+      assert.equal(weighedDraft.items[0].description, "Coffee Beans");
+      assert.equal(weighedDraft.items[0].quantity, 0.375);
+      assert.equal(weighedDraft.items[0].unitPrice, "319.99");
+      assert.equal(rasterizations, 0);
+    }
     expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "Currency: EUR", "Qty Item Unit Price Amount",
       "2 Tea EUR 10.00 EUR 20.00", "Subtotal EUR 20.00", "Total Amount EUR 20.00"]);
     const prefixed = await uploadPdf(expectedBytes);
@@ -136,7 +141,8 @@ async function verify() {
   }
   assert.equal(rasterizations, 0, "A complete one-page digital receipt should return its reconciled native text");
   assert.equal(pdf.status, 200);
-  const {preview} = await pdf.json();
+  const {preview, reliableForScopedSplit} = await pdf.json();
+  assert.equal(reliableForScopedSplit, false);
   assert.equal(preview.billDate, null);
   assert.equal(preview.total, "20.00");
   assert.deepEqual(preview.items.map((item: { description: string }) => item.description), ["Tea"]);
@@ -147,12 +153,12 @@ async function verify() {
   const orderDraft = await order.json();
   assert.equal(orderDraft.preview.requiresReview, true);
   assert.equal(orderDraft.reliableForScopedSplit, false);
-  assert.equal(retained, 10);
+  assert.equal(retained, 11);
   if (process.argv[3]) {
     const locked = await uploadPdf(await readFile(process.argv[3]));
     assert.equal(locked.status, 422);
     assert.equal((await locked.json()).code, "IMPORT_PASSWORD_REQUIRED");
-    assert.equal(retained, 10);
+    assert.equal(retained, 11);
   }
   console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }

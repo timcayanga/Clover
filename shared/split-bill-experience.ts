@@ -12,6 +12,19 @@ export type SplitItem = {
   splitMethod?: "equal" | "exact" | "percentage" | "shares";
   allocations?: { participantId: string; value: string }[];
 };
+/** A separately printed service charge can fill the exact gap between items and payable. */
+export function receiptServiceChargeItem(
+  items: readonly { amount?: string | null }[], fee: string | null | undefined, total: string | null | undefined,
+) {
+  const cents = (value: string | null | undefined) =>
+    value && /^\d+(?:\.\d{1,2})?$/.test(value) ? Math.round(Number(value) * 100) : NaN;
+  const feeCents = cents(fee);
+  if (!items.length || !Number.isSafeInteger(feeCents) || feeCents <= 0) return null;
+  const payable = cents(total);
+  const sum = items.reduce((n, item) => n + cents(item.amount), 0);
+  return Number.isSafeInteger(payable) && sum + feeCents === payable
+    ? { description: "Service Charge", amount: (feeCents / 100).toFixed(2) } : null;
+}
 export const splitMethods = [
   { value: "equal", label: "Equally", icon: "＝" },
   { value: "exact", label: "By amount", icon: "₱" },

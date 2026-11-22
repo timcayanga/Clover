@@ -7,6 +7,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { Platform, View, TextInput, Pressable, type ScrollViewInstance } from "react-native";
 import { SplitItemGrid } from "./split-item-grid";
 import {
+  receiptServiceChargeItem,
   suggestBillCategory,
   type SplitItem,
 } from "../../shared/split-bill-experience";
@@ -276,9 +277,8 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
         })),
       });
       const items = p.items.filter(item => item.description && Number(item.amount) > 0).map(({description,amount}) => ({description,amount}));
-      const sum = items.reduce((n,item) => n + Math.round(Number(item.amount)*100),0);
-      const service = Math.round(Number(p.serviceCharge)*100);
-      if (service > 0 && sum + service === Math.round(Number(p.total)*100)) items.push({description:"Service Charge",amount:(service/100).toFixed(2)});
+      const serviceItem = receiptServiceChargeItem(p.items, p.serviceCharge, p.total);
+      if (serviceItem) items.push(serviceItem);
       const reconciled = items.reduce((n, item) => n + Math.round(Number(item.amount) * 100), 0) === Math.round(Number(p.total) * 100);
       const conflictingCurrencies = /mixed currencies|multiple currencies/i.test(p.currencyWarning ?? "");
       setReviewedItems(reconciled && !conflictingCurrencies ? items : []);
@@ -286,9 +286,9 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
       setTitle(p.merchantName || "Receipt");
       setTotal(conflictingCurrencies ? "" : p.total ?? "");
       if (/^[A-Z]{3}$/.test(p.currency)) setCurrency(p.currency);
-      if (p.billDate) setDate(p.billDate.slice(0,10));
-      scopedSave.current = (!context?.group && !context?.person && !circleId) ||
-        Boolean(result.reliableForScopedSplit && !p.currencyWarning);
+      setDate(p.billDate?.slice(0,10) ?? "");
+      scopedSave.current = Boolean(p.billDate) && ((!context?.group && !context?.person && !circleId) ||
+        Boolean(result.reliableForScopedSplit && !p.currencyWarning));
       if (p.currencyWarning) setError(p.currencyWarning);
     } catch (e) {
       if (alive.current)
