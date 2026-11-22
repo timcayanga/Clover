@@ -436,15 +436,17 @@ async function handle(
       const accounts = await prisma.account.findMany({ where: { workspaceId }, select: { currency: true } });
       const selection = resolveReportCurrency(accounts.map(account => account.currency), normalizeRegionalPreferences(user.regionalPreferences).baseCurrency, requested);
       const currency = selection.currentCurrency;
-      const {mobileHome} = await import("@/lib/mobile-home");
-      const {loadReportNetWorth} = await import("@/lib/report-net-worth");
-      const { mobileReportBalances } = await import("@/lib/mobile-report-balances");
-      const {nativeReportWindow,nativeReportDetails}=await import("@/lib/native-report-details");
-      const window=nativeReportWindow(url.searchParams);
-      const access=await getProAccess(user.id);
-      const details=await nativeReportDetails(workspaceId,currency,window,hasFullFeatureAccess(access.planTier));
+      const [{ mobileHome }, { loadReportNetWorth }, { mobileReportBalances }, { nativeReportWindow, nativeReportDetails }] = await Promise.all([
+        import("@/lib/mobile-home"), import("@/lib/report-net-worth"), import("@/lib/mobile-report-balances"), import("@/lib/native-report-details"),
+      ]);
+      const window = nativeReportWindow(url.searchParams);
       const now = new Date();
-      const [data, netWorth, balances] = await Promise.all([mobileHome(workspaceId,currency),loadReportNetWorth(workspaceId,currency,window.start,window.end),mobileReportBalances(workspaceId,currency,now,window)]);
+      const [data, netWorth, balances, details] = await Promise.all([
+        mobileHome(workspaceId, currency),
+        loadReportNetWorth(workspaceId, currency, window.start, window.end),
+        mobileReportBalances(workspaceId, currency, now, window),
+        getProAccess(user.id).then(access => nativeReportDetails(workspaceId, currency, window, hasFullFeatureAccess(access.planTier))),
+      ]);
       return reply({...data,currencies:selection.currencies,netWorth,balances,details});
     }
     if (operation === "payment-profile-edit") {

@@ -222,7 +222,12 @@ const summarizeWindow = (transactions: DashboardTransaction[], label: string): W
   };
 };
 
-const buildDailyFlow = (transactions: DashboardTransaction[], start: Date, dayCount: number, labelFormat: Intl.DateTimeFormatOptions): DailyFlow[] => {
+const chartDayNumber = new Intl.DateTimeFormat("en-PH", { day: "numeric" });
+const chartWeekday = new Intl.DateTimeFormat("en-PH", { weekday: "short" });
+const chartFullWeekday = new Intl.DateTimeFormat("en-PH", { weekday: "long" });
+const chartMonthDay = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric" });
+
+const buildDailyFlow = (transactions: DashboardTransaction[], start: Date, dayCount: number, labelFormat: Intl.DateTimeFormat): DailyFlow[] => {
   const totals = new Map<string, { income: number; expense: number }>();
 
   for (const transaction of transactions) {
@@ -251,9 +256,9 @@ const buildDailyFlow = (transactions: DashboardTransaction[], start: Date, dayCo
     const dayTotals = totals.get(key) ?? { income: 0, expense: 0 };
     return {
       key,
-      label: date.toLocaleDateString("en-PH", labelFormat),
-      dateLabel: date.toLocaleDateString("en-PH", { month: "short", day: "numeric" }),
-      dayLabel: date.toLocaleDateString("en-PH", { weekday: "long" }),
+      label: labelFormat.format(date),
+      dateLabel: chartMonthDay.format(date),
+      dayLabel: chartFullWeekday.format(date),
       ...dayTotals,
     };
   });
@@ -1012,7 +1017,7 @@ async function DashboardStream({
         { title: "Monthly Report", label: "Monthly report", days: 30, start: thirtyDaysAgo },
       ].map((period) => ({ ...period,
         summary: summarizeWindow(inWindow(period.start, tomorrowStart), period.title),
-        flow: buildDailyFlow(inWindow(period.start, tomorrowStart), period.start, period.days, period.days === 7 ? { weekday: "short" } : { day: "numeric" }),
+        flow: buildDailyFlow(inWindow(period.start, tomorrowStart), period.start, period.days, period.days === 7 ? chartWeekday : chartDayNumber),
       })),
     };
   });

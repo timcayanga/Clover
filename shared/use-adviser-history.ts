@@ -15,6 +15,7 @@ export function createAdviserHistoryHook({useEffect,useRef,useState}: HistoryHoo
 return function useAdviserHistory(scope:string, enabled:boolean, request:HistoryRequest, createId:()=>string) {
   const [conversations,setConversations] = useState<SavedConversation[]>([]);
   const [active,setActive] = useState<SavedConversation|null>(null);
+  const [loadingList,setLoadingList] = useState(false);
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState("");
   const [firstName,setFirstName] = useState("");
@@ -25,12 +26,12 @@ return function useAdviserHistory(scope:string, enabled:boolean, request:History
   useEffect(()=>{
     const version=++generation.current;
     locked.current=false;setConversations([]);setActive(null);setError("");setFirstName("");revision.current=0;currentId.current="";saved.current="";
-    if(!enabled||!scope){setBusy(false);return;}
-    setBusy(true);
+    if(!enabled||!scope){setBusy(false);setLoadingList(false);return;}
+    setBusy(true);setLoadingList(true);
     void requestRef.current<{conversations:SavedConversation[];firstName?:string}>(`adviser/conversations?workspaceId=${encodeURIComponent(scope)}`)
       .then(data=>{if(version===generation.current){setConversations(data.conversations);setFirstName(data.firstName||"");}})
       .catch(()=>{if(version===generation.current)setError("Chat history is unavailable. Retry to load your chats.");})
-      .finally(()=>{if(version===generation.current)setBusy(false);});
+      .finally(()=>{if(version===generation.current){setBusy(false);setLoadingList(false);}});
     return ()=>{generation.current++;};
   },[scope,enabled,reload]);
   const fresh=()=>{ if(busy||locked.current)return; currentId.current=createId();revision.current=0;saved.current="";setActive({id:currentId.current,title:"New chat",updatedAt:new Date().toISOString(),revision:0,messages:[]});setError(""); };
@@ -59,7 +60,7 @@ return function useAdviserHistory(scope:string, enabled:boolean, request:History
     }catch(e){if(version===generation.current)setError(e instanceof Error?e.message:"Unable to save chat history.");}
     finally{if(version===generation.current){locked.current=false;setBusy(false);}}
   };
-  return {conversations,active,busy,error,firstName,fresh,open,save,retry:()=>setReload(value=>value+1)};
+  return {conversations,active,busy,changingConversation:busy && !loadingList,error,firstName,fresh,open,save,retry:()=>setReload(value=>value+1)};
 }
 
 }

@@ -271,9 +271,16 @@ export function SessionProvider({
           (id) => owner.assertLocalAccess(id),
         );
         fileQueueRef.current = queue;
-        queue.subscribe(() => {
-          if (active) void queue.list().then(setQueuedFiles);
-        });
+        let queueRevision = 0;
+        const refreshQueuedFiles = () => {
+          const revision = ++queueRevision;
+          void queue.list().then(files => {
+            if (active && revision === queueRevision) setQueuedFiles(files);
+          }).catch(error => {
+            if (active && revision === queueRevision) setOfflineStatus(s => ({ ...s, error: (error as Error).message }));
+          });
+        };
+        queue.subscribe(refreshQueuedFiles);
         // NetInfo's initial subscription event updates reachability without
         // delaying authenticated bootstrap on its separate network probe.
         if (!active) {
@@ -283,14 +290,14 @@ export function SessionProvider({
         }
         void queue.pruneUnreferencedSources().catch(() => {});
         setFileQueue(queue);
-        setQueuedFiles(await queue.list());
+        refreshQueuedFiles();
         void queue.reportUnseenReceipts().catch(() => {});
         setOffline(engine);
         setOfflineStatus({ ...engine.status });
-        unsubscribe = engine.subscribe(() => {
+        unsubscribe = engine.subscribe(event => {
           if (active) {
             setOfflineStatus({ ...engine!.status });
-            void queue.list().then(setQueuedFiles);
+            if (event === "files-cleared") refreshQueuedFiles();
           }
         });
         network = NetInfo.addEventListener((state) => {

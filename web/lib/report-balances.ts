@@ -43,9 +43,10 @@ export function buildReportBalanceSeries(
   return [...new Set(accounts.map(a => a.currency))].map(currency => {
     const selected = accounts.filter(a => a.currency === currency);
     const ids = new Set(selected.map(a => a.id));
+    const cashAccounts = new Set(selected.filter(account => account.cashMovements).map(account => account.id));
     const deltas = new Map<string,number>();
     for (const t of movements) {
-      if (!ids.has(t.accountId) || +t.date > +asOf || selected.some(account => account.id === t.accountId && account.cashMovements)) continue;
+      if (!ids.has(t.accountId) || +t.date > +asOf || cashAccounts.has(t.accountId)) continue;
       const key = dateKey(t.date);
       deltas.set(key, (deltas.get(key) ?? 0) + getTransactionAmountDelta(t));
     }

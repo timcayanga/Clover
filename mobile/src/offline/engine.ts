@@ -21,6 +21,7 @@ const pathKey = (path: string) => {
 const workspace = (path: string) =>
   new URLSearchParams(path.split("?")[1]).get("workspaceId");
 export type Transport = <T>(path: string, options?: RequestInit) => Promise<T>;
+type OfflineListener = (event?: "files-cleared") => void;
 export class OfflineEngine {
   status: OfflineStatus = {
     online: true,
@@ -30,7 +31,7 @@ export class OfflineEngine {
     lastSync: null,
     error: "",
   };
-  private listeners = new Set<() => void>();
+  private listeners = new Set<OfflineListener>();
   private active = true;
   private syncPromise: Promise<void> | null = null;
   constructor(
@@ -39,14 +40,14 @@ export class OfflineEngine {
     private uuid: () => string,
     private now = () => Date.now(),
   ) {}
-  subscribe = (fn: () => void) => {
+  subscribe = (fn: OfflineListener) => {
     this.listeners.add(fn);
     return () => {
       this.listeners.delete(fn);
     };
   };
-  private emit() {
-    if (this.active) for (const fn of this.listeners) fn();
+  private emit(event?: "files-cleared") {
+    if (this.active) for (const fn of this.listeners) fn(event);
   }
   async init() {
     this.status.lastSync = await this.store.get<number>("last-sync");
@@ -244,6 +245,7 @@ export class OfflineEngine {
     if (previous && (previous.value.offlineEpoch ?? null) !== (result.offlineEpoch ?? null)) {
       for (const prefix of ["cache:", "mutation:", "receipt:", "file:", "file-bytes:", "receipt-outcome:"])
         for (const key of await this.store.keys(prefix)) await this.store.remove(key);
+      this.emit("files-cleared");
     }
     if (!this.active) return;
     await this.store.set("cache:bootstrap", { value: result, savedAt: this.now() });

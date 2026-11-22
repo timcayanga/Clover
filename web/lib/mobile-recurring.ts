@@ -17,7 +17,7 @@ export async function mobileRecurring(
   month: number,
   calendarYear = false,
 ) {
-  const records = await prisma.financialCommitment.findMany({
+  const recordsQuery = prisma.financialCommitment.findMany({
     where: { workspaceId },
     include: {
       occurrences: { select: { dueDate: true, completedAt: true } },
@@ -27,8 +27,8 @@ export async function mobileRecurring(
     },
     orderBy: { createdAt: "desc" },
   });
+  const [records, suggestions] = await Promise.all([recordsQuery, getPlannedPaymentSuggestions(workspaceId)]);
   const commitments = records.map(serializeFinancialCommitment);
-  const suggestions = await getPlannedPaymentSuggestions(workspaceId);
   const completions = new Map(records.map(record => [record.id, new Set(record.occurrences.map(o => o.dueDate.toISOString().slice(0, 10)))]));
   return {
     summaries: Object.fromEntries((["overview", "planned", "debt", "owed", "installments"] as RecurringSummaryTab[]).map(tab => [tab, recurringDashboardSummary(commitments, tab, suggestions.length)])),
@@ -48,7 +48,7 @@ export async function mobileRecurring(
       evidenceTransactionIds: s.transactionIds,
       statementCheckpointId: s.statementCheckpointId,
     })),
-    items: commitments.map((c) => {
+    items: commitments.map((c, index) => {
       const bank = recurringBankBrand(c.title);
       const logo = bank ? {merchantLogoUrl:bank.logoSrc, merchantLogoNameKey:JSON.stringify([c.title,c.title])}
         : transactionMerchantLogo({ merchantRaw:c.title, merchantClean:c.title, categoryName:c.categoryName, currency:c.currency });
@@ -62,9 +62,7 @@ export async function mobileRecurring(
         counterparty: c.counterparty,
         tracking: c.tracking,
         completedDates:
-          records
-            .find((r) => r.id === c.id)
-            ?.occurrences.map((o) => o.dueDate.toISOString().slice(0, 10)) ?? [],
+          records[index].occurrences.map(o => o.dueDate.toISOString().slice(0, 10)),
         id: c.id,
         title: c.title,
         kind: c.kind,

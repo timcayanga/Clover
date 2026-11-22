@@ -295,7 +295,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim() || (attachments.length ? "Help me understand the financial information in these attached files. Ask what I want to add before drafting entries." : "");
-    if (!trimmed || isSending || aiPermissionPending.current || attaching || entryLocked || history.busy) {
+    if (!trimmed || isSending || aiPermissionPending.current || attaching || entryLocked || history.changingConversation) {
       return;
     }
 
@@ -631,7 +631,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
           disabled={hasReachedLimit || isSending || entryLocked}
         />
         {!input.trim() && !attachments.length ? <AdviserInputTools compact disabled={hasReachedLimit || isSending || attaching || entryLocked} onText={text => setInput(current => `${current}${current ? " " : ""}${text}`)} onPhoto={file => void attachFile(file)} /> : null}
-        {(input.trim() || attachments.length) ? <button type="submit" className="adviser-chat__send" aria-label="Send message" disabled={hasReachedLimit||isSending||attaching||entryLocked||history.busy}>↑</button> : null}
+        {(input.trim() || attachments.length) ? <button type="submit" className="adviser-chat__send" aria-label="Send message" disabled={hasReachedLimit||isSending||attaching||entryLocked||history.changingConversation}>↑</button> : null}
         {attaching ? <span role="status" className="adviser-chat__status">Reading attachment…</span> : null}
         {isSending || error ? (
           <span className={`adviser-chat__status${isSending ? " adviser-chat__status--thinking" : ""}`}>

@@ -2,17 +2,25 @@ import assert from 'node:assert/strict';
 import { prisma } from '../lib/prisma';
 import { mobileHome } from '../lib/mobile-home';
 import { mergeHomeDetails } from '../../mobile/src/home-sections';
+import { mobileHomePeriods } from "../lib/mobile-home-periods";
 async function main() {
   const originals: Array<() => void> = [];
   const stub = (model: any, key: string, run: (...args: any[]) => any) => {
     const original = model[key]; originals.push(() => { model[key] = original; }); model[key] = run;
   };
+  const { day } = mobileHomePeriods();
+  const posting = (offset: number, type: string, amount: string, currency = "PHP") => ({
+    date: new Date(+day + offset), type, amount, currency, isTransfer: type === "transfer", category: null,
+  });
+  const DAY = 86_400_000;
+  const postings = [posting(-1,"expense","2.50"), posting(0,"income","10"), posting(1,"transfer","4"),
+    posting(-7 * DAY,"expense","8"), posting(-30 * DAY,"income","5"), posting(0,"income","99","USD")];
   let secondaryCalls = 0;
   stub(prisma.account, 'findMany', async (args) => {
     assert.equal(args.where.workspaceId,'qa-home');
     return [{id:'bank',type:'bank',currency:'PHP',source:'import',balance:'123',transactions:[],statementCheckpoints:[]}];
   });
-  stub(prisma.transaction, 'findMany', async (args) => args.select?.merchantRaw ? [0,1].map(index=>({id:`review-${index}`,reviewStatus:'pending_review',reviewReasons:[],categoryId:null,category:null,merchantRaw:'Lunch',merchantClean:'Lunch',account:{institution:'BPI'},type:'expense',rawPayload:{},normalizedPayload:{},parserConfidence:98,categoryConfidence:30,accountMatchConfidence:100,isExcluded:false})) : []);
+  stub(prisma.transaction, 'findMany', async (args) => args.select?.merchantRaw ? [0,1].map(index=>({id:`review-${index}`,reviewStatus:'pending_review',reviewReasons:[],categoryId:null,category:null,merchantRaw:'Lunch',merchantClean:'Lunch',account:{institution:'BPI'},type:'expense',rawPayload:{},normalizedPayload:{},parserConfidence:98,categoryConfidence:30,accountMatchConfidence:100,isExcluded:false})) : postings);
   stub(prisma.transaction, 'groupBy', async () => []);
   stub(prisma.financialCommitment, 'findMany', async () => []);
   stub(prisma.transaction, 'findFirst', async (args) => {
@@ -29,6 +37,14 @@ async function main() {
     assert.equal(data.balance,123); assert.equal(data.detailsPending,true);
     assert.equal(data.reviewCount,2); assert.equal(secondaryCalls,0);
     assert.deepEqual(data.budgets,[]);
+    assert.equal(data.weekly.income,10);
+    assert.equal(data.weekly.days.at(-1)?.expense,0);
+    assert.equal(data.weekly.days.at(-2)?.expense,2.5);
+    assert.equal(data.weekly.days.at(-1)?.transfer,4);
+    assert.equal(data.weekly.previous.expense,8);
+    assert.equal(data.monthly.expense,10.5);
+    assert.equal(data.monthly.previous.income,5);
+    assert.deepEqual(data.currencyReports[0].monthly,data.monthly);
     assert.equal(data.insights.some(insight => insight.kind === "reminder"), false);
     console.log(`PASS Home overview returns balances without budget/recurring analysis (${(performance.now()-start).toFixed(1)}ms with mocked database)`);
   } finally { originals.reverse().forEach(restore => restore()); }

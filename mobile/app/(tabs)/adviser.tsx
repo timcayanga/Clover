@@ -133,7 +133,7 @@ export function AdviserConversation({ pageContext, embedded = false, onClose }: 
   }, [params.prompt, pageContext?.prompt]);
   const send = async (prompt = draft) => {
     const question = prompt.trim().slice(0, 4000);
-    if (inFlight.current || history.busy || !question) return;
+    if (inFlight.current || history.changingConversation || !question) return;
     if (session.demo) {
       setError(
         "Sign in to ask Clover about your records. Sample mode does not send questions or financial data.",
@@ -246,7 +246,7 @@ export function AdviserConversation({ pageContext, embedded = false, onClose }: 
       onChangeText={setDraft}
       onSend={() => void send()}
       onDeviceOnly={useLocal}
-      disabled={busy || history.busy}
+      disabled={busy || history.changingConversation}
       onText={(text) =>
         setDraft((previous) => `${previous} ${text}`.trim().slice(0, 4000))
       }

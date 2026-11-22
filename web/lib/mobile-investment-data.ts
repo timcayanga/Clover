@@ -14,7 +14,7 @@ import {
 
 /** Authorized Profile only. No raw import payloads or full account numbers leave this reader. */
 export async function loadMobileInvestments(workspaceId: string) {
-  const rows = await prisma.account.findMany({
+  const accountsQuery = prisma.account.findMany({
     where: {
       workspaceId,
       OR: [
@@ -45,6 +45,10 @@ export async function loadMobileInvestments(workspaceId: string) {
       investmentMaturityValue: true,
     },
   });
+  const [rows, positions, hasSnapshots, hasHoldings] = await Promise.all([
+    accountsQuery, listInvestmentPositions(workspaceId),
+    hasCompatibleTable("InvestmentSnapshot"), hasCompatibleTable("InvestmentHolding"),
+  ]);
   const accounts = rows
     .slice(0, 1000)
     .map((a) => ({
@@ -60,8 +64,7 @@ export async function loadMobileInvestments(workspaceId: string) {
       investmentMaturityDate: a.investmentMaturityDate?.toISOString() ?? null,
     }));
   const snapshots: PortfolioSnapshot[] =
-    (await hasCompatibleTable("InvestmentSnapshot")) &&
-    (await hasCompatibleTable("InvestmentHolding"))
+    accounts.length && hasSnapshots && hasHoldings
       ? (
           await prisma.investmentSnapshot.findMany({
             where: {
@@ -129,7 +132,6 @@ export async function loadMobileInvestments(workspaceId: string) {
         currency: a.currency,
         value: Number(a.balance),
       });
-  const positions=await listInvestmentPositions(workspaceId);
   const projected=projectPortfolio(accounts as PortfolioAccount[],snapshots.slice(0,200), snapshots.length <= 200);
   const holdings=projected.filter(h=>!positions.some(p=>(p.accountId===h.accountId || p.accountId===h.valuationAccountId) && p.currency===h.currency && (h.source==="account" || p.sourceHoldingId===h.id || (p.symbol||p.assetName).trim().toLowerCase()===(h.symbol||h.name).trim().toLowerCase())));
   // Opening cost basis can differ from the first recorded valuation.

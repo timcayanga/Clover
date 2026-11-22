@@ -179,33 +179,49 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
         );
       }, 0)
     : null;
-  const totals = (from: Date, to: Date, reportCurrency = currency) =>
-    transactions
-      .filter((t) => t.currency === reportCurrency && t.date >= from && t.date < to)
-      .reduce(
-        (sum, t) => {
-          const type = resolveFinancialTransactionType({
-            ...t,
-            categoryName: t.category?.name,
-          });
-          if (type === "income" || type === "expense" || type === "transfer")
-            sum[type] += Math.abs(Number(t.amount));
-          return sum;
-        },
-        { income: 0, expense: 0, transfer: 0 },
-      );
+  // All report boundaries use the same Manila midnight. Index each posting once
+  // so adding a day or a currency never requires another ledger scan.
+  const dayLength = 86_400_000;
+  type Flow = { income: number; expense: number; transfer: number };
+  const emptyFlow = (): Flow => ({ income: 0, expense: 0, transfer: 0 });
+  const dailyFlows = new Map<string, Map<number, Flow>>();
+  for (const transaction of transactions) {
+    const type = resolveFinancialTransactionType({ ...transaction, categoryName: transaction.category?.name });
+    if (type !== "income" && type !== "expense" && type !== "transfer") continue;
+    let days = dailyFlows.get(transaction.currency);
+    if (!days) {
+      days = new Map();
+      dailyFlows.set(transaction.currency, days);
+    }
+    const index = Math.floor((+transaction.date - +day) / dayLength);
+    const flow = days.get(index) ?? emptyFlow();
+    flow[type] += Math.abs(Number(transaction.amount));
+    days.set(index, flow);
+  }
+  const totals = (from: Date, to: Date, reportCurrency = currency) => {
+    const result = emptyFlow();
+    const days = dailyFlows.get(reportCurrency);
+    if (days) {
+      for (let index = (+from - +day) / dayLength; index < (+to - +day) / dayLength; index++) {
+        const flow = days.get(index);
+        if (!flow) continue;
+        result.income += flow.income;
+        result.expense += flow.expense;
+        result.transfer += flow.transfer;
+      }
+    }
+    return result;
+  };
   const report = (days: number, reportCurrency = currency) => {
     const { from, previousFrom, previousTo } = rolling(days);
+    const flows = dailyFlows.get(reportCurrency);
     return {
       ...totals(from, tomorrow, reportCurrency),
       previous: totals(previousFrom, previousTo, reportCurrency),
-      days: Array.from({ length: days }, (_, i) => {
-        const date = new Date(+from + i * 86400000);
-        return {
-          date: homeDateKey(date),
-          ...totals(date, new Date(+date + 86400000), reportCurrency),
-        };
-      }),
+      days: Array.from({ length: days }, (_, i) => ({
+        date: homeDateKey(new Date(+from + i * dayLength)),
+        ...(flows?.get(i + 1 - days) ?? emptyFlow()),
+      })),
     };
   };
   const { upcoming, overdue } = mobileHomePayments(
@@ -268,7 +284,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     ...(overviewOnly ? { insightInput, detailsPending: true } : {}),
     insights: buildHomeAdviserInsights(insightInput),
     nextSteps: buildHomeNextSteps({ transactionCount: 0, recurringCount, statementCount: suggestions.filter((s) => s.sourceKind === "statement_reminder").length }),
-    currencyReports: (allCurrencies ? currencies : [currency]).map((c) => ({ currency: c, weekly: report(7, c), monthly: report(30, c) })),
+    currencyReports: (allCurrencies ? currencies : [currency]).map((c) => ({ currency: c, weekly: c === currency ? weekly : report(7, c), monthly: c === currency ? monthly : report(30, c) })),
     heroTotals: { current: convertHomeWindow(transactions, month, tomorrow, Object.fromEntries(rates)), previous: convertHomeWindow(transactions, previousMonth, month, Object.fromEntries(rates)) },
     currencies,
     reviewCount,
@@ -289,7 +305,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     currency,
     balance,
     overdue,
-    month: totals(month, tomorrow),
+    month: monthTotals,
     previousMonth: totals(previousMonth, month),
     weekly,
     monthly,

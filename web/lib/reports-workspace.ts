@@ -203,13 +203,26 @@ export async function loadReportsWorkspace(
     "#e2758c",
     "#6286b7",
   ];
+  // The same dated movements back all currencies and each account's opening balance.
+  const movements = transactions.map((t) => ({
+    ...t,
+    amount: String(t.amount),
+    rawPayload: t.rawPayload as never,
+    date: getCalendarDayEndInTimeZone(t.date, timeZone),
+  }));
+  const movementsByAccount = new Map<string, typeof movements>();
+  if (paid) {
+    for (const movement of movements) {
+      const entries = movementsByAccount.get(movement.accountId);
+      if (entries) entries.push(movement);
+      else movementsByAccount.set(movement.accountId, [movement]);
+    }
+  }
   const reports = (
     view.currency === "ALL" ? currencySelection.currencies : [view.currency]
   ).map((currency) => {
-    const analysis = analyzeReport(
-      selected.filter((t) => t.currency === currency),
-      period,
-    );
+    const currencyRows = selected.filter((t) => t.currency === currency);
+    const analysis = analyzeReport(currencyRows, period);
     const scopedAccounts = accounts.filter(
       (a) =>
         a.currency === currency &&
@@ -256,12 +269,6 @@ export async function loadReportsWorkspace(
     const known = snapshot.filter(
       (a) => a.balance !== null && Number.isFinite(a.balance),
     );
-    const movements = transactions.map((t) => ({
-      ...t,
-      amount: String(t.amount),
-      rawPayload: t.rawPayload as never,
-      date: getCalendarDayEndInTimeZone(t.date, timeZone),
-    }));
     const balances =
       buildReportBalanceSeries(
         known,
@@ -321,7 +328,7 @@ export async function loadReportsWorkspace(
             account && snap
               ? buildReportBalanceSeries(
                   [snap],
-                  movements,
+                  movementsByAccount.get(snap.id) ?? [],
                   dayDate(openingDay),
                   dayDate(openingDay),
                   asOf,
@@ -503,12 +510,9 @@ export async function loadReportsWorkspace(
           now,
         ),
       ),
-      merchantAnalysis: reportMerchants(
-        selected.filter((t) => t.currency === currency),
-        period,
-      ),
+      merchantAnalysis: reportMerchants(currencyRows, period),
       coverage: reportCoverage(
-        selected.filter((t) => t.currency === currency),
+        currencyRows,
         period,
         view,
         scopedAccounts

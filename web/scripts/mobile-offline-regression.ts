@@ -661,9 +661,15 @@ test("server wipe epoch removes cached financial data and queued sources", async
     }) as Transport,
     randomUUID,
   );
+  let fileChanges = 0;
+  afterWipe.subscribe(event => { if (event === "files-cleared") fileChanges++; });
   await afterWipe.init();
+  assert.equal(fileChanges, 0);
   await afterWipe.sync();
+  assert.equal(fileChanges, 1);
   assert.equal(sends, 0);
+  await afterWipe.request("accounts?workspaceId=p");
+  assert.equal(fileChanges, 1, "Loading accounts should not reload the file queue");
   assert.equal(afterWipe.status.pending, 0);
   assert.equal(await store.get("file-bytes:old"), null);
   assert.equal(await store.get("cache:transactions/t?workspaceId=p"), null);
