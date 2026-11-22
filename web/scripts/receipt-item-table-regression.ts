@@ -280,3 +280,27 @@ for (const header of ["Date: 11/12/2026", "Date: 2026-11-15", "19.11.2026", "Ref
     assert.equal(preview.subtotal, "250.00");
   }
 }
+
+for (const name of ["Café", "Éclair", "紅茶", "抹茶ラテ", "Orderly Tea", "Vitamin B 12"]) {
+  const text = ["GREEN CAFE", "Official Receipt", "Date: 2026-11-15", "Order: 901",
+    name + " PHP 125.00", "Total PHP 125.00"].join("\n");
+  for (const input of [text, encodeLocalReceiptOcr({ text })]) {
+    const preview = parseReceiptPhotoText(input);
+    assert.deepEqual(preview.items.map(item => [item.description, item.amount]), [[name, "125.00"]]);
+    assert.equal(preview.subtotal, "125.00");
+  }
+}
+
+const missingIdentity = { merchantName: null, billDate: null, total: "30.00" };
+assert.equal(canPreviewLocalReceiptItems(grossBill, missingIdentity), true);
+for (const disputed of [grossBill.replace("Tea 10.00", "Tea 9.00"), grossBill.replace("Gross Amount 30", "Gross Amount 31"),
+  grossBill + "\nGrand Total 35.00", grossBill + "\nGrand Total 3?.00", grossBill + "\nTotal Qty 40", grossBill.replace("Bill Amount", "Discount 5.00\nBill Amount")]) {
+  assert.equal(canPreviewLocalReceiptItems(disputed, missingIdentity), false);
+}
+
+const brokenPrice = plainPhoto + "\n@ 490.00 4.90.00";
+for (const input of [brokenPrice, encodeLocalReceiptOcr({ text: brokenPrice })]) {
+  const result = parseReceiptPhotoText(input);
+  assert.equal(result.billDate, null);
+  assert.equal(mergeReceiptBackup(result, { ...model, transaction_date: "2026-04-05" }, null, { schemaValidated: true }).billDate, null);
+}

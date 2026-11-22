@@ -311,3 +311,7 @@ assert.equal(selectSavedStatementReceiptText(emptyStatement, [missingTotalReadin
 assert.equal(parseReceiptText(missingTotalReading).total, null, "The saved draft still needs the actual total");
 
 console.log("Receipt intake: positive routing, default currency, VAT, partial-core safety and pre-AI relevance passed.");
+
+const tillBill = "CLOVER CAFE\nOfficial Receipt\nTea 10.00\nCoffee 20.00\nGross Amount 30.00\nBill Amount 30.00";
+assert(hasReceiptPhotoEvidence(tillBill));
+assert(!hasReceiptPhotoEvidence("Account statement\nOpening balance 123.45\n" + tillBill));

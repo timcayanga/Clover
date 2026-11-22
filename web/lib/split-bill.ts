@@ -3,7 +3,7 @@ import { readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities,
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
-import { hasOnlyAmbiguousNumericDates, numericReceiptDatePattern, resolveReceiptPurchaseDateRoles } from "./receipt-date-evidence";
+import { hasOnlyAmbiguousNumericDates, validNumericReceiptDates, numericReceiptDatePattern, resolveReceiptPurchaseDateRoles } from "./receipt-date-evidence";
 import { readReceiptMerchantEvidence } from "./receipt-merchant-evidence";
 import { refineReceiptItemWords, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
@@ -618,7 +618,7 @@ const isSummaryLine = (line: string) =>
   );
 
 const isNoiseLine = (line: string) =>
-  /^(thank you|powered by|receipt|order|invoice|(?:sales|tax|commercial) invoice|official receipt|or no\.?|cashier|store copy|customer copy|page \d+|paid with|paid via|payment (?:method|type)|tendered with|charged to|refund|void|voided|reversal|customer|tin|company|signature|for comments|pls contact|please contact)/i.test(
+  /^(thank you|powered by|receipt|order(?:\b|no\b|number\b|id\b)|invoice|(?:sales|tax|commercial) invoice|official receipt|or no\.?|cashier|store copy|customer copy|page \d+|paid with|paid via|payment (?:method|type)|tendered with|charged to|refund|void|voided|reversal|customer|tin|company|signature|for comments|pls contact|please contact)/i.test(
     line
   ) || /^(?:card|visa|mastercard|debit|credit)[ \t]*[:：]?[ \t]*(?:[\d,.]+)?[ \t]*$/i.test(line);
 
@@ -933,13 +933,13 @@ const isLikelyReceiptBodyLine = (line: string) => {
     return true;
   }
 
-  return /[A-Za-z]/.test(line) && line.length <= 80;
+  return /\p{L}/u.test(line) && line.length <= 80;
 };
 
 const cleanReceiptDescription = (line: string, preserveNumericSuffix = false) =>
   normalizeWhitespace(line)
-    .replace(/^[^A-Za-z0-9(]+/, "")
-    .replace(/[^A-Za-z0-9)%]+$/g, "")
+    .replace(/^[^\p{L}\p{N}(]+/u, "")
+    .replace(/[^\p{L}\p{M}\p{N})%]+$/u, "")
     .replace(/\s+\d{1,3}(?:[.,]\d{2})?$/, (suffix) => preserveNumericSuffix && /^\s+\d+$/.test(suffix) ? suffix : "")
     .replace(/\s+\d+x\s*$/i, "")
     .replace(/\b\d{1,3}\s*x\s*/i, "")
@@ -1402,7 +1402,9 @@ const extractReceiptItemFromLine = (line: string, pendingDescription?: string | 
     return null;
   }
 
-  const description = cleanReceiptDescription(combinedText.replace(/\s+(?:(?:PHP|USD|EUR|GBP|SGD|HKD|IDR|MYR|[₱$€£])\s+)?[^\s]*\s*$/, ""));
+  const pricedName = combinedText.match(/^(.+?)\s+(?:PHP|USD|EUR|GBP|SGD|HKD|IDR|MYR|[₱$€£])\s*\d[\d,]*(?:\.\d{1,2})?$/u);
+  const description = pricedName ? cleanReceiptDescription(pricedName[1], true)
+    : cleanReceiptDescription(combinedText.replace(/\s+(?:(?:PHP|USD|EUR|GBP|SGD|HKD|IDR|MYR|[₱$€£])\s+)?[^\s]*\s*$/, ""));
   if (!hasPendingDescription && (!/\s/.test(normalized) || (/^\d+$/.test(normalized) && !/\./.test(normalized)))) {
     return null;
   }
@@ -1551,7 +1553,7 @@ const pruneSuspiciousReceiptItems = (items: ReceiptPreviewItem[]) =>
   items.filter((item) => {
     const description = normalizeWhitespace(item.description);
     const amount = parseAmountValue(item.amount) ?? 0;
-    const alphaCount = (description.match(/[A-Za-z]/g) ?? []).length;
+    const alphaCount = (description.match(/\p{L}/gu) ?? []).length;
     if (!description) {
       return false;
     }
@@ -2095,13 +2097,13 @@ const isSuspiciousReceiptItemDescription = (description: string) => {
     return true;
   }
 
-  if (hasHangul(normalized)) {
-    if (/^(?:합계|소계|부가세|과세금액|승인번호|거스름돈|할인금액)/.test(normalized.replace(/\s+/g, ""))) return true;
+  if (hasHangul(normalized) || /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(normalized)) {
+    if (/^(?:合計|小計|消費税|総額|お釣り|总计|合计|找零|합계|소계|부가세|과세금액|승인번호|거스름돈|할인금액)/.test(normalized.replace(/\s+/g, ""))) return true;
     return (normalized.match(/\p{L}/gu)?.length ?? 0) < 2 || (normalized.match(/\p{L}/gu)?.length ?? 0) / normalized.replace(/\s+/g, "").length < 0.45;
   }
   const tokens = normalized.split(/\s+/).filter(Boolean);
-  const alphaTokens = tokens.map((token) => token.replace(/[^A-Za-z]/g, "")).filter(Boolean);
-  const alphaCount = (normalized.match(/[A-Za-z]/g) ?? []).length;
+  const alphaTokens = tokens.map((token) => token.replace(/[^\p{L}]/gu, "")).filter(Boolean);
+  const alphaCount = (normalized.match(/\p{L}/gu) ?? []).length;
   const compactLength = normalized.replace(/\s+/g, "").length;
   if (alphaCount < 3 || compactLength === 0) {
     return true;
@@ -2701,9 +2703,10 @@ export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
     }
   }
   if (optical && parsed.billDate) {
-    const ambiguous = hasOnlyAmbiguousNumericDates(optical);
+    const dates = validNumericReceiptDates(optical);
+    const ambiguous = hasOnlyAmbiguousNumericDates(optical, dates);
     const dateBlocks = readReceiptOpticalEvidence(source).filter(line => /^\d{1,2}([./-])\d{1,2}\1(?:20\d{2}|\d{2})$/.test(line.text.trim()));
-    const unreadableDigit = dateBlocks.length === 1 && [...optical.matchAll(numericReceiptDatePattern)].length === 1 && (dateBlocks[0].minimumCharacterConfidence ?? 1) < 0.5;
+    const unreadableDigit = dateBlocks.length === 1 && dates.length === 1 && (dateBlocks[0].minimumCharacterConfidence ?? 1) < 0.5;
     if (unreadableDigit || ambiguous) {
       // A second spelling of the same day can corroborate it. Removing all
       // day-first/month-first tokens prevents a weak reading confirming itself.

@@ -275,12 +275,25 @@ export function hasPrintedItemizedTotal(text: string, total: string, requirePurc
   });
   if (totals.some(value => value !== total)) return false;
   const quantityTable = readQuantityTable(text);
-  if (requirePurchaseTable) return quantityTable?.total === total;
-  const reconciled = quantityTable ?? readChargedReceiptTable(text);
+  if (quantityTable) return quantityTable.total === total;
+  if (requirePurchaseTable) {
+    // A separate, legible subtotal plus a matching printed payable can
+    // establish the purchase amount even if the name or date needs review.
+    const gross = [...text.matchAll(/^(?:gross amount|sub[ -]?total)[ \t]*[:：]?[ \t]*(\d[\d,]*\.\d{2})[ \t]*\r?$/gim)];
+    const payableLabels = text.match(/^(?:grand total|bill (?:amount|total)|amount (?:due|to pay)|total(?: due| amount| paid)?)(?![ \t]+(?:[oqa]ty|quantity)\b)\b/gim);
+    if (totals.length !== 1 || payableLabels?.length !== 1 || gross.length !== 1 || gross[0][1].replace(/,/g, "") !== total ||
+        /^(?:service charge|s\. charge|discount|tip|rounding|balance due|total no\.? of items|\d+ item\(s\))/im.test(text)) return false;
+  }
+  const reconciled = readChargedReceiptTable(text);
   if (reconciled) return reconciled.total === total;
   if (!totals.length) return false;
   const items = readSubtotalItems(text);
   if (!items) return false;
+  if (requirePurchaseTable) {
+    const counts = [...text.matchAll(/^total[ \t]+(?:[oqa]ty|quantity)[ \t]*[:：]?[ \t]*(\d+)[ \t]*\r?$/gim)];
+    if (counts.length > 1 || (counts.length && Number(counts[0][1]) !==
+        items.reduce((units, item) => units + (item.quantity ?? 1), 0))) return false;
+  }
   const itemCents = items.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
   return itemCents === Math.round(Number(total) * 100);
 }

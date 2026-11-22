@@ -28,3 +28,7 @@ When a recognizer returns a separate column of standalone prices, use positioned
 On printed quantity tables with a unit-price heading, separate the unit price from the description when quantity times unit price equals the extended amount. A digital receipt with one intact page, a reconciled purchase table and a matching payable can use its native PDF text directly. Ambiguous day/month dates remain open for review unless independent printed evidence resolves them.
 
 A standalone numeric sale date or labeled reference identifier ends a pending purchase description. Exclude those rows from the item subtotal while keeping the raw transcript. Preserve merchandise names such as “Date Cake” and “Reference Book”. A separated currency marker beside a line price belongs with the price.
+
+Keep printed Unicode letters and combining marks at the edges of purchase descriptions. Retain numbers in merchandise names when a separate currency and line price delimit the name. On photo receipts, only valid calendar dates can establish whether month and day are ambiguous. A damaged price such as 4.90.00 supplies no date evidence.
+
+A till can label the payable Bill Amount. With the identity or purchase date missing, an editable local preview may use that amount when the contiguous purchases reconcile to a separately printed subtotal or gross amount and the one legible payable matches. Check any printed unit count and withhold the shortcut for conflicting totals and additional adjustments.

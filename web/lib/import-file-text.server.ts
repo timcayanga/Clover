@@ -549,9 +549,7 @@ const extractTextFromImageBufferWithOcr = async (
       await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: pageSegMode });
       slot.pageSegMode = pageSegMode;
     }
-    const source = typeof imageSource === "string"
-      ? imageSource : `data:image/jpeg;base64,${Buffer.from(imageSource).toString("base64")}`;
-    const { data: { text } } = await measureImportReader("ocr_recognition", () => worker.recognize(source));
+    const { data: { text } } = await measureImportReader("ocr_recognition", () => worker.recognize(imageSource));
     return typeof text === "string" ? text.trim() : "";
   } catch (error) {
     const worker = slot.worker;
@@ -788,7 +786,7 @@ const buildReceiptAwareOcrCandidates = async (
   family: ReceiptOcrFamily
 ) => {
   if (profile === "generic" || profile === "investment_screenshot") {
-    return [] as Array<{ label: string; dataUrl: string }>;
+    return [] as Array<{ label: string; buffer: Buffer }>;
   }
 
   try {
@@ -800,10 +798,10 @@ const buildReceiptAwareOcrCandidates = async (
     const height = Number(metadata.height ?? 0);
 
     if (width <= 0 || height <= 0) {
-      return [] as Array<{ label: string; dataUrl: string }>;
+      return [] as Array<{ label: string; buffer: Buffer }>;
     }
 
-    const candidates: Array<{ label: string; dataUrl: string }> = [];
+    const candidates: Array<{ label: string; buffer: Buffer }> = [];
     const overlap = Math.max(24, Math.round(Math.min(width, height) * 0.04));
 
     if (family !== "wallet_transfer" && width >= Math.round(height * 1.2)) {
@@ -822,8 +820,8 @@ const buildReceiptAwareOcrCandidates = async (
         .toBuffer();
 
       candidates.push(
-        { label: "ocr-left", dataUrl: `data:image/jpeg;base64,${left.toString("base64")}` },
-        { label: "ocr-right", dataUrl: `data:image/jpeg;base64,${right.toString("base64")}` }
+        { label: "ocr-left", buffer: left },
+        { label: "ocr-right", buffer: right }
       );
     }
 
@@ -843,8 +841,8 @@ const buildReceiptAwareOcrCandidates = async (
         .toBuffer();
 
       candidates.push(
-        { label: "ocr-top", dataUrl: `data:image/jpeg;base64,${top.toString("base64")}` },
-        { label: "ocr-bottom", dataUrl: `data:image/jpeg;base64,${bottom.toString("base64")}` }
+        { label: "ocr-top", buffer: top },
+        { label: "ocr-bottom", buffer: bottom }
       );
     }
 
@@ -855,12 +853,12 @@ const buildReceiptAwareOcrCandidates = async (
         .extract({ left: 0, top: middleTop, width, height: Math.min(height - middleTop, middleHeight) })
         .jpeg({ quality: 88, chromaSubsampling: "4:4:4" })
         .toBuffer();
-      candidates.push({ label: "ocr-middle", dataUrl: `data:image/jpeg;base64,${middle.toString("base64")}` });
+      candidates.push({ label: "ocr-middle", buffer: middle });
     }
 
     return candidates;
   } catch {
-    return [] as Array<{ label: string; dataUrl: string }>;
+    return [] as Array<{ label: string; buffer: Buffer }>;
   }
 };
 
@@ -936,7 +934,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     ? await normalizeImportedImageBytes(params.sourceBytes, params.fileType, params.fileName, params.importMode, "text-region", region)
     : null;
   const firstPreview = focusedPreview ?? await normalizeFullFrame();
-  let firstPassText = await extractTextFromImageBufferWithOcr(firstPreview.dataUrl);
+  let firstPassText = await extractTextFromImageBufferWithOcr(firstPreview.buffer);
   // A focused crop cannot exclude contrary evidence elsewhere in the file.
   if (!focusedPreview) {
     const rejection = classifyExactPhotoRejection({ ...params, text: firstPassText }, params.classificationContext);
@@ -969,7 +967,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   if (useExpandedPreview) {
     const expanded = await normalizeImportedImageBytes(params.sourceBytes, params.fileType, params.fileName, params.importMode, "original-view");
     const expandedText = await extractTextFromImageBufferWithOcr(
-      expanded.dataUrl, "6", hasIndonesianFinancialText(firstPassText) ? "eng+ind" : "eng+kor"
+      expanded.buffer, "6", hasIndonesianFinancialText(firstPassText) ? "eng+ind" : "eng+kor"
     );
     const rejection = classifyExactPhotoRejection({ ...params, text: expandedText }, params.classificationContext);
     if (rejection && (region || !firstPassText.trim())) throw rejection;
@@ -1024,7 +1022,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     candidates.map(async (candidate) => ({
       label: candidate.label,
       text: await extractTextFromImageBufferWithOcr(
-        candidate.dataUrl,
+        candidate.buffer,
         candidatePageSegMode,
         indonesian ? "eng+ind" : "eng+kor"
       ),
@@ -1035,7 +1033,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   // trying a new segmentation. Keep full-frame language retries bounded to two.
   const secondaryTexts = hasHangul(firstPassText) || indonesian
     ? await Promise.all(["4", "11"].map(async mode => ({
-        label: `ocr-full-psm-${mode}`, text: await extractTextFromImageBufferWithOcr(normalized.dataUrl, mode, indonesian ? "eng+ind" : "eng+kor"),
+        label: `ocr-full-psm-${mode}`, text: await extractTextFromImageBufferWithOcr(normalized.buffer, mode, indonesian ? "eng+ind" : "eng+kor"),
       })))
     : [];
 
@@ -1053,7 +1051,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     return bestText;
   }
 
-  return extractTextFromImageBufferWithOcrBestEffort(normalized.dataUrl, { profile });
+  return extractTextFromImageBufferWithOcrBestEffort(normalized.buffer, { profile });
 };
 
 type PdfOcrProfile = "standard" | "aggressive";
@@ -2460,7 +2458,14 @@ const normalizeImportedImageBytes = (
     }
 
     const buffer = await image.jpeg({ quality: 88, chromaSubsampling: "4:4:4" }).toBuffer();
-    return { mimeType: "image/jpeg", buffer, dataUrl: `data:image/jpeg;base64,${buffer.toString("base64")}` };
+    let url: string | undefined;
+    return {
+      mimeType: "image/jpeg",
+      buffer,
+      get dataUrl() {
+        return url ??= `data:image/jpeg;base64,${buffer.toString("base64")}`;
+      },
+    };
   })();
   profiles.set(key, pending);
   return pending;
@@ -2929,9 +2934,8 @@ const extractTextFromPdfBytesWithOcrFallback = async (
     const renderScale = profile === "aggressive" ? 3.9 : 3.5;
     const pageImages = await renderPdfPageImagesFromBytes(data, password, maxPages, renderScale, true);
     const ocrPages = (await runPdfPageBatch("primary_page_ocr", pageImages, async page => {
-      const base64 = page.dataUrl.split(",")[1];
-      if (!base64) return null;
-      const text = (await extractTextFromImageBufferWithOcr(Buffer.from(base64, "base64"))).trim();
+      if (!page.dataUrl) return null;
+      const text = (await extractTextFromImageBufferWithOcr(page.dataUrl)).trim();
       if (!text) return null;
       rememberPdfOcrPage(data, page, text);
       return { page: page.page, text };

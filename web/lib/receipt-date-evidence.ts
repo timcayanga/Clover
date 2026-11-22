@@ -66,8 +66,14 @@ export const getExplicitEvidenceDates = (sourceText: string) => {
 // Keep the separator consistent and avoid matching a fragment of an ISO date.
 export const numericReceiptDatePattern = /\b(\d{1,2})([-/.])(\d{1,2})\2(20\d{2}|\d{2})\b/g;
 
-export function hasOnlyAmbiguousNumericDates(text: string) {
-  const matches = [...text.matchAll(numericReceiptDatePattern)];
+export function validNumericReceiptDates(text: string) {
+  return [...text.matchAll(numericReceiptDatePattern)].filter(([, left, , right, value]) => {
+    const year = value.length === 2 ? 2000 + Number(value) : Number(value);
+    return toIsoDate(year, Number(left), Number(right)) || toIsoDate(year, Number(right), Number(left));
+  });
+}
+
+export function hasOnlyAmbiguousNumericDates(text: string, matches = validNumericReceiptDates(text)) {
   return matches.length > 0 && matches.every(([, left, , right]) =>
     Number(left) !== Number(right) && Number(left) >= 1 && Number(left) <= 12 &&
     Number(right) >= 1 && Number(right) <= 12);
