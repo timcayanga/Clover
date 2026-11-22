@@ -4,7 +4,7 @@ import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
 import { qualifyDeviceReceiptReading } from "../lib/device-receipt-reading";
-import type { OpticalTextLine } from "../../shared/device-text-evidence";
+import { normalizeDeviceTextEvidence, type OpticalTextLine } from "../../shared/device-text-evidence";
 
 const text = `THE SPIRITS LIBRARY INC.
 AuditCHECK: 80326
@@ -103,3 +103,27 @@ assert.deepEqual(readPartialPriceColumn(damagedColumn), [
 assert.equal(readPartialPriceColumn(damagedColumn.replace("8.8", "8.80")), null);
 assert.deepEqual(parseReceiptPhotoText(readLocalReceiptOcrText(unpriced)!).items, []);
 assert.deepEqual(parseReceiptPhotoText(register + "\nTotal PHP 11.00").items.map(item => item.description), ["Coffee","Tea"]);
+
+const columns = [
+  ["Test Cafe", "Official Receipt", "2026-11-19", "1 Black Tea", "2 Coffee", "Sub-total", "Service Charge", "Amount Due"],
+  ["", "", "", "125.00", "250.00", "375.00", "37.50", "412.50"],
+];
+const blocks = columns.flatMap((column, col) => column.flatMap((text,i) => text ? [{
+  text, box:[col * .65, i * .1, col * .65 + .34, i * .1 + .04],
+}] : []));
+for (const source of ["apple_vision", "google_mlkit"]) {
+  const evidence = normalizeDeviceTextEvidence({
+    version: 1, source, text: blocks.map(block => block.text).join("\n"), opticalLines: blocks,
+    complete: true, pagesRead: 1, totalPages: 1, durationMs: 100,
+  });
+  assert(evidence);
+  const columnSource = encodeLocalReceiptOcr(evidence);
+  const columnReceipt = parseReceiptPhotoText(columnSource);
+  assert.equal(columnReceipt.total, "412.50");
+  assert.deepEqual(columnReceipt.items.map(item => item.amount), ["125.00", "250.00"]);
+  assert.equal(columnReceipt.receiptText, columnSource);
+}
+const feeReceipt = "Qty Item Amount\n1 Tea\n125.00\n2 Coffee 250.00\n10%ServiceChrge: 37.50\nAmo 412.50";
+assert.equal(readChargedReceiptTable(feeReceipt)?.items[1].quantity, 2);
+assert.equal(readChargedReceiptTable(feeReceipt.replace("412.50", "422.50")), null);
+assert.equal(readChargedReceiptTable(feeReceipt.replace("Qty Item Amount\n1 Tea", "7 Up"))?.items[0].description, "7 Up");

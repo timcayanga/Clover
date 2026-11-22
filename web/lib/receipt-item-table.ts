@@ -61,7 +61,7 @@ export function readReconciledItemTable(text: string) {
 // Some tills put the name on one line and quantity @ unit price on the next.
 // Trust this reconstruction only when the entire contiguous run adds up to the
 // independently printed subtotal. Retain the original transcript separately.
-export function readSubtotalItems(source: string) {
+export function readSubtotalItems(source: string, allowQuantityRows = false) {
   const lines = source.normalize("NFKC").split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const stop = lines.findIndex(line => /^(?:sub[ -]?total|gross amount|total amount)\s*[:：]?\s*\d[\d,]*\.\d{2}$/i.test(line));
   if (stop < 2) return null;
@@ -72,6 +72,7 @@ export function readSubtotalItems(source: string) {
   const items: Item[] = [];
   let sum = 0;
   let suffix = "";
+  const hasQuantityHeader = lines.slice(0, stop).some(line => /^(?:qty|quantity)\b/i.test(line));
   const excluded = /^(?:sub[ -]?total|total|service charge|cash|vat|tax|discount|amount due|bill amount|table|server|cashier|guest|order type|ref\b|tin\b|register|dine in|walk-in|gross amount|net amount)\b/i;
   const name = (value: string) => /\p{L}/u.test(value) && !excluded.test(value) && !/[:：@]/.test(value);
   for (let i = stop - 1; i >= 0; i--) {
@@ -114,8 +115,12 @@ export function readSubtotalItems(source: string) {
       if ((quantity ?? 1) * cents(unit[2]) !== cents(amount)) break;
       item = { description: lines[--i], quantity, unitPrice: unit[2].replace(/,/g, ""), amount };
     } else {
-      if (/^\d+(?:\.0+)?\s+\p{L}/u.test(prefix) || !name(prefix) || /^\d+\s+[@(©€]/.test(prefix) || /\d[,.]\d{2}$/.test(prefix)) break;
-      item = { description: suffix ? prefix + " " + suffix : prefix, amount };
+      if ((!allowQuantityRows && /^\d+(?:\.0+)?\s+\p{L}/u.test(prefix)) || !name(prefix) || /^\d+\s+[@(©€]/.test(prefix) || /\d[,.]\d{2}$/.test(prefix)) break;
+      const leadingQuantity = hasQuantityHeader ? prefix.match(/^([1-9]\d*)\s+(\p{L}.*)$/u) : null;
+      if (leadingQuantity && !name(leadingQuantity[2])) break;
+      const description = leadingQuantity?.[2] ?? prefix;
+      item = { description: suffix ? description + " " + suffix : description, amount,
+        ...(leadingQuantity ? { quantity: Number(leadingQuantity[1]) } : {}) };
     }
     suffix = "";
     items.push(item);
@@ -132,7 +137,7 @@ export function readChargedReceiptTable(source: string) {
   const charge = lines.findIndex(line => /^(?:\d+(?:\.\d+)?%\s*)?service\s*ch(?:arge|rge)\s*:\s*\d[\d,]*\.\d{2}$/i.test(line) ||
     /^service\s+charge\s+\d[\d,]*\.\d{2}$/i.test(line));
   if (charge < 2) return null;
-  const payable = lines[charge + 1]?.match(/^(?:bill\s+am(?:ount|a)|amo(?:unt)?(?: due)?)\s*[:：]?\s*(\d[\d,=. ]*\d)$/i);
+  const payable = lines[charge + 1]?.match(/^(?:bill\s+am(?:ount|a)|amo(?:unt)?(?: due)?)\s*[:：]?\s*(\d[\d,:=. ]*\d)$/i);
   if (!payable || !/[.,= ]\d{2}$/.test(payable[1])) return null;
   const money = (value: string) => Math.round(Number(value.replace(/,/g, "")) * 100);
   const service = money(lines[charge].match(/\d[\d,]*\.\d{2}$/)![0]);
@@ -141,18 +146,25 @@ export function readChargedReceiptTable(source: string) {
   if (/^gross amount\b/i.test(lines[end - 1])) end--;
   const count = end ? lines[end - 1].match(/^total\s+(?:qty|aty|quantity)\s+(\d+)$/i) : null;
   if (count) end--;
-  const items: { description: string; amount: string }[] = [];
+  const hasLeadingQuantity = lines.slice(0, end).some(line => /^(?:qty|quantity)\b/i.test(line));
+  const items: { description: string; amount: string; quantity?: number }[] = [];
   let subtotal = 0;
   for (let i = end - 1; i >= 0; i--) {
-    const row = lines[i].match(/^(\p{L}.+?)\s+(\d[\d,]*\.\d{2})$/u);
-    if (!row || /^(?:vat|total|tax|cash|discount|service|gross|table|change)\b/i.test(row[1])) break;
-    subtotal += money(row[2]);
-    items.push({ description: row[1], amount: row[2].replace(/,/g,"") });
+    let line = lines[i];
+    if (/^\d[\d,]*\.\d{2}$/.test(line) && i > 0 && /^[1-9]\d*\s+\p{L}/u.test(lines[i - 1])) {
+      line = lines[--i] + " " + line;
+    }
+    const row = line.match(/^(?:([1-9]\d*)\s+)?(\p{L}.+?)\s+(\d[\d,]*\.\d{2})$/u);
+    if (!row || /^(?:vat|total|tax|cash|discount|service|gross|table|change)\b/i.test(row[2])) break;
+    subtotal += money(row[3]);
+    const description = row[1] && !hasLeadingQuantity ? row[1] + " " + row[2] : row[2];
+    items.push({ description, amount: row[3].replace(/,/g, ""),
+      ...(row[1] && hasLeadingQuantity ? { quantity: Number(row[1]) } : {}) });
   }
   const calculated = subtotal + service;
   // Match complete digits, including both cents. Never manufacture a digit.
   if ((printedGross && money(printedGross[1]) !== subtotal) || items.length < 2 || !Number.isSafeInteger(calculated) || calculated <= 0 ||
-      String(calculated) !== payable[1].replace(/[,=. ]/g,"")) return null;
+      String(calculated) !== payable[1].replace(/[,:=. ]/g,"")) return null;
   const total = (calculated / 100).toFixed(2);
   if (lines.slice(charge + 2).some(line =>
     /^(?:grand total|total amount|amount due|bill amount)\b/i.test(line) &&

@@ -18,7 +18,7 @@ export function normalizeLocalReceiptOcrText(source: string) {
     );
   return lines
     .map((line) => {
-      if (charged && /^(?:bill\s+ama|amo)\s+\d[\d,=. ]*\d$/i.test(line.trim())) return "Bill Amount " + charged.total;
+      if (charged && /^(?:bill\s+ama|amo)\s+\d[\d,:=. ]*\d$/i.test(line.trim())) return "Bill Amount " + charged.total;
       const due = line.match(/^\s*anount due\s*[:：]?\s*((?:[₱$€£]|P(?=\d)|[A-Z]{3}\s+)?\d[\d,]*\.\d{2})\s*$/i);
       if (due) return "Amount Due " + due[1];
       // Common l/I/1/r confusion on the final letter. A whole final-total label

@@ -1,4 +1,5 @@
 import {
+  importMediaType,
   PUBLIC_IMPORT_CONTENT_TYPES,
   PUBLIC_IMPORT_EXTENSIONS,
   FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES,
@@ -31,7 +32,7 @@ export const isSupportedImportFile = (
   }
 ) => {
   const extension = getFileExtension(fileName);
-  const normalizedContentType = (contentType ?? "").trim().toLowerCase();
+  const normalizedContentType = importMediaType(contentType);
 
   if (PUBLIC_IMPORT_EXTENSIONS.includes(extension as (typeof PUBLIC_IMPORT_EXTENSIONS)[number]) || PUBLIC_IMPORT_CONTENT_TYPES.has(normalizedContentType)) {
     return true;
@@ -93,7 +94,7 @@ export const validateImportFileBytes = (params: {
 }) => {
   const name = params.fileName.toLowerCase();
   const bytes = params.bytes;
-  const normalizedContentType = (params.contentType ?? "").trim().toLowerCase();
+  const normalizedContentType = importMediaType(params.contentType);
   const startsWith = (values: number[]) => values.every((value, index) => bytes[index] === value);
   const isPdf = name.endsWith(".pdf") || normalizedContentType === "application/pdf";
   const isPng = name.endsWith(".png") || normalizedContentType === "image/png";

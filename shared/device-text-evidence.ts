@@ -13,15 +13,18 @@ export type OpticalTextLine = {
 const isConfidence = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 
-export function normalizeOpticalTextLines(value: unknown): OpticalTextLine[] {
+export function normalizeOpticalTextLines(value: unknown, clipImageEdges = false): OpticalTextLine[] {
   if (!Array.isArray(value) || value.length > 300) return [];
   const lines: OpticalTextLine[] = [];
   let length = 0;
   let alternateLength = 0;
   for (const line of value) {
     if (!line || typeof line.text !== "string" || !Array.isArray(line.box) || line.box.length !== 4 ||
-        !line.box.every((coordinate: unknown) => typeof coordinate === "number" && Number.isFinite(coordinate) && coordinate >= 0 && coordinate <= 1)) return [];
-    const [left, top, right, bottom] = line.box;
+        !line.box.every((coordinate: unknown) => typeof coordinate === "number" && Number.isFinite(coordinate) && (clipImageEdges || (coordinate >= 0 && coordinate <= 1)))) return [];
+    // Vision may extend a rotated text box beyond the photographed frame.
+    // Intersect it with the frame, retaining the nonempty-area check below.
+    const [left, top, right, bottom] = clipImageEdges
+      ? line.box.map((coordinate: number) => Math.max(0, Math.min(1, coordinate))) : line.box;
     const text = line.text.replace(/\u0000/g, "").trim();
     length += text.length;
     if (length > DEVICE_TEXT_MAX_CHARACTERS || !text || /[\r\n]/.test(text) || right <= left || bottom <= top) return [];
@@ -88,7 +91,7 @@ export function normalizeDeviceTextEvidence(value: unknown): DeviceTextEvidence 
       !Number.isFinite(item.durationMs) || Number(item.durationMs) < 0 || Number(item.durationMs) > 120_000) return null;
   const text = item.text.replace(/\u0000/g, "").trim();
   if (!text) return null;
-  const opticalLines = item.totalPages === 1 ? normalizeOpticalTextLines(item.opticalLines) : [];
+  const opticalLines = item.totalPages === 1 ? normalizeOpticalTextLines(item.opticalLines, item.source === "apple_vision") : [];
   return {
     version: 1,
     source: item.source as DeviceTextEvidence["source"],

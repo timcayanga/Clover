@@ -1,3 +1,6 @@
+/** Providers can include parameters such as charset in the picker MIME type. */
+export const importMediaType = (value?: string | null) => (value ?? "").split(";", 1)[0].trim().toLowerCase();
+
 const IMAGE_IMPORT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"] as const;
 export const FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS = [".ofx", ".qfx", ".qif", ".mt940", ".sta", ".xml", ".json"] as const;
 export const FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES = new Set([

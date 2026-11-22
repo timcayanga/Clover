@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { prisma } from "../lib/prisma";
 import { NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
 import { getVerifiedNativeSource } from "../lib/native-upload-validation";
-import { nativeUploadRequest } from "../lib/native-upload-store";
+import { nativeUploadRequest, readReceiptUpload } from "../lib/native-upload-store";
 import { getLocalImportObjectPath } from "../lib/s3";
 import { listImportFileSummariesCompat } from "../lib/data-engine";
 
@@ -120,15 +120,20 @@ async function main() {
     });
     assert.equal(imageResult.status,200);
     const multiPart = Buffer.concat([
-      Buffer.from("%PDF-1.7\n"), Buffer.alloc(NATIVE_UPLOAD_PART_SIZE * 2, 65), Buffer.from("\n%%EOF"),
+      Buffer.from("%PDF-1.7\n"), Buffer.alloc(NATIVE_UPLOAD_PART_SIZE * 3, 65), Buffer.from("\n%%EOF"),
     ]);
-    const parts = Array.from({ length: 3 }, (_, index) =>
+    const parts = Array.from({ length: Math.ceil(multiPart.length / NATIVE_UPLOAD_PART_SIZE) }, (_, index) =>
       multiPart.subarray(index * NATIVE_UPLOAD_PART_SIZE, (index + 1) * NATIVE_UPLOAD_PART_SIZE));
     Object.assign(row, { state: "uploading", response: null, fileName: "multi-part.pdf", contentType: "application/pdf",
       size: multiPart.length, parts: Object.fromEntries(parts.map((part, index) => [index, createHash("sha256").update(part).digest("hex")])) });
     const putPart = (index: number, part: Buffer) => writeFile(getLocalImportObjectPath(`native-upload-parts/${id}/${index}`), part);
     await Promise.all(parts.map((part, index) => putPart(index, part)));
+    const receipt = await readReceiptUpload(id, userId, workspaceId);
+    assert.deepEqual(receipt.sourceBytes, multiPart);
+    assert.equal(receipt.name, "multi-part.pdf");
+    assert.equal(receipt.size, multiPart.length);
     await putPart(1, Buffer.alloc(parts[1].length, 66));
+    await assert.rejects(readReceiptUpload(id, userId, workspaceId), /Upload verification failed/);
     const completeParts = () => nativeUploadRequest(new Request("https://staging.clover.ph/api/mobile/v1/uploads/test/complete", {
       method: "POST", body: "{}",
     }), id, userId, workspaceId, "complete", async request => {

@@ -42,7 +42,7 @@ export async function loadAdviserAttachments(
 }
 
 export async function storeAdviserAttachment(
-  file: File,
+  file: File | (Pick<File, "name" | "type" | "size"> & { sourceBytes: Uint8Array }),
   workspaceId: string,
   actorUserId: string,
 ) {
@@ -55,7 +55,7 @@ export async function storeAdviserAttachment(
     throw new Error("This Profile is unavailable.");
   const problem = adviserFileProblem(file);
   if (problem) throw new Error(problem);
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const bytes = "sourceBytes" in file ? file.sourceBytes : new Uint8Array(await file.arrayBuffer());
   const isPlainText = /\.(txt|md)$/i.test(file.name);
   const extracted = isPlainText
     ? new TextDecoder("utf-8", { fatal: true }).decode(bytes)

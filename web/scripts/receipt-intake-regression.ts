@@ -111,6 +111,11 @@ assert.equal(Number(parseReceiptText(boxedReceipt).total), 425);
 assert.equal(parseReceiptText(boxedReceipt).currency, "PHP");
 assert.equal(parseReceiptText(boxedReceipt).receiptText, boxedReceipt);
 assert.equal(readReceiptOpticalLayout(encodeLocalReceiptOcr({ ...deviceOcr, opticalLines: opticalLines.slice(0, -1) })), deviceOcr.text);
+// Vision can locate an edge glyph just outside the page. Other rows remain usable.
+const edgeBlocks = opticalLines.map((line, index) => index === 0 ? { ...line, box: [-0.001, .04, .50, .08] } : line);
+const clipped = normalizeDeviceTextEvidence({ ...deviceOcr, opticalLines: edgeBlocks });
+assert.equal(clipped?.opticalLines?.length, opticalLines.length);
+assert.equal(clipped?.opticalLines?.[0].box[0], 0);
 const malformed = { ...deviceOcr, opticalLines: [{ text: "Total", box: [0, 2, 1, 3] }] };
 assert.equal(normalizeDeviceTextEvidence(malformed)?.opticalLines, undefined);
 assert.equal(normalizeDeviceTextEvidence(malformed)?.text, deviceOcr.text);

@@ -54,6 +54,9 @@ export async function runUploadFormatCoverageRegression() {
   }
 
   assert(validateImportFileBytes({ fileName: "receipt", contentType: "IMAGE/JPG", bytes: Buffer.from("unreadable image") }));
+  const providerFile = { name: "Activity", mimeType: "text/csv; charset=utf-8", size: 42 };
+  assert.equal(native.fileProblem(providerFile), null);
+  assert.equal(validateImportFile({ fileName: providerFile.name, fileSize: providerFile.size, contentType: providerFile.mimeType }), null);
   const csv = "Migration Source,Date,Description,Amount,Currency,Account,Type,Category\nspreadsheet,2026-09-13,Upload test,12.50,PHP,Upload Checking,Expense,Food";
   const ofx = "OFXHEADER:100\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>PHP<BANKACCTFROM><ACCTID>1234</BANKACCTFROM><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260913<TRNAMT>-12.50<FITID>upload-1<NAME>Upload test</STMTTRN></BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>";
   const xmlOfx = ofx.replace("OFXHEADER:100", '<?xml version="1.0"?>\n<?OFX OFXHEADER="200"?>')
@@ -108,6 +111,15 @@ export async function runUploadFormatCoverageRegression() {
           arrayBuffer: async () => { throw new Error("Preloaded upload bytes were read twice"); },
         }, undefined, { sourceBytes: receivedBytes });
         assert.equal(cachedText, text, extension);
+        if (contentType === mimeByExtension[extension] && [".csv", ".docx"].includes(extension)) {
+          const document = new File([bytes as BlobPart], "Document", { type: contentType + "; charset=utf-8" });
+          assert.equal(validateImportFileBytes({ fileName: document.name, contentType: document.type, bytes: receivedBytes }), null);
+          assert.equal(await readUploadedFileText(document), text);
+          const imported = await readImportedFileTextWithCacheInfo({
+            storageKey: "local-fixture", fileName: document.name, fileType: document.type, sourceBytes: receivedBytes,
+          });
+          assert.equal(imported.text, text);
+        }
         // A provider can preserve "csv" in the name of a converted workbook.
         const stored = await readImportedFileTextWithCacheInfo({
           storageKey: "local-fixture", fileName: "export-from-csv" + extension, fileType: received.type,

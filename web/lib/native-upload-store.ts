@@ -147,7 +147,9 @@ export async function readReceiptUpload(id: string, userId: string, workspaceId:
   const row = await owned(id, userId, workspaceId);
   if (row.state !== "uploading") throw new NativeInputError("Choose the receipt again.");
   const bytes = await assembleUpload(row);
-  return new File([new Uint8Array(bytes)], row.fileName, { type: row.contentType });
+  // A multipart receipt is already assembled and verified. Pass those exact
+  // bytes to the reader without cloning the whole upload through a File.
+  return { name: row.fileName, type: row.contentType, size: bytes.byteLength, sourceBytes: bytes };
 }
 
 type ImportProcessor = (request: Request, id: string) => Promise<Response>;

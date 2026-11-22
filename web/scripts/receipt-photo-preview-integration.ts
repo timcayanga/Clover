@@ -17,6 +17,10 @@ async function verify() {
   process.env.OPENAI_API_KEY = "offline-test-only";
   require("next/server").after = () => {};
   const mocks = {
+    "../lib/native-upload-store": { readReceiptUpload: async (id: string, user: string, workspace: string) => {
+      assert.deepEqual([id, user, workspace], ["receipt-fixture", "qa", "qa"]);
+      return { name: "IMG_1000.jpg", type: "image/jpeg", size: bytes.length, sourceBytes: bytes };
+    } },
     "../lib/auth": { isLocalDevHost: async () => false },
     "../lib/split-bill-access": { getSplitBillCurrentUser: async () => ({ id: "qa", clerkUserId: "qa" }) },
     "../lib/clover-token-usage": { mayUseImportCloudAi: async () => false },
@@ -38,18 +42,23 @@ async function verify() {
   });
   // A completed scan with no text must leave the worker available for the next upload.
   assert.equal(await readLocalReceiptImage({ data: Buffer.alloc(320 * 240 * 3, 255), width: 320, height: 240 }), null);
-  const start = performance.now();
-  const response = await withMobileRequestContext("qa", request, () => POST(request));
-  const result = await response.json();
-  assert.equal(response.status, 200, result.error);
-  assert.equal(result.preview.total, "1470.54");
-  assert.equal(result.preview.billDate.slice(0, 10), "2026-11-19");
-  assert.equal(result.preview.serviceCharge, "120.54");
-  assert.deepEqual(result.preview.items.map((item: { description: string }) => item.description),
-    ["Mocktail REFRESHING", "Cavinti Fizz", "Punch from the Past"]);
-  assert.equal(retained, 1);
-  assert.equal(networkCalls, 0);
-  console.log("PASS local split receipt preview, printed total, items, date and retained photo in", Math.round(performance.now() - start), "ms");
+  const nativeRequest = new Request(request.url + "?uploadId=receipt-fixture&workspaceId=qa", {
+    method: "POST", headers: { origin: "https://clover.ph" },
+  });
+  for (const [method, upload] of [["multipart", request], ["native", nativeRequest]] as const) {
+    const start = performance.now();
+    const response = await withMobileRequestContext("qa", upload, () => POST(upload));
+    const result = await response.json();
+    assert.equal(response.status, 200, result.error);
+    assert.equal(result.preview.total, "1470.54");
+    assert.equal(result.preview.billDate.slice(0, 10), "2026-11-19");
+    assert.equal(result.preview.serviceCharge, "120.54");
+    assert.deepEqual(result.preview.items.map((item: { description: string }) => item.description),
+      ["Mocktail REFRESHING", "Cavinti Fizz", "Punch from the Past"]);
+    assert.equal(networkCalls, 0);
+    console.log("PASS " + method + " split receipt preview, printed total, items, date and retained photo in", Math.round(performance.now() - start), "ms");
+  }
+  assert.equal(retained, 2);
 }
 
 verify().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {

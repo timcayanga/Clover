@@ -15,7 +15,7 @@ import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/req
 import { assertRateLimit } from "@/lib/rate-limit";
 import { uploadObject } from "@/lib/s3";
 import { nativeUploadRequest, readReceiptUpload } from "@/lib/native-upload-store";
-import { NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
+import { isUploadPdf, NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -64,9 +64,9 @@ const asReceiptDate = (value: unknown) => {
     : null;
 };
 
-const isReceiptImage = (file: File) =>
-  file.type.startsWith("image/") || /\.(?:jpe?g|png|webp|heic|heif)$/i.test(file.name);
-const isReceiptPdf = (file: File) => file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+const isReceiptImage = (file: Pick<File, "name" | "type">) =>
+  /^image\//i.test(file.type) || /\.(?:jpe?g|png|webp|heic|heif)$/i.test(file.name);
+const isReceiptPdf = (file: Pick<File, "name" | "type">) => isUploadPdf(file.name, file.type);
 
 const mergeReceiptBackup = (
   localPreview: ReceiptPreviewResult,
@@ -176,7 +176,7 @@ const mergeReceiptBackup = (
 
 const tryReceiptBackup = async (params: {
   consentUserId: string;
-  file: File;
+  file: Pick<File, "name" | "type">;
   bytes: Uint8Array;
   receiptText: string;
   preview: ReceiptPreviewResult;
@@ -301,11 +301,11 @@ export async function POST(request: Request) {
       after(() => nativeUploadRequest(request, uploadId, user.clerkUserId, workspace.id, "cancel").then(() => {}));
     }
 
-    if (!(file instanceof File)) {
+    if (!file || typeof file === "string") {
       return NextResponse.json({ error: "Receipt file is required" }, { status: 400 });
     }
 
-    const selectedFile = file as File;
+    const selectedFile = file;
     const validationError = validateImportFile({
       fileName: selectedFile.name,
       fileSize: selectedFile.size,
@@ -318,7 +318,7 @@ export async function POST(request: Request) {
     const validationInput = {
       fileName: selectedFile.name,
       contentType: selectedFile.type,
-      bytes: new Uint8Array(await selectedFile.arrayBuffer()),
+      bytes: "sourceBytes" in selectedFile ? selectedFile.sourceBytes : new Uint8Array(await selectedFile.arrayBuffer()),
     };
     const byteValidationError = validateImportFileBytes(validationInput) ??
       await validateImportImageDecode(validationInput);

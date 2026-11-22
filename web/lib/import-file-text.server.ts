@@ -1,4 +1,4 @@
-import { FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
+import { importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
 import { readLocalReceiptOcrText, readReceiptOpticalEvidence, receiptDateDisagreements, recordReceiptDateCheck, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
 import { hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
@@ -257,7 +257,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v6";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v7";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -3190,7 +3190,7 @@ export const readUploadedFileText = async (
   options?: { importMode?: string | null; sourceBytes?: Uint8Array }
 ) => {
   const lowerName = String(file.name ?? "").toLowerCase();
-  const lowerType = String(file.type ?? "").toLowerCase();
+  const lowerType = importMediaType(file.type);
   const importMode = options?.importMode ?? null;
 
   if (
@@ -3232,11 +3232,11 @@ export const readUploadedFileText = async (
   }
 
   if (lowerName.endsWith(".pdf") || lowerType === "application/pdf") {
-    if (typeof file.arrayBuffer !== "function") {
+    if (!options?.sourceBytes && typeof file.arrayBuffer !== "function") {
       throw new Error("Unable to read imported file.");
     }
 
-    const data = options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer());
+    const data = options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer!());
     await preflightPdfPassword(data, password);
     const knownStatementPdfText = resolveKnownStatementPdfFallbackText({
       fileType: "application/pdf",
@@ -3254,11 +3254,11 @@ export const readUploadedFileText = async (
   }
 
   if (isImageImportFileName(lowerType, lowerName)) {
-    if (typeof file.arrayBuffer !== "function") {
+    if (!options?.sourceBytes && typeof file.arrayBuffer !== "function") {
       throw new Error("Unable to read imported file.");
     }
 
-    const originalBytes = options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer());
+    const originalBytes = options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer!());
     return extractTextFromImageBufferWithReceiptAwareFallback({
       sourceBytes: originalBytes,
       fileType: lowerType,
@@ -3289,8 +3289,9 @@ export const readImportedFileTextWithCacheInfo = async (
 ): Promise<ImportedFileTextWithCacheInfo> => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   const isPdf = isUploadPdf(params.fileName, params.fileType);
+  const mediaType = importMediaType(params.fileType);
   const financialExport = FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS.some(extension => params.fileName.toLowerCase().endsWith(extension)) ||
-    FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES.has(params.fileType.toLowerCase());
+    FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES.has(mediaType);
   const oldRouteWasDelimited = /csv|tab-separated-values/i.test(params.fileName) &&
     !isDelimitedImport(params.fileName, params.fileType);
   const baseVersion = resolveImportFileExtractionCacheVersion(params.fileName);
@@ -3469,7 +3470,7 @@ export const readImportedFileTextWithCacheInfo = async (
 
   recordImportWork("text_cache_miss");
   const extraction = (async () => {
-    if (lowerName.endsWith('.docx') || params.fileType.toLowerCase() === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    if (lowerName.endsWith('.docx') || mediaType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       return decodeWordGrabReceiptBytes(bytes);
     }
 
@@ -3479,14 +3480,14 @@ export const readImportedFileTextWithCacheInfo = async (
 
     if (
       /\.(?:ofx|qfx|qif|mt940|sta|xml|json)$/.test(lowerName) ||
-      /(?:x-ofx|intu\.qfx|application\/qif|text\/qif|mt940|application\/xml|text\/xml|application\/json)/.test(params.fileType.toLowerCase())
+      /(?:x-ofx|intu\.qfx|application\/qif|text\/qif|mt940|application\/xml|text\/xml|application\/json)/.test(mediaType)
     ) {
       return decodeStructuredDelimitedBytes(bytes);
     }
 
     if (
       /\.(?:xlsx|xls|xlsm|xlsb|ods)$/.test(lowerName) ||
-      /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/.test(params.fileType.toLowerCase())
+      /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/.test(mediaType)
     ) {
       return decodeSpreadsheetWorkbookBytes(bytes);
     }
@@ -3613,7 +3614,7 @@ export const readImportedFileText = async (
 
 export const readUploadedFilePdfPageImages = async (file: File | ImportFileLike, password?: string, maxPages = 2) => {
   const lowerName = String(file.name ?? "").toLowerCase();
-  const lowerType = String(file.type ?? "").toLowerCase();
+  const lowerType = importMediaType(file.type);
 
   if (!lowerName.endsWith(".pdf") && lowerType !== "application/pdf") {
     return [];

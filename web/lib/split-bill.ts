@@ -2523,6 +2523,23 @@ function parseReceiptSource(receiptText: string, photo: boolean): ReceiptPreview
   return items === receipt.items ? receipt : { ...receipt, items };
 }
 
+// Some mobile recognizers return every label first and the entire price column
+// afterwards. Use box order when printed accounting agrees to the cent.
+function hasReconciledOpticalSettlement(layout: string) {
+  const subtotal = /^sub[ -]?total[ \t]*[:：]?[ \t]*([\d,]+\.\d{2})$/gim;
+  const charge = /^(?:service charge|s\.[ \t]*charge)(?:[ \t]+\d+(?:\.\d+)?%)?[ \t]*[:：]?[ \t]*([\d,]+\.\d{2})$/gim;
+  const payable = /^(?:grand total|total(?: amount| due| paid)?|amount due)[ \t]*[:：]?[ \t]*(?:PHP|₱)?[ \t]*([\d,]+\.\d{2})$/gim;
+  const cents = (pattern: RegExp) => [...layout.matchAll(pattern)].map(match => Number(match[1].replace(/[,.]/g, "")));
+  const totals = cents(payable);
+  if (!totals.length || !Number.isSafeInteger(totals[0]) || totals[0] <= 0 || !totals.every(value => value === totals[0])) return false;
+  const paid = cents(/^(?:total paid|cash)[ \t]*[:：]?[ \t]*(?:PHP|₱)?[ \t]*([\d,]+\.\d{2})$/gim);
+  if (paid.length === 1 && paid[0] === totals[0] &&
+      /^(?:grand total|total|amount due)[ \t]*[:：]?[ \t]*(?:PHP|₱)?[ \t]*\d/im.test(layout) &&
+      readReceiptSettlementEvidence(layout)?.kind === "payable") return true;
+  const subtotals = cents(subtotal), charges = cents(charge);
+  return subtotals.length === 1 && charges.length <= 1 && subtotals[0] + (charges[0] ?? 0) === totals[0];
+}
+
 function parseReceiptSourceFields(receiptText: string, photo: boolean): ReceiptPreviewResult {
   if (detectMultipleReceipts(receiptText)) {
     return {
@@ -2542,7 +2559,11 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean): ReceiptP
     ? joinReceiptSettlementLines(normalizeLocalReceiptOcrText(ordered))
     : settlementText;
   const layout = splitReceiptPromotionalFooter(layoutText);
-  const { body, footer } = layoutText === settlementText || layout.footer
+  const useOpticalRows = opticalText !== null && ordered !== opticalText &&
+    /^(?:[\d,]+\.\d{2})[ \t]*\r?\n[\d,]+\.\d{2}[ \t]*$/m.test(opticalText) &&
+    (hasReconciledOpticalSettlement(ordered) || Boolean(readChargedReceiptTable(ordered))) && !splitReceiptPromotionalFooter(settlementText).footer &&
+    !/^(?:grand total|amount due|total(?: amount| due| paid)?)[ \t]*[:：]?[ \t]*[\d₱$]/im.test(opticalText);
+  const { body, footer } = layoutText === settlementText || layout.footer || useOpticalRows
     ? layout : { body: settlementText, footer: null };
   const settlementEvidence = readReceiptSettlementEvidence(body);
   const parsed = parseReceiptTextCore(body, settlementEvidence);
@@ -2574,14 +2595,14 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean): ReceiptP
     requiresReview: settled.requiresReview || Boolean(tenderDifference),
     paymentMethod: hasSplitReceiptTender(tenders) ? "Mixed" : settled.paymentMethod,
   } : settled;
-  const photoText = opticalText ?? (photo ? receiptText : null);
+  const photoText = useOpticalRows ? ordered : opticalText ?? (photo ? receiptText : null);
   const table = readReconciledItemTable(photoText ?? receiptText) ?? (photoText ? readChargedReceiptTable(photoText) : null);
   if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
     return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || photoText !== null,
       confidence:photoText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};
   }
   if (photoText !== null && !payment && !footer && ["generic_receipt", "restaurant_receipt", "tax_invoice", "official_receipt"].includes(paymentDetails.receiptType)) {
-    const items = readSubtotalItems(photoText);
+    const items = readSubtotalItems(photoText, useOpticalRows);
     if (items) {
       const subtotalCents = items.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
       return { ...paymentDetails, items: readOpticalItemQuantities(items, photoText, readReceiptOpticalEvidence(receiptText)), subtotal: (subtotalCents / 100).toFixed(2), receiptText,
