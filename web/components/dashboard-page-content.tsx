@@ -1133,7 +1133,6 @@ async function DashboardStream({
         }}
       />
       <section className="dashboard-home dashboard-home--figma">
-        <FirstUseActivation key={workspaceSummary.id} workspaceId={workspaceSummary.id} />
         <article
           className="dashboard-home__hero dashboard-home__hero--fresh dashboard-home__hero--balance glass"
           style={{ background: "linear-gradient(90deg, #03A8C0 0%, #34D3D0 100%)" }}
