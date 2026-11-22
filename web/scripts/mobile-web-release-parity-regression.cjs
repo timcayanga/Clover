@@ -8,7 +8,7 @@ const jsx = require('react/jsx-runtime');
 const postcss = require('postcss');
 const { renderToStaticMarkup } = require('react-dom/server');
 const root = path.resolve(__dirname, '..');
-const hooks = { useState: v => [typeof v === 'function' ? v() : v, () => {}], useMemo: fn => fn() };
+const hooks = { useRef: current => ({ current }), useState: v => [typeof v === 'function' ? v() : v, () => {}], useMemo: fn => fn() };
 const empty = () => null;
 const Calendar = () => React.createElement('section', { className: 'recurring-calendar' }, 'Payment calendar');
 function load(file, dependencies) {
@@ -54,6 +54,7 @@ assert(html.indexOf('Due this month') < html.indexOf('Review suggestions'));
 
 const { SplitBillHome } = load('components/split-bill-home.tsx', {
   ...shared,
+  './split-person-search': load('components/split-person-search.tsx', {}),
   '../../shared/split-debts': load('../shared/split-debts.ts', {}),
   '../../shared/split-group-cover': load('../shared/split-group-cover.ts', {}),
   '../../shared/split-bill-experience': { suggestBillCategory: () => ({ name: 'Food & Dining' }) },
