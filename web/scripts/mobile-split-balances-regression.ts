@@ -23,7 +23,7 @@ assert.equal(JSON.stringify(fixtures),before);
 console.log('Native split balances: settled zero, partial remainder, currency separation and source preservation passed.');
 
 // Native headline cards use the same complete-workspace projection as mobile web.
-import { splitBillBalanceSummary, isSameSplitBillPerson } from '../lib/split-bill-balance-summary';
+import { directoryPersonBalances, personBalanceColumns, splitBillBalanceSummary, isSameSplitBillPerson } from '../lib/split-bill-balance-summary';
 import { mobileApiResponse } from '../lib/mobile-api-response';
 import { formatSplitBillAmount } from '../lib/split-bill';
 assert.deepEqual(splitBillBalanceSummary([], 'B'), {youOwe:formatSplitBillAmount(0,'PHP'),owedToYou:formatSplitBillAmount(0,'PHP')});
@@ -64,3 +64,16 @@ console.log("Group debts preserve residual cents, partial payments, and currenci
 const renamed = {...partial,group:{members:[{name:"Bee",previousNames:["B"]}]}};
 assert.equal(remainingDebts([renamed])[0].from,"Bee");
 assert.equal(renamed.settlement.transfers[0].fromParticipantName,"B");
+
+const directory = ["Tim", "Tim Sun", "Tim Li", "Tina", "Viewer"].map(name => ({ id: name, name }));
+const directoryBills = ["PHP", "USD"].map(currency => ({
+  currency, settlement: { transfers: [
+    { fromParticipantName: " tim  sun ", toParticipantName: "Viewer", amount: 10 },
+    { fromParticipantName: "Viewer", toParticipantName: "Tim", amount: 4 },
+    { fromParticipantName: "Tim Li", toParticipantName: "Tina", amount: 25 },
+  ] },
+}));
+for (const rates of [{}, { USD: 58 }] as Record<string, number>[]) {
+  assert.deepEqual(directoryPersonBalances(directoryBills, "Viewer", directory, "PHP", rates),
+    Object.fromEntries(directory.map(person => [person.id, personBalanceColumns(directoryBills, "Viewer", person.name, "PHP", rates)])));
+}

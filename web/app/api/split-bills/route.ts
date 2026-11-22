@@ -1,6 +1,6 @@
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import {displayRates} from "@/lib/display-rates";
-import {personBalanceColumns} from "@/lib/split-bill-balance-summary";
+import {directoryPersonBalances} from "@/lib/split-bill-balance-summary";
 import { transactionMerchantLogo } from "@/lib/transaction-merchant-logo";
 import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 import { invalidateWorkspaceSummaryCache, invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
@@ -598,7 +598,7 @@ export async function GET(request: Request) {
         ? Object.fromEntries(await displayRates(bills.map(b=>b.currency),currency)) : {};
       return NextResponse.json(surface === "home_split_bills_summary"
         ? { pending: homePendingSplitBills(bills, { groups, people, currentUserId: user.id, currentUserName: getUserDisplayName(user) }, transactionMerchantLogo) }
-        : { summary: splitBillBalanceSummary(bills, getUserDisplayName(user)), personBalances: Object.fromEntries(people.map(p=>[p.id,personBalanceColumns(bills,getUserDisplayName(user),p.name,currency,rates)])) },
+        : { summary: splitBillBalanceSummary(bills, getUserDisplayName(user)), personBalances: directoryPersonBalances(bills, getUserDisplayName(user), people, currency, rates) },
       { headers: { "Cache-Control": "private, no-store" } });
     }
     const ledger = native && query.get("view") === "ledger";

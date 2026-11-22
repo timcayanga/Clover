@@ -57,3 +57,28 @@ export function personBalanceColumns(bills: readonly BalanceBill[], viewer: stri
   };
   return {owed:column("owed"), owes:column("owes")};
 }
+
+// Full names and their first-name aliases share a bucket. The existing matcher
+// still decides each balance, including when two people have the same first name.
+export function directoryPersonBalances(
+  bills: readonly BalanceBill[], viewer: string, people: readonly { id: string; name: string }[],
+  currency: string, rates: Record<string, number>,
+) {
+  const firstName = (name: string) => name.trim().toLowerCase().split(/\s+/, 1)[0];
+  const billsByName = new Map<string, BalanceBill[]>();
+  for (const bill of bills) {
+    const names = new Set<string>();
+    for (const transfer of bill.settlement.transfers) {
+      if (isSameSplitBillPerson(transfer.fromParticipantName, viewer)) names.add(firstName(transfer.toParticipantName));
+      if (isSameSplitBillPerson(transfer.toParticipantName, viewer)) names.add(firstName(transfer.fromParticipantName));
+    }
+    for (const name of names) {
+      const bucket = billsByName.get(name);
+      if (bucket) bucket.push(bill);
+      else billsByName.set(name, [bill]);
+    }
+  }
+  return Object.fromEntries(people.map(person => [
+    person.id, personBalanceColumns(billsByName.get(firstName(person.name)) ?? [], viewer, person.name, currency, rates),
+  ]));
+}

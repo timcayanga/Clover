@@ -9,7 +9,7 @@ import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { InterfaceIcon } from "@/components/interface-icon";
 import {useDefaultCurrency} from "@/lib/use-default-currency";
 import {useExchangeRates} from "@/lib/use-exchange-rates";
-import { personBalanceColumns, splitBillBalanceSummary, isSameSplitBillPerson as isSamePersonName } from "@/lib/split-bill-balance-summary";
+import { directoryPersonBalances, splitBillBalanceSummary, isSameSplitBillPerson as isSamePersonName } from "@/lib/split-bill-balance-summary";
 import { useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
@@ -228,6 +228,7 @@ export function SplitBillHome({
   };
 
   const visibleGroups = useMemo(() => {
+    if (tab !== "Groups") return [];
     return groups.filter(g=>g.name.toLowerCase().includes(search.toLowerCase())).map((group) => {
       const groupBills = bills.filter((bill) => bill.group?.id === group.id);
       const billsByCurrency = groupBillsByCurrency(groupBills);
@@ -251,11 +252,15 @@ export function SplitBillHome({
         status: buildGroupStatus(groupBills),
       };
     });
-  }, [bills, groups, search]);
+  }, [bills, groups, search, tab]);
 
   const currency = useDefaultCurrency();
   const fx = useExchangeRates(bills.map(b=>b.currency),currency,tab === "People");
-  const peopleWithBalances = people.map(p=>({...p,...personBalanceColumns(bills,currentUserName,p.name,currency,fx.rates)}));
+  const peopleWithBalances = useMemo(() => {
+    if (tab !== "People") return [];
+    const balances = directoryPersonBalances(bills, currentUserName, people, currency, fx.rates);
+    return people.map(person => ({ ...person, ...balances[person.id] }));
+  }, [tab, bills, currentUserName, people, currency, fx.rates]);
   const matchingPeople=peopleWithBalances.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
   const visiblePeople = showAllPeople ? matchingPeople : matchingPeople.slice(0, 6);
   const hasHiddenPeople = peopleWithBalances.length > 6;

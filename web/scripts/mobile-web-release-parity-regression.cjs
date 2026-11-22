@@ -61,7 +61,7 @@ const { SplitBillHome } = load('components/split-bill-home.tsx', {
   '@/components/interface-icon': { InterfaceIcon: empty },
   '@/lib/use-default-currency': { useDefaultCurrency: () => 'PHP' },
   '@/lib/use-exchange-rates': { useExchangeRates: () => ({rates:{PHP:1}}) },
-  '@/lib/split-bill-balance-summary': { personBalanceColumns: () => ({owed:'PHP 0',owes:'PHP 0'}), splitBillBalanceSummary: () => ({ youOwe: 'PHP 0', owedToYou: 'PHP 0' }), isSameSplitBillPerson: (a,b) => a.toLowerCase() === b.toLowerCase() },
+  '@/lib/split-bill-balance-summary': { directoryPersonBalances: (_b, _v, people) => Object.fromEntries(people.map(p => [p.id, {owed:'PHP 0',owes:'PHP 0'}])), splitBillBalanceSummary: () => ({ youOwe: 'PHP 0', owedToYou: 'PHP 0' }), isSameSplitBillPerson: (a,b) => a.toLowerCase() === b.toLowerCase() },
   '@clerk/nextjs': { useUser: () => ({ user: { fullName: 'Alex Reyes', firstName: 'Alex', imageUrl: '/qa-self.png' } }) },
   '@/components/split-bill-action-buttons': { SplitBillActionButtons: empty },
   '@/components/split-bill-qr-library': { SplitBillQrLibrary: empty },

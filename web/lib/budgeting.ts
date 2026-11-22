@@ -462,17 +462,19 @@ export const buildBudgetOverview = (params: {
       transaction.date >= currentMonthStart &&
       !transaction.isExcluded
   );
+  const transactionsByCadence = new Map<BudgetCadence, BudgetTransaction[]>();
   const allBudgets = params.budgets
     .map((budget) => {
       const periodStart = getBudgetPeriodStart(budget.cadence, now);
       const periodEnd = getPeriodEnd(budget.cadence, periodStart);
-      const periodTransactions = params.transactions.filter(
-        (transaction) =>
-          transaction.date >= periodStart &&
-          transaction.date < periodEnd &&
-          matchesBudgetScope(budget, transaction) &&
-          !transaction.isExcluded
-      );
+      let activeTransactions = transactionsByCadence.get(budget.cadence);
+      if (!activeTransactions) {
+        activeTransactions = params.transactions.filter(transaction =>
+          transaction.date >= periodStart && transaction.date < periodEnd && !transaction.isExcluded
+        );
+        transactionsByCadence.set(budget.cadence, activeTransactions);
+      }
+      const periodTransactions = activeTransactions.filter(transaction => matchesBudgetScope(budget, transaction));
       const periodCommitments = budget.kind === "savings_target" || budget.scope === "category" ? [] : commitments.filter((commitment) => {
         const dueDate = commitment.nextDueDate ?? commitment.dueDate;
         return commitment.status === "active" && dueDate !== null && dueDate >= periodStart && dueDate < periodEnd &&
