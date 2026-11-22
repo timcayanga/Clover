@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { reconcilesReviewedDiscountPhoto, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "../lib/receipt-price-column";
-import { recordReceiptQuantityCrop, recordReceiptPriceCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
+import { recordReceiptQuantityCrop, recordReceiptTableCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
 import { qualifyDeviceReceiptReading } from "../lib/device-receipt-reading";
 import { normalizeDeviceTextEvidence, type OpticalTextLine } from "../../shared/device-text-evidence";
@@ -116,6 +116,44 @@ for (const damaged of [
   discountedPhoto + "\nTotal Due 99.00",
 ]) assert.equal(reconcilesReviewedDiscountPhoto(damaged, discountDraft), false);
 assert.equal(reconcilesReviewedDiscountPhoto(discountedPhoto, { ...discountDraft, requiresReview: false }), false);
+const countedTill = "Garden Cafe\nOfficial Receipt\n2026-11-19\nTea 42 2 40.00\nRice 1\n60.00\nTotal Qty\n3\nGross Amount 100.00\nBill Amount 100.00\nCash 150.00\nChange 50.00";
+assert.equal(hasPrintedItemizedTotal(countedTill, "100.00", true), true);
+assert.deepEqual(readReconciledItemTable(countedTill)?.items, [
+  { description: "Tea 42", quantity: 2, amount: "40.00" },
+  { description: "Rice", quantity: 1, amount: "60.00" },
+]);
+for (const invalid of [
+  countedTill.replace("Qty\n3", "Qty\n4"),
+  countedTill.replace("Rice 1", "Rice"),
+  countedTill.replace("Gross Amount 100", "Gross Amount 150"),
+  countedTill.replace("Change 50", "Change 60"),
+  countedTill + "\nTotal Paid 90.00",
+  countedTill + "\nGross Amount 99.00",
+  "Bill Amount 120.00\n" + countedTill,
+  countedTill + "\nDiscount 10.00",
+]) assert.equal(readReconciledItemTable(invalid), null);
+
+// Mobile recognizers can emit each column separately. Row geometry and the
+// three printed checks must agree before the server can reuse that evidence.
+const countedColumns = [
+  ["Garden Cafe", "Official Receipt", "2026-11-19", "Garden Tea 42", "Rice", "Total Qty", "Gross Amount", "Bill Amount"],
+  ["", "", "", "2", "1", "3", "", ""],
+  ["", "", "", "40.00", "60.00", "", "100.00", "100.00"],
+];
+const countedBlocks = countedColumns.flatMap((column, c) => column.flatMap((text, r) =>
+  text ? [{ text, box: [c * .33, r * .1, c * .33 + .30, r * .1 + .04] as OpticalTextLine["box"] }] : []));
+for (const source of ["apple_vision", "google_mlkit"]) {
+  const device = normalizeDeviceTextEvidence({ version: 1, source, text: countedBlocks.map(b => b.text).join("\n"),
+    opticalLines: countedBlocks, complete: true, pagesRead: 1, totalPages: 1, durationMs: 10 });
+  for (const mode of ["receipt", "statement"]) {
+    const accepted = qualifyDeviceReceiptReading(device, mode, "PHP");
+    assert.ok(accepted);
+    const parsed = parseReceiptPhotoText(accepted.source);
+    assert.equal(parsed.receiptText, accepted.source);
+    assert.deepEqual(parsed.items.map(i => [i.description, i.quantity]), [["Garden Tea 42", 2], ["Rice", 1]]);
+    assert.equal(parsed.total, "100.00");
+  }
+}
 const damagedNameFirst = parseReceiptPhotoText("Green Cafe\nOfficial Receipt\n" + nameFirst.replace("319.99", "310.00"));
 assert.equal(damagedNameFirst.items[0].description, "Coffee Beans");
 assert.equal(damagedNameFirst.items[0].unitPrice, null);
@@ -505,7 +543,7 @@ function checkDamagedPriceColumn() {
   assert.equal(recoverReceiptPrices(plan, [priced, priced.replace("20.00","30.00")]), null);
   assert.equal(locateDamagedReceiptPrices(source, [...blocks,blocks[0]]), null);
   const raw = encodeLocalReceiptOcr({text:source, opticalLines:blocks});
-  const repaired = recordReceiptPriceCrop(raw, plan.original, priced, plan.bounds, [priced]);
+  const repaired = recordReceiptTableCrop(raw, plan.original, priced, plan.bounds, [priced]);
   assert.deepEqual(readReceiptOpticalEvidence(repaired), readReceiptOpticalEvidence(raw));
   assert.equal(readLocalReceiptOcrText(repaired), source.replace(plan.original, priced));
 }

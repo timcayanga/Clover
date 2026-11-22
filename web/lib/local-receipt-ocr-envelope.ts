@@ -18,11 +18,11 @@ export function readLocalReceiptOcrText(source: string): string | null {
   return index < 0 ? "" : source.slice(index + SEPARATOR.length);
 }
 
-export function recordReceiptPriceCrop(source: string, original: string, replacement: string, bounds: number[], crop: string[]) {
+export function recordReceiptTableCrop(source: string, original: string, replacement: string, bounds: number[], crop: string[], kind: "priceCrop" | "countedQuantityCrop" = "priceCrop") {
   const text = readLocalReceiptOcrText(source);
   if (!text || text.split(original).length !== 2) return source;
   const metadata = JSON.parse(source.slice(PREFIX.length, source.indexOf(SEPARATOR)));
-  return encodeLocalReceiptOcr({ ...metadata, priceCrop: { original, bounds, crop }, text: text.replace(original, () => replacement) });
+  return encodeLocalReceiptOcr({ ...metadata, [kind]: { original, bounds, crop }, text: text.replace(original, () => replacement) });
 }
 
 /** Edit the reading text without replacing the original optical evidence. */

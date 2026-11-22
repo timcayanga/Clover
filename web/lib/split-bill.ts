@@ -1,6 +1,6 @@
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
 import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
-import { receiptNameFirstPriceHeader, readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
+import { readCountedGrossTable, receiptNameFirstPriceHeader, readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
@@ -2584,8 +2584,8 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, { ordered
   const layout = splitReceiptPromotionalFooter(layoutText);
   const useOpticalRows = opticalText !== null && ordered !== opticalText &&
     /^(?:[\d,]+\.\d{2})[ \t]*\r?\n[\d,]+\.\d{2}[ \t]*$/m.test(opticalText) &&
-    (hasReconciledOpticalSettlement(ordered) || Boolean(readChargedReceiptTable(ordered))) && !splitReceiptPromotionalFooter(settlementText).footer &&
-    !/^(?:grand total|amount due|total(?: amount| due| paid)?)[ \t]*[:：]?[ \t]*[\d₱$]/im.test(opticalText);
+    (hasReconciledOpticalSettlement(ordered) || Boolean(readChargedReceiptTable(ordered) ?? readCountedGrossTable(ordered))) && !splitReceiptPromotionalFooter(settlementText).footer &&
+    !/^(?:grand total|bill (?:amount|total)|amount due|total(?: amount| due| paid)?)[ \t]*[:：]?[ \t]*[\d₱$]/im.test(opticalText);
   const { body, footer } = layoutText === settlementText || layout.footer || useOpticalRows
     ? layout : { body: settlementText, footer: null };
   const settlementEvidence = readReceiptSettlementEvidence(body);

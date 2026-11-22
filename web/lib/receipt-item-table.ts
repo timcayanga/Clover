@@ -5,7 +5,48 @@ import { isReceiptCurrencyCode } from "./receipt-currency-evidence";
 // A purchase table must agree with two independently printed totals before it
 // can replace the general OCR parser's line items.
 export function readReconciledItemTable(text: string) {
-  return readQuantityTable(text) ?? readRegisterServiceTable(text);
+  return readQuantityTable(text) ?? readRegisterServiceTable(text) ?? readCountedGrossTable(text);
+}
+
+// Some tills omit column headings and print the quantity count under the
+// purchases. The count, gross, and separately printed payable must all agree.
+export function readCountedGrossTable(text: string) {
+  if (!/^\s*total (?:[qo]ty|quantity)\b/im.test(text) || !/^\s*gross amount\b/im.test(text)) return null;
+  const lines = text.trim().split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const counts = lines.filter(line => /^total (?:[qo]ty|quantity)\b/i.test(line));
+  if (counts.length !== 1) return null;
+  const end = lines.indexOf(counts[0]);
+  const count = lines[end].match(/^total (?:[qo]ty|quantity)\s*:?\s*(\d*)$/i);
+  if (!count) return null;
+  const quantity = count[1] || lines[end + 1];
+  if (!/^[1-9]\d*$/.test(quantity ?? "")) return null;
+  const gross = lines[end + (count[1] ? 1 : 2)]?.match(/^gross amount\s*:?\s*(\d+(?:,\d{3})*\.\d{2})$/i);
+  if (!gross || lines.filter(line => /^gross amount\b/i.test(line)).length !== 1) return null;
+  const total = gross[1].replace(/,/g, "");
+  const payableLabel = /^(?:bill (?:amount|total)|grand total|amount due|total(?: amount| due| paid)?)\b/i;
+  if (lines.slice(0, end).some(line => payableLabel.test(line))) return null;
+  const footer = lines.slice(end + 1);
+  if (footer.some(line => /^(?:discount|service charge|tip|rounding|balance due|sub[ -]?total)\b/i.test(line))) return null;
+  const payables = footer.filter(line => payableLabel.test(line));
+  if (Number(total) <= 0 || !payables.length || payables.some(line => {
+    const value = line.replace(payableLabel, "").trim().replace(/^:\s*/, "");
+    return !/^\d+(?:,\d{3})*\.\d{2}$/.test(value) || value.replace(/,/g, "") !== total;
+  })) return null;
+  const settlement = readReceiptSettlementEvidence(text);
+  if (settlement?.kind !== "payable" || settlement.amount !== Number(total)) return null;
+  const items: { description: string; quantity: number; amount: string }[] = [];
+  for (let i = end - 1; i >= 0; i--) {
+    let row = lines[i];
+    if (/^\d+(?:,\d{3})*\.\d{2}$/.test(row) && i > 0) row = lines[--i] + " " + row;
+    const fields = row.match(/^(\p{L}.+?)\s+([1-9]\d*)\s+(\d+(?:,\d{3})*\.\d{2})$/u);
+    if (!fields || /^(?:table|guest|cash|discount|service|vat|change|reference|subtotal|total)\b/i.test(fields[1])) break;
+    items.push({ description: fields[1], quantity: Number(fields[2]), amount: fields[3].replace(/,/g, "") });
+  }
+  const sum = items.reduce((cents, item) => cents + Number(item.amount.replace(".", "")), 0);
+  const units = items.reduce((n, item) => n + item.quantity, 0);
+  if (items.length < 2 || !Number.isSafeInteger(sum) || sum !== Number(total.replace(".", "")) ||
+      !Number.isSafeInteger(units) || units !== Number(quantity)) return null;
+  return { items: items.reverse(), subtotal: total, total, serviceCharge: null };
 }
 
 export const receiptNameFirstPriceHeader = /^[ \t]*(?:item(?:[ \t]+description)?|description)[ \t]+(?:qty|quantity)[ \t]+(?:unit[ \t]+)?price[ \t]+(?:line[ \t]+total|total|amount)[ \t]*\r?$/im;
@@ -468,7 +509,7 @@ export function hasPrintedItemizedTotal(text: string, total: string, requirePurc
   });
   if (paidConflict || totals.some(value => value !== total)) return false;
   if (reconcilesDiscountedVatReceipt(text, total)) return true;
-  const quantityTable = readQuantityTable(text);
+  const quantityTable = readQuantityTable(text) ?? readCountedGrossTable(text);
   if (quantityTable) return quantityTable.total === total;
   const charged = readChargedReceiptTable(text);
   if (requirePurchaseTable && charged?.total === total && reconcilesTaxAndService(text, charged)) return true;

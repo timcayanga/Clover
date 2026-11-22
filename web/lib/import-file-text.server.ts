@@ -1,8 +1,8 @@
 import { isDelimitedImport, importDocumentMediaType, importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
 import { purchaseInvoiceHeading } from "./purchase-document-payment";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "./receipt-price-column";
-import { recordReceiptQuantityCrop, recordReceiptPriceCrop, readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
-import { reconcilesReviewedDiscountPhoto, readChargedReceiptTable, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
+import { recordReceiptQuantityCrop, recordReceiptTableCrop, readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
+import { readCountedGrossTable, reconcilesReviewedDiscountPhoto, readChargedReceiptTable, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
 import { measureImportReader, recordImportReaderTiming, recordImportWork, reportImportReaderEvent } from "./import-timing";
@@ -258,7 +258,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v23";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v24";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -926,7 +926,7 @@ async function verifyReceiptPriceCrop(source: string, image: ImagePreview) {
       if (!reading) break;
       readings.push(reading);
       const items = recoverReceiptPrices(plan, readings);
-      if (items) return recordReceiptPriceCrop(source, plan.original, items, plan.bounds, readings);
+      if (items) return recordReceiptTableCrop(source, plan.original, items, plan.bounds, readings);
     }
     return source;
   } catch {
@@ -1009,6 +1009,59 @@ async function recoverReceiptMarginQuantities(source: string, image: ImagePrevie
   }
 }
 
+// When the till printed a unit count, reread just the purchase columns.
+async function recoverCountedReceiptQuantities(source: string, image: ImagePreview, draft: ReturnType<typeof parseReceiptPhotoText>) {
+  const text = readLocalReceiptOcrText(source);
+  if (!text || draft.items.length < 3 || draft.items.length > 40 || draft.subtotal !== draft.total ||
+      !/^total [qo]ty +\d+$/im.test(text) || !draft.items.some(item => item.quantity == null)) return source;
+  const rows = draft.items.map(item => item.description + (item.quantity == null ? "" : " " + item.quantity) + " " + item.amount);
+  const lines = text.split("\n");
+  const start = lines.indexOf(rows[0]);
+  const grossIndex = start + rows.length + 1;
+  if (start < 0 || rows.some((row, i) => lines[start + i] !== row) ||
+      !/^gross amount +[\d,.]+$/i.test(lines[grossIndex] ?? "")) return source;
+  const blocks = readReceiptOpticalEvidence(source);
+  const first = blocks.filter(b => b.text === draft.items[0].description);
+  const gross = blocks.filter(b => /^gross amount$/i.test(b.text));
+  if (first.length !== 1 || gross.length !== 1) return source;
+  const area = blocks.filter(b => b.box[1] >= first[0].box[1] && b.box[1] <= gross[0].box[3]);
+  if (!area.length) return source;
+  const left = Math.max(0, Math.floor((Math.min(...area.map(b => b.box[0])) - .02) * 100) / 100);
+  const top = Math.max(0, first[0].box[1] - .024);
+  const right = Math.min(1, Math.ceil((Math.max(...area.map(b => b.box[2])) + .01) * 100) / 100);
+  const bottom = Math.min(1, Math.ceil((Math.max(...area.map(b => b.box[3])) + .004) * 100) / 100);
+  if ((right - left) * (bottom - top) > .5 || bottom <= top || right <= left) return source;
+  try {
+    const sharp = (await import("sharp")).default;
+    const x = Math.floor(left * image.width), y = Math.floor(top * image.height);
+    const crop = await sharp(image.data, { raw: { width: image.width, height: image.height, channels: 3 } })
+      .extract({ left: x, top: y, width: Math.floor(right * image.width) - x, height: Math.floor(bottom * image.height) - y })
+      .resize({ height: 720, width: 2400, fit: "inside" }).normalize().raw().toBuffer({ resolveWithObject: true });
+    const scan = await readLocalReceiptImage({ data: crop.data, width: crop.info.width, height: crop.info.height });
+    const reading = scan && readLocalReceiptOcrText(scan);
+    if (!reading) return source;
+    const suffix = lines.slice(grossIndex + 1).join("\n");
+    const table = readCountedGrossTable(reading + "\n" + suffix);
+    if (!table || table.total !== draft.total || table.items.length !== rows.length) return source;
+    const count = Number(lines[grossIndex - 1].match(/^total [qo]ty +(\d+)$/i)?.[1]);
+    if (table.items.reduce((n, item) => n + item.quantity, 0) !== count) return source;
+    for (const [i, item] of draft.items.entries()) {
+      const recovered = table.items[i];
+      if (item.amount !== recovered.amount || (item.quantity != null && item.quantity !== recovered.quantity)) return source;
+      // Require a shared name word as well as the price and row position.
+      const words = new Set(recovered.description.toLowerCase().split(/\W+/).filter(word => word.length > 2));
+      const matching = draft.items.filter(other => other.amount === recovered.amount &&
+        other.description.toLowerCase().split(/\W+/).some(word => words.has(word)));
+      if (matching.length !== 1 || matching[0] !== item) return source;
+      lines[start + i] = item.description + " " + recovered.quantity + " " + item.amount;
+    }
+    return recordReceiptTableCrop(source, rows.join("\n"), lines.slice(start, start + rows.length).join("\n"),
+      [left, top, right, bottom], [reading], "countedQuantityCrop");
+  } catch {
+    return source;
+  }
+}
+
 const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   sourceBytes: Uint8Array;
   classificationContext?: ClassificationContext;
@@ -1062,6 +1115,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
         parsed.items.filter(item => item.quantity == null).length >= 2) {
       verified = await recoverReceiptMarginQuantities(verified, image);
     }
+    verified = await recoverCountedReceiptQuantities(verified, image, parsed);
     return verifyReceiptDateCrop(verified, image);
   };
   const purchase = await verifiedPurchase(firstOptical, opticalPreview);
