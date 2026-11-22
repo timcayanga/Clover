@@ -138,3 +138,7 @@ Use existing institution aliases to keep bank/credit/wallet payments out of this
 ## Printed statement balance boundaries
 
 Keep source line breaks when reading opening and closing balance labels, including comma-decimal amounts. A flattened document can attach its final amount to an earlier opening label. Preserve independent printed values and unknowns; do not infer or rewrite existing confirmed balances from this correction.
+
+## Upload reader selection
+
+An image named with the standalone word `receipt` or `resibo` uses the receipt reader. Filename routing does not establish merchant, category, date, amount, or confirmation. Preserve normal confidence and review checks.

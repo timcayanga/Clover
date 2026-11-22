@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { isPhotoRetakeMessage } from "../../shared/import-photo-retake";
+import { getImportRecovery } from "@/lib/import-recovery.client";
 import { ImportErrorToast } from "@/components/import-error-toast";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { buildReceiptSummaryFromReceiptTransaction } from "@/lib/import-receipt-summary";
@@ -106,6 +107,7 @@ export function GlobalImportActivity() {
   const [pageModalActive, setPageModalActive] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [accountsSplashActive, setAccountsSplashActive] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const controlBusyRef = useRef(false);
   const shouldShowOnCurrentPath = canShowImportActivityOnPath(pathname);
 
@@ -617,6 +619,18 @@ export function GlobalImportActivity() {
     const spec = getImportErrorSpecForCode(code);
     const receiptReviewId = /Review the .+ to finish this receipt\./.test(activity.errorMessage ?? "") ? activity.importFileId : null;
     const photoRetakeMessage = isPhotoRetakeMessage(activity.errorMessage) ? activity.errorMessage : null;
+    const recovery = getImportRecovery(activity);
+    const retry = async () => {
+      if (retrying) return;
+      if (!recovery) {
+        handleClose();
+        router.push("/transactions?import=1");
+        return;
+      }
+      setRetrying(true);
+      try { await recovery.retry(); } finally { setRetrying(false); }
+    };
+    const retryProps = { onRetry: () => void retry(), retrying, retryLabel: recovery ? "Retry" : "Choose file again" };
     if (code === "I-104" || receiptReviewId || photoRetakeMessage) {
       return (
         <ImportUploadDock
@@ -632,6 +646,7 @@ export function GlobalImportActivity() {
           errorTitle={photoRetakeMessage ? "Clearer photo needed" : receiptReviewId ? "Receipt needs review" : activity.errorTitle || spec.title || "File not readable"}
           errorNextSteps={activity.errorNextSteps ?? getImportErrorNextSteps(code)}
           onClose={handleClose}
+          {...(photoRetakeMessage ? {} : retryProps)}
           reviewImportId={receiptReviewId}
           onReviewSaved={() => {
             publishWorkspaceDataChange({ workspaceId: activity.workspaceId, source: "transactions", affected: ["transactions", "accounts", "home", "reports"], path: `/api/imports/${activity.importFileId}/receipt-draft`, revision: Date.now() });
@@ -643,6 +658,7 @@ export function GlobalImportActivity() {
 
     return (
       <ImportErrorToast
+        {...(code === "I-108" ? {} : retryProps)}
         code={code}
         fileName={activity.fileName}
         title={activity.errorTitle || spec.title || "Clover hit an import snag"}

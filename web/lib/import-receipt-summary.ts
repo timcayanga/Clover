@@ -26,6 +26,7 @@ type BuildOptimisticSummary = (params: {
 }) => UploadInsightsSummary;
 
 type ReceiptDocumentLike = {
+  transactionId?: string | null;
   total?: string | null;
   transactionDate?: string | null;
   merchantRaw?: string | null;
@@ -73,7 +74,7 @@ export const buildReceiptPreviewTransactions = (
 
   return [
     {
-      id: `optimistic-${params.importFileId}-receipt`,
+      id: params.receiptDocument.transactionId?.trim() || `optimistic-${params.importFileId}-receipt`,
       importFileId: params.importFileId,
       sourceRowIndex: 1,
       accountId: params.accountId,

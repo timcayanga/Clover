@@ -10,6 +10,9 @@ type ImportErrorToastProps = {
   message: string;
   nextSteps: string[];
   fileName?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
+  retryLabel?: string;
   onClose: () => void;
 };
 
@@ -26,7 +29,7 @@ const truncateMiddle = (value: string, maxLength = 52) => {
   return `${value.slice(0, leading)}…${value.slice(-trailing)}${extension}`;
 };
 
-export function ImportErrorToast({ code, title, message, nextSteps, fileName = null, onClose }: ImportErrorToastProps) {
+export function ImportErrorToast({ code, title, message, nextSteps, fileName = null, onClose, onRetry, retrying, retryLabel = "Retry" }: ImportErrorToastProps) {
   return (
     <aside className="import-error-toast glass" role="alert" aria-live="assertive">
       <div className="import-error-toast__eyebrow">Import issue</div>
@@ -50,6 +53,7 @@ export function ImportErrorToast({ code, title, message, nextSteps, fileName = n
       </ul>
 
       <div className="import-error-toast__actions">
+        {onRetry ? <button type="button" className="button button-secondary button-small" disabled={retrying} onClick={onRetry}>{retrying ? "Retrying…" : retryLabel}</button> : null}
         <Link href="/transactions?manual=1" className="button button-primary button-small" onClick={onClose} prefetch={false}>
           Add manually
         </Link>

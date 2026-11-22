@@ -18,6 +18,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
+import { AmountPasteHandler } from "@/components/amount-paste-handler";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
@@ -1968,6 +1969,7 @@ export function CloverShell({
 
   return (
     <CloverChromeContext.Provider value={{ closeChrome, setMobileOverlayChrome }}>
+      <AmountPasteHandler />
       <RegionalPreferencesSync />
       <MobileReturnGreeting />
       <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
@@ -2565,6 +2567,8 @@ export function CloverShell({
       </nav>
 
       <main
+        id="main-content"
+        tabIndex={-1}
         className={`content content--${active} ${shouldShowBackButton ? "content--has-back" : ""} ${mobileBackAction || /Details|Edit |Create |Add /.test(title) ? "content--plan-detail" : ""} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}${
           mobileLeadingAction ? " content--has-mobile-leading-action" : ""
         }${mobileSubheader ? " content--has-mobile-subheader" : ""}`}

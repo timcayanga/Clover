@@ -289,6 +289,7 @@ export const inferImportModeForFile = (file: ImportFileLike, defaultMode: Import
     return "statement";
   }
 
+  if (/\bresibo\b/i.test(receiptSignalName)) return "receipt";
   return defaultMode;
 };
 

@@ -52,6 +52,7 @@ import {
 } from "@/lib/import-file-validation";
 import { type ImportImageMode } from "@/lib/import-image-mode";
 import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
+import { registerImportRecovery, resolveImportRetryAction } from "@/lib/import-recovery.client";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import {
@@ -394,8 +395,6 @@ const clearImportInteractionLocks = () => {
 
   delete document.body.dataset.cloverImportModalLocks;
   delete document.body.dataset.cloverImportModalOpen;
-  delete document.body.dataset.cloverImportModalVisible;
-  delete document.body.dataset.cloverImportModalVisibleCount;
 };
 
 const getImportErrorCode = (error: unknown) => {
@@ -1795,7 +1794,7 @@ export function ImportFilesModal({
     addFiles(incoming);
   };
 
-  const updateItem = (id: string, patch: Partial<QueuedFile>) => {
+  const updateItem = (id: string, patch: Partial<QueuedFile>, options?: { retry?: boolean }) => {
     const nextItems = itemsRef.current.map((item) => {
         if (item.id !== id) {
           return item;
@@ -1814,7 +1813,7 @@ export function ImportFilesModal({
           };
         }
 
-        if (item.status === "error" && patch.status && patch.status !== "error") {
+        if (item.status === "error" && patch.status && patch.status !== "error" && !options?.retry) {
           return item;
         }
 
@@ -6978,7 +6977,7 @@ export function ImportFilesModal({
       }
 
       const recoverableStatus = importFileId
-        ? await fetch(`/api/imports/${importFileId}/status`)
+        ? await fetch(`/api/imports/${importFileId}/status`, { signal: AbortSignal.timeout(10_000) })
             .then(async (response) => {
               if (!response.ok) {
                 return null;
@@ -8284,7 +8283,7 @@ export function ImportFilesModal({
           error: null,
           importFileId: item.importFileId,
           targetAccountId: resumedAccountId ?? item.targetAccountId,
-          importedRows: item.importedRows ?? 0,
+          importedRows: typeof payload.importedRows === "number" ? payload.importedRows : item.importedRows ?? 0,
           progress: 100,
           progressLabel: "Done",
         });
@@ -8322,29 +8321,35 @@ export function ImportFilesModal({
         errorMessage: null,
       });
 
-      await monitorQueuedImportAndConfirm(
-        itemId,
-        item.importFileId,
-        resumedAccountId ?? item.targetAccountId ?? null,
-        {
-          fileName: item.file.name,
-          fallbackAccountName:
-            deriveStatementFallbackAccountName(item.file.name, null, null, null) ?? "Imported statement",
-          guessedAccountName: null,
-          guessedInstitution: null,
-          guessedAccountNumber: null,
-          guessedAccountType: null,
-          accountName: null,
-          institution: null,
-          accountNumber: null,
-          accountType: null,
-          optimisticAccountId: resumedAccountId && !resumedAccountId.startsWith("optimistic-") ? resumedAccountId : item.targetAccountId,
-          initialBalance: null,
-          password: item.password || undefined,
-          previewTransactions: [],
-        }
-      );
-
+      const resumedImportMode = inferImportModeForFile(item.file, item.importMode ?? "statement");
+      if (resumedImportMode !== "statement") {
+        await monitorQueuedDocumentImport(itemId, item.importFileId, resumedImportMode, item.file.name, {
+          keepWatchingAfterVisible: resumedImportMode === "receipt",
+        });
+      } else {
+        await monitorQueuedImportAndConfirm(
+          itemId,
+          item.importFileId,
+          resumedAccountId ?? item.targetAccountId ?? null,
+          {
+            fileName: item.file.name,
+            fallbackAccountName:
+              deriveStatementFallbackAccountName(item.file.name, null, null, null) ?? "Imported statement",
+            guessedAccountName: null,
+            guessedInstitution: null,
+            guessedAccountNumber: null,
+            guessedAccountType: null,
+            accountName: null,
+            institution: null,
+            accountNumber: null,
+            accountType: null,
+            optimisticAccountId: resumedAccountId && !resumedAccountId.startsWith("optimistic-") ? resumedAccountId : item.targetAccountId,
+            initialBalance: null,
+            password: item.password?.trim() || undefined,
+            previewTransactions: [],
+          }
+        );
+      }
       setMessage(`Resumed ${item.file.name}.`);
 
       capturePostHogClientEvent("import_retry_succeeded", {
@@ -8451,6 +8456,56 @@ export function ImportFilesModal({
 
   const readyToImport = items.some((item) => item.status === "pending" || (item.status === "needs_password" && item.password) || item.confirmationState === "staged");
 
+  const retryImportRef = useRef<() => Promise<void>>(async () => undefined);
+  const retryInFlightRef = useRef(false);
+  retryImportRef.current = async () => {
+    const item = currentErrorItem && itemsRef.current.find((entry) => entry.id === currentErrorItem.id);
+    if (!item || retryInFlightRef.current || busyRef.current || item.confirmationState === "confirmed") return;
+    retryInFlightRef.current = true;
+    setBusy(true);
+    try {
+      const action = await resolveImportRetryAction(item.importFileId);
+      lastImportActivityRef.current = null;
+      clearImportActivity();
+      retiredImportActivityFileNamesRef.current.delete(item.file.name);
+      primaryVisibilityCompletedRef.current = false;
+      updateItem(item.id, {
+        status: "pending", confirmationState: action === "upload" ? "none" : item.confirmationState, progress: 0,
+        progressLabel: "Preparing file", error: null, errorCode: null,
+        errorTitle: null, errorNextSteps: null,
+      }, { retry: true });
+      if (action === "resume") {
+        await handleResumeImport(item.id);
+      } else {
+        setValidationNotice(null);
+        autoStartRef.current = true;
+        scheduleQueuedImport();
+      }
+    } catch (error) {
+      closeImportAfterError(item.id, "monitor", item.file.name, error instanceof Error ? error.message : "Unable to retry this upload.");
+    } finally {
+      retryInFlightRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!open || !currentErrorItem) return;
+    return registerImportRecovery({
+      workspaceId,
+      importFileId: currentErrorItem.importFileId,
+      fileName: currentErrorItem.file.name,
+      retry: () => retryImportRef.current(),
+      dismiss: () => {
+        lastImportActivityRef.current = null;
+        itemsRef.current = [];
+        setItems([]);
+        clearImportActivity();
+        onClose();
+      },
+    });
+  }, [open, workspaceId, currentErrorItem?.id, currentErrorItem?.importFileId, onClose]);
+
   if (!open) {
     return null;
   }
@@ -8484,6 +8539,7 @@ export function ImportFilesModal({
     ) : showImportProgressDock ? (
       <ImportUploadDock
         open
+        owner="modal"
         tone={currentErrorItem ? "error" : hasCompletedBatch ? "success" : "default"}
         fileName={currentErrorItem?.file.name ?? activitySnapshotForDisplay?.fileName ?? activeProgressItem?.file.name ?? null}
         fileIndex={
@@ -8532,6 +8588,8 @@ export function ImportFilesModal({
           publishWorkspaceDataChange({ workspaceId, source: "transactions", affected: ["transactions", "accounts", "home", "reports"], path: `/api/imports/${currentErrorItem?.importFileId}/receipt-draft`, revision: Date.now() });
           router.refresh();
         }}
+        onRetry={currentErrorItem ? () => void retryImportRef.current() : undefined}
+        retrying={busy}
         paused={uploadPaused}
         canControl={busy && !currentErrorItem}
         onPauseToggle={handleToggleUploadPause}

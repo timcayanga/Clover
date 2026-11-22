@@ -114,7 +114,7 @@ const SPEC_BY_STAGE: Record<
     title: "Parsing issue",
     message: "Clover could not finish reading the file.",
     nextSteps: [
-      "Click Resume import if Clover shows it, or upload the original file again.",
+      "Click Retry to try this upload again. If you closed Clover, choose the original file again.",
       "If Clover still stalls, add the missing transactions manually in Transactions.",
       "If the statement looks off after import, check Review before confirming anything.",
     ],

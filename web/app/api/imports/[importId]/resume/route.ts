@@ -61,6 +61,29 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         retryable: false, importFileId: importId }, { status: 409 });
     }
 
+    // Receipts link their expense through ReceiptDocument, rather than the
+    // statement Transaction.importFileId path. Replaying an already saved
+    // receipt must never enqueue its parser or touch the existing expense.
+    const [hasReceipts, hasDocuments] = await Promise.all([
+      hasCompatibleTable("ReceiptDocument"), hasCompatibleTable("DocumentImport"),
+    ]);
+    const savedReceipt = hasReceipts && hasDocuments
+      ? await prisma.receiptDocument.findFirst({
+          where: { workspaceId: importFile.workspaceId as string, documentImport: { importFileId: importId } },
+          select: { transaction: { select: { id: true, accountId: true, deletedAt: true } } },
+        })
+      : null;
+    if (savedReceipt?.transaction && !savedReceipt.transaction.deletedAt) {
+      return NextResponse.json({
+        ok: true, queued: false, skipped: true,
+        telemetryPhase: "complete", telemetryLabel: "Import complete",
+        telemetryMessage: "Your receipt is already saved in Clover.",
+        canResume: false, resumeReason: "receipt_already_saved",
+        importFileId: importId, accountId: savedReceipt.transaction.accountId,
+        receiptTransactionId: savedReceipt.transaction.id, importedRows: 1,
+      });
+    }
+
     const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
       ? await prisma.accountStatementCheckpoint.findUnique({
           where: { importFileId: importId },

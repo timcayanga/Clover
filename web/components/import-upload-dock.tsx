@@ -27,13 +27,17 @@ type ImportUploadDockProps = {
   onCancel?: () => void;
   onClose?: () => void;
   reviewImportId?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
+  retryLabel?: string;
+  owner?: "modal" | "global";
   onReviewSaved?: () => void;
 };
 
 
 export function ImportUploadDock({ open, fileIndex, fileTotal, completedFiles, progress, detail,
   phaseLabel, tone = "default", errorTitle, errorCode, paused = false, canControl = false,
-  onPauseToggle, onCancel, onClose, reviewImportId, onReviewSaved }: ImportUploadDockProps) {
+  onPauseToggle, onCancel, onClose, reviewImportId, onReviewSaved, onRetry, retrying, retryLabel = "Retry", owner = "global" }: ImportUploadDockProps) {
   const [reviewOpen, setReviewOpen] = useState(false);
   useEffect(() => { setReviewOpen(false); }, [reviewImportId, open]);
   useEffect(() => {
@@ -52,7 +56,7 @@ export function ImportUploadDock({ open, fileIndex, fileTotal, completedFiles, p
   const value = isComplete ? 100 : Math.min(rawValue, ceiling, 99);
   const progressLabel = paused ? "Import paused" : tone === "error" ? errorTitle || "Import needs attention" : getImportStageLabel(phaseLabel || detail || "", value);
   const settled = isComplete || tone === "error";
-  return <div className={`import-upload-dock import-upload-dock--${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>
+  return <div data-clover-import-owner={owner} className={`import-upload-dock import-upload-dock--${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>
     <div className="import-upload-dock__inner glass">
       <div className="import-upload-dock__step">
         <span>{isComplete ? "Import complete" : progressLabel}</span>
@@ -72,6 +76,7 @@ export function ImportUploadDock({ open, fileIndex, fileTotal, completedFiles, p
         <span style={{ width: `${value}%` }}/>
       </div>
       {tone === "error" && (errorCode === "I-108" || isPhotoRetakeMessage(detail)) ? <p>{detail}</p> : null}
+      {tone === "error" && !reviewImportId && onRetry ? <button type="button" className="import-upload-dock__review" disabled={retrying} onClick={onRetry}>{retrying ? "Retrying…" : retryLabel}</button> : null}
       {tone === "error" && reviewImportId ? <button type="button" className="import-upload-dock__review" onClick={() => setReviewOpen(true)}>Review receipt</button> : null}
     </div>
   </div>;
