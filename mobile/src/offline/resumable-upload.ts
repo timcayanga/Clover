@@ -43,15 +43,16 @@ export async function uploadInParts(
   // immediately because a part request can fail before finalization is reached.
   const cachedText = normalizeDeviceTextEvidence(file.deviceText);
   const prepared = control.preparedDeviceText;
-  let latestFull: DeviceTextEvidence | undefined;
-  if (prepared && !cachedText?.complete) {
-    void prepared.full.then(value => { latestFull = normalizeDeviceTextEvidence(value) ?? undefined; }, () => {});
-  }
-  const reading = cachedText ? null : prepared
-    ? prepared.partial ? Promise.race([prepared.full, prepared.partial]) : prepared.full
-    : (readDeviceText
+  const fullRead = cachedText?.complete ? undefined : prepared?.full ?? (readDeviceText
     ? Promise.resolve().then(() => control.signal.aborted ? undefined : readDeviceText(file, source)).catch(() => undefined)
-    : null);
+    : undefined);
+  let latestFull: DeviceTextEvidence | undefined;
+  if (fullRead) {
+    void fullRead.then(value => { latestFull = normalizeDeviceTextEvidence(value) ?? undefined; }, () => {});
+  }
+  const reading = fullRead && prepared?.partial
+    ? Promise.race([fullRead, prepared.partial]).catch(() => undefined)
+    : fullRead;
   const startedAt = file.uploadTransfer?.startedAt ?? Date.now();
   const attemptNumber = file.uploadTransfer?.attempts ?? 1;
   const transferStarted = performance.now();

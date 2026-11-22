@@ -1,6 +1,6 @@
 import { isDelimitedImport, importDocumentMediaType, importMediaType, FINANCIAL_EXCHANGE_IMPORT_EXTENSIONS, FINANCIAL_EXCHANGE_IMPORT_CONTENT_TYPES } from "./import-format-policies";
 import { readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
-import { canPreviewLocalReceiptItems, readReconciledItemTable } from "./receipt-item-table";
+import { canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
 import { measureImportReader, recordImportReaderTiming, recordImportWork, reportImportReaderEvent } from "./import-timing";
@@ -1082,9 +1082,11 @@ function hasVerifiedPdfReceipt(data: Uint8Array, text: string) {
   const pages = pdfNativePageReads.get(data);
   if (pages?.length !== 1 || pages[0].trim() !== text.trim() ||
       !/\breceipt\b/i.test(text) || /[\uFFFD\uE000-\uF8FF]|\(cid:\d+\)/u.test(text)) return false;
+  if (resolvePositiveImportDocumentRoute(text)?.mode !== "receipt") return false;
+  const { total } = parseReceiptPhotoText(text);
+  if (!total) return false;
   const table = readReconciledItemTable(text);
-  return Boolean(table && resolvePositiveImportDocumentRoute(text)?.mode === "receipt" &&
-    parseReceiptPhotoText(text).total === table.total);
+  return table ? table.total === total : hasPrintedItemizedTotal(text, total, true);
 }
 
 export async function verifyPdfStatementPageCoverage(data: Uint8Array, selectedText: string, password?: string, baseUrl?: string | null) {

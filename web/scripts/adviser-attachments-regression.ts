@@ -2,10 +2,20 @@ import assert from "node:assert/strict";
 import {
   adviserFileProblem,
   adviserAttachmentIds,
+  decodeAdviserText,
 } from "../lib/adviser-attachments";
 import { mobileAdviserInput } from "../lib/mobile-adviser-input";
 import { mobileOperation } from "../lib/mobile-api-policy";
 import { normalizeEntryProposal } from "../lib/adviser-entry-schema";
+const note = "Lunch at Café — ₱580.00";
+for (const bom of ["", "\ufeff"]) {
+  const little = Buffer.from(bom + note, "utf16le");
+  assert.equal(decodeAdviserText(little), note);
+  assert.equal(decodeAdviserText(Buffer.from(little).swap16()), note);
+}
+assert.equal(decodeAdviserText(Buffer.from(note)), note);
+assert.throws(() => decodeAdviserText(Buffer.from([0xff, 0xfe, 0x41])), /No readable text/);
+assert.throws(() => decodeAdviserText(Buffer.from([0xc3, 0x28])), /No readable text/);
 const id = "adviser_file_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 for (const name of [
   "receipt.pdf",

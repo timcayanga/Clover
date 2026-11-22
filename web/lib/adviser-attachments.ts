@@ -1,3 +1,4 @@
+import { decodeUnicodeTable } from "../../shared/unicode-table";
 import { uploadSizeProblem } from "../../shared/native-upload";
 import { importMediaType, isDelimitedImport, SPREADSHEET_IMPORT_CONTENT_TYPES } from "./import-format-policies";
 import { z } from "zod";
@@ -17,6 +18,19 @@ export const isAdviserPhoto = (file: AttachmentFile) =>
     /^image\/(?:png|jpe?g|webp|hei[cf](?:-sequence)?)$/.test(importMediaType(file.type)));
 export const isAdviserText = (file: AttachmentFile) => /\.(txt|md)$/i.test(file.name) ||
   (!hasExtension(file.name) && ["text/plain", "text/markdown"].includes(importMediaType(file.type)));
+export function decodeAdviserText(bytes: Uint8Array): string {
+  let text: string | null;
+  try {
+    text = decodeUnicodeTable(bytes);
+  } catch {
+    text = null;
+  }
+  if (text === null || text.includes("\u0000")) {
+    throw new Error("No readable text was found. Export this file as UTF-8 or UTF-16 and try again.");
+  }
+  return text;
+}
+
 export function adviserFileProblem(file: AttachmentFile) {
   if (!file.size || file.size < 0) return "Choose a non-empty file.";
   if (isAdviserPhoto(file)) {

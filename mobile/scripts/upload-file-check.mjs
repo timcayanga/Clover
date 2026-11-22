@@ -89,6 +89,7 @@ class MobileUtf8Decoder extends TextDecoder {
   }
 }
 const { previewFile } = load('../src/offline/file-preview.ts', {
+  '../../../shared/device-text-evidence': load('../../shared/device-text-evidence.ts', {}),
   '../../../shared/import-format-policies': load('../../shared/import-format-policies.ts', {}),
   '../../../shared/native-upload': limits,
   './table-preview': load('../src/offline/table-preview.ts', {}),
@@ -98,6 +99,17 @@ const { previewFile } = load('../src/offline/file-preview.ts', {
   'expo-file-system': { File: class { async bytes() { return tableBytes; } } },
   '../../modules/clover-local-ai': { CloverLocalAI: { extractText: async () => ({ text: 'Total 2.50', pagesRead: 1, totalPages: 1, complete: true }) } },
 });
+for (const source of ['apple_vision', 'google_mlkit']) {
+  const deviceText = { version: 1, source, text: 'First page only', complete: true, pagesRead: 1, totalPages: 2, durationMs: 30 };
+  const file = { ...large, name: 'report.pdf', deviceText };
+  assert.match(await previewFile(file, null), /Read 1 of 2 pages. Partial preview/);
+  assert.equal(previewReads.length, 0);
+}
+const invalidPreview = await previewFile({
+  ...large, name: 'receipt.jpg', deviceText: { text: 'stale cache' },
+}, null);
+assert.match(invalidPreview, /Total 2.50/);
+assert.doesNotMatch(invalidPreview, /stale cache/);
 for (const mimeType of ['application/pdf; version=1.7', 'image/jpeg']) {
   assert.match(await previewFile({ ...large, name: 'Document', mimeType }, null), /Total 2.50/);
 }

@@ -7,8 +7,15 @@ import type { QueuedFile, UploadSource } from "./file-queue";
 import { withUploadCopy } from "./file-storage";
 import { tryRunLocalOcr } from "./local-ocr-slot";
 import { delimitedPreview } from "./table-preview";
+import { normalizeDeviceTextEvidence, type DeviceTextEvidence } from "../../../shared/device-text-evidence";
+
+function formatTextPreview(extracted: Pick<DeviceTextEvidence, "text" | "pagesRead" | "totalPages" | "complete">) {
+  return `Local text preview · Needs review\nRead ${extracted.pagesRead} of ${extracted.totalPages} pages. ${extracted.complete ? "" : "Partial preview. "}OCR may contain errors; no financial rows are confirmed.\n\n${extracted.text || "No readable text found. Connect for full processing."}`;
+}
+
 export async function previewFile(file: QueuedFile, bytes: UploadSource) {
-  if (file.deviceText) return `Local text preview · Needs review\nOCR may contain errors; no financial rows are confirmed.\n\n${file.deviceText.text}`;
+  const cached = normalizeDeviceTextEvidence(file.deviceText);
+  if (cached) return formatTextPreview(cached);
   if (isDelimitedImport(file.name, file.mimeType)) {
     // Even the densest UTF-8 encoding cannot fit this many bytes in the local preview.
     if (file.size > 200_000 * 4 + 3)
@@ -32,5 +39,5 @@ export async function previewFile(file: QueuedFile, bytes: UploadSource) {
     throw new Error("This file could not be previewed on this device. You can upload the original for Clover to read instead.");
   });
   if (!extracted) throw new Error("Clover is already reading a file. Try previewing again in a moment.");
-  return `Local text preview · Needs review\nRead ${extracted.pagesRead} of ${extracted.totalPages} pages. ${extracted.complete ? "" : "Partial preview. "}OCR may contain errors; no financial rows are confirmed.\n\n${extracted.text || "No readable text found. Connect for full processing."}`;
+  return formatTextPreview(extracted);
 }

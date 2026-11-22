@@ -2,7 +2,7 @@ import { readLocalReceiptOcrText, receiptWordReplacements } from "./local-receip
 import { randomUUID, createHash } from "node:crypto";
 import { uploadObject } from "./s3";
 import { deleteImportObject } from "./s3-delete";
-import { adviserFileProblem, isAdviserText } from "./adviser-attachments";
+import { adviserFileProblem, decodeAdviserText, isAdviserText } from "./adviser-attachments";
 import { prisma } from "./prisma";
 import { MAX_ADVISER_ATTACHMENT_TEXT } from "./adviser-attachments";
 export async function loadAdviserAttachments(
@@ -58,7 +58,7 @@ export async function storeAdviserAttachment(
   const bytes = "sourceBytes" in file ? file.sourceBytes : new Uint8Array(await file.arrayBuffer());
   const isPlainText = isAdviserText(file);
   const extracted = isPlainText
-    ? new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+    ? decodeAdviserText(bytes)
     : await (
         await import("@/lib/import-file-text.server")
       ).readUploadedFileText(file, undefined, {sourceBytes:bytes});

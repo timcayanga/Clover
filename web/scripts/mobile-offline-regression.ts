@@ -929,6 +929,22 @@ test("native upload reads OCR concurrently, forwards it only on completion and r
   await uploadInParts(request,photo,"b3JpZ2luYWw=",control,read);
   assert.equal(reads,1,"A transfer retry must not repeat device OCR");
 });
+test("resumed photos can upgrade a cached partial read during transfer", async () => {
+  const cached = { version: 1 as const, source: "apple_vision" as const, text: "Coffee\nTotal 425.00",
+    pagesRead: 1, totalPages: 1, complete: false, durationMs: 30 };
+  const full = { ...cached, complete: true, text: cached.text + "\nTea 425.00" };
+  for (const fresh of [full, undefined]) {
+    let handoff: unknown;
+    await uploadInParts(async <T,>(path: string, options?: RequestInit) => {
+      if (path.includes("/start")) return { parts: [], state: "uploading" } as T;
+      if (path.includes("/complete")) handoff = JSON.parse(String(options?.body)).deviceText;
+      return {} as T;
+    }, { ...file, name: "receipt.jpg", mimeType: "image/jpeg", deviceText: cached }, "b3JpZ2luYWw=",
+    { signal: new AbortController().signal, progress: async () => {} }, async () => fresh);
+    assert.deepEqual(handoff, fresh ?? cached);
+  }
+});
+
 test("early photo recognition overlaps secure retention and upload opening without rereading the image", async () => {
   const evidence = { version: 1 as const, source: "google_mlkit" as const, text: "COFFEE\nTOTAL 425.00",
     pagesRead: 1, totalPages: 1, complete: true, durationMs: 25 };

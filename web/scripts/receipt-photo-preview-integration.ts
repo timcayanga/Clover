@@ -77,19 +77,33 @@ async function verify() {
     if (args[0] === "[import-performance] PDF rasterization requested") rasterizations++;
     info(...args);
   };
-  const pdf = await uploadPdf(expectedBytes).finally(() => { console.info = info; });
+  const quantityReceipt = expectedBytes;
+  let pdf: Response;
+  try {
+    expectedBytes = statementPdf(["Green Cafe", "Official Receipt", "Tea 10.00", "Coffee 20.00", "Gross Amount 30.00", "Bill Amount 30.00"]);
+    const simplePdf = await uploadPdf(expectedBytes);
+    assert.equal(simplePdf.status, 200);
+    const { preview } = await simplePdf.json();
+    assert.equal(preview.total, "30.00");
+    assert.deepEqual(preview.items.map((item: { description: string }) => item.description), ["Tea", "Coffee"]);
+    assert.equal(rasterizations, 0, "Reconciling item prices, gross and payable should skip page rendering");
+    expectedBytes = quantityReceipt;
+    pdf = await uploadPdf(expectedBytes);
+  } finally {
+    console.info = info;
+  }
   assert.equal(rasterizations, 0, "A complete one-page digital receipt should return its reconciled native text");
   assert.equal(pdf.status, 200);
   const {preview} = await pdf.json();
   assert.equal(preview.billDate, null);
   assert.equal(preview.total, "20.00");
   assert.deepEqual(preview.items.map((item: { description: string }) => item.description), ["Tea"]);
-  assert.equal(retained, 3);
+  assert.equal(retained, 4);
   if (process.argv[3]) {
     const locked = await uploadPdf(await readFile(process.argv[3]));
     assert.equal(locked.status, 422);
     assert.equal((await locked.json()).code, "IMPORT_PASSWORD_REQUIRED");
-    assert.equal(retained, 3);
+    assert.equal(retained, 4);
   }
   console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }
