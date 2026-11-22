@@ -6,8 +6,8 @@ import { Field, Notice } from "./ui";
 import { useSession } from "./session";
 
 export type DirectoryPerson = {id: string; name: string; avatarUrl?: string | null; email?: string | null; phone?: string | null};
-type Contact = {name?: string; email?: string; phone?: string};
-const picker = requireOptionalNativeModule<{pick: () => Promise<Contact | null>}>("CloverContactPicker");
+type Contact = {contactId?: string; name?: string; email?: string; phone?: string};
+const picker = requireOptionalNativeModule<{pick: () => Promise<Contact | null>; pickDetail?: (id: string, field: "email" | "phone") => Promise<string | null>}>("CloverContactPicker");
 
 export function AddSplitPerson({initial, people, onSaved, onCancel}: {
   initial: string;
@@ -34,6 +34,21 @@ export function AddSplitPerson({initial, people, onSaved, onCancel}: {
     } catch {setError("Couldn’t open Contacts. You can still enter a name.");}
     finally {pending.current = false; setBusy(false);}
   }
+  async function chooseDetail(field: "email" | "phone") {
+    if (!contact?.contactId || !picker?.pickDetail || pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const value = await picker.pickDetail(contact.contactId, field);
+      if (value) setContact({...contact, [field]: value});
+    } catch {
+      setError(`Choose ${field === "email" ? "an email address" : "a phone number"} for ${contact.name}, or enter it manually.`);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  }
   async function save() {
     if (!clean || pending.current) return;
     const existing = people.find(p => p.name.toLowerCase() === clean.toLowerCase());
@@ -58,7 +73,9 @@ export function AddSplitPerson({initial, people, onSaved, onCancel}: {
     {matches.map(p => <PlanAction key={p.id} title={p.name} onPress={() => setName(p.name)} disabled={busy}/>)}
     {contact && <>
       <Field label="Email" value={contact.email ?? ""} keyboardType="email-address" autoCapitalize="none" onChangeText={email=>setContact({...contact,email})}/>
+      {contact.contactId && picker?.pickDetail && !contact.email && <PlanAction title="Choose Email From Contacts" onPress={() => chooseDetail("email")} disabled={busy}/>}
       <Field label="Phone" value={contact.phone ?? ""} keyboardType="phone-pad" onChangeText={phone=>setContact({...contact,phone})}/>
+      {contact.contactId && picker?.pickDetail && !contact.phone && <PlanAction title="Choose Phone From Contacts" onPress={() => chooseDetail("phone")} disabled={busy}/>}
     </>}
     <View style={{flexDirection:"row",gap:8}}>
       {picker && <PlanAction title="From Contacts" onPress={chooseContact} disabled={busy}/>}

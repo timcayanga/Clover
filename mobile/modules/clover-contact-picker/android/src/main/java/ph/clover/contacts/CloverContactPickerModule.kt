@@ -14,10 +14,11 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.Serializable
 
-private class PickInput : Serializable
+private data class PickInput(val mime: String? = null) : Serializable
 private class PickContract : AppContextActivityResultContract<PickInput, Uri?> {
   override fun createIntent(context: Context, input: PickInput) =
-    Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
+    if (input.mime == null) Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
+    else Intent(Intent.ACTION_PICK).setType(input.mime)
   override fun parseResult(input: PickInput, resultCode: Int, intent: Intent?) =
     if (resultCode == Activity.RESULT_OK) intent?.data else null
 }
@@ -31,8 +32,11 @@ class CloverContactPickerModule : Module() {
       val uri = picker.launch(PickInput()) ?: return@Coroutine null
       val resolver = requireNotNull(appContext.reactContext).contentResolver
       val result = mutableMapOf<String, String>()
-      resolver.query(uri, arrayOf(ContactsContract.Contacts.DISPLAY_NAME), null, null, null)?.use {
-        if (it.moveToFirst()) result["name"] = it.getString(0).orEmpty()
+      resolver.query(uri, arrayOf(ContactsContract.Contacts.DISPLAY_NAME, ContactsContract.Contacts._ID), null, null, null)?.use {
+        if (it.moveToFirst()) {
+          result["name"] = it.getString(0).orEmpty()
+          result["contactId"] = it.getString(1)
+        }
       }
       // Some providers grant only the selected display name.
       try {
@@ -50,6 +54,22 @@ class CloverContactPickerModule : Module() {
         }
       } catch (_: SecurityException) { /* Keep the selected name. */ }
       result
+    }
+    // A picker can grant access to a contact but not its child data URI.
+    // A typed pick grants read access to precisely the selected data row.
+    AsyncFunction("pickDetail") Coroutine { contactId: String, field: String ->
+      val mime = when (field) {
+        "email" -> Email.CONTENT_TYPE
+        "phone" -> Phone.CONTENT_TYPE
+        else -> error("Unknown contact field")
+      }
+      val uri = picker.launch(PickInput(mime)) ?: return@Coroutine null
+      val resolver = requireNotNull(appContext.reactContext).contentResolver
+      resolver.query(uri, arrayOf(ContactsContract.Data.CONTACT_ID, ContactsContract.Data.DATA1),
+        null, null, null)?.use { rows ->
+        check(rows.moveToFirst() && rows.getString(0) == contactId) { "Different contact selected" }
+        rows.getString(1)
+      }
     }
   }
 }
