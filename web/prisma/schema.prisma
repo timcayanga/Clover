@@ -1877,6 +1877,8 @@ model SplitBillGroupCollaborator {
 }
 
 model SplitBillPerson {
+  displayName String?
+  fromContacts Boolean @default(false)
   email     String?
   phone     String?
   id        String   @id @default(cuid())

@@ -122,7 +122,8 @@ export function mobileApiResponse(operation: string, value: unknown) {
     return operation === "circles" ? { circles } : { circle: circles[0] ?? null };
   }
   if (operation === "split-bills" && data.pending) return { pending: { ...pick(data.pending, ["count"]), bills: rows(record(data.pending).bills, ["id", "title", "currency", "remaining"]) } };
-  if (operation === "split-bills" && data.summary) return { summary: pick(data.summary, ["youOwe", "owedToYou"]) };
+  if (operation === "split-bills" && data.summary) return { summary: pick(data.summary, ["youOwe", "owedToYou"]),
+    ...(data.personBalances ? {personBalances:Object.fromEntries(Object.entries(record(data.personBalances)).map(([id, balance])=>[id,pick(balance,["owed","owes"])]))} : {}) };
   if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore", "viewerName"]), bills: Array.isArray(data.bills) ? data.bills.map(splitDetail) : [] };
   if (operation === "split-bill" || operation === "transfer-settlements" || operation === "resolution") return data.bill ? { bill: splitDetail(data.bill) } : pick(data,["deleted","ok"]);
   if (operation === "payment-profile-delete") return pick(data,["deleted","ok"]);

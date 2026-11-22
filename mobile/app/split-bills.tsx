@@ -229,8 +229,9 @@ export default function SplitBills() {
         {...entity}
         group={options.data?.groups.find(g=>g.id===entity.group?.id)??entity.group}
         savedPeople={options.data?.people ?? []}
+        onPersonSaved={updated=>options.setData(current=>current && ({...current,people:current.people.map(p=>p.id===updated.id ? updated : p)}))}
         onClose={() => setEntity(null)}
-        onChanged={() => { options.reload(); reload(); }}
+        onChanged={() => { if (!session.demo) { options.reload(); reload(); } }}
         onBill={(id) => {
           setSelected({
             id,
@@ -360,7 +361,7 @@ export default function SplitBills() {
           {tab === "People" && addingPerson ? <AddSplitPerson initial={search} people={options.data?.people ?? []}
             onCancel={()=>setAddingPerson(false)} onSaved={person=>{
               options.setData(current => current && ({...current,people:[...current.people.filter(p=>p.id!==person.id),person]}));
-              setSearch(person.name);
+              setSearch(person.displayName || person.name);
               setAddingPerson(false);
               if (!session.demo) options.reload();
             }}/> : tab !== "Bills" ? <TogetherToolbar search={search} onSearch={setSearch}
@@ -614,11 +615,12 @@ export default function SplitBills() {
               {options.data.people.length ? (
                 <View>
                   <View style={{flexDirection:"row",gap:6,paddingVertical:8}}><Text style={{flex:1,color:colors.muted}}>Name</Text><Text style={{width:82,textAlign:"right",color:colors.muted}}>Owed</Text><Text style={{width:82,textAlign:"right",color:colors.muted}}>Owes</Text><View style={{width:36}}/></View>
-                  {options.data.people.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).map(person=>(
-                    <Pressable key={person.id} accessibilityRole="button" accessibilityLabel={`Open ${person.name} details`} onPress={()=>setEntity({person:person.name})}
+                  {options.data.people.filter(p=>[p.name,p.displayName].some(n=>n?.toLowerCase().includes(search.toLowerCase()))).map(person=>(
+                    <Pressable key={person.id} accessibilityRole="button" accessibilityLabel={`Open ${person.displayName || person.name} details`} onPress={()=>setEntity({person:person.name})}
                       style={{flexDirection:"row",alignItems:"center",gap:6,minHeight:58,borderBottomWidth:1,borderColor:colors.line}}>
                       <PersonAvatar name={person.name} imageUrl={person.avatarUrl}/>
-                      <Text style={{flex:1,color:colors.ink}}>{person.name}</Text>
+                      <Text style={{flex:1,color:colors.ink}}>{person.displayName || person.name}</Text>
+                      {person.fromContacts && <View accessible accessibilityLabel="From Contacts"><Icon name="person-circle-outline" line size={18}/></View>}
                       <Text style={{width:82,textAlign:"right",color:colors.ink}}>{balance.data?.personBalances?.[person.id]?.owed ?? "—"}</Text>
                       <Text style={{width:82,textAlign:"right",color:colors.ink}}>{balance.data?.personBalances?.[person.id]?.owes ?? "—"}</Text>
                       <Text style={{width:36,textAlign:"center",color:colors.teal}}>•••</Text>

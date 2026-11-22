@@ -87,6 +87,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
       }),
       select: {
         currency: true,
+        importFileId: true,
         date: true,
         amount: true,
         type: true,
@@ -108,9 +109,11 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     prisma.transaction.findFirst({
       where: buildActiveWorkspaceTransactionWhere(workspaceId, {
         createdAt: { gte: new Date(+rolling(7).from) },
+        currency,
         reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
       }),
-      select: { id: true },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { date: true },
     }),
     overviewOnly ? Promise.resolve([]) : import("./planned-payment-suggestions").then(module => module.getPlannedPaymentSuggestions(workspaceId)),
     finverseBalances(workspaceId),
@@ -247,7 +250,10 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     .sort((a, b) => b.delta - a.delta || b.current - a.current)[0] ?? null;
   const monthTotals = totals(month, tomorrow);
   const currencies = [...new Set([currency, ...accounts.map((a) => a.currency), ...reportCurrencies.map((t) => t.currency)])].sort();
+  const reportEntries = transactions.filter(t => t.currency === currency && t.date >= rolling(30).from);
   const insightInput = {
+      backfilledDate: recentEntry && recentEntry.date < rolling(30).from ? recentEntry.date.toISOString().slice(0,10) : undefined,
+      reportEntries: reportEntries.length, importedEntries: reportEntries.filter(t => t.importFileId).length,
       currency,
       hasRecentTransactionActivity: Boolean(recentEntry) || transactions.some(t => t.date >= rolling(7).from),
       categorySpike: spike,

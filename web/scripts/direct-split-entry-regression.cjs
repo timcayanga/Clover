@@ -217,7 +217,9 @@ async function main() {
     const tx = {
       $executeRaw: async () => {},
       splitBillPerson: {
-        findFirst: async ({where}) => contacts.find(p=>p.userId===where.userId && p.name.toLowerCase()===where.name.equals.toLowerCase()),
+        findFirst: async ({where}) => contacts.find(p => p.userId===where.userId &&
+          (!where.id || (typeof where.id==="string" ? p.id===where.id : p.id!==where.id.not)) &&
+          (!where.OR || where.OR.some(clause=>Object.entries(clause).every(([field,match])=>p[field]?.toLowerCase()===match.equals.toLowerCase())))),
         create: async ({data}) => {const p={id:"new",...data};contacts.push(p);return p;},
         update: async ({where,data}) => Object.assign(contacts.find(p=>p.id===where.id),data),
       },
@@ -227,12 +229,25 @@ async function main() {
       zod:require("zod"), "@/lib/prisma":{prisma:{$transaction:async fn=>fn(tx)}},
       "@/lib/split-bill-access":{getSplitBillCurrentUser:async()=>({id:owner})},
     });
+    const {PATCH} = load("app/api/split-bill-people/[personId]/route.ts",{
+      "next/server":{NextResponse:{json:(body,opts)=>({...body,status:opts?.status??200})}},
+      zod:require("zod"), "@/lib/prisma":{prisma:{$transaction:async fn=>fn(tx)}},
+      "@/lib/split-bill-access":{getSplitBillCurrentUser:async()=>({id:owner})},
+    });
+    const edit=(personId,body)=>PATCH({json:async()=>body},{params:Promise.resolve({personId})});
     const save=body=>POST({json:async()=>body});
     const existing=await save({name:" naomi ",phone:"+63912345",email:"different@example.test"});
     assert.equal(existing.status,200);
     assert.equal(existing.person.email,"confirmed@example.test");
     assert.equal(existing.person.phone,"+63912345");
+    assert.equal((await edit("naomi",{name:"Nao",email:null,phone:"5550101"})).status,200);
+    assert.equal(contacts[0].name,"Naomi");
+    assert.equal(contacts[0].displayName,"Nao");
+    assert.equal(contacts[0].email,null);
+    assert.equal((await save({name:"Nao",fromContacts:true})).person.id,"naomi");
+    assert.equal(contacts[0].fromContacts,true);
     owner="another-owner";
+    assert.equal((await edit("naomi",{name:"Changed"})).status,404);
     assert.equal((await save({name:"Naomi"})).status,201);
     assert.equal(contacts.length,2);
     assert.equal(contacts[1].email,undefined);
@@ -271,7 +286,7 @@ async function main() {
       }})},
     });
     const render=()=>nodes(ui.render(()=>AddSplitPerson({initial:"",people:[existing],onSaved:p=>saved.push(p),onCancel:()=>{}})));
-    const action=title=>render().find(n=>n.props.title===title).props.onPress();
+    const action=title=>render().find(n=>n.props.title===title || n.props.accessibilityLabel===title).props.onPress();
     if (scenario==="contact" || scenario==="cancel") await action("From Contacts");
     else render().find(n=>n.type==="Field").props.onChangeText(scenario==="existing"?"na":"Ari");
     if (scenario==="existing") await action("Naomi");
@@ -283,7 +298,7 @@ async function main() {
       assert.equal(saved.length,1);
       assert.equal(writes.length,scenario==="existing"?0:1);
       if (scenario==="existing") assert.equal(saved[0].id,"known");
-      if (scenario==="contact") assert.deepEqual(writes[0],picked);
+      if (scenario==="contact") assert.deepEqual(writes[0],{...picked,fromContacts:true});
     }
     ui.stop();
   }

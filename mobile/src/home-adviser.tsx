@@ -11,6 +11,10 @@ import { Body, Card, money, useTheme } from "./ui";
 function openInsight(item: HomeInsight, askClover: (context: AskPageContext) => void) {
   if (item.kind === "reminder") {
     router.push({ pathname: "/add-transaction", params: { entry: "manual" } });
+  } else if (item.href.startsWith("/reports?")) {
+    const params = new URLSearchParams(item.href.split("?")[1]);
+    router.navigate({pathname:"/reports",params:{section:"overview",range:params.get("range") || "30d",currency:params.get("currency") || "",
+      ...(params.get("range")==="custom" ? {from:params.get("from")!,to:params.get("to")!,transfers:"exclude"} : {})}});
   } else if (item.href.startsWith("/recurring")) {
     router.navigate("/recurring");
   } else if (item.href.startsWith("/transactions")) {

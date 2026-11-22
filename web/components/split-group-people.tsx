@@ -12,10 +12,10 @@ import {
 import {
   personKey,
   remainingDebts,
-  simplifyDebts,
   participantName,
 } from "../../shared/split-debts";
-import { splitItemTotals } from "../../shared/split-bill-experience";
+import { personLedger } from "../../shared/split-person-ledger";
+import { PersonBillTable } from "./split-person-ledger";
 import { MobileSwipeDelete } from "./mobile-swipe-delete";
 
 export function SplitGroupPeople({
@@ -139,42 +139,7 @@ export function SplitGroupPeople({
           ‹ People
         </button>
         <h3>{detail}</h3>
-        <p>
-          Owes You {amount(detail, viewer)} · Owed {amount(viewer, detail)}
-        </p>
-        <h4>Simplified Debt</h4>
-        {simplifyDebts(debts)
-          .filter((d) =>
-            [d.from, d.to].some((n) => personKey(n) === personKey(detail)),
-          )
-          .map((d) => (
-            <p key={JSON.stringify(d)}>
-              {d.from} → {d.to} ·{" "}
-              {formatSplitBillAmount(d.cents / 100, d.currency)}
-            </p>
-          ))}
-        {scopedBills.map((b) => {
-          const p = b.participants.find(
-            (p) => personKey(participantName(b, p.name)) === personKey(detail),
-          );
-          if (!p) return null;
-          return (
-            <section key={b.id}>
-              <button onClick={() => onBill(b.id)}>{b.title} ›</button>
-              {b.items
-                .filter((i) => i.participantIds.includes(p.id))
-                .map((i) => (
-                  <p key={i.id}>
-                    {i.description} ·{" "}
-                    {formatSplitBillAmount(
-                      splitItemTotals(b.participants, [i])[p.id],
-                      b.currency,
-                    )}
-                  </p>
-                ))}
-            </section>
-          );
-        })}
+        <PersonBillTable ledger={personLedger(scopedBills,detail,viewer)} name={detail} onBill={onBill}/>
       </section>
     );
   return (

@@ -2,7 +2,7 @@ import { Pressable, View } from "react-native";
 import { Text } from "./app-text";
 import { Field, useTheme } from "./ui";
 
-export type SavedPerson = { name: string; email?: string | null; phone?: string | null };
+export type SavedPerson = { id?: string; name: string; displayName?: string | null; fromContacts?: boolean; email?: string | null; phone?: string | null };
 
 export function mergePeople(selected: string[], additions: string[], saved: SavedPerson[]) {
   const canonical = new Map(saved.map(p => [p.name.trim().toLowerCase(), p.name.trim()]));

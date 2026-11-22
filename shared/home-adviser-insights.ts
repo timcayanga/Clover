@@ -12,6 +12,9 @@ export type HomeInsight = {
 // separate so every client can honor the user's hide-balances preference.
 export function buildHomeAdviserInsights(input: {
   currency: string;
+  backfilledDate?: string;
+  reportEntries?: number;
+  importedEntries?: number;
   hasRecentTransactionActivity?: boolean;
   categorySpike: { name: string; delta: number } | null;
   paymentTitles: string[];
@@ -54,7 +57,19 @@ export function buildHomeAdviserInsights(input: {
     parts: ["No recent transactions need review. Older transactions may still need attention."],
     href: "/transactions", actionLabel: "View transactions",
   });
-  if (input.hasRecentTransactions) {
+  if (input.backfilledDate) {
+    const date = new Date(input.backfilledDate + "T00:00:00Z");
+    const month = date.toLocaleDateString("en-US",{month:"long",year:"numeric",timeZone:"UTC"});
+    const from = input.backfilledDate.slice(0,7) + "-01";
+    const to = new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).toISOString().slice(0,10);
+    items.unshift({emoji:"📊",label:"Latest report",parts:[`Your ${month} report is ready.`],tone:"neutral",actionLabel:"View report",
+      href:`/reports?section=overview&range=custom&from=${from}&to=${to}&currency=${encodeURIComponent(input.currency)}&transfers=exclude`});
+  } else if (input.reportEntries) {
+    const period = input.hasRecentTransactions ? "weekly" : "monthly";
+    const source = (input.importedEntries ?? 0) > input.reportEntries / 2 ? "imported transactions" : "recorded transactions";
+    items.unshift({ emoji: "📊", label: "Latest report", parts: [`Your ${period} report is ready with your ${source}.`],
+      href: `/reports?section=overview&range=${input.hasRecentTransactions ? "7d" : "30d"}&currency=${encodeURIComponent(input.currency)}`, actionLabel: "View report", tone: "neutral" });
+  } else if (input.hasRecentTransactions && input.reportEntries === undefined) {
     const delta = input.weekly.expense - input.previousWeeklyExpense;
     const parts: HomeInsight["parts"] = input.weekly.expense > 0
       ? [amount(input.weekly.expense), " in spending recorded this week", ...(input.weekly.transfer > 0 ? ["; ", amount(input.weekly.transfer), " moved between accounts"] : []), "."]

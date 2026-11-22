@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const createPersonSchema = z.object({
   name: z.string().trim().min(1).max(100),
+  fromContacts: z.literal(true).optional(),
   email: z.string().trim().email().max(254).optional(),
   phone: z.string().trim().min(1).max(80).optional(),
   avatarUrl: z.string().trim().nullable().optional(),
@@ -34,10 +35,11 @@ export async function POST(request: Request) {
       // Use the same lock as Circle and group contact discovery.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"split-bill-people:" + user.id}))`;
       const existing = await tx.splitBillPerson.findFirst({
-        where: { userId: user.id, name: { equals: name, mode: "insensitive" } },
+        where: { userId: user.id, OR: [{name: { equals: name, mode: "insensitive" }}, {displayName: {equals: name, mode: "insensitive"}}] },
       });
       if (existing) {
         const update = {
+          ...(body.fromContacts ? {fromContacts:true} : {}),
           ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl || null } : {}),
           ...(!existing.email && body.email ? { email: body.email } : {}),
           ...(!existing.phone && body.phone ? { phone: body.phone } : {}),

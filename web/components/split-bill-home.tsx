@@ -256,7 +256,7 @@ export function SplitBillHome({
   const currency = useDefaultCurrency();
   const fx = useExchangeRates(bills.map(b=>b.currency),currency,tab === "People");
   const peopleWithBalances = people.map(p=>({...p,...personBalanceColumns(bills,currentUserName,p.name,currency,fx.rates)}));
-  const matchingPeople=peopleWithBalances.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
+  const matchingPeople=peopleWithBalances.filter(p=>[p.name,p.displayName].some(n=>n?.toLowerCase().includes(search.toLowerCase())));
   const visiblePeople = showAllPeople ? matchingPeople : matchingPeople.slice(0, 6);
   const hasHiddenPeople = peopleWithBalances.length > 6;
   const currentUserAvatarUrl = user?.imageUrl ?? cachedProfileImage;
@@ -556,10 +556,10 @@ export function SplitBillHome({
                               : person.avatarUrl
                           }
                         />
-                        {person.name}
+                        {person.displayName || person.name} {person.fromContacts && <span role="img" aria-label="From Contacts">📇</span>}
                       </button>
                     </td>
-                    <td className="amount">{person.owed}</td><td className="amount">{person.owes}</td><td><button aria-label={`Open ${person.name} details`} onClick={()=>onOpenPerson(person.id)}>•••</button></td>
+                    <td className="amount">{person.owed}</td><td className="amount">{person.owes}</td><td><button aria-label={`Open ${person.displayName || person.name} details`} onClick={()=>onOpenPerson(person.id)}>•••</button></td>
                   </tr>
                 ))}
               </tbody>

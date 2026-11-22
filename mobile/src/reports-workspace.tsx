@@ -105,7 +105,9 @@ export function NativeReportsWorkspace() {
     /^[A-Z]{3}$/.test(currency) &&
     transfers === "exclude"
       ? { ...defaultReportView, section, range, from, to, currency, transfers }
-      : defaultReportView;
+      : section === "overview" && (range === "7d" || range === "30d") && currency && /^[A-Z]{3}$/.test(currency)
+        ? { ...defaultReportView, section, range, currency }
+        : defaultReportView;
   const initialQuery =
     initialView === defaultReportView
       ? ""
