@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
+import { hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
@@ -141,3 +141,15 @@ for (const [index, [text, price]] of [["Tea", "100.00"], ["Lime Juice", "200.00"
 }
 assert.deepEqual(readChargedReceiptTable(marginTable, marginBlocks)?.items[0], { description: "Tea", amount: "100.00", quantity: 1 });
 assert.equal(readChargedReceiptTable(marginTable, marginBlocks.slice(1))?.items[0].description, "1 Tea");
+
+const grossBill = "Tea 10.00\nCoffee 20.00\nGross Amount 30.00\nBill Amount 30.00";
+assert.ok(hasPrintedItemizedTotal(grossBill, "30.00"));
+assert.ok(!hasPrintedItemizedTotal(grossBill.replace("Bill Amount 30", "Bill Amount 45"), "45.00"));
+assert.ok(!hasPrintedItemizedTotal(grossBill + "\nAmount Due 29.00", "30.00"));
+
+const weakDate = (other: string) => encodeLocalReceiptOcr({
+  text: "Example Cafe\nOfficial Receipt\n6/30/2023\nTea 50.00\n" + other + "\nTotal PHP 50.00",
+  opticalLines: [{text:"6/30/2023",box:[0.2,0.1,0.4,0.2],minimumCharacterConfidence:0.42}],
+});
+assert.equal(parseReceiptPhotoText(weakDate("JANON IBERICO")).billDate, null);
+assert.equal(parseReceiptPhotoText(weakDate("June 30, 2023")).billDate?.slice(0,10), "2023-06-30");

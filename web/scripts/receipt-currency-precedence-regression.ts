@@ -1,3 +1,4 @@
+import { readPrintedReceiptCurrency } from "../lib/receipt-currency-evidence";
 import assert from "node:assert/strict";
 import { captureReceiptLocation } from "../../shared/receipt-capture-location";
 import { applyReceiptDefaultCurrency } from "../lib/receipt-intake";
@@ -48,3 +49,10 @@ assert.equal(conflict.currency_resolution?.source, "printed_conflict");
 assert.deepEqual(incompleteReceiptFields(conflict), ["currency"]);
 assert.equal(draft.currency, "USD");
 console.log("Receipt currency evidence passed for total, tender, regional symbols, capture, Profile default, replay, and printed conflicts.");
+
+assert.equal(readPrintedReceiptCurrency("Makati City\nAmount Due P99.80")?.kind, "printed");
+assert.deepEqual(readPrintedReceiptCurrency("Philippines\nBill Amount\nP 99.80"), {kind:"printed", currency:"PHP", evidence:"P"});
+assert.equal(readPrintedReceiptCurrency("Amount Due P99.80", "PHP"), null);
+assert.equal(readPrintedReceiptCurrency("Philippines\nJapan\nAmount Due P99.80"), null);
+assert.equal(readPrintedReceiptCurrency("Philippines\nProduct P99.80"), null);
+assert.equal(readPrintedReceiptCurrency("Philippines\nAmount Due P99.80\nCurrency: USD")?.kind, "conflict");

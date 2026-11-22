@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readLocalReceiptOcrText } from "../lib/local-receipt-ocr-envelope";
+import { normalizeDeviceTextEvidence } from "../../shared/device-text-evidence";
+import { encodeLocalReceiptOcr, readLocalReceiptOcrText } from "../lib/local-receipt-ocr-envelope";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
@@ -244,7 +245,18 @@ async function main() {
       const type = source.extension === ".webp" ? "image/webp" : "image/jpeg";
       const file = new File([source.bytes], "photo" + source.extension, { type });
       const routes: Record<string, () => Promise<string | null>> = {};
-      if (vision) routes[visionRoute] = () => runOcrProbe(vision, source.bytes);
+      if (vision) {
+        const structured = process.argv.includes("--structured-probe");
+        routes[structured ? visionRoute + "_structured" : visionRoute] = async () => {
+          const output = await runOcrProbe(vision, source.bytes);
+          if (!structured) return output;
+          const evidence = normalizeDeviceTextEvidence(JSON.parse(output));
+          assert(evidence?.complete && evidence.pagesRead === 1 && evidence.totalPages === 1, "Incomplete device OCR evidence");
+          assert(probePlatform !== "android_emulator" || evidence.source === "google_mlkit");
+          assert(probePlatform !== "ios_simulator" || evidence.source === "apple_vision");
+          return encodeLocalReceiptOcr(evidence);
+        };
+      }
       if (!visionOnly) {
         routes.server_receipt_reader = () => readUploadedFileText(file, undefined, { importMode: "receipt", sourceBytes: source.bytes });
         routes.server_local_ppocr = async () => {

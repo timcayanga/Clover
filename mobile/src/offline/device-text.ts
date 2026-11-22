@@ -42,6 +42,10 @@ async function prepareDeviceText(
       const source = Platform.OS === "ios" ? "apple_vision" : "google_mlkit";
       if (publishPartial && CloverLocalAI!.extractPhotoTextFast) {
         const fast = await CloverLocalAI!.extractPhotoTextFast(uri).catch(() => undefined);
+        if (Platform.OS === "android" && fast?.complete && fast.pagesRead === 1 && fast.totalPages === 1) {
+          const full = normalizeDeviceTextEvidence({ version: 1, source, ...fast, durationMs: Date.now() - started });
+          if (full) return full;
+        }
         if (fast && hasUsefulPartialReceiptText(fast.text)) {
           const evidence = normalizeDeviceTextEvidence({
             version: 1, source, ...fast, complete: false, durationMs: Date.now() - started,

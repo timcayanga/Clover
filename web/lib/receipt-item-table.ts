@@ -215,9 +215,12 @@ export function readChargedReceiptTable(source: string, blocks: OpticalBlock[] =
 export function hasPrintedItemizedTotal(text: string, total: string) {
   const reconciled = readReconciledItemTable(text) ?? readChargedReceiptTable(text);
   if (reconciled) return reconciled.total === total;
-  if (!readSubtotalItems(text)) return false;
+  const items = readSubtotalItems(text);
+  if (!items) return false;
+  const itemCents = items.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
+  if (itemCents !== Math.round(Number(total) * 100)) return false;
   const totals = text.split(/\r?\n/).flatMap(line => {
-    const match = line.match(/^\s*(?:grand total|amount due|total(?: due| amount| paid)?)\s*[:：]?\s*(?:[A-Z]{3}|₱)?\s*(\d[\d,]*\.\d{2})\s*$/i);
+    const match = line.match(/^\s*(?:grand total|bill amount|amount due|total(?: due| amount| paid)?)\s*[:：]?\s*(?:[A-Z]{3}|₱)?\s*(\d[\d,]*\.\d{2})\s*$/i);
     return match ? [match[1].replace(/,/g, "")] : [];
   });
   return totals.length > 0 && totals.every(value => value === total);

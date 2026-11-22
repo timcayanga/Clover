@@ -8,7 +8,7 @@ const marks: Record<string, string> = {
   "₹": "INR", "RP": "IDR", "RM": "MYR", "円": "JPY", "元": "CNY",
 };
 const token = /(?<![\p{L}])(?:(?:US|HK|NZ|NT|S|A|C)\$|(?:rupiah|peso filipino|[A-Z]{3}|Rp\.?|RM)(?![\p{L}])|[₱$€£฿₩원₫₹¥円元])/giu;
-const saleTotal = /^(?:grand\s+total|bill\s+total|total(?:\s+(?:amount|paid|due|bayar))?|amount\s+(?:due|paid|to\s+pay)|sale\s+amount|jumlah\s+bayar|合計|결제금액|합\s*계)(?=$|[\s:：=\d₱$€£฿₩₫₹¥])/iu;
+const saleTotal = /^(?:bill\s+amount|grand\s+total|bill\s+total|total(?:\s+(?:amount|paid|due|bayar))?|amount\s+(?:due|paid|to\s+pay)|sale\s+amount|jumlah\s+bayar|合計|결제금액|합\s*계)(?=$|[\s:：=\d₱$€£฿₩₫₹¥])/iu;
 const declaredCurrency = /^\s*(?:(?:sale|transaction|purchase|receipt)\s+)?currency\s*[:：=]/iu;
 const secondaryAmount = /^(?:\W*\b(?:cash|change|tender(?:ed)?|card(?: payment)?|payment(?:\s+(?:amount|currency))?|refund|settlement|dcc|conversion|exchange rate|equivalent|converted|balance|promo(?:tion)?|coupon|voucher|rewards?)\b)|^(?:points?\s+(?:earned|balance)|(?:amount|total)\s+(?:in|converted))\b/iu;
 const dollarRegions = new Set(["USD", "CAD", "AUD", "NZD", "SGD", "HKD", "TWD"]);
@@ -33,6 +33,36 @@ function currencyMarks(line: string, allowBareMark: boolean, region: string | nu
   return matches;
 }
 
+const regions: [string, RegExp][] = [
+  ["PHP", /\bPhilippines\b|\b(?:Makati|Mandaluyong|Taguig|Pasig|Quezon|Cebu|Davao)\s+City\b|\bBIR\b.{0,50}\b(?:permit|accr(?:ed(?:itation)?)?|TIN)\b/i],
+  ["IDR", /\bIndonesia\b|\b(?:Jakarta|Surabaya|Bandung|Denpasar)\b.{0,60}\b\d{5}\b/i],
+  ["KRW", /\b(?:South Korea|Republic of Korea)\b|(?:서울|부산|인천|대구|대전|광주|울산)(?:특별시|광역시)|대한민국/u],
+  ["SGD", /\bSingapore\s+\d{6}\b/i],
+  ["MYR", /\bMalaysia\b/i], ["THB", /\bThailand\b/i],
+  ["VND", /\bViet\s*Nam\b/i], ["JPY", /\bJapan\b|日本国/u],
+  ["HKD", /\bHong Kong\b/i], ["AUD", /\bAustralia\b/i], ["CAD", /\bCanada\b/i],
+  ["CNY", /\b(?:mainland China|People.s Republic of China)\b|中华人民共和国/u],
+  ["TWD", /\bTaiwan\b/i],
+  ["NZD", /\bNew Zealand\b/i], ["GBP", /\bUnited Kingdom\b/i],
+  ["USD", /\bUnited States(?: of America)?\b/i],
+];
+
+/** Strong printed location clues suggest a currency, never rewrite source text.
+ * Conflicting regions deliberately fall back to the user's preference. */
+export function receiptLocationCandidates(text: string) {
+  const source = text.normalize("NFKC");
+  const matches = regions.flatMap(([currency, pattern]) => {
+    const match = source.match(pattern);
+    return match ? [{ currency, evidence: match[0] }] : [];
+  });
+  return matches;
+}
+
+export function inferReceiptLocationCurrency(text: string) {
+  const matches = receiptLocationCandidates(text);
+  return matches.length === 1 ? matches[0] : null;
+}
+
 /** Purchase total and declared transaction currency outrank currencies on line items or tender. */
 export function readPrintedReceiptCurrency(text: string, region: string | null = null) {
   const { body } = splitReceiptPromotionalFooter(text.normalize("NFKC"));
@@ -46,7 +76,13 @@ export function readPrintedReceiptCurrency(text: string, region: string | null =
       const value = line.slice(match[0].length).replace(/^\s*[:：=]\s*/u, "");
       const next = lines[index + 1] ?? "";
       const wrapped = /^[\s:：=]*$/u.test(value) && !secondaryAmount.test(next) && !saleTotal.test(next);
-      for (const [currency, evidence] of currencyMarks(wrapped ? next : value, true, region)) {
+      const amountText = (wrapped ? next : value).trim();
+      // The plain P glyph is ambiguous outside a peso-denominated receipt.
+      // Require a printed Philippine location on this document as well.
+      if (/^P[ \t]*\d[\d,]*\.\d{2}$/u.test(amountText) && inferReceiptLocationCurrency(body)?.currency === "PHP") {
+        primary.set("PHP", "P");
+      }
+      for (const [currency, evidence] of currencyMarks(amountText, true, region)) {
         primary.set(currency, evidence);
       }
       continue;

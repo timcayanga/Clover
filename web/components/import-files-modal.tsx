@@ -4296,7 +4296,7 @@ export function ImportFilesModal({
 
     try {
       const itemImportMode = inferImportModeForFile(item.file, item.importMode ?? "statement");
-      if (await probeFilePasswordProtection(item.file)) return;
+      if (!item.password && await probeFilePasswordProtection(item.file)) return;
       const text = await extractTextFromFile(item.file, item.password || undefined);
       if (text.trim()) {
         localPreparseTextByItemIdRef.current.set(itemId, text);

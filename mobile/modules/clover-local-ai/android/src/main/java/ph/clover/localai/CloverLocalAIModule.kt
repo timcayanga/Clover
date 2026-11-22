@@ -66,6 +66,7 @@ class CloverLocalAIModule : Module() {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         try {
           var pagesRead=1;var total=1
+          var fullResolutionRead = !fast
           var opticalLines = emptyList<Map<String, Any>>()
           val text=if(file.extension.lowercase()=="pdf") {
             ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
@@ -83,9 +84,16 @@ class CloverLocalAIModule : Module() {
             require(bounds.outWidth>0&&bounds.outHeight>0&&bounds.outWidth.toLong()*bounds.outHeight<=200000000) { "This image needs online processing or a smaller copy for local OCR." }
             // Read an OCR-sized copy, including 48 MP camera photos, without
             // decoding a full-resolution bitmap or changing the retained source.
-            var sample=1
-            val maxEdge = if (fast) 1600 else 2400
-            while(maxOf(bounds.outWidth,bounds.outHeight)/sample>maxEdge) sample*=2
+            val longestEdge = maxOf(bounds.outWidth, bounds.outHeight)
+            fun sampleFor(limit: Int): Int {
+              var sample = 1
+              while (longestEdge / sample > limit) sample *= 2
+              return sample
+            }
+            val fullSample = sampleFor(2400)
+            val sample = if (fast) sampleFor(1600) else fullSample
+            // Both paths use the same recognizer, orientation and source bytes.
+            fullResolutionRead = sample == fullSample
             val bitmap=BitmapFactory.decodeFile(file.path,BitmapFactory.Options().apply { inSampleSize=sample })
               ?: error("This image needs online processing.")
             var oriented=bitmap
@@ -122,7 +130,7 @@ class CloverLocalAIModule : Module() {
               result.text
             } finally { if(oriented!==bitmap) oriented.recycle();bitmap.recycle() }
           }
-          mapOf("text" to text.take(40000),"opticalLines" to opticalLines,"pagesRead" to pagesRead,"totalPages" to total,"complete" to (!fast && pagesRead > 0 && pagesRead == total && text.length <= 40000))
+          mapOf("text" to text.take(40000),"opticalLines" to opticalLines,"pagesRead" to pagesRead,"totalPages" to total,"complete" to (fullResolutionRead && text.isNotBlank() && pagesRead > 0 && pagesRead == total && text.length <= 40000))
         } finally {
           recognizer.close()
         }

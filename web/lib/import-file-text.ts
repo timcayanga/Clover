@@ -1,5 +1,7 @@
 "use client";
 
+import { isUploadPdf, isUploadPhoto } from "../../shared/native-upload";
+import { isDelimitedImport } from "./import-format-policies";
 import { pdfjsStandardFontDataUrl } from "@/lib/pdfjs-config";
 import { runBrowserImportWork } from "./import-browser-work";
 
@@ -12,8 +14,6 @@ type ProgressCallback = (progress: {
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
-const isImageFileName = (fileName: string) => /\.(jpe?g|png|webp|heic|heif)$/i.test(fileName);
-
 const isPdfPasswordError = (error: unknown) => {
   if (!error || typeof error !== "object") {
     return false;
@@ -25,7 +25,6 @@ const isPdfPasswordError = (error: unknown) => {
   return /passwordexception/i.test(name) || /password/i.test(message) || /encrypted pdf/i.test(message);
 };
 
-const PDF_PASSWORD_PROBE = "__clover_password_probe__";
 const CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS = 12_000;
 const CLIENT_PDF_PASSWORD_PROBE_TIMEOUT_MS = 4_000;
 const pdfFileBufferCache = new WeakMap<File, Promise<ArrayBuffer>>();
@@ -68,7 +67,7 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number) => {
 };
 
 export const probeFilePasswordProtection = async (file: File) => {
-  if (!file.name.toLowerCase().endsWith(".pdf")) {
+  if (!isUploadPdf(file.name, file.type)) {
     return false;
   }
 
@@ -92,7 +91,7 @@ export const probeFilePasswordProtection = async (file: File) => {
 };
 
 export const validatePdfPassword = async (file: File, password: string): Promise<boolean | null> => {
-  if (!file.name.toLowerCase().endsWith(".pdf")) {
+  if (!isUploadPdf(file.name, file.type)) {
     return true;
   }
 
@@ -124,41 +123,19 @@ export const extractTextFromFile = async (
   password?: string,
   onProgress?: ProgressCallback
 ) => {
-  const lowerName = file.name.toLowerCase();
-
-  if (/\.(?:csv|tsv)$/.test(lowerName)) {
+  if (isDelimitedImport(file.name, file.type)) {
     return (await runBrowserImportWork({ kind: "delimited", file })) ?? "";
   }
 
-  if (isImageFileName(lowerName)) {
+  if (isUploadPhoto(file.name, file.type)) {
     return "";
   }
 
-  if (lowerName.endsWith(".pdf")) {
+  if (isUploadPdf(file.name, file.type)) {
     const { pdfjs } = await loadPdfJs();
     const data = await readFreshFileBytes(file);
-    if (!password) {
-      const probeTask = pdfjs.getDocument({
-        data,
-        password: PDF_PASSWORD_PROBE,
-        standardFontDataUrl: pdfjsStandardFontDataUrl,
-      } as any);
-      try {
-        const probePdf = await withTimeout(probeTask.promise, CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS);
-        await probeTask.destroy();
-      } catch (error) {
-        await probeTask.destroy().catch(() => undefined);
-        if (isPdfPasswordError(error)) {
-          throw new Error("This file is password-protected. Enter the password to continue.", { cause: error });
-        }
-        throw error;
-      }
-    }
-    const readPdfText = async (pdfPassword?: string) => {
-      const options = pdfPassword
-        ? { data, password: pdfPassword, standardFontDataUrl: pdfjsStandardFontDataUrl }
-        : { data, standardFontDataUrl: pdfjsStandardFontDataUrl };
-      const loadingTask = pdfjs.getDocument(options as any);
+    const loadingTask = pdfjs.getDocument({ data, password, standardFontDataUrl: pdfjsStandardFontDataUrl });
+    const readPdfText = async () => {
       const pdf = await loadingTask.promise;
       const pages: string[] = [];
 
@@ -195,13 +172,15 @@ export const extractTextFromFile = async (
     };
 
     try {
-      return await withTimeout(readPdfText(password), CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS);
+      return await withTimeout(readPdfText(), CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS);
     } catch (error) {
       if (password || !isPdfPasswordError(error)) {
         throw error;
       }
 
-      return withTimeout(readPdfText(""), CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS);
+      throw new Error("This file is password-protected. Enter the password to continue.", { cause: error });
+    } finally {
+      await loadingTask.destroy().catch(() => undefined);
     }
   }
 

@@ -67,3 +67,5 @@ CLOVER_RECEIPT_PROVIDER_EVAL=1 npx tsx scripts/receipt-model-benchmark.ts
 ```
 
 Inject an evaluation key via `OPENAI_API_KEY` for the live run. The dry run makes no provider calls and exercises the request and reporting paths with a simulated failure. Live output is aggregate. The diagnostic photo set excludes private receipts and is separate from the blind claim evaluation. Before replacing the default, require a larger paired set with enough independently labeled complete cases, check that the candidate makes no new core errors on safety cases, and compare latency and cost including failed attempts and retries. A repeated run increases timing observations while leaving the number of independent labeled photos unchanged.
+
+Add `--structured-probe` for an executable that returns the native JSON evidence object, including source, reading-order text, optical lines, page counts, completeness and duration. This exercises the shared photo parser with the same coordinates and alternatives as a mobile upload. Transcript-only and structured results carry distinct route names.

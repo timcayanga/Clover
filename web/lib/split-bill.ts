@@ -560,8 +560,8 @@ const parseBillDateFromText = (text: string) => {
     /\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/,
     /\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b/,
     /\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/,
-    /\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})\b/,
-    /\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{2,4})\b/,
+    /\b([A-Za-z]{3,9})[ \t]+(\d{1,2}),?[ \t]+(\d{4})\b/,
+    /\b(\d{1,2})[ \t]+([A-Za-z]{3,9})[ \t]+(\d{2,4})\b/,
   ];
 
   // Reading order matters: the purchase date near the receipt header must
@@ -589,6 +589,7 @@ const parseBillDateFromText = (text: string) => {
     } else if (/^[A-Za-z]/.test(match[1]) || /^[A-Za-z]/.test(match[2])) {
       const monthToken = /^[A-Za-z]/.test(match[1]) ? match[1] : match[2];
       const dayToken = /^[A-Za-z]/.test(match[1]) ? match[2] : match[1];
+      if (!/^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)$/i.test(monthToken)) continue;
       const monthIndex = monthIndexByAbbr[monthToken.slice(0, 3).toUpperCase()];
       const year = normalizeReceiptYear(Number(match[3]));
       const parsed = buildReceiptDate(year, monthIndex === undefined ? 0 : monthIndex + 1, Number(dayToken));
@@ -2692,8 +2693,13 @@ export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
       Number(a) !== Number(b) && Number(a) >= 1 && Number(a) <= 12 && Number(b) >= 1 && Number(b) <= 12);
     const dateBlocks = readReceiptOpticalEvidence(source).filter(line => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(line.text));
     const unreadableDigit = slashDates.length === 1 && dateBlocks.length === 1 && (dateBlocks[0].minimumCharacterConfidence ?? 1) < 0.5;
-    if ((unreadableDigit || ambiguous) && !/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*)\b/i.test(optical)) {
-      parsed = { ...parsed, billDate: null, requiresReview: true };
+    if (unreadableDigit || ambiguous) {
+      // A second spelling of the same day can corroborate it. Removing all
+      // day-first/month-first tokens prevents a weak reading confirming itself.
+      const independent = optical.replace(/\b\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})\b/g, "");
+      if (parseBillDateFromText(independent) !== parsed.billDate) {
+        parsed = { ...parsed, billDate: null, requiresReview: true };
+      }
     }
   }
   if (!hasUnreadableReceiptPhotoTotal(source) && !hasConflictingReceiptTotalReading(readReceiptOpticalEvidence(source))) return parsed;

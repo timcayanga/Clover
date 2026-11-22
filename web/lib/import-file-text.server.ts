@@ -36,7 +36,6 @@ import { formatIndonesianBankPdfRows } from "@/lib/indonesian-pdf-columns";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { dirname, join, sep } from "node:path";
-import { pathToFileURL } from "node:url";
 import { Prisma } from "@prisma/client";
 import { downloadImportObject } from "@/lib/import-storage.server";
 import {
@@ -257,7 +256,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v9";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v10";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -974,7 +973,8 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
       expanded.dataUrl, "6", hasIndonesianFinancialText(firstPassText) ? "eng+ind" : "eng+kor"
     );
     const rejection = classifyExactPhotoRejection({ ...params, text: expandedText }, params.classificationContext);
-    if (rejection && !firstPassText.trim()) throw rejection;
+    if (rejection && (region || !firstPassText.trim())) throw rejection;
+    if (resolvePositiveImportDocumentRoute(expandedText)?.mode === "statement") return expandedText;
     if (expandedText) {
       const first = parseReceiptText(firstPassText);
       const larger = parseReceiptText(expandedText);
@@ -2251,24 +2251,18 @@ async function withPdfDocument<T>(
   });
 }
 
-let pdfJsStandardFontDataUrlCache: string | null | undefined;
-
-const resolvePdfJsStandardFontDataUrl = () => {
-  if (pdfJsStandardFontDataUrlCache !== undefined) {
-    return pdfJsStandardFontDataUrlCache;
-  }
-
+// PDF.js' Node binary factory passes these strings directly to fs.readFile.
+const pdfJsAssets = (() => {
   try {
-    const pdfJsPackagePath = nodeRequire.resolve("pdfjs-dist/package.json");
-    pdfJsStandardFontDataUrlCache = pathToFileURL(
-      `${join(dirname(pdfJsPackagePath), "standard_fonts")}${sep}`
-    ).href;
+    const root = dirname(nodeRequire.resolve("pdfjs-dist/package.json"));
+    return {
+      standardFontDataUrl: join(root, "standard_fonts") + sep,
+      wasmUrl: join(root, "wasm") + sep,
+    };
   } catch {
-    pdfJsStandardFontDataUrlCache = null;
+    return {};
   }
-
-  return pdfJsStandardFontDataUrlCache;
-};
+})();
 
 const clonePdfBytes = (data: Uint8Array) => {
   const copy = new Uint8Array(data.length);
@@ -2277,11 +2271,10 @@ const clonePdfBytes = (data: Uint8Array) => {
 };
 
 const createPdfJsLoadOptions = (data: Uint8Array, password?: string, _baseUrl?: string | null, disableWorker = true) => {
-  const standardFontDataUrl = resolvePdfJsStandardFontDataUrl();
   return {
     data: clonePdfBytes(data),
     ...(password ? { password } : {}),
-    ...(standardFontDataUrl ? { standardFontDataUrl } : {}),
+    ...pdfJsAssets,
     disableWorker,
     useWorkerFetch: false,
     isOffscreenCanvasSupported: false,

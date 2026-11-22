@@ -1,6 +1,6 @@
 import { readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { readReceiptOpticalLayout } from "./local-receipt-ocr-envelope";
-import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
+import { readPrintedReceiptCurrency, receiptLocationCandidates } from "./receipt-currency-evidence";
 import { hasLocalizedReceiptEvidence, hasLocalizedUnpaidStatus } from "./localized-receipt-cues";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 import { normalizeReceiptCaptureLocation, locationMatchesReceiptDate } from "../../shared/receipt-capture-location";
@@ -71,34 +71,7 @@ type ReceiptCurrencyDetails = {
   currency_resolution?: { source?: string; original?: string | null; currency?: string | null; requiresReview?: boolean; evidence?: string; confidence?: number; countryCode?: string };
 };
 
-/** Strong printed location clues suggest a currency, never rewrite source text.
- * Conflicting regions deliberately fall back to the user's preference. */
-function receiptLocationCandidates(text: string) {
-  const source = text.normalize("NFKC");
-  const regions: [string, RegExp][] = [
-    ["PHP", /\bPhilippines\b|\b(?:Makati|Mandaluyong|Taguig|Pasig|Quezon|Cebu|Davao)\s+City\b|\bBIR\b.{0,50}\b(?:permit|accr(?:ed(?:itation)?)?|TIN)\b/i],
-    ["IDR", /\bIndonesia\b|\b(?:Jakarta|Surabaya|Bandung|Denpasar)\b.{0,60}\b\d{5}\b/i],
-    ["KRW", /\b(?:South Korea|Republic of Korea)\b|(?:서울|부산|인천|대구|대전|광주|울산)(?:특별시|광역시)|대한민국/u],
-    ["SGD", /\bSingapore\s+\d{6}\b/i],
-    ["MYR", /\bMalaysia\b/i], ["THB", /\bThailand\b/i],
-    ["VND", /\bViet\s*Nam\b/i], ["JPY", /\bJapan\b|日本国/u],
-    ["HKD", /\bHong Kong\b/i], ["AUD", /\bAustralia\b/i], ["CAD", /\bCanada\b/i],
-    ["CNY", /\b(?:mainland China|People.s Republic of China)\b|中华人民共和国/u],
-    ["TWD", /\bTaiwan\b/i],
-    ["NZD", /\bNew Zealand\b/i], ["GBP", /\bUnited Kingdom\b/i],
-    ["USD", /\bUnited States(?: of America)?\b/i],
-  ];
-  const matches = regions.flatMap(([currency, pattern]) => {
-    const match = source.match(pattern);
-    return match ? [{ currency, evidence: match[0] }] : [];
-  });
-  return matches;
-}
-
-export function inferReceiptLocationCurrency(text: string) {
-  const matches = receiptLocationCandidates(text);
-  return matches.length === 1 ? matches[0] : null;
-}
+export { inferReceiptLocationCurrency } from "./receipt-currency-evidence";
 
 /** Currency on the draft is separate from the parser's original value and source text. */
 export function applyReceiptDefaultCurrency<T extends ReceiptCurrencyDetails>(details: T, defaultCurrency: string, receiptText = "", captureLocation?: unknown): T {

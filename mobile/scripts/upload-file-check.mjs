@@ -127,3 +127,29 @@ for (const mimeType of ['application/pdf', 'image/jpeg', 'text/csv', 'applicatio
   assert.equal(fileProblem({ name: 'download', mimeType, size: 200 }), null);
 }
 assert.match(fileProblem({ name: 'download', mimeType: 'application/octet-stream', size: 200 }), /supported/);
+
+const fullRead = {text: "Example Cafe\nOfficial Receipt\n2026-11-19\nTotal PHP 180.00", complete:true, pagesRead:1, totalPages:1};
+for (const [os, initial, expectedReads] of [
+  ["android", fullRead, 1],
+  ["android", {...fullRead, complete:false}, 2],
+  ["android", {...fullRead, text:""}, 2],
+  ["ios", {...fullRead, complete:false}, 2],
+]) {
+  let calls = 0;
+  const reader = load('../src/offline/device-text.ts', {
+    'expo-device': {totalMemory: 4 * 1024 ** 3},
+    'react-native': {Platform:{OS:os}, AppState:{currentState:'active'}},
+    '../../../shared/device-text-evidence': load('../../shared/device-text-evidence.ts', {}),
+    '../../../shared/native-upload': limits,
+    '../../modules/clover-local-ai': {CloverLocalAI:{
+      extractPhotoTextFast: async () => { calls++; return initial; },
+      extractText: async () => { calls++; return fullRead; },
+    }},
+    './file-storage': {},
+    './local-ocr-slot': {tryRunLocalOcr: work => work()},
+  });
+  const result = await reader.prepareSelectedPhoto({name:"receipt.jpg", mimeType:"image/jpeg", size:40000}, "file:///qa.jpg").full;
+  assert.equal(result?.complete, true);
+  assert.equal(calls, expectedReads);
+}
+console.log("PASS selected photo reuses complete Android OCR and retries partial or unreadable readings");
