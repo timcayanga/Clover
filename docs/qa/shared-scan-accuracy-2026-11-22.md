@@ -92,3 +92,44 @@ Unnecessary second full-image reads also delayed previews. A verified item table
 All 11 results went to review. The next accuracy work should compare the affected item crops with an independent reading, particularly on photos 6, 8 and 11, then check new photos before extending automatic acceptance. Physical capture-to-visible-bill latency remains unmeasured in this replay.
 
 The supplied Spirits Library JPEG also passed through the local Split Bills HTTP preview immediately after a blank capture. The handler returned the three labeled drinks, November 19, 2026, the 120.54 service charge and the 1,470.54 total in 3.52 seconds with offline adapters.
+
+## Third pass on original photos and scan routes
+
+A 253 × 450 receipt thumbnail explained the largest item failure. At the original detection scale the reader missed the price column and treated an address and receipt identifier as purchases. Detecting small text on a larger grid recovered the printed date and two credible price readings from the original pixels. The detector still reads the original image for recognition. On a damaged table, only suggestions supported by an explicit two-decimal price on the same row survive. A partial price such as “8.8” no longer creates an 8.80 allocation in that table. The two surviving descriptions still differ from the printed spellings.
+
+A second receipt had quantities floating between names and prices. Clover now accepts an observed quantity when the word, quantity and price occupy the same row, at least two rows establish the quantity column and their counts are compatible with the printed count. Unseen quantities stay unknown. A bare “Reference” heading no longer supplies a merchant. The reader also reuses the detector's pixel arrays while building the text mask and avoids repeated dictionary and probability-array lookups when decoding text.
+
+The generic upload worker previously discarded word positions in two places. It now retains them when isolating a receipt in a photo and when recovering a receipt after statement processing yields no rows. Device OCR eligibility uses the same region evidence. Plain photo transcripts from fallback OCR now use the same item-table checks. Those changes cover the receipt paths behind Add, Transactions, Split Bills, Circles and investment uploads. Bank and investment documents still follow their document-specific readers. Regression checks exercised PDF page coverage, screenshot routing and PDAX, GCrypto, GFunds and GoTrade example documents.
+
+The supplied Spirits Library JPEG produced the printed 1,470.54 total, all three drinks, the 120.54 service charge and the November 19 purchase date in 3.35 seconds through the local Split Bills preview. This includes the HTTP handler with offline adapters, after a blank scan. Physical-device upload, network transit and a production UI render were outside this run.
+
+The same 11 labeled photos yielded the following shared-reader results. All 11 still went to review.
+
+| Measure | Previous pass | This pass |
+| --- | ---: | ---: |
+| Merchant | 7/8 | 7/8 |
+| Date | 7/8 | 8/8 |
+| Currency | 1/2 | 1/2 |
+| Total | 11/11 | 11/11 |
+| Item description | 47/67 | 48/67 |
+| Quantity | 27/67 | 28/67 |
+| Unit price | 13/15 | 13/15 |
+| Matched item amount | 47/67 | 48/67 |
+| Median reader time | 4.40 s | 4.24 s |
+| Slowest reader time | 10.16 s | 9.83 s |
+
+| Photo | Exact names | Unmatched outputs | Core field discrepancies |
+| --- | ---: | ---: | --- |
+| 1 | 7/7 | 0 | None |
+| 2 | 3/3 | 0 | None |
+| 3 | 9/9 | 0 | merchant mismatch |
+| 4 | 2/2 | 0 | None |
+| 5 | 10/11 | 1 | None |
+| 6 | 4/9 | 5 | date supplied without an observable label |
+| 7 | 1/2 | 1 | None |
+| 8 | 2/6 | 4 | None |
+| 9 | 5/5 | 0 | None |
+| 10 | 5/5 | 0 | None |
+| 11 | 0/8 | 2 | currency missing |
+
+Spelling, punctuation and word breaks still account for mismatches. Photo 6 also has a suggested date that the independent label could not establish. Photo 11 has two readable prices with imperfect names and no verified currency. Further work on these examples needs clearer source pixels or independent corroboration. This was a diagnostic replay on familiar images.

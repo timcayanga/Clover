@@ -280,7 +280,7 @@ assert.equal(resolveEarlyPhotoImportRoute("", "Sales Invoice\nTotal PHP 425.00\n
 
 const isStatementReading = (text: string) => resolvePositiveImportDocumentRoute(text)?.mode === "statement";
 const savedReceiptReading = encodeLocalReceiptOcr({ text: photo, source: "apple_vision" });
-assert.equal(selectSavedStatementReceiptText(emptyStatement, ["", savedReceiptReading], isStatementReading), photo);
+assert.equal(selectSavedStatementReceiptText(emptyStatement, ["", savedReceiptReading], isStatementReading), savedReceiptReading);
 assert.equal(selectSavedStatementReceiptText(emptyStatement, ["", "Only thank you"], isStatementReading), null);
 assert.equal(selectSavedStatementReceiptText(emptyStatement, [photo, historyWithReceiptReference], isStatementReading), null);
 assert.equal(selectSavedStatementReceiptText(emptyStatement, [positiveStatement, photo], isStatementReading), null);

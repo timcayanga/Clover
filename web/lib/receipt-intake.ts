@@ -55,10 +55,10 @@ export function selectSavedStatementReceiptText(
       context.hasStatementRows || context.hasSavedRows) return null;
   const readings = candidates.flatMap(candidate => {
     const text = candidate ? readReceiptOpticalLayout(candidate).trim() : "";
-    return text ? [text] : [];
+    return candidate && text ? [{ source: candidate, text }] : [];
   });
-  if (readings.some(isStatement)) return null;
-  return readings.find(opticalText => shouldRecoverEmptyStatementImageAsReceipt({ ...context, opticalText })) ?? null;
+  if (readings.some(reading => isStatement(reading.text))) return null;
+  return readings.find(reading => shouldRecoverEmptyStatementImageAsReceipt({ ...context, opticalText: reading.text }))?.source ?? null;
 }
 
 type ReceiptCurrencyDetails = {

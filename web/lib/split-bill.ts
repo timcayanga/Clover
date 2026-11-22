@@ -1,5 +1,5 @@
 import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
-import { readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
+import { readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
@@ -2515,7 +2515,9 @@ export const parseAirlineTicketReceiptText = (receiptText: string): ReceiptPrevi
   };
 };
 
-export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
+export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => parseReceiptSource(receiptText, false);
+
+function parseReceiptSource(receiptText: string, photo: boolean): ReceiptPreviewResult {
   if (detectMultipleReceipts(receiptText)) {
     return {
       receiptText, receiptType: "generic_receipt", merchantName: null, billDate: null,
@@ -2566,21 +2568,37 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
     requiresReview: settled.requiresReview || Boolean(tenderDifference),
     paymentMethod: hasSplitReceiptTender(tenders) ? "Mixed" : settled.paymentMethod,
   } : settled;
-  const table = readReconciledItemTable(opticalText ?? receiptText) ?? (opticalText ? readChargedReceiptTable(opticalText) : null);
+  const photoText = opticalText ?? (photo ? receiptText : null);
+  const table = readReconciledItemTable(photoText ?? receiptText) ?? (photoText ? readChargedReceiptTable(photoText) : null);
   if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
-    return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || opticalText !== null,
-      confidence:opticalText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};
+    return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || photoText !== null,
+      confidence:photoText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};
   }
-  if (opticalText !== null && !payment && !footer && ["generic_receipt", "restaurant_receipt", "tax_invoice", "official_receipt"].includes(paymentDetails.receiptType)) {
-    const items = readSubtotalItems(opticalText);
+  if (photoText !== null && !payment && !footer && ["generic_receipt", "restaurant_receipt", "tax_invoice", "official_receipt"].includes(paymentDetails.receiptType)) {
+    const items = readSubtotalItems(photoText);
     if (items) {
       const subtotalCents = items.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
-      return { ...paymentDetails, items, subtotal: (subtotalCents / 100).toFixed(2), receiptText,
+      return { ...paymentDetails, items: readOpticalItemQuantities(items, photoText, readReceiptOpticalEvidence(receiptText)), subtotal: (subtotalCents / 100).toFixed(2), receiptText,
         requiresReview: true, confidence: Math.min(45, paymentDetails.confidence) };
     }
   }
+  if (photoText && !payment && !footer && paymentDetails.items.length) {
+    const partial = readPartialPriceColumn(photoText);
+    if (partial) {
+      // Restrict the existing suggestions to prices independently seen on a
+      // single purchase row. An unreadable price stays out of the allocation.
+      const supported = partial.filter(row => paymentDetails.items.some(item =>
+        item.amount === row.amount && item.description.toLowerCase().endsWith(row.description.toLowerCase())));
+      return { ...paymentDetails, items: supported, receiptText, requiresReview: true, confidence: Math.min(45, paymentDetails.confidence) };
+    }
+  }
+  if (photoText && !payment && paymentDetails.items.length && hasUnpricedItemBody(photoText) &&
+      paymentDetails.items.every(item => !Number.isInteger(Number(item.amount)) ||
+        !photoText.split(/\r?\n/).some(line => line.trim().split(/\s+/).pop() === String(Number(item.amount))))) {
+    return { ...paymentDetails, items: [], receiptText, requiresReview: true, confidence: Math.min(45, paymentDetails.confidence) };
+  }
   return opticalText === null ? paymentDetails : { ...paymentDetails, receiptText, requiresReview: true, confidence: Math.min(45, paymentDetails.confidence) };
-};
+}
 
 /** A photo with a clipped settlement line is still a receipt. Keep its
  * visible fields while leaving the amount for a second read or review. */
@@ -2608,7 +2626,7 @@ export function hasUnreadableReceiptPhotoTotal(source: string) {
 }
 
 export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
-  let parsed = parseReceiptText(source);
+  let parsed = parseReceiptSource(source, true);
   const optical = readLocalReceiptOcrText(source);
   if (optical && parsed.receiptType !== "wallet_transfer" && parsed.receiptType !== "travel_ticket") {
     // VAT and service charges occur worldwide. A profile may suggest a
@@ -2631,7 +2649,8 @@ export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
     const index = lines.findIndex(line => line.includes(name));
     const paymentProvider = /\bpayment\s+ne[tl]work\b/i.test(name);
     const afterPayment = index >= 0 && lines.slice(0, index).some(line => /^(?:grand total|amount due|total paid|vat sales)\b/.test(line.trim()));
-    if (paymentProvider || afterPayment || /^(?:qty|ite[mn]) description\b/i.test(name)) {
+    const referenceHeading = /^ref(?:erence)?(?: no\.?| number)?[.:#]?$/i.test(name);
+    if (referenceHeading || paymentProvider || afterPayment || /^(?:qty|ite[mn]) description\b/i.test(name)) {
       parsed = { ...parsed, merchantName: null, requiresReview: true };
     }
   }

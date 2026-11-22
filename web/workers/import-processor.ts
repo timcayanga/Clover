@@ -9723,7 +9723,8 @@ const processImportFileTextImpl = async (
     importMode = "receipt";
     isDocumentImport = true;
   }
-  const receiptOpticalSource = () => receiptRegion?.text ?? deviceReading?.source ?? text;
+  const regionSource = receiptRegion ? encodeLocalReceiptOcr(receiptRegion) : null;
+  const receiptOpticalSource = () => regionSource ?? deviceReading?.source ?? text;
   const receiptOpticalLayout = () => readReceiptOpticalLayout(receiptOpticalSource());
   const originalOpticalSource = receiptOpticalSource();
   const opticalPurchaseText = receiptOpticalLayout();
@@ -11951,11 +11952,11 @@ const processImportFileTextImpl = async (
 
     await rawFileReady;
     await requireImportMayContinue(importFileId, String(importFile.workspaceId));
-    const recoveredDetails = buildReceiptDetailsFromPreview(parseReceiptText(opticalText));
+    const recoveredDetails = buildReceiptDetailsFromPreview(parseReceiptPhotoText(opticalText));
     effectiveImportMode = "receipt";
     isDocumentImport = true;
     recoveredStatementImage = true;
-    recoveredReceiptText = opticalText;
+    recoveredReceiptText = readReceiptOpticalLayout(opticalText);
     receiptDetails = {
       ...recoveredDetails,
       confidence_score: Math.min(69, recoveredDetails.confidence_score),

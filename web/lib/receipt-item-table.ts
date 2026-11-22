@@ -181,3 +181,64 @@ export function hasPrintedItemizedTotal(text: string, total: string) {
   });
   return totals.length > 0 && totals.every(value => value === total);
 }
+
+// Recover a separately printed quantity only when its box sits between the
+// item's last word and its price, in a column shared by multiple item rows.
+export function readOpticalItemQuantities<T extends { description: string; amount: string; quantity?: number }>(
+  items: T[], text: string, blocks: import("../../shared/device-text-evidence").OpticalTextLine[],
+) {
+  const count = text.match(/^total\s+[oq]ty\s+(\d+)$/im);
+  if (!count || !blocks.length) return items;
+  const candidates = items.map(item => {
+    const parts = item.description.match(/^(.+?)\s+([1-9]\d?)$/);
+    if (!parts || item.quantity !== undefined) return null;
+    const lastWord = parts[1].split(/\s+/).pop()!.toLowerCase();
+    const matches = blocks.filter(block => block.text.trim() === parts[2]).filter(block => {
+      const [left, top, right, bottom] = block.box;
+      const sameRow = blocks.filter(other => Math.min(bottom, other.box[3]) - Math.max(top, other.box[1]) >
+        Math.min(bottom - top, other.box[3] - other.box[1]) * 0.45);
+      return sameRow.some(other => other.box[2] < left && other.text.trim().toLowerCase().split(/\s+/).pop() === lastWord) &&
+        sameRow.some(other => other.box[0] > right && other.text.trim().replace(/,/g, "") === item.amount);
+    });
+    return matches.length === 1 ? { name: parts[1], qty: Number(parts[2]), x: matches[0].box[0] } : null;
+  });
+  const observed = candidates.filter(candidate => candidate !== null);
+  const minimum = candidates.reduce((sum, candidate, i) => sum + (candidate?.qty ?? items[i].quantity ?? 1), 0);
+  if (observed.length < 2 || Math.max(...observed.map(c => c.x)) - Math.min(...observed.map(c => c.x)) > 0.025 ||
+      minimum > Number(count[1])) return items;
+  return items.map((item, i) => {
+    const candidate = candidates[i];
+    return candidate ? { ...item, description: candidate.name, quantity: candidate.qty } : item;
+  });
+}
+
+// When the item price column is illegible, an audit number or receipt number
+// in the header must not supply prices for the unpriced description rows.
+export function hasUnpricedItemBody(text: string) {
+  const lines = text.split(/\r?\n/).map(line => line.trim());
+  const end = lines.findIndex(line => /^sub[ -]?total\s*[:：]?$/i.test(line));
+  if (end < 3) return false;
+  const lastRows = lines.slice(end - 3, end);
+  return lastRows.every(line => /^\p{L}[\p{L}\d '’/().,&-]+$/u.test(line)) &&
+    !lines.slice(0, end).some(line => /(?:^|[^\d])\d+[.,]\d{2}\s*$/.test(line));
+}
+
+// A damaged price column can contain several item names followed by only one
+// readable price. Do not assign that price to the concatenation of all names.
+export function readPartialPriceColumn(text: string) {
+  const lines = text.split(/\r?\n/).map(line => line.trim());
+  const end = lines.findIndex(line => /^sub[ -]?total\s*[:：]?\s+\d[\d,]*\.\d{2}$/i.test(line));
+  if (end < 4) return null;
+  const items: { description: string; amount: string }[] = [];
+  let unpriced = 0;
+  let damagedPrice = false;
+  for (let i = end - 1; i >= 0; i--) {
+    const row = lines[i].match(/^(\p{L}[\p{L}\p{N} '&/().,-]*?)\s+(\d[\d,]*\.\d{1,2})$/u);
+    if (row) {
+      if (row[2].split(".")[1].length === 1) damagedPrice = true;
+      else items.push({ description: row[1], amount: row[2].replace(/,/g, "") });
+    } else if (/^\p{L}[\p{L} '&/().,-]+$/u.test(lines[i])) unpriced++;
+    else break;
+  }
+  return damagedPrice && unpriced >= 2 && items.length >= 2 ? items.reverse() : null;
+}

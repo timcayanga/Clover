@@ -179,7 +179,10 @@ function rectangle(cv, contour, expansion = 0) {
   return { box: [left[0], right[0], right[1], left[1]], short: Math.min(w, h) };
 }
 async function detect(cv, image, size) {
-  const ratio = Math.min(1, size / Math.max(image.width, image.height));
+  const edge = Math.max(image.width, image.height);
+  // Small thumbnails can contain text narrower than a detection cell.
+  // Enlarge the detection grid only, then recognize crops of the source pixels.
+  const ratio = edge < 720 ? Math.min(2, 720 / edge) : Math.min(1, size / edge);
   const w = Math.max(32, Math.round((image.width * ratio) / 32) * 32),
     h = Math.max(32, Math.round((image.height * ratio) / 32) * 32);
   const bytes = await sharp(image.data, {
@@ -193,7 +196,9 @@ async function detect(cv, image, size) {
     tensor(bytes, w, h, true),
   );
   const mask = new cv.Mat(h, w, cv.CV_8UC1);
-  for (let i = 0; i < w * h; i++) mask.data[i] = output.data[i] > 0.3 ? 255 : 0;
+  const maskData = mask.data;
+  const probabilities = output.data;
+  for (let i = 0; i < w * h; i++) maskData[i] = probabilities[i] > 0.3 ? 255 : 0;
   output.dispose();
   const contours = new cv.MatVector(),
     hierarchy = new cv.Mat(),
@@ -293,6 +298,7 @@ async function crops(cv, image, boxes) {
 async function recognize(lines, language, normalize = true) {
   const model = await getModel(language),
     results = [];
+  const numericGlyphs = model.dictionary.flatMap((char, index) => index && /^[0-9OoIlSBZ]$/.test(char) ? [index] : []);
   for (const line of lines) {
     const input = tensor(
       line.data,
@@ -324,22 +330,28 @@ async function recognize(lines, language, normalize = true) {
         last = -1,
         min = 1;
       const characterAlternatives = [];
-      const numericGlyphs = model.dictionary.flatMap((char, index) => index && /^[0-9OoIlSBZ]$/.test(char) ? [index] : []);
+      const probabilities = output.data;
       let characterIndex = 0;
-      for (let i = 0; i < output.data.length; i += classes) {
+      for (let i = 0; i < probabilities.length; i += classes) {
         let best = 0;
-        for (let c = 1; c < classes; c++)
-          if (output.data[i + c] > output.data[i + best]) best = c;
+        let maximum = probabilities[i];
+        for (let c = 1; c < classes; c++) {
+          const value = probabilities[i + c];
+          if (value > maximum) {
+            maximum = value;
+            best = c;
+          }
+        }
         if (best !== 0 && best !== last) {
           const glyph = model.dictionary[best];
-          const p = output.data[i + best];
+          const p = probabilities[i + best];
           if (characterAlternatives.length < 8 && p < 0.85 && /^[0-9OoIlSBZ]$/.test(glyph)) {
             let next = -1;
             for (const c of numericGlyphs) {
-              if (c !== best && (next === -1 || output.data[i + c] > output.data[i + next])) next = c;
+              if (c !== best && (next === -1 || probabilities[i + c] > probabilities[i + next])) next = c;
             }
-            if (next !== -1 && output.data[i + next] >= 0.1 && p - output.data[i + next] <= 0.25) {
-              characterAlternatives.push({ index: characterIndex, text: model.dictionary[next], confidence: output.data[i + next] });
+            if (next !== -1 && probabilities[i + next] >= 0.1 && p - probabilities[i + next] <= 0.25) {
+              characterAlternatives.push({ index: characterIndex, text: model.dictionary[next], confidence: probabilities[i + next] });
             }
           }
           text += glyph;
@@ -446,8 +458,9 @@ async function run(preview, timings) {
   const language = hangul >= 3 ? "korean" : "latin";
   const first = language === "korean" ? korean : latin;
   const alternate = await recognize(lineImages, language, false);
+  const alternateByBox = new Map(alternate.map(line => [line.box, line]));
   const lines = first.map((line) => {
-    const other = alternate.find((candidate) => candidate.box === line.box);
+    const other = alternateByBox.get(line.box);
     const best = other?.confidence > line.confidence ? other : line;
     const runnerUp = best === line ? other : line;
     return {

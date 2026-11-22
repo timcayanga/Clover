@@ -24,7 +24,7 @@ export function qualifyDeviceReceiptReading(
       inspectBankingScreenshot(fullLayout).kind !== "unknown" ||
       classifyUnsettledPurchaseDocument(layout)) return null;
 
-  const candidate = parseReceiptPhotoText(region ? layout : source);
+  const candidate = parseReceiptPhotoText(region ? encodeLocalReceiptOcr(region) : source);
   if (!candidate.merchantName || !candidate.billDate || !(Number(candidate.total) > 0)) return null;
   // An unspecified currency can be suggested at review. Conflicting totals,
   // missing printed evidence, or incomplete itemization still get a new read.

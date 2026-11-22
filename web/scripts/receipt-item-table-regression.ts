@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
+import { readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
@@ -82,3 +82,24 @@ const foreign = encodeLocalReceiptOcr({text: "GREEN CAFE\n2026-11-19\nCoffee 10.
 assert.equal(parseReceiptPhotoText(foreign).currency, "USD");
 assert.equal(parseReceiptPhotoText(foreign.replace("USD ", "")).currency, "MIXED");
 assert.equal(parseReceiptPhotoText(foreign.replace("USD ", "")).total, "11.00");
+
+const unpriced = encodeLocalReceiptOcr({text: "CAFE GREEN\n#401\nOfficial Receipt\nRef: 188270\nMango Juice\nCarrot Juice\nLemon Tea\nSubtotal\nAmount Due PHP 180.00"});
+assert.equal(parseReceiptPhotoText(unpriced).total, "180.00");
+assert.deepEqual(parseReceiptPhotoText(unpriced).items, []);
+const opticalBlocks: OpticalTextLine[] = [];
+for (const [i, name, qty, price] of [[0,"Cocoa","1","10.00"],[1,"Tea","2","12.00"]] as const) {
+  const top = 0.1 + i * 0.1;
+  opticalBlocks.push({text:name, box:[0.1,top,0.3,top+0.04]}, {text:qty,box:[0.5,top,0.52,top+0.04]},
+    {text:price,box:[0.7,top,0.8,top+0.04]});
+}
+const quantityRows = [{description:"Cocoa 1",amount:"10.00"}, {description:"Tea 2",amount:"12.00"}];
+assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 3", opticalBlocks).map(item => item.description), ["Cocoa","Tea"]);
+assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 2", opticalBlocks), quantityRows);
+assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 3", opticalBlocks.slice(1)), quantityRows);
+const damagedColumn = "Orange Juice 25.00\nTea\nBeer\nSpring Roll 30.00\nNoodles 8.8\nSubtotal 120.00";
+assert.deepEqual(readPartialPriceColumn(damagedColumn), [
+  { description: "Orange Juice", amount: "25.00" }, { description: "Spring Roll", amount: "30.00" },
+]);
+assert.equal(readPartialPriceColumn(damagedColumn.replace("8.8", "8.80")), null);
+assert.deepEqual(parseReceiptPhotoText(readLocalReceiptOcrText(unpriced)!).items, []);
+assert.deepEqual(parseReceiptPhotoText(register + "\nTotal PHP 11.00").items.map(item => item.description), ["Coffee","Tea"]);
