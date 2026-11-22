@@ -134,6 +134,12 @@ const acceptedReading = qualifyDeviceReceiptReading(normalizeDeviceTextEvidence(
 assert.match(acceptedReading?.layout ?? "", /Total PHP 425\.00/);
 assert.equal(acceptedReading?.source, encodeLocalReceiptOcr(normalizeDeviceTextEvidence(readableDeviceOcr)!),
   "Keep source text and validated geometry together");
+// A damaged amount-due label can leave a plausible sum of apparent items.
+for (const source of ["apple_vision", "google_mlkit"]) {
+  const shuffled = normalizeDeviceTextEvidence({ ...readableDeviceOcr, source, opticalLines: [],
+    text: "Date & Time: 05.05.2023 20:16\nCashier: Test Cashier\n(Whole)\nCustomer Name:\nSub Total\nDiscount Detail\n0.00\n0.00\nSett lement Details\n875.33" });
+  for (const mode of ["statement", "receipt"]) assert.equal(qualifyDeviceReceiptReading(shuffled, mode, "PHP"), null);
+}
 const alternateReading = normalizeDeviceTextEvidence({
   ...readableDeviceOcr,
   opticalLines: readableLines.map(line => !line.text.startsWith("PHP 425") ? line : {

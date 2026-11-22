@@ -1,5 +1,6 @@
 import type { DeviceTextEvidence } from "../../shared/device-text-evidence";
 import { encodeLocalReceiptOcr, receiptDateDisagreements, hasConflictingReceiptTotalReading, readReceiptOpticalLayout, readReceiptOpticalLines } from "./local-receipt-ocr-envelope";
+import { readReceiptSettlementEvidence } from "./receipt-settlement-evidence";
 import { findReceiptImageRegion } from "./receipt-image-region";
 import { hasReceiptPhotoEvidence } from "./receipt-intake";
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
@@ -27,6 +28,10 @@ export function qualifyDeviceReceiptReading(
 
   const candidate = parseReceiptPhotoText(region ? encodeLocalReceiptOcr(region) : source);
   if (!candidate.merchantName || !candidate.billDate || !(Number(candidate.total) > 0)) return null;
+  // Device text can arrive column by column. Adding its apparent items may
+  // produce a plausible total from reference numbers and duplicated amounts.
+  const settlement = readReceiptSettlementEvidence(layout);
+  if (settlement?.kind !== "payable" || settlement.amount !== Number(candidate.total)) return null;
   // An unspecified currency can be suggested at review. Conflicting totals,
   // missing printed evidence, or incomplete itemization still get a new read.
   if (candidate.currencyWarning?.startsWith("Mixed currencies detected:")) return null;

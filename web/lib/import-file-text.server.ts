@@ -2,7 +2,7 @@ import { isDelimitedImport, importDocumentMediaType, importMediaType, FINANCIAL_
 import { purchaseInvoiceHeading } from "./purchase-document-payment";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "./receipt-price-column";
 import { recordReceiptQuantityCrop, recordReceiptPriceCrop, readLocalReceiptOcrText, readReceiptOpticalEvidence, singleReceiptDate, receiptDateDisagreements, recordReceiptDateCheck } from "./local-receipt-ocr-envelope";
-import { readChargedReceiptTable, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
+import { reconcilesReviewedDiscountPhoto, readChargedReceiptTable, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readReconciledItemTable } from "./receipt-item-table";
 import { runPdfPageBatch } from "./pdf-page-work";
 import { createImportReaderCapacity } from "./import-reader-capacity";
 import { measureImportReader, recordImportReaderTiming, recordImportWork, reportImportReaderEvent } from "./import-timing";
@@ -258,7 +258,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v22";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v23";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -1046,7 +1046,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     // The shared photo parser withholds clipped or conflicting payable amounts.
     const parsed = parseReceiptPhotoText(source);
     let verified = source;
-    if (!canPreviewLocalReceiptItems(text, parsed)) {
+    if (!canPreviewLocalReceiptItems(text, parsed) && !reconcilesReviewedDiscountPhoto(text, parsed)) {
       if (!parsed.total || !parsed.subtotal || !parsed.requiresReview) return null;
       const recovered = await verifyReceiptPriceCrop(source, image);
       if (recovered === source) return null;

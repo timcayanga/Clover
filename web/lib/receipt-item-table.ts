@@ -1,3 +1,5 @@
+import { readReceiptSettlementEvidence } from "./receipt-settlement-evidence";
+import type { ReceiptPreviewResult } from "./split-bill";
 import { isReceiptCurrencyCode } from "./receipt-currency-evidence";
 
 // A purchase table must agree with two independently printed totals before it
@@ -91,6 +93,9 @@ function readQuantityTable(text: string) {
   if (!items.length || itemCents !== subtotal) return null;
 
   const footer = lines.slice(subtotalIndex + 1);
+  // A repeated subtotal can belong to another check on the same page.
+  // Preserve the general reader when the figures disagree.
+  if (footer.some(line => /^sub[ -]?total\b/i.test(line) && priceInCents(line) !== subtotal)) return null;
   const serviceRows = footer.filter(line => /^service\s+ch\w+\b/i.test(line));
   if (serviceRows.length > 1) return null;
   const service = serviceRows.length ? priceInCents(serviceRows[0]) : 0;
@@ -351,6 +356,37 @@ export function readChargedReceiptTable(source: string, blocks: OpticalBlock[] =
 // before showing the editable amount. A second scan should still handle partial rows.
 export function canPreviewLocalReceiptItems(text: string, draft: { total: string | null; merchantName: string | null; billDate: string | null }) {
   return draft.total !== null && hasPrintedItemizedTotal(text, draft.total, !draft.merchantName || !draft.billDate);
+}
+
+// For an editable photo draft, two independent calculations can establish the
+// payable even when secondary tax details still need review. This check only
+// selects the OCR transcript. It never changes confidence or save eligibility.
+export function reconcilesReviewedDiscountPhoto(text: string, draft: ReceiptPreviewResult) {
+  if (!draft.requiresReview || !draft.merchantName || !draft.billDate || !draft.total ||
+      draft.currencyMentions.length > 1 || !draft.discount || !draft.tax || !draft.subtotal || draft.tip || draft.rounding || draft.serviceCharge) return false;
+  const cents = (raw: string | null) => raw && /^-?\d+(?:,\d{3})*\.\d{2}$/.test(raw)
+    ? Number(raw.replace(/[,.]/g, "")) : NaN;
+  const lines = text.split(/\r?\n/).map(line => line.trim());
+  const uniqueAmount = (label: RegExp) => {
+    const matching = lines.filter(line => label.test(line));
+    return matching.length === 1 ? cents(matching[0].replace(label, "").replace(/^\s*:\s*/, "").trim()) : NaN;
+  };
+  const subtotal = uniqueAmount(/^sub[ -]?total\b/i);
+  const discount = uniqueAmount(/^discount(?=\s*[:–-]|\s+\d)/i);
+  const payable = uniqueAmount(/^(?:amount (?:due|to pay|paid)|bill (?:amount|total)|balance due|grand total|total(?: amount| due)?)(?=\s|:|$)/i);
+  const net = uniqueAmount(/^net amount\b/i);
+  const vat = uniqueAmount(/^\d+(?:\.\d+)?%\s*VAT\b/i);
+  if (![subtotal, discount, payable, net, vat].every(Number.isSafeInteger) ||
+      discount >= 0 || net <= 0 || vat <= 0 || subtotal + discount !== payable || net + vat !== payable ||
+      cents(draft.total) !== payable || cents(draft.tax) !== vat || cents(draft.discount) !== discount ||
+      cents(draft.subtotal) !== subtotal || uniqueAmount(/^VAT amount\b/i) !== vat) return false;
+  const settlement = readReceiptSettlementEvidence(text);
+  if (settlement?.kind !== "payable" || settlement.amount !== Number(draft.total)) return false;
+  const items = readSubtotalItems(text);
+  return !!items && items.length === draft.items.length && items.every((item, index) =>
+    item.quantity !== undefined && item.quantity > 0 && !!item.unitPrice &&
+    item.amount === draft.items[index].amount && item.quantity === draft.items[index].quantity &&
+    item.unitPrice === draft.items[index].unitPrice);
 }
 
 // Some registers print VAT-inclusive item prices, apply a percentage to

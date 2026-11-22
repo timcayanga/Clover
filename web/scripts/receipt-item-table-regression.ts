@@ -1,7 +1,7 @@
 import { splitBillDraftFromReceiptPreview } from "../lib/split-bill";
 import { mergeReceiptBackup } from "../lib/receipt-backup-preview";
 import assert from "node:assert/strict";
-import { canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
+import { reconcilesReviewedDiscountPhoto, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "../lib/receipt-price-column";
 import { recordReceiptQuantityCrop, recordReceiptPriceCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
@@ -89,6 +89,33 @@ assert.deepEqual(readReconciledItemTable(nameFirst)?.items, [
   { description: "Tea 42", quantity: 1, unitPrice: "25.00", amount: "25.00" },
 ]);
 assert.equal(readReconciledItemTable(nameFirst.replace("319.99", "300.00")), null);
+assert.equal(readReconciledItemTable(nameFirst + "\nSubtotal 250.00"), null);
+
+const discountedPhoto = `Garden Cafe
+Official Receipt
+2026-11-19
+Item Qty Amount
+Price
+Cake 2.00 50.00 100.00
+Bag 1.00 12.00 12.00
+Sub Total 112.00
+Discount -12.00
+Net Amount 89.29
+12%VAT 10.71
+AMOUNT DUE 100.00
+VAT BREAKDOWN
+VAT Amount 10.71`;
+const discountDraft = parseReceiptPhotoText(discountedPhoto);
+assert.ok(reconcilesReviewedDiscountPhoto(discountedPhoto, discountDraft));
+for (const damaged of [
+  discountedPhoto.replace("Net Amount 89.29", "Net Amount 39.29"),
+  discountedPhoto.replace("2.00 50.00", "3.00 50.00"),
+  discountedPhoto.replace("VAT Amount 10.71", "VAT Amount 11.71"),
+  discountedPhoto + "\nAmount paid 101.00",
+  discountedPhoto + "\nCash 110.00\nChange 12.00",
+  discountedPhoto + "\nTotal Due 99.00",
+]) assert.equal(reconcilesReviewedDiscountPhoto(damaged, discountDraft), false);
+assert.equal(reconcilesReviewedDiscountPhoto(discountedPhoto, { ...discountDraft, requiresReview: false }), false);
 const damagedNameFirst = parseReceiptPhotoText("Green Cafe\nOfficial Receipt\n" + nameFirst.replace("319.99", "310.00"));
 assert.equal(damagedNameFirst.items[0].description, "Coffee Beans");
 assert.equal(damagedNameFirst.items[0].unitPrice, null);
