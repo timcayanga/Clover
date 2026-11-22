@@ -8,6 +8,8 @@ export function readReconciledItemTable(text: string) {
   return readQuantityTable(text) ?? readRegisterServiceTable(text) ?? readCountedGrossTable(text);
 }
 
+const purchaseHeader = /^(?:qty|quantity|description|item(?: description)?|product)[ \t]+.*\b(?:amount|total|price)[ \t]*\r?$/im;
+
 // Some tills omit column headings and print the quantity count under the
 // purchases. The count, gross, and separately printed payable must all agree.
 export function readCountedGrossTable(text: string) {
@@ -20,7 +22,8 @@ export function readCountedGrossTable(text: string) {
   if (!count) return null;
   const quantity = count[1] || lines[end + 1];
   if (!/^[1-9]\d*$/.test(quantity ?? "")) return null;
-  const gross = lines[end + (count[1] ? 1 : 2)]?.match(/^gross amount\s*:?\s*(\d+(?:,\d{3})*\.\d{2})$/i);
+  const grossIndex = end + (count[1] ? 1 : 2);
+  const gross = lines[grossIndex]?.match(/^gross amount\s*:?\s*(\d+(?:,\d{3})*\.\d{2})$/i);
   if (!gross || lines.filter(line => /^gross amount\b/i.test(line)).length !== 1) return null;
   const total = gross[1].replace(/,/g, "");
   const payableLabel = /^(?:bill (?:amount|total)|grand total|amount due|total(?: amount| due| paid)?)\b/i;
@@ -34,6 +37,29 @@ export function readCountedGrossTable(text: string) {
   })) return null;
   const settlement = readReceiptSettlementEvidence(text);
   if (settlement?.kind !== "payable" || settlement.amount !== Number(total)) return null;
+  // An explicit header determines which column contains the quantity. A
+  // numeric product suffix can coincidentally add up to the printed count.
+  const headings = lines.slice(0, end).filter(line => purchaseHeader.test(line));
+  if (headings.length) {
+    if (headings.length !== 1) return null;
+    if (/^(?:description|item(?: description)?|product)\s+amount$/i.test(headings[0])) {
+      const rows = lines.slice(lines.indexOf(headings[0]) + 1, end);
+      const items: PricedItem[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        let row = rows[i];
+        if (/^\d+(?:,\d{3})*\.\d{2}$/.test(rows[i + 1] ?? "")) row += " " + rows[++i];
+        const match = row.match(/^(\p{L}.*?)\s+(\d+(?:,\d{3})*\.\d{2})$/u);
+        if (!match || Number(match[2].replace(/,/g, "")) <= 0) return null;
+        items.push({ description: match[1], amount: match[2].replace(/,/g, "") });
+      }
+      const cents = items.reduce((sum, item) => sum + Number(item.amount.replace(".", "")), 0);
+      return items.length > 0 && items.length <= Number(quantity) && Number.isSafeInteger(cents) && cents === Number(total.replace(".", ""))
+        ? { items, subtotal: total, total, serviceCharge: null } : null;
+    }
+    if (!/\b(?:qty|quantity)\b/i.test(headings[0])) return null;
+    const labeled = readQuantityTable(text, { lines, header: lines.indexOf(headings[0]), end, grossIndex });
+    return labeled && labeled.items.reduce((units, item) => units + item.quantity, 0) === Number(quantity) ? labeled : null;
+  }
   const items: { description: string; quantity: number; amount: string }[] = [];
   for (let i = end - 1; i >= 0; i--) {
     let row = lines[i];
@@ -49,18 +75,18 @@ export function readCountedGrossTable(text: string) {
   return { items: items.reverse(), subtotal: total, total, serviceCharge: null };
 }
 
-export const receiptNameFirstPriceHeader = /^[ \t]*(?:item(?:[ \t]+description)?|description)[ \t]+(?:qty|quantity)[ \t]+(?:unit[ \t]+)?price[ \t]+(?:line[ \t]+total|total|amount)[ \t]*\r?$/im;
+export const receiptNameFirstPriceHeader = /^[ \t]*(?:item(?:[ \t]+description)?|description)[ \t]+(?:qty|quantity)[ \t]+(?:unit[ \t]*)?price[ \t]+(?:line[ \t]+total|total|amount)[ \t]*\r?$/im;
 
-function readQuantityTable(text: string) {
-  const lines = text.split(/\r?\n/).map(line => line.trim());
-  const header = lines.findIndex(line => receiptNameFirstPriceHeader.test(line) || /\b(?:qty|quantity)\b.*\b(?:ite(?:m)?|description)\b/i.test(line));
+function readQuantityTable(text: string, counted?: { lines: string[]; header: number; end: number; grossIndex: number }) {
+  const lines = counted?.lines ?? text.split(/\r?\n/).map(line => line.trim());
+  const header = counted?.header ?? lines.findIndex(line => receiptNameFirstPriceHeader.test(line) || /\b(?:qty|quantity)\b.*\b(?:ite(?:m)?|description)\b/i.test(line));
   if (header < 0) return null;
 
-  const subtotalIndex = lines.findIndex((line, i) => i > header && /^sub[ -]?total\b/i.test(line));
+  const subtotalIndex = counted?.grossIndex ?? lines.findIndex((line, i) => i > header && /^sub[ -]?total\b/i.test(line));
   if (subtotalIndex < 0) return null;
 
-  const nameFirst = receiptNameFirstPriceHeader.test(lines[header]);
-  const hasUnitPrice = nameFirst || /\bunit\s+price\b|\bprice\s+(?:amount|line total|total)\b/i.test(lines[header]);
+  const nameFirst = /^(?:item(?: description)?|description|product)\s+(?:qty|quantity)\b/i.test(lines[header]);
+  const hasUnitPrice = receiptNameFirstPriceHeader.test(lines[header]) || /\bunit\s*price\b|\bprice\s+(?:amount|line total|total)\b/i.test(lines[header]);
   // Parse printed denominations only in monetary columns. Keep the
   // original OCR transcript and numbers embedded in product names intact.
   const denominations = new Set<string>();
@@ -90,7 +116,7 @@ function readQuantityTable(text: string) {
   }
   const items: {description: string; quantity: number; amount: string; unitPrice?: string}[] = [];
   let itemCents = 0;
-  for (const line of lines.slice(header + 1, subtotalIndex)) {
+  for (const line of lines.slice(header + 1, counted?.end ?? subtotalIndex)) {
     if (!items.length && /^(?:dine in|take out|vat items?|vat item\(s\))$/i.test(line)) continue;
     const column = takePrice(line);
     const unitColumn = column && hasUnitPrice ? takePrice(column.prefix) : null;
@@ -511,6 +537,9 @@ export function hasPrintedItemizedTotal(text: string, total: string, requirePurc
   if (reconcilesDiscountedVatReceipt(text, total)) return true;
   const quantityTable = readQuantityTable(text) ?? readCountedGrossTable(text);
   if (quantityTable) return quantityTable.total === total;
+  // A weaker price sum cannot validate a damaged, explicitly counted table.
+  if (/^\s*total (?:[qo]ty|quantity)\b/im.test(text) && /^\s*gross amount\b/im.test(text) &&
+      purchaseHeader.test(text)) return false;
   const charged = readChargedReceiptTable(text);
   if (requirePurchaseTable && charged?.total === total && reconcilesTaxAndService(text, charged)) return true;
   if (requirePurchaseTable && totals.length === 2 && totals.every(amount => amount === total)) {

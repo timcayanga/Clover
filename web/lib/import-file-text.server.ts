@@ -258,7 +258,7 @@ const KNOWN_SECURITY_BANK_1852_TEXT = [
   "18Dec23",
 ].join("\n");
 
-export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v24";
+export const IMPORT_IMAGE_OCR_CACHE_VERSION = "image-ocr-v25";
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -1044,7 +1044,12 @@ async function recoverCountedReceiptQuantities(source: string, image: ImagePrevi
     const table = readCountedGrossTable(reading + "\n" + suffix);
     if (!table || table.total !== draft.total || table.items.length !== rows.length) return source;
     const count = Number(lines[grossIndex - 1].match(/^total [qo]ty +(\d+)$/i)?.[1]);
-    if (table.items.reduce((n, item) => n + item.quantity, 0) !== count) return source;
+    let recoveredUnits = 0;
+    for (const item of table.items) {
+      if (item.quantity === undefined) return source;
+      recoveredUnits += item.quantity;
+    }
+    if (recoveredUnits !== count) return source;
     for (const [i, item] of draft.items.entries()) {
       const recovered = table.items[i];
       if (item.amount !== recovered.amount || (item.quantity != null && item.quantity !== recovered.quantity)) return source;

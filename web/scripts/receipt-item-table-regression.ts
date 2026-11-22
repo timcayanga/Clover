@@ -133,6 +133,30 @@ for (const invalid of [
   countedTill + "\nDiscount 10.00",
 ]) assert.equal(readReconciledItemTable(invalid), null);
 
+const numberedGoods = countedTill.replace("Tea 42 2 40.00\nRice 1\n60.00", "Description Amount\nTea 2 40.00\nBlend 1 60.00");
+assert.deepEqual(readReconciledItemTable(numberedGoods)?.items.map(item => item.description), ["Tea 2", "Blend 1"]);
+assert.deepEqual(parseReceiptPhotoText(numberedGoods).items.map(item => [item.description, item.quantity]),
+  [["Tea 2", undefined], ["Blend 1", undefined]]);
+
+const countedUnitPrices = countedTill.replace("Tea 42 2 40.00\nRice 1\n60.00",
+  "Qty Description Unit Price Amount\n2 Green Tea 42 20.00 40.00\n1 Rice Bowl 60.00 60.00");
+assert.deepEqual(readReconciledItemTable(countedUnitPrices)?.items, [
+  { description: "Green Tea 42", quantity: 2, unitPrice: "20.00", amount: "40.00" },
+  { description: "Rice Bowl", quantity: 1, unitPrice: "60.00", amount: "60.00" },
+]);
+assert.deepEqual(readReconciledItemTable(countedUnitPrices.replace("Unit Price", "UnitPrice"))?.items,
+  readReconciledItemTable(countedUnitPrices)?.items);
+assert.deepEqual(readReconciledItemTable(numberedGoods.replace("Total Qty\n3", "Total Qty 3").replace("Tea 2 40.00", "Tea 2\n40.00"))?.items,
+  readReconciledItemTable(numberedGoods)?.items);
+for (const invalid of [
+  countedUnitPrices.replace("Qty\n3", "Qty\n2"),
+  countedUnitPrices.replace("20.00 40.00", "30.00 40.00"),
+  countedUnitPrices.replace("Cash 150.00", "Cash 160.00"),
+]) {
+  assert.equal(readReconciledItemTable(invalid), null);
+  assert.equal(hasPrintedItemizedTotal(invalid, "100.00", true), false);
+}
+
 // Mobile recognizers can emit each column separately. Row geometry and the
 // three printed checks must agree before the server can reuse that evidence.
 const countedColumns = [
