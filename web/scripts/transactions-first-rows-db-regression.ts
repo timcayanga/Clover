@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { performance } from "node:perf_hooks";
 import { randomUUID } from "node:crypto";
+import { mock } from "node:test";
 
 const database = new URL(process.env.DATABASE_URL ?? "http://invalid");
 assert.equal(database.hostname, "127.0.0.1");
@@ -57,6 +58,41 @@ async function main() {
       previous.push(normal.ms);
       optimized.push(fast.ms);
     }
+    // A drilldown can supply both a saved account ID and an imported identity.
+    // Both aliases must resolve against the same directory snapshot.
+    const alias = await prisma.account.create({ data: { workspaceId: workspace.id, name: "QA Cash", currency: "PHP", type: "cash" } });
+    const originalFindMany = prisma.account.findMany;
+    const directoryRead = mock.fn(originalFindMany);
+    prisma.account.findMany = directoryRead;
+    try {
+      const params = new URLSearchParams({ workspaceId: workspace.id, summaryMode: "rows", accountId: alias.id, accountName: "QA Cash", accountType: "cash", accountCurrency: "PHP" });
+      const response = await GET(new Request(`http://localhost/api/transactions?${params}`));
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).totalCount, size);
+      assert.equal(directoryRead.mock.callCount(), 1);
+    } finally { prisma.account.findMany = originalFindMany; }
+    // The same account list backs the web page and the native gateway.
+    const accountsRoute = await import("../app/api/accounts/route");
+    const { withMobileRequestContext } = await import("../lib/mobile-request-context");
+    const { mobileApiResponse } = await import("../lib/mobile-api-response");
+    const checking = await prisma.account.create({ data: { workspaceId: workspace.id, name: "QA Checking", institution: "QA Bank", accountNumber: "12345678", type: "bank", source: "upload", currency: "PHP" } });
+    const checkpoint = { workspaceId: workspace.id, accountId: checking.id, status: "reconciled" as const };
+    await prisma.accountStatementCheckpoint.createMany({ data: [
+      { ...checkpoint, endingBalance: 870, statementEndDate: new Date("2026-09-01"), createdAt: new Date("2026-10-05") },
+      { ...checkpoint, endingBalance: 950, statementEndDate: new Date("2026-10-01"), createdAt: new Date("2026-10-03") },
+      { ...checkpoint, endingBalance: 10, sourceMetadata: { importMode: "receipt" }, createdAt: new Date("2026-10-06") },
+    ] });
+    const directoryRequest = new Request(`http://localhost/api/accounts?workspaceId=${workspace.id}`);
+    const full = await accountsRoute.GET(directoryRequest);
+    const compact = await withMobileRequestContext(clerkUserId, directoryRequest, () => accountsRoute.GET(directoryRequest));
+    assert.equal(full.status, 200);
+    assert.equal(compact.status, 200);
+    const fullBody = await full.json();
+    const compactBody = await compact.json();
+    assert.equal(fullBody.accounts.find((a: { id: string }) => a.id === checking.id)?.balance, "950");
+    assert.deepEqual(mobileApiResponse("accounts", compactBody), mobileApiResponse("accounts", fullBody));
+    assert.ok(fullBody.statementCheckpoints.length > 0);
+    assert.deepEqual(compactBody.statementCheckpoints, []);
     const percentile = (samples: number[], fraction: number) => [...samples].sort((a,b) => a-b)[Math.ceil(samples.length * fraction) - 1].toFixed(1);
     console.log(`30,000 transactions, 10 requests per path: baseline p50/p90 ${percentile(previous,.5)}/${percentile(previous,.9)}ms, first rows p50/p90 ${percentile(optimized,.5)}/${percentile(optimized,.9)}ms`);
   } finally {

@@ -287,7 +287,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
   }
   const savedGoal = goalId === "primary" ? null : await prisma.personalGoal.findFirst({ where: { id: goalId, workspaceId: resolvedWorkspace.id } });
   if (goalId !== "primary" && !savedGoal) notFound();
-  const profileCurrencies = await prisma.account.findMany({ where: { workspaceId: resolvedWorkspace.id }, select: { currency: true }, distinct: ["currency"] });
+  const profileCurrencies = savedGoal?.currency ? [] : await prisma.account.groupBy({ where: { workspaceId: resolvedWorkspace.id }, by: ["currency"] });
   const goalCurrency = savedGoal?.currency ?? (profileCurrencies.length === 1 ? profileCurrencies[0].currency ?? "PHP" : "PHP");
   const goalFilterCurrency = goalCurrency;
 

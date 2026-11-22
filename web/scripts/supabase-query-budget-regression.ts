@@ -19,8 +19,8 @@ const main = async () => {
     ]);
 
   assert.doesNotMatch(userContext, /prisma\.user\.upsert/);
-  assert.match(userContext, /await prisma\.user\.update/);
-  assert.match(userContext, /await prisma\.user\.create/);
+  assert.match(userContext, /await tx\.user\.update/);
+  assert.match(userContext, /await tx\.user\.create/);
 
   const importCountStart = dataEngine.indexOf("export const countTransactionsByImportFileCompat");
   const importCountSource = dataEngine.slice(importCountStart, importCountStart + 1_500);
@@ -30,7 +30,7 @@ const main = async () => {
   assert.doesNotMatch(importCountSource, /"importFileId" = \$1\s+OR/);
 
   assert.match(eventRoute, /fetchImportFileStatusCompat/);
-  assert.match(eventRoute, /fullSnapshotLoaded/);
+  assert.match(eventRoute, /lastFullSnapshotStatus !== "done" \|\| Date.now\(\) >= nextFinalizationCheckAt/);
   assert.match(eventRoute, /IMPORT_STATUS_STREAM_POLL_MS\s*=\s*2_500/);
 
   assert.match(accountsRoute, /sourceRowsByImport/);
@@ -44,7 +44,7 @@ const main = async () => {
   assert.match(accountsPage, /ACCOUNTS_MAINTENANCE_INTERVAL_MS\s*=\s*24 \* 60 \* 60 \* 1000/);
   assert.match(accountsPage, /shouldRunAccountsMaintenance/);
   assert.match(accountsPage, /markAccountsMaintenanceComplete/);
-  assert.match(dashboardPage, /account:\s*\{\s*source:\s*"manual"\s*\}/);
+  assert.match(dashboardPage, /account:\s*\{ OR: \[\{ source: \{ in: \["manual", "adviser_manual"\] \} \}, \{ type: "cash" \}\] \}/);
   assert.doesNotMatch(
     enrichmentJobs,
     /CREATE (?:UNIQUE )?INDEX IF NOT EXISTS|CREATE TABLE IF NOT EXISTS|ALTER TABLE/,

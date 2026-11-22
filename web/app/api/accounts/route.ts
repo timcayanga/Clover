@@ -1,3 +1,4 @@
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { after } from "next/server";
 import { enqueueLearningJob, processPendingLearningJobs } from "@/lib/learning-jobs";
 import { newManualAccountBalance, isInvalidManualAccountBalance } from "../../../../shared/investment-entry";
@@ -277,16 +278,14 @@ const loadEarliestInvestmentPurchaseDatesForWorkspace = async (workspaceId: stri
     return new Map<string, Date>();
   }
 
-  const purchases = await prisma.investmentPurchase.findMany({
+  const purchases = await prisma.investmentPurchase.groupBy({
+    by: ["accountId"],
     where: { account: { workspaceId } },
-    orderBy: { purchasedAt: "asc" },
-    select: { accountId: true, purchasedAt: true },
+    _min: { purchasedAt: true },
   }).catch(() => []);
   const earliestByAccountId = new Map<string, Date>();
-  for (const purchase of purchases) {
-    if (!earliestByAccountId.has(purchase.accountId)) {
-      earliestByAccountId.set(purchase.accountId, purchase.purchasedAt);
-    }
+  for (const { accountId, _min } of purchases) {
+    if (_min.purchasedAt) earliestByAccountId.set(accountId, _min.purchasedAt);
   }
   return earliestByAccountId;
 };
@@ -3395,13 +3394,14 @@ export async function GET(request: Request) {
       });
     }
 
+    const nativeDirectory = getMobileRequestContext()?.request === request;
     const [accounts, accountRules, statementCheckpoints, investmentSnapshots, earliestInvestmentPurchaseDates] = await Promise.all([
       prisma.account.findMany({
         where: { workspaceId },
         orderBy: { createdAt: "desc" },
         select: getCompatibleAccountSelect(compatibleColumns),
       }),
-      loadAccountRules(workspaceId),
+      nativeDirectory ? [] : loadAccountRules(workspaceId),
       (async () => {
       if (!(await hasCompatibleTable("AccountStatementCheckpoint"))) {
         return [];
@@ -3474,8 +3474,8 @@ export async function GET(request: Request) {
         sourceMetadata: checkpoint.sourceMetadata ?? null,
       }));
       })(),
-      loadInvestmentSnapshotsForWorkspace(workspaceId),
-      loadEarliestInvestmentPurchaseDatesForWorkspace(workspaceId),
+      nativeDirectory ? [] : loadInvestmentSnapshotsForWorkspace(workspaceId),
+      nativeDirectory ? new Map<string, Date>() : loadEarliestInvestmentPurchaseDatesForWorkspace(workspaceId),
     ]);
     const accountIds = accounts.map((account) => account.id);
     const transactionCounts = accountIds.length
@@ -3489,17 +3489,13 @@ export async function GET(request: Request) {
           _count: { _all: true },
         })
       : [];
-    const transactionCountByAccountId = new Map(
-      accounts.map((account) => [
-        account.id,
-        transactionCounts
-          .filter((row) => row.accountId === account.id)
-          .filter(
-            (row) => account.type !== "cash" || normalizeImportedCurrencyCode(row.currency) === normalizeImportedCurrencyCode(account.currency)
-          )
-          .reduce((sum, row) => sum + row._count._all, 0),
-      ])
-    );
+    const accountsById = new Map(accounts.map(account => [account.id, account]));
+    const transactionCountByAccountId = new Map<string, number>();
+    for (const row of transactionCounts) {
+      const account = accountsById.get(row.accountId);
+      if (!account || (account.type === "cash" && normalizeImportedCurrencyCode(row.currency) !== normalizeImportedCurrencyCode(account.currency))) continue;
+      transactionCountByAccountId.set(account.id, (transactionCountByAccountId.get(account.id) ?? 0) + row._count._all);
+    }
     const checkpointAccountIds = new Set(
       statementCheckpoints
         .map((checkpoint) => checkpoint.accountId)
@@ -3610,76 +3606,60 @@ export async function GET(request: Request) {
         );
       }
     );
-    const latestCheckpointForAccount = (account: {
-      id: string;
-      name: string;
-      institution: string | null;
-      accountNumber?: string | null;
-      type: string;
-      currency?: string | null;
-    }) => {
-      let latestCheckpoint: (typeof statementCheckpoints)[number] | null = null;
-      const accountKey = buildCurrencyScopedAccountIdentityKey({
-        name: account.name,
-        institution: account.institution,
-        accountNumber: account.accountNumber ?? null,
-        type: account.type,
-        currency: account.currency ?? null,
+    // A checkpoint may match by several identifiers. Retain the freshest for
+    // each, using original iteration order to settle equal timestamps.
+    const checkpointIndexes = new Map<string, number>();
+    const newerIndex = (left: number | undefined, right: number) => {
+      if (left === undefined) return right;
+      const order = compareAccountCheckpointFreshness(statementCheckpoints[right], statementCheckpoints[left]);
+      return order > 0 || (order === 0 && right > left) ? right : left;
+    };
+    statementCheckpoints.forEach((checkpoint, index) => {
+      const sourceMetadata =
+        checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+          ? (checkpoint.sourceMetadata as Record<string, unknown>)
+          : null;
+      const checkpointNumber =
+        typeof sourceMetadata?.accountNumber === "string" ? normalizeImportAccountNumber(sourceMetadata.accountNumber) : null;
+      const checkpointKey = buildCurrencyScopedAccountIdentityKey({
+        name: typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+        institution: typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+        accountNumber: checkpointNumber,
+        type: typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null,
+        currency:
+          typeof sourceMetadata?.currency === "string"
+            ? sourceMetadata.currency
+            : typeof sourceMetadata?.accountCurrency === "string"
+              ? sourceMetadata.accountCurrency
+              : null,
       });
-      const accountNumber = normalizeImportAccountNumber(account.accountNumber ?? null);
-
-      for (const checkpoint of statementCheckpoints) {
-        const sourceMetadata =
-          checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
-            ? (checkpoint.sourceMetadata as Record<string, unknown>)
+      const checkpointBankLabel =
+        typeof sourceMetadata?.institution === "string"
+          ? sourceMetadata.institution
+          : typeof sourceMetadata?.uploadBankHint === "string"
+            ? sourceMetadata.uploadBankHint
             : null;
-        const checkpointNumber =
-          typeof sourceMetadata?.accountNumber === "string" ? normalizeImportAccountNumber(sourceMetadata.accountNumber) : null;
-        const checkpointKey = buildCurrencyScopedAccountIdentityKey({
-          name: typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
-          institution: typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
-          accountNumber: checkpointNumber,
-          type: typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null,
-          currency:
-            typeof sourceMetadata?.currency === "string"
-              ? sourceMetadata.currency
-              : typeof sourceMetadata?.accountCurrency === "string"
-                ? sourceMetadata.accountCurrency
-                : null,
-        });
-        const checkpointBankLabel =
-          typeof sourceMetadata?.institution === "string"
-            ? sourceMetadata.institution
-            : typeof sourceMetadata?.uploadBankHint === "string"
-              ? sourceMetadata.uploadBankHint
-              : null;
-        const accountDigits = String(account.accountNumber ?? "").replace(/\D/g, "");
-        const checkpointDigits = String(checkpointNumber ?? "").replace(/\D/g, "");
-        const accountLastFour = accountDigits.slice(-4);
-        const checkpointLastFour = checkpointDigits.slice(-4);
-        const matchesByDigits =
-          Boolean(accountDigits && checkpointDigits && accountDigits === checkpointDigits) ||
-          Boolean(
-            checkpointBankLabel &&
-              accountLastFour.length === 4 &&
-              checkpointLastFour.length === 4 &&
-              accountLastFour === checkpointLastFour
-          );
-        const matchesAccount =
-          checkpoint.accountId === account.id ||
-          (accountKey !== "" && checkpointKey === accountKey) ||
-          matchesByDigits;
-
-        if (!matchesAccount) {
-          continue;
-        }
-
-        if (!latestCheckpoint || compareAccountCheckpointFreshness(checkpoint, latestCheckpoint) >= 0) {
-          latestCheckpoint = checkpoint;
-        }
+      const digits = String(checkpointNumber ?? "").replace(/\D/g, "");
+      const keys: string[] = [];
+      if (checkpoint.accountId) keys.push("id:" + checkpoint.accountId);
+      if (checkpointKey) keys.push("identity:" + checkpointKey);
+      if (digits) keys.push("number:" + digits);
+      if (checkpointBankLabel && digits.length >= 4) keys.push("suffix:" + digits.slice(-4));
+      for (const key of keys) checkpointIndexes.set(key, newerIndex(checkpointIndexes.get(key), index));
+    });
+    const latestCheckpointForAccount = (account: (typeof visibleAccounts)[number]) => {
+      const identity = buildCurrencyScopedAccountIdentityKey({
+        name: account.name, institution: account.institution, accountNumber: account.accountNumber ?? null,
+        type: account.type, currency: account.currency ?? null,
+      });
+      const digits = String(account.accountNumber ?? "").replace(/\D/g, "");
+      const keys = ["id:" + account.id, "identity:" + identity, "number:" + digits, "suffix:" + digits.slice(-4)];
+      let latest: number | undefined;
+      for (const key of keys) {
+        const match = checkpointIndexes.get(key);
+        if (match !== undefined) latest = newerIndex(latest, match);
       }
-
-      return latestCheckpoint;
+      return latest === undefined ? null : statementCheckpoints[latest];
     };
     const accountsWithCheckpointBackfill = visibleAccounts.map((account) => {
       const latestCheckpoint = latestCheckpointForAccount(account);
@@ -3841,7 +3821,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       accounts: serializedResponseAccounts,
       accountRules,
-      statementCheckpoints,
+      statementCheckpoints: nativeDirectory ? [] : statementCheckpoints,
       investmentSnapshots,
       removedEmptyCashAccountIds,
       maintenance: shouldCleanupImportedAccounts

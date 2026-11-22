@@ -7,7 +7,7 @@ import { isAutomaticReviewExclusion } from "@/lib/transaction-review-inclusion";
 import { enrichMerchantIdentityPayload } from "@/lib/merchant-identity";
 import { getAccountBrand } from "@/lib/account-brand";
 import { planTransactionAccountPage, compareTransactionsByAccount } from "@/lib/transaction-account-sort";
-import { Prisma } from "@prisma/client";
+import { Prisma, type Account } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
@@ -163,25 +163,13 @@ const canonicalInstitutionKey = (value?: string | null) =>
     .replace(/\bchina\s+bank\b/g, "chinabank")
     .replace(/\bmetro\s+bank\b/g, "metrobank");
 
-const expandImportedAccountFilters = async (workspaceId: string, accountIds: string[] | undefined) => {
+type FilterAccount = Pick<Account, "id" | "name" | "institution" | "type" | "accountNumber" | "currency">;
+
+const expandImportedAccountFilters = (siblingAccounts: FilterAccount[], accountIds: string[] | undefined) => {
   const requestedAccountIds = (accountIds ?? []).filter(Boolean);
   if (requestedAccountIds.length === 0) {
     return requestedAccountIds;
   }
-
-  const siblingAccounts = await prisma.account.findMany({
-    where: {
-      workspaceId,
-    },
-    select: {
-      id: true,
-      name: true,
-      institution: true,
-      type: true,
-      accountNumber: true,
-      currency: true,
-    },
-  });
 
   const requestedAccounts = siblingAccounts.filter((candidate) => requestedAccountIds.includes(candidate.id));
   if (requestedAccounts.length === 0) {
@@ -242,8 +230,8 @@ const expandImportedAccountFilters = async (workspaceId: string, accountIds: str
   return Array.from(expandedAccountIds);
 };
 
-const expandImportedAccountIdentityFilters = async (
-  workspaceId: string,
+const expandImportedAccountIdentityFilters = (
+  matchingAccounts: FilterAccount[],
   identity: {
     accountName?: string | null;
     accountInstitution?: string | null;
@@ -271,20 +259,6 @@ const expandImportedAccountIdentityFilters = async (
   if (!identityKey) {
     return [];
   }
-
-  const matchingAccounts = await prisma.account.findMany({
-    where: {
-      workspaceId,
-    },
-    select: {
-      id: true,
-      name: true,
-      institution: true,
-      type: true,
-      accountNumber: true,
-      currency: true,
-    },
-  });
 
   return matchingAccounts
     .filter(
@@ -772,32 +746,30 @@ export async function GET(request: Request) {
     if (parsedFilters.dateFilterMode === "custom" && parsedFilters.customStart && parsedFilters.customEnd && parsedFilters.customStart > parsedFilters.customEnd) {
       return NextResponse.json({ error: "From date must be on or before To date" }, { status: 400 });
     }
-    const [workspaceAccountRows, expandedAccountIds, expandedIdentityAccountIds] = await Promise.all([
+    const [workspaceAccountRows, categoryFilterNames, regionalUser] = await Promise.all([
       prisma.account.findMany({
         where: { workspaceId },
         select: { id: true, name: true, source: true, currency: true, accountNumber: true, institution: true, type: true },
       }),
-      expandImportedAccountFilters(workspaceId, parsedFilters.accountIds),
-      expandImportedAccountIdentityFilters(workspaceId, {
-        accountName: searchParams.get("accountName"),
-        accountInstitution: searchParams.get("accountInstitution"),
-        accountNumber: searchParams.get("accountNumber"),
-        accountType: searchParams.get("accountType"),
-        accountCurrency: searchParams.get("accountCurrency"),
-      }),
+      resolveCategoryFilterNames(workspaceId, parsedFilters.categoryIds),
+      parsedFilters.dateFilterMode && parsedFilters.dateFilterMode !== "ltd"
+        ? prisma.user.findUnique({ where: { clerkUserId: userId }, select: { regionalPreferences: true } })
+        : null,
     ]);
-    const workspaceAccounts = workspaceAccountRows.map((account) => ({
-      id: account.id,
-      accountNumber: account.accountNumber,
-    }));
-
+    const expandedAccountIds = expandImportedAccountFilters(workspaceAccountRows, parsedFilters.accountIds);
+    const expandedIdentityAccountIds = expandImportedAccountIdentityFilters(workspaceAccountRows, {
+      accountName: searchParams.get("accountName"),
+      accountInstitution: searchParams.get("accountInstitution"),
+      accountNumber: searchParams.get("accountNumber"),
+      accountType: searchParams.get("accountType"),
+      accountCurrency: searchParams.get("accountCurrency"),
+    });
+    const workspaceAccounts = workspaceAccountRows;
     const filters: TransactionQueryFilters = {
       ...parsedFilters,
       accountIds: Array.from(new Set([...expandedAccountIds, ...expandedIdentityAccountIds])),
     };
-    const categoryFilterNames = await resolveCategoryFilterNames(workspaceId, filters.categoryIds);
     const hasEffectiveCategoryFilters = categoryFilterNames.size > 0;
-    const regionalUser = filters.dateFilterMode && filters.dateFilterMode !== "ltd" ? await prisma.user.findUnique({where:{clerkUserId:userId},select:{regionalPreferences:true}}) : null;
     const filterTimeZone = normalizeRegionalPreferences(regionalUser?.regionalPreferences).timeZone;
     const where = buildTransactionQueryWhere(
       workspaceId,

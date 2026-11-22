@@ -13,23 +13,30 @@ import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 // Authentication and explicit Profile ownership are checked by the gateway.
 // Never infer the native Profile from browser cookies.
-export async function loadGoalActivity(workspaceId: string, currency: string, period = mobileHomePeriods().rolling(30)) {
+async function loadGoalActivityByCurrency(workspaceId: string, currencies: string[], period: { from: Date; to: Date }) {
   const { from: start, to: end } = period;
-  const rows = await prisma.transaction.findMany({
+  const rows = currencies.length ? await prisma.transaction.findMany({
     where: buildActiveWorkspaceTransactionWhere(workspaceId, {
-      currency,
+      currency: { in: currencies },
       date: { gte: start, lt: end },
     }),
     select: {
+      currency: true,
       amount: true,
       type: true,
       isTransfer: true,
       category: { select: { name: true } },
       account: { select: { type: true } },
     },
-  });
-  const totals = goalActivityTotals(rows);
-  return { ...totals, start: start.toISOString(), end: end.toISOString() };
+  }) : [];
+  const byCurrency = new Map(currencies.map(currency => [currency, [] as typeof rows]));
+  for (const row of rows) byCurrency.get(row.currency)?.push(row);
+  return new Map(currencies.map(currency => [currency, {
+    ...goalActivityTotals(byCurrency.get(currency)!), start: start.toISOString(), end: end.toISOString(),
+  }]));
+}
+export async function loadGoalActivity(workspaceId: string, currency: string, period = mobileHomePeriods().rolling(30)) {
+  return (await loadGoalActivityByCurrency(workspaceId, [currency], period)).get(currency)!;
 }
 export async function mobileGoals(workspaceId: string, userId: string, options: { goalId?: string; now?: Date } = {}) {
   const { goalId, now } = options;
@@ -49,19 +56,16 @@ export async function mobileGoals(workspaceId: string, userId: string, options: 
       where: { id: userId },
       select: { primaryGoal: true, goalPlan: true, goalTargetAmount: true },
     }),
-    goalId && goalId !== "primary" ? [] : prisma.account.findMany({
+    goalId && goalId !== "primary" ? [] : prisma.account.groupBy({
       where: { workspaceId },
-      select: { currency: true },
-      distinct: ["currency"],
+      by: ["currency"],
     }),
   ]);
   const legacyCurrency = currencies.length === 1 ? currencies[0].currency ?? "PHP" : "PHP";
   const activityCurrencies = new Set(saved.map(goal => goal.currency));
   if (user?.primaryGoal) activityCurrencies.add(legacyCurrency);
   const period = mobileHomePeriods(now).rolling(30);
-  const activity = new Map(await Promise.all([...activityCurrencies].map(async currency =>
-    [currency, await loadGoalActivity(workspaceId, currency, period)] as const,
-  )));
+  const activity = await loadGoalActivityByCurrency(workspaceId, [...activityCurrencies], period);
   const goals = saved.map((goal) => {
     const plan = normalizeGoalPlan(
       goal.goalPlan,
