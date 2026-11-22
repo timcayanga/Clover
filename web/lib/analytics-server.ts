@@ -31,6 +31,8 @@ async function prepareServerCapture(event: AnalyticsEventName, distinctId: strin
       if (identity.startsWith("user_") && await prisma.clerkIdentityDeletion.findUnique({ where: { clerkUserId: identity }, select: { clerkUserId: true } })) return true;
     } catch { return false; /* Analytics must not block billing or capture an unverified deleted identity. */ }
     const audience = await getAnalyticsAudience(identity);
+    // An intentional exclusion counts as delivered for retryable milestones.
+    if (audience.analytics_audience === "test") return true;
     if ((event === "signup_completed" || event === "first_login") && audience.analytics_audience === "unknown") return false;
     return capture(event, identity, { ...context, ...properties, ...audience, event_source: "server" }, timestamp);
   };

@@ -24,6 +24,8 @@ async function main() {
       const sql = JSON.parse(String(options?.body)).query.query;
       assert.match(sql, /properties\.\$host = 'clover.ph'/);
       assert.match(sql, /timestamp </);
+      assert.match(sql, /person_id NOT IN/);
+      assert.match(sql, /distinct_id\) NOT IN/);
       return Response.json({results: [["current", "Mobile", 0, 0, 0]]});
     };
     const zero = await getTeamAnalyticsSnapshot(now);

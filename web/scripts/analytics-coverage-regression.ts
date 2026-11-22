@@ -133,6 +133,7 @@ assert.ok(events.some(e => e.event === "offline_sync_conflict"));
 assert.doesNotMatch(JSON.stringify(events), /PRIVATE|private-profile|private-account|merchantRaw/);
 await engine.dispose();
 // Request-scoped server events preserve device/operation context and run after response.
+let audience = "customer";
 let deletedIdentity = false;
 let trackingEnabled = false;
 let outgoing: any[] = [], scheduled: Array<() => Promise<void>> = [];
@@ -145,7 +146,7 @@ vm.runInNewContext(serverCode, { exports: serverModule.exports, require: (id: st
   if (id.endsWith("shared/analytics")) return { browserContext };
   if (id === "./analytics") return { shouldTrackAnalytics: () => trackingEnabled };
   if (id === "./analytics-capture") return { capturePostHogServerEvent: async (...args: any[]) => { outgoing.push(args); } };
-  if (id === "./analytics-audience") return { getAnalyticsAudience: async () => ({analytics_audience:"customer",analytics_excluded:false,analytics_audience_version:1}) };
+  if (id === "./analytics-audience") return { getAnalyticsAudience: async () => ({analytics_audience:audience,analytics_excluded:audience !== "customer",analytics_audience_version:1}) };
   if (id === "./prisma") return { prisma: { user: { findUnique: async () => ({ clerkUserId: "user_billing" }) }, clerkIdentityDeletion: { findUnique: async () => deletedIdentity ? { clerkUserId: "user_billing" } : null } } };
   throw Error(id);
 } });
@@ -154,6 +155,10 @@ await serverModule.exports.scheduleFirstLogin("test-user", true, new Date());
 assert.equal(scheduled.length, 0);
 assert.equal(outgoing.length, 0);
 trackingEnabled = true;
+audience = "test";
+assert.equal(await serverModule.exports.captureClerkSignup("user_demo", true, new Date()), true);
+assert.equal(outgoing.length, 0, "demo milestone is acknowledged without delivery");
+audience = "customer";
 await serverModule.exports.capturePostHogServerEvent("account_created", "test-user", { account_type: "cash" });
 assert.equal(outgoing.length, 0); assert.equal(scheduled.length, 1);
 await scheduled.pop()!();

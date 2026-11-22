@@ -1,3 +1,4 @@
+import { scopeCustomerAnalyticsQuery } from "./analytics-query-scope";
 import { z } from "zod";
 
 // Fixed read-only aggregate query. Briefs never become SQL, hosts or credentials.
@@ -21,7 +22,7 @@ export async function getTeamAnalyticsSnapshot(now = new Date()) {
   const host = process.env.POSTHOG_APP_URL?.trim().replace(/\/$/, "") || "https://us.posthog.com";
   if (!key || !project) return {...base, status: "unavailable", reason: "PostHog query credentials are not configured."};
   if (!/^\d+$/.test(project) || !["https://us.posthog.com", "https://eu.posthog.com"].includes(host)) return {...base, status: "unavailable", reason: "PostHog project or cloud host needs verification."};
-  const sql = `SELECT if(timestamp >= toDateTime('${window.comparisonEnd}'), 'current', 'previous') AS period,
+  const baseQuery = `SELECT if(timestamp >= toDateTime('${window.comparisonEnd}'), 'current', 'previous') AS period,
     coalesce(nullIf(toString(properties.$device_type), ''), 'Unknown') AS device,
     count() AS pageviews, uniqExact(distinct_id) AS visitors,
     countIf(empty(coalesce(toString(properties.analytics_audience), ''))) AS missing_audience
@@ -33,6 +34,7 @@ export async function getTeamAnalyticsSnapshot(now = new Date()) {
     AND coalesce(toString(properties.analytics_excluded), '') NOT IN ('true', '1')
     GROUP BY period, device ORDER BY period, device LIMIT 30`;
   try {
+    const sql = await scopeCustomerAnalyticsQuery(baseQuery, "production");
     const response = await fetch(`${host}/api/projects/${project}/query/`, {
       method: "POST", headers: {Authorization: `Bearer ${key}`, "Content-Type": "application/json"},
       signal: AbortSignal.timeout(18000), redirect: "error", cache: "no-store",
