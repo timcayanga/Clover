@@ -19,6 +19,7 @@ async function verify() {
   globalThis.fetch = async () => { networkCalls++; throw new Error("Unexpected network call"); };
   process.env.OPENAI_API_KEY = "offline-test-only";
   require("next/server").after = () => {};
+  let qaUserId = "qa";
   const mocks = {
     "../lib/native-upload-store": { readReceiptUpload: async (id: string, user: string, workspace: string) => {
       assert.deepEqual([id, user, workspace], ["receipt-fixture", "qa", "qa"]);
@@ -26,7 +27,7 @@ async function verify() {
       return { name: "IMG_1000.JPG", type: "application/octet-stream", size: bytes.length, sourceBytes: bytes };
     } },
     "../lib/auth": { isLocalDevHost: async () => false },
-    "../lib/split-bill-access": { getSplitBillCurrentUser: async () => ({ id: "qa", clerkUserId: "qa" }) },
+    "../lib/split-bill-access": { getSplitBillCurrentUser: async () => ({ id: qaUserId, clerkUserId: "qa" }) },
     "../lib/clover-token-usage": { mayUseImportCloudAi: async () => { allowanceChecks++; return false; } },
     "../lib/prisma": { prisma: { workspace: { findFirst: async () => ({ id: "qa" }) } } },
     "../lib/s3": { uploadObject: async (_key: string, original: Uint8Array) => {
@@ -162,6 +163,7 @@ async function verify() {
     assert.equal(retained, 11);
   }
   if (process.env.CLOVER_QA_DISCOUNT_PHOTO) {
+    qaUserId = "qa-discount";
     expectedBytes = new Uint8Array(await readFile(process.env.CLOVER_QA_DISCOUNT_PHOTO));
     const form = new FormData();
     form.append("file", new File([Buffer.from(expectedBytes)], "receipt.webp", { type: "image/webp" }));
@@ -176,6 +178,23 @@ async function verify() {
     assert.equal(reliableForScopedSplit, false);
     assert.equal(allowanceChecks, checksBefore, "Reconciled discounted purchases can open for review directly");
     console.log("PASS reconciled discount photo opens for review without a provider allowance check");
+  }
+  if (process.env.CLOVER_QA_QUANTITY_MARGIN_PHOTO) {
+    qaUserId = "qa-quantity-margin";
+    expectedBytes = new Uint8Array(await readFile(process.env.CLOVER_QA_QUANTITY_MARGIN_PHOTO));
+    const form = new FormData();
+    form.append("file", new File([Buffer.from(expectedBytes)], "receipt.jpg", { type: "image/jpeg" }));
+    const upload = new Request(request.url, { method: "POST", headers: { origin: "https://clover.ph" }, body: form });
+    const checksBefore = allowanceChecks;
+    const response = await withMobileRequestContext("qa", upload, () => POST(upload));
+    assert.equal(response.status, 200);
+    const { preview } = await response.json();
+    assert.equal(preview.total, "2511.00");
+    assert.deepEqual(preview.items.map((item: { quantity?: number }) => item.quantity ?? null),
+      [null, null, null, null, 1, 1, 2]);
+    assert.equal(preview.requiresReview, true);
+    assert.equal(allowanceChecks, checksBefore);
+    console.log("PASS quantity margin preserves the payable and unreadable quantities in the receipt draft");
   }
   console.log("PASS PDF receipt preserves payable and withholds ambiguous date");
 }

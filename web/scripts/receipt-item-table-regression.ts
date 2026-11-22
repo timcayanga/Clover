@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { hasPrintedQuantityConflict, reconcilesReviewedDiscountPhoto, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "../lib/receipt-price-column";
-import { recordReceiptQuantityCrop, recordReceiptTableCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
+import { applyVerifiedMarginReadings, recordVerifiedMarginReadings, recordReceiptQuantityCrop, recordReceiptTableCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
 import { resolvePositiveImportDocumentRoute } from "../lib/positive-import-route";
 import { qualifyDeviceReceiptReading } from "../lib/device-receipt-reading";
 import { normalizeDeviceTextEvidence, type OpticalTextLine } from "../../shared/device-text-evidence";
@@ -612,3 +612,14 @@ function checkDamagedPriceColumn() {
   assert.equal(readLocalReceiptOcrText(repaired), source.replace(plan.original, priced));
 }
 checkDamagedPriceColumn();
+
+const marginSource = encodeLocalReceiptOcr({ engine: "ppocr-v5-local", text: "Milk 10.00" });
+const marginItem = { description: "Milk", amount: "10.00" };
+const withMargin = recordVerifiedMarginReadings(marginSource, [{ ...marginItem,
+  digit: { text: "2", box: [0.1, 0.2, 0.12, 0.23], minimumCharacterConfidence: 0.99 },
+}], [0.08, 0.18, 0.15, 0.4]);
+assert.equal(readLocalReceiptOcrText(withMargin), "Milk 10.00");
+assert.deepEqual(applyVerifiedMarginReadings(withMargin, [marginItem]), [{ ...marginItem, quantity: 2 }]);
+for (const ambiguous of [[marginItem, marginItem], [{ ...marginItem, amount: "20.00" }], [{ ...marginItem, quantity: 3 }]]) {
+  assert.deepEqual(applyVerifiedMarginReadings(withMargin, ambiguous), ambiguous);
+}

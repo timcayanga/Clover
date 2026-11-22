@@ -219,3 +219,32 @@ export function recordReceiptQuantityCrop(source: string, rows: Map<string, Opti
   return encodeLocalReceiptOcr({ ...metadata, text, opticalLines: [...metadata.opticalLines, ...rows.values()],
     quantityCrop: { original, bounds } });
 }
+
+type MarginReading = { description: string; amount: string; digit: OpticalTextLine };
+
+export function recordVerifiedMarginReadings(source: string, readings: MarginReading[], bounds: number[]) {
+  const text = readLocalReceiptOcrText(source);
+  if (!text) return source;
+  const metadata = JSON.parse(source.slice(PREFIX.length, source.indexOf(SEPARATOR)));
+  return encodeLocalReceiptOcr({ ...metadata, verifiedQuantityMargin: { readings, bounds }, text });
+}
+
+export function applyVerifiedMarginReadings<T extends {description:string; amount:string | null; quantity?:number | null}>(
+  source: string, items: T[],
+): T[] {
+  if (!source.startsWith(PREFIX) || !source.includes('"verifiedQuantityMargin":')) return items;
+  try {
+    const meta = JSON.parse(source.slice(PREFIX.length, source.indexOf(SEPARATOR)));
+    const readings = meta.verifiedQuantityMargin?.readings;
+    if (meta.engine !== "ppocr-v5-local" || !Array.isArray(readings) || readings.length > 40) return items;
+    return items.map(item => {
+      if (item.quantity != null || items.filter(i => i.description === item.description && i.amount === item.amount).length !== 1) return item;
+      const matches = readings.filter(r => r?.description === item.description && r.amount === item.amount);
+      const digit = matches.length === 1 && matches[0].digit;
+      return digit && /^[1-9]$/.test(digit.text) && digit.minimumCharacterConfidence >= 0.9
+        ? { ...item, quantity: Number(digit.text) } : item;
+    });
+  } catch {
+    return items;
+  }
+}

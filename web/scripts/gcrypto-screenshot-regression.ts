@@ -1,3 +1,4 @@
+import { overlappingGCryptoTradeIndices } from "../lib/gcrypto-screenshot-overlap";
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
 import { inferCanonicalImportedAccountProduct } from "@/lib/imported-account-identity";
@@ -238,3 +239,14 @@ assert.deepEqual(
 );
 
 console.log("[PASS] GCrypto screenshot parser surfaces one investment account and deduped visible transaction rows.");
+
+const trades = allRows.map(row => ({ ...row, accountId: "investment", currency: "PHP" }));
+const previousPage = trades.slice(4, 8).map((row, i) => ({ ...row, importFileId: "previous",
+  rawPayload: { ...(row.rawPayload as object), sourceRowIndex: i + 1 } }));
+const nextPage = trades.slice(8);
+assert.deepEqual([...overlappingGCryptoTradeIndices(nextPage, previousPage)], [0, 1]);
+assert.equal(overlappingGCryptoTradeIndices(nextPage.slice(0, 1), previousPage).size, 0);
+assert.equal(overlappingGCryptoTradeIndices(nextPage.map(row => ({...row, accountId: "other"})), previousPage).size, 0);
+assert.equal(overlappingGCryptoTradeIndices([nextPage[0], nextPage[1], ...nextPage], previousPage).size, 0);
+assert.equal(overlappingGCryptoTradeIndices(nextPage, previousPage.map((row, i) =>
+  ({...row, importFileId: String(i)}))).size, 0);

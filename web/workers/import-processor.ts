@@ -33,6 +33,7 @@ import { enqueueLearningJob, processLearningJob, type LearningAction } from "@/l
 import { assessBpiStatementReconciliation, isBpiCardMetadata } from "@/lib/bpi-statement-reconciliation";
 import { readAppMigration, createMigrationOverlapMatcher, summarizeAppMigration } from "@/lib/app-migration-import";
 import { persistMigrationTags } from "@/lib/app-migration-persistence";
+import { isGCryptoHistorySource, overlappingGCryptoTradeIndices } from "@/lib/gcrypto-screenshot-overlap";
 import { qualifyDeviceReceiptReading } from "@/lib/device-receipt-reading";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalEvidence } from "@/lib/local-receipt-ocr-envelope";
 import { applyReceiptDefaultCurrency, hasCompleteReceiptCore, hasReceiptPhotoEvidence, selectSavedStatementReceiptText, receiptCacheQualityPercent } from "@/lib/receipt-intake";
@@ -9708,6 +9709,17 @@ const processImportFileTextImpl = async (
   }
   const regionSource = receiptRegion ? encodeLocalReceiptOcr(receiptRegion) : null;
   const receiptOpticalSource = () => regionSource ?? deviceReading?.source ?? text;
+  // Reuse the same preview across intake, validation and partial-draft recovery.
+  // A replaced transcript must go through the parser again.
+  let lastPhoto: { source: string; preview: ReturnType<typeof parseReceiptPhotoText> } | null = null;
+  const parseReceiptPreview = (source: string) => {
+    if (!imageImport) return parseReceiptText(source);
+    if (deviceReading?.preview.receiptText === source) return deviceReading.preview;
+    if (lastPhoto?.source === source) return lastPhoto.preview;
+    const preview = parseReceiptPhotoText(source);
+    lastPhoto = { source, preview };
+    return preview;
+  };
   const originalOpticalSource = receiptOpticalSource();
   const opticalPurchaseText = deviceReading?.source === originalOpticalSource && !deviceReading.region
     ? deviceReading.layout : readReceiptOpticalLayout(originalOpticalSource);
@@ -9824,8 +9836,7 @@ const processImportFileTextImpl = async (
   let localReceiptItemsDeferred = false;
   if (imageImport && importMode === "receipt" && !trainedReceiptDetails && text.trim()) {
     const opticalSource = receiptOpticalSource();
-    const localPreview = deviceReading?.preview.receiptText === opticalSource
-      ? deviceReading.preview : parseReceiptPhotoText(opticalSource);
+    const localPreview = parseReceiptPreview(opticalSource);
     const itemTotal = localPreview.items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const itemsReconcile = [localPreview.subtotal, localPreview.total].some(value => value !== null && Math.abs(Number(value) - itemTotal) <= .1);
     // OCR may read both a quantity-price expression and its separate amount
@@ -11235,7 +11246,6 @@ const processImportFileTextImpl = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
-  const parseReceiptPreview = imageImport ? parseReceiptPhotoText : parseReceiptText;
   const receiptPreview = (imageImport || importMode === "receipt") && !isTransactionHistoryImage()
     ? parseReceiptPreview(receiptRegion || usableDeviceText || localOpticalReceiptText !== null ? receiptOpticalSource() : textForParse) : null;
   const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
@@ -16761,6 +16771,27 @@ export const confirmImportFile = async (
     where: { accountId: { in: matchingAccountIdsForImport }, deletedAt: null, finverseTransactionRecord: { isNot: null } },
     select: { id: true, accountId: true, date: true, amount: true, currency: true, type: true, merchantRaw: true, merchantClean: true, description: true },
   });
+  // Confirm under the owner lock so two overlapping screenshots cannot
+  // both observe an empty account and insert the same pair of trades.
+  const gcTradeDates = parsedRows.flatMap(row => {
+    if (!isGCryptoHistorySource(row.rawPayload)) return [];
+    const date = row.date instanceof Date ? row.date : parseDateValue(typeof row.date === "string" ? row.date : null);
+    return date && Number.isFinite(date.getTime()) ? [date.getTime()] : [];
+  });
+  const gcOverlap = gcTradeDates.length > 1
+    ? overlappingGCryptoTradeIndices(
+      parsedRows.map(row => ({ ...row, currency: row.currency ?? rowAccountFor(row).currency, accountId: rowAccountFor(row).id })),
+      await tx.transaction.findMany({
+        where: {
+          accountId: { in: matchingAccountIdsForImport }, importFileId: { not: importFileId }, deletedAt: null,
+          date: { in: [...new Set(gcTradeDates)].map(time => new Date(time)) },
+          OR: ["gcrypto_mobile_screenshot", "gcrypto_transaction_screenshot"].map(source => ({
+            rawPayload: { path: ["source"], equals: source },
+          })),
+        },
+        select: { importFileId: true, accountId: true, date: true, amount: true, currency: true, rawPayload: true },
+      }),
+    ) : new Set<number>();
   const matchBankOverlap = createBankImportOverlapMatcher(bankRows);
   const matchMigrationOverlap = createMigrationOverlapMatcher(existingRowsForAccount as unknown as Array<Record<string, unknown>>);
 
@@ -17229,6 +17260,10 @@ export const confirmImportFile = async (
       continue;
     }
 
+    if (gcOverlap.has(index)) {
+      duplicateSkippedTransactionsCount += 1;
+      continue;
+    }
     if (migration && matchMigrationOverlap({ ...insertRow, accountId: rowResolvedAccountId })) {
       duplicateSkippedTransactionsCount += 1;
       continue;

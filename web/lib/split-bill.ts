@@ -6,7 +6,7 @@ import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
 import { hasOnlyAmbiguousNumericDates, validNumericReceiptDates, numericReceiptDatePattern, resolveReceiptPurchaseDateRoles } from "./receipt-date-evidence";
 import { readReceiptMerchantEvidence } from "./receipt-merchant-evidence";
-import { refineReceiptItemWords, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalLines, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
+import { applyVerifiedMarginReadings, refineReceiptItemWords, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalLines, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading } from "./local-receipt-ocr-envelope";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 import { joinReceiptSettlementLines } from "./receipt-summary-lines";
 import { readMerchantPaymentConfirmation } from "./merchant-payment-confirmation";
@@ -2557,7 +2557,7 @@ function parseReceiptSource(receiptText: string, photo: boolean, optics = receip
   const receipt = classifyUnsettledPurchaseDocument(source)
     ? { ...parsed, requiresReview: true, confidence: Math.min(parsed.confidence, 45) }
     : parsed;
-  const items = refineReceiptItemWords(receiptText, receipt.items);
+  const items = refineReceiptItemWords(receiptText, applyVerifiedMarginReadings(receiptText, receipt.items));
   return items === receipt.items ? receipt : { ...receipt, items };
 }
 

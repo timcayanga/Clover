@@ -489,7 +489,7 @@ export function canUseLocalReceiptPreview(text: string, draft: ReceiptPreviewRes
   return canPreviewLocalReceiptItems(text, draft) || reconcilesReviewedDiscountPhoto(text, draft);
 }
 
-function reconcilesDiscountedVatReceipt(text: string, total: string) {
+export function reconcilesDiscountedVatReceipt(text: string, total: string) {
   if (!/^price net of vat[ \t]*:/im.test(text)) return false;
   const lines = text.split(/\r?\n/).map(line => line.trim());
   const money = "(\\d+(?:,\\d{3})*\\.\\d{2})";
