@@ -15,6 +15,7 @@ import {
   type PricingMarket,
 } from "@/lib/public-plan-comparison";
 import s from "./showcase.module.css";
+import { CustomerProof, BankShowcase } from "./landing-proof";
 import { PublicFooter } from "@/components/public-footer";
 import { StoreAvailability } from "@/components/app-store-links";
 import { JourneyHeader, JourneyActions } from "@/app/landing-preview/landing-journey";
@@ -281,37 +282,6 @@ export function PurchaseThroughline() {
   );
 }
 
-export function ConnectionOptions() {
-  const banks = [
-    ["BDO", "bdo.png"],
-    ["BPI", "bpi.png"],
-    ["LandBank", "landbank.png"],
-    ["Metrobank", "metrobank.png"],
-    ["RCBC", "rcbc.png"],
-    ["Security Bank", "security bank.png"],
-  ];
-  return (
-    <div className={s.connectionOptions}>
-      <div className={s.miniHeader}>
-        <strong>Connect</strong>
-        <span>Philippines</span>
-      </div>
-      <div className={s.connectionGrid}>
-        {banks.map(([name, file]) => (
-          <div key={name}>
-            <img
-              src={`/assets/banks/philippines/${file}`}
-              width="42"
-              height="42"
-              alt=""
-            />
-            <span>{name}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 export function TransactionMoment() {
   return (
     <div className={s.transactionMoment}>
@@ -867,6 +837,7 @@ export function Showcase({ initialMarket, authEnabled = false, homeHref = "/land
           </a>
         </ScrollScene>
 
+        <CustomerProof />
         <ScrollScene id="one-picture" className={s.journey} flow>
           <div className={s.journeyWorld}>
             <article className={s.journeyBeat} data-story-act data-story-weight="1" data-chapter="organize">
@@ -885,10 +856,11 @@ export function Showcase({ initialMarket, authEnabled = false, homeHref = "/land
                 data-story-art
               >
                 <div className={s.receiptStop} data-receipt-stop />
-                <div className={s.connectStack}><ConnectionOptions /><div className={s.manualPreview}><span>Add manually</span><strong>Lunch with friends</strong><b>₱500.00</b><small>Food & dining · BPI</small></div></div>
+                <div className={s.connectStack}><div className={s.manualPreview}><span>Add manually</span><strong>Lunch with friends</strong><b>₱500.00</b><small>Food & dining · BPI</small></div></div>
 
               </div>
             </article>
+            <BankShowcase />
             <article className={s.journeyBeat} data-story-act data-story-weight="0.85" data-chapter="understand">
               <div className={s.journeyCopy}>
                 <Heading text="See where your money stands and what changed. Bring spending, accounts, obligations, and investments into focus.">
