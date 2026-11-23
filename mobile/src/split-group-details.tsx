@@ -1,3 +1,4 @@
+import { SplitBillQuickActions, type BillEntryMethod } from "./split-bill-quick-actions";
 import { PersonContactFields, type DirectoryPerson } from "./add-split-person";
 import { personLedger, netDebtLabel } from "../../shared/split-person-ledger";
 import { type SavedPerson } from "./split-people-field";
@@ -60,10 +61,10 @@ export function SplitGroupDetails({
 }) {
   const session = useSession();
   const { colors } = useTheme();
-  const [adding, setAdding] = useState(false),
+  const [adding, setAdding] = useState<BillEntryMethod | null>(null),
     [search, setSearch] = useState("");
   useEffect(
-    () => onContextBillEntry(() => setAdding(true), entryScope),
+    () => onContextBillEntry(() => setAdding("upload"), entryScope),
     [entryScope],
   );
 
@@ -196,25 +197,26 @@ export function SplitGroupDetails({
         <PlanHeader
           title={label}
           back={selectedPerson ? () => setSelectedPerson(null) : onClose}
-          add={() => setAdding(true)}
+          add={() => setAdding("upload")}
         />
         {contact?.id && <PersonContactFields key={contact.id} person={{...contact,id:contact.id}} onSaved={updated=>{onPersonSaved?.(updated);onChanged();}}/>}
         {adding ? (
-          <BillEditor
+          <BillEditor initialMethod={adding}
               context={{
                 group,
                 person: detail,
                 circleId,
                 currency: circleCurrency,
               }}
-              onClose={() => setAdding(false)}
+              onClose={() => setAdding(null)}
               onSaved={() => {
-                setAdding(false);
+                setAdding(null);
                 reload();
                 onChanged();
               }}
             />
         ) : null}
+        <SplitBillQuickActions onSelect={setAdding} />
         {loadError ? <Notice>{loadError}</Notice> : null}
         {data ? (
           <>
@@ -241,7 +243,7 @@ export function SplitGroupDetails({
   return (
     <Screen>
       {adding ? (
-        <BillEditor
+        <BillEditor initialMethod={adding}
             context={{
               group: group
                 ? {
@@ -254,9 +256,9 @@ export function SplitGroupDetails({
               circleId,
               currency: circleCurrency,
             }}
-            onClose={() => setAdding(false)}
+            onClose={() => setAdding(null)}
             onSaved={() => {
-              setAdding(false);
+              setAdding(null);
               reload();
               onChanged();
             }}
@@ -265,23 +267,22 @@ export function SplitGroupDetails({
       <PlanHeader
         title={name || "Group"}
         back={onClose}
-        add={() => setAdding(true)}
+        add={() => setAdding("upload")}
       />
       {group ? (
         <PlanTabs items={["Bills", "People"]} value={tab} onChange={setTab} />
       ) : null}
       {tab === "Bills" ? (
         <TogetherToolbar
-          action={circleId ? "Add Expense" : "Add Bill"}
           search={search}
           onSearch={setSearch}
-          onAdd={() => setAdding(true)}
         />
       ) : null}
       {loadError ? <Notice>{loadError}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}
       {tab === "Bills" || person ? (
         <>
+          <SplitBillQuickActions onSelect={setAdding} />
           <View
             style={{ flexDirection: "row", justifyContent: "space-between" }}
           >

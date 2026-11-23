@@ -143,7 +143,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
   );
   const [total, setTotal] = useState(sourceTransaction?.amount || "");
   const [currency, setCurrency] = useState(
-    sourceTransaction?.currency || context?.currency || "PHP",
+    sourceTransaction?.currency || context?.currency || session.data?.defaultCurrency || "PHP",
   );
   const [date, setDate] = useState(
     sourceTransaction?.date.slice(0, 10) ||

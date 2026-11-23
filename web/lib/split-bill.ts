@@ -1,5 +1,5 @@
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
-import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
+import { inferReceiptLocationCurrency, readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { hasPrintedQuantityConflict, readCountedGrossTable, receiptNameFirstPriceHeader, readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
@@ -126,6 +126,7 @@ export type ReceiptPreviewResult = {
   currency: string;
   currencyMentions: string[];
   currencyWarning: string | null;
+  currencySource?: "receipt_location" | "user_default";
   paymentMethod: string | null;
   tenders?: ReceiptTender[];
   receiptPayerName: string | null;
@@ -2706,7 +2707,7 @@ function hasClippedSettlementLine(body: string) {
   return clipped && !readMerchantPaymentConfirmation(body);
 }
 
-export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
+export function parseReceiptPhotoText(source: string, defaultCurrency?: string): ReceiptPreviewResult {
   const optics = receiptOptics(source);
   const { ordered, evidence } = optics;
   let parsed = parseReceiptSource(source, true, optics);
@@ -2720,9 +2721,14 @@ export function parseReceiptPhotoText(source: string): ReceiptPreviewResult {
     const currencySource = /\d\s*@\s*\d/.test(optical)
       ? optical.replace(/^(\d+(?:\.0+)?)\s+€(?=\d+[.,]\d{2}\s+\d+[.,]\d{2})/gm, "$1 @")
       : optical;
-    const printed = readPrintedReceiptCurrency(normalizeLocalReceiptOcrText(currencySource));
+    const currencyText = normalizeLocalReceiptOcrText(currencySource);
+    const location = defaultCurrency ? inferReceiptLocationCurrency(currencyText) : null;
+    const printed = readPrintedReceiptCurrency(currencyText, location?.currency);
     if (printed?.kind === "printed") {
       parsed = { ...parsed, currency: printed.currency, currencyMentions: [printed.currency], currencyWarning: null };
+    } else if (!printed && defaultCurrency && parsed.currencyMentions.length <= 1) {
+      parsed = { ...parsed, currency: location?.currency ?? defaultCurrency, currencyWarning: null,
+        currencyMentions: [], currencySource: location ? "receipt_location" : "user_default" };
     } else if (printed?.kind === "conflict" || (parsed.currency === "PHP" && !printed)) {
       parsed = { ...parsed, currency: "MIXED", currencyMentions: printed?.currencies ?? [],
         currencyWarning: printed ? "Mixed currencies detected: " + printed.currencies.join(", ")

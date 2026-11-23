@@ -1,8 +1,18 @@
+import { parseReceiptPhotoText } from "../lib/split-bill";
 import { readPrintedReceiptCurrency } from "../lib/receipt-currency-evidence";
 import assert from "node:assert/strict";
 import { captureReceiptLocation } from "../../shared/receipt-capture-location";
 import { applyReceiptDefaultCurrency } from "../lib/receipt-intake";
 import { incompleteReceiptFields } from "../lib/receipt-review";
+
+const splitReceipt = "Sample Cafe\nOFFICIAL RECEIPT\n2026-11-19\nDrink 80.00\nTotal Amount 80.00";
+const located = parseReceiptPhotoText(splitReceipt + "\nCITY OF MAKATI FOURTH DISTRICT", "USD");
+assert.equal(located.currency, "PHP");
+assert.equal(located.currencySource, "receipt_location");
+assert.equal(located.currencyWarning, null);
+assert.equal(parseReceiptPhotoText(splitReceipt, "SGD").currency, "SGD");
+assert.equal(parseReceiptPhotoText(splitReceipt + "\nCity of Makati\nCurrency: USD", "PHP").currency, "USD");
+assert.equal(parseReceiptPhotoText(splitReceipt + "\nCurrency: USD\nCurrency: PHP", "PHP").currency, "MIXED");
 
 const now = Date.now();
 const date = new Date(now).toISOString().slice(0, 10);
