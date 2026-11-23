@@ -1,77 +1,18 @@
 // Local PP-OCRv5 inference. Models: PaddlePaddle/RapidAI, Apache-2.0.
 // No uploaded image, transcript or customer identifier leaves this process.
 const { performance } = require("node:perf_hooks");
-const { parentPort, threadId } = require("node:worker_threads");
-const { createHash } = require("node:crypto");
-const fs = require("node:fs/promises");
-const path = require("node:path");
-const os = require("node:os");
+const { parentPort } = require("node:worker_threads");
 const sharp = require("sharp");
 const ort = require("onnxruntime-node");
 const cvModule = require("@techstark/opencv-js");
-const modelSpecs = {
-  detection: [
-    "det/ch_PP-OCRv5_det_mobile.onnx",
-    "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae",
-  ],
-  korean: [
-    "rec/korean_PP-OCRv5_rec_mobile.onnx",
-    "cd6e2ea50f6943ca7271eb8c56a877a5a90720b7047fe9c41a2e541a25773c9b",
-  ],
-  latin: [
-    "rec/latin_PP-OCRv5_rec_mobile.onnx",
-    "b20bd37c168a570f583afbc8cd7925603890efbcdc000a59e22c269d160b5f5a",
-  ],
-};
+const { modelSpecs, loadModelBytes } = require("./receipt-ocr-models.cjs");
 const sessions = new Map();
-const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 async function getModel(name) {
   if (!sessions.has(name))
     sessions.set(
       name,
       (async () => {
-        const [file, sha] = modelSpecs[name];
-        const dir = path.join(os.tmpdir(), "clover-ocr-models-v1");
-        const target = path.join(dir, sha + ".onnx");
-        let bytes = await fs.readFile(target).catch(() => null);
-        if (!bytes || hash(bytes) !== sha) {
-          const response = await fetch(
-            "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/" +
-              file,
-            { signal: AbortSignal.timeout(15000) },
-          );
-          if (!response.ok) throw new Error("OCR model download failed");
-          if (
-            !response.body ||
-            Number(response.headers.get("content-length") || 0) >
-              20 * 1024 * 1024
-          )
-            throw new Error("OCR model too large");
-          const chunks = [];
-          let size = 0;
-          const reader = response.body.getReader();
-          try {
-            for (;;) {
-              const next = await reader.read();
-              if (next.done) break;
-              size += next.value.length;
-              if (size > 20 * 1024 * 1024) {
-                await reader.cancel();
-                throw new Error("OCR model too large");
-              }
-              chunks.push(next.value);
-            }
-          } finally {
-            reader.releaseLock();
-          }
-          bytes = Buffer.concat(chunks);
-          if (bytes.length > 20 * 1024 * 1024 || hash(bytes) !== sha)
-            throw new Error("OCR model integrity check failed");
-          await fs.mkdir(dir, { recursive: true });
-          const temp = target + "." + process.pid + "." + threadId + ".tmp";
-          await fs.writeFile(temp, bytes);
-          await fs.rename(temp, target);
-        }
+        const bytes = await loadModelBytes(name);
         const dictionary = name === "detection" ? [] : modelDictionary(bytes);
         return {
           session: await ort.InferenceSession.create(bytes, {

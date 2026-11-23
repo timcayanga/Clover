@@ -41,6 +41,8 @@ const nextConfig = {
   outputFileTracingIncludes: {
     "/*": [
       "./lib/receipt-ocr-worker.cjs",
+      "./lib/receipt-ocr-models.cjs",
+      "./.receipt-ocr-models/*.onnx",
       "./node_modules/onnxruntime-node/dist/**/*",
       "./node_modules/onnxruntime-node/package.json",
       "./node_modules/onnxruntime-node/bin/napi-v6/linux/x64/onnxruntime_binding.node",
