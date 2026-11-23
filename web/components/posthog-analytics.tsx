@@ -516,38 +516,86 @@ function PostHogRequestSignals() {
   return null;
 }
 
-const SIGNIN_SUBMISSION_KEY = "clover.analytics.signin-submitted-at";
+const SIGNIN_ATTEMPT_KEY = "clover.analytics.signin-attempt.v1";
+const SIGNIN_WINDOW_MS = 30 * 60_000;
+type SignInAttempt = { id: string; started: number; authenticated?: string; homeReady?: boolean };
+
+function pendingSignIn(): SignInAttempt | null {
+  try {
+    const attempt = JSON.parse(window.sessionStorage.getItem(SIGNIN_ATTEMPT_KEY) || "null");
+    const age = Date.now() - attempt?.started;
+    if (typeof attempt?.id === "string" && age >= 0 && age < SIGNIN_WINDOW_MS) return attempt;
+  } catch { /* Storage is optional. */ }
+  return null;
+}
+
+function storeSignIn(attempt: SignInAttempt) {
+  try { window.sessionStorage.setItem(SIGNIN_ATTEMPT_KEY, JSON.stringify(attempt)); } catch { /* Storage is optional. */ }
+}
 
 export function trackSignInSubmission(method: string, step: string) {
   if (!shouldTrackAnalytics()) return;
-  try {
-    window.sessionStorage.setItem(SIGNIN_SUBMISSION_KEY, String(Date.now()));
-  } catch {
-    // Stage counts still work when tab storage is unavailable.
-  }
-  capturePostHogClientEvent("web_signin_stage", { stage: "submitted", method, step }, { send_instantly: true });
+  if (!window.crypto?.randomUUID) return;
+  const attempt = { id: window.crypto.randomUUID(), started: Date.now() };
+  storeSignIn(attempt);
+  capturePostHogClientEvent("web_signin_stage", { stage: "submitted", method, step, signin_attempt_id: attempt.id }, { send_instantly: true });
+}
+
+export function trackSignInStep(stage: string, step?: string) {
+  const attempt = pendingSignIn();
+  if (attempt) capturePostHogClientEvent("web_signin_stage", { stage, step, signin_attempt_id: attempt.id });
 }
 
 export function clearPendingSignIn() {
-  try {
-    window.sessionStorage.removeItem(SIGNIN_SUBMISSION_KEY);
-  } catch {
-    // Storage may be disabled.
-  }
+  try { window.sessionStorage.removeItem(SIGNIN_ATTEMPT_KEY); } catch { /* Storage is optional. */ }
 }
 
 function trackAuthenticatedSignIn() {
-  try {
-    const started = window.sessionStorage.getItem(SIGNIN_SUBMISSION_KEY);
-    if (!started) return;
-    window.sessionStorage.removeItem(SIGNIN_SUBMISSION_KEY);
-    const elapsed = Date.now() - Number(started);
-    if (elapsed >= 0 && elapsed < 30 * 60_000 && shouldTrackAnalytics()) {
-      safeCapture("web_signin_stage", { stage: "authenticated" });
-    }
-  } catch {
-    // Authentication must work without tab storage.
+  const attempt = pendingSignIn();
+  if (!attempt || !currentPlanUserId || !shouldTrackAnalytics()) return;
+  if (currentPlanProperties.analytics_excluded || (attempt.authenticated && attempt.authenticated !== currentPlanUserId)) {
+    clearPendingSignIn();
+    return;
   }
+  if (currentPlanProperties.analytics_audience !== "customer") return;
+  const properties = { signin_attempt_id: attempt.id };
+  if (!attempt.authenticated) {
+    attempt.authenticated = currentPlanUserId;
+    storeSignIn(attempt);
+    safeCapture("web_signin_stage", { ...properties, stage: "authenticated" });
+  }
+  if (attempt.homeReady) {
+    safeCapture("web_signin_stage", { ...properties, stage: "home_data_ready" });
+    clearPendingSignIn();
+  }
+}
+
+export function SignInHomeDataReady() {
+  const pathname = usePathname();
+  useEffect(() => {
+    const attempt = pendingSignIn();
+    if (pathname !== "/home" || !shouldTrackAnalytics() || !attempt) return;
+    let frame = 0;
+    const observe = () => {
+      cancelAnimationFrame(frame);
+      if (document.visibilityState !== "visible") return;
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => {
+          const current = pendingSignIn();
+          if (current?.id !== attempt.id || document.visibilityState !== "visible") return;
+          storeSignIn({ ...current, homeReady: true });
+          runWhenPostHogReady(trackAuthenticatedSignIn);
+        });
+      });
+    };
+    observe();
+    document.addEventListener("visibilitychange", observe);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("visibilitychange", observe);
+    };
+  }, [pathname]);
+  return null;
 }
 
 function PostHogIdentity() {
@@ -561,7 +609,7 @@ function PostHogIdentity() {
     if (!isLoaded || !user || !shouldTrackAnalytics()) return;
     const controller = new AbortController();
     const refresh = () => { void fetch("/api/analytics/plan", { cache: "no-store", signal: controller.signal })
-      .then(r => r.ok ? r.json() : null).then(p => { if (p && !controller.signal.aborted) runWhenPostHogReady(() => { if (controller.signal.aborted) return; currentPlanProperties = p; safeIdentify(scopeAnalyticsDistinctId(user.id, getClientAnalyticsEnvironment()), p); }); }).catch(() => {}); };
+      .then(r => r.ok ? r.json() : null).then(p => { if (p && !controller.signal.aborted) runWhenPostHogReady(() => { if (controller.signal.aborted) return; currentPlanProperties = p; safeIdentify(scopeAnalyticsDistinctId(user.id, getClientAnalyticsEnvironment()), p); trackAuthenticatedSignIn(); }); }).catch(() => {}); };
     refresh(); window.addEventListener("focus", refresh);
     return () => { controller.abort(); window.removeEventListener("focus", refresh); };
   }, [isLoaded, user?.id, path]);
@@ -580,7 +628,6 @@ function PostHogIdentity() {
             ...getPostHogPersonProperties(user),
           }
         );
-        trackAuthenticatedSignIn();
         const attribution = getFirstTouchAttribution();
         if (attribution) {
           const conversionKey = `clover.posthog.acquisition-identified.v1:${user.id}`;
@@ -605,6 +652,7 @@ function PostHogIdentity() {
       }
 
       currentPlanProperties = {};
+      if (pendingSignIn()?.authenticated) clearPendingSignIn();
       // Anonymous visitors keep their original session through Clerk sign-in.
       const previousId = window.posthog?.get_distinct_id();
       if (previousId && /^(?:production:|staging:|local:|user_)/.test(previousId)) {

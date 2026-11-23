@@ -23,7 +23,7 @@ import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-conte
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { isLiabilityAccountType, SPENDABLE_ACCOUNT_TYPES } from "@/lib/account-types";
-import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
+import { PostHogEvent, PostHogPersonProperties, SignInHomeDataReady } from "@/components/posthog-analytics";
 import { DashboardTopActionsLazy } from "@/components/dashboard-top-actions-lazy";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -1122,6 +1122,7 @@ async function DashboardStream({
           days_since_last_import: daysSinceLastImport,
         }}
       />
+      {!balanceEstimateUnavailable && <SignInHomeDataReady />}
       <PostHogEvent
         event="dashboard_viewed"
         onceKey={analyticsOnceKey("dashboard_viewed", "session")}

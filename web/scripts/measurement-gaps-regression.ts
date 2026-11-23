@@ -152,7 +152,7 @@ async function main() {
   const sharedAnalytics=await import("../../shared/analytics");
   const measurement=await import("../../shared/analytics-measurement");
   const signup=await import("../../shared/web-signup-attribution");
-  vm.runInNewContext(browserSource+"\nexports.runIdentity=PostHogIdentity;exports.authenticated=trackAuthenticatedSignIn;exports.runViews=PostHogPageViews;exports.runBehavior=PostHogBehaviorSignals;",{exports:browserModule.exports,Element:ElementDouble,URL,URLSearchParams,document:doc,navigator:{userAgent:"iPhone Safari",maxTouchPoints:1},performance:{now:()=>now},window:{__posthogReady:true,sessionStorage:{getItem:(k:string)=>tabStorage.get(k),setItem:(k:string,v:string)=>tabStorage.set(k,v),removeItem:(k:string)=>tabStorage.delete(k)},location,innerWidth:390,innerHeight:844,localStorage:{getItem:()=>null,setItem:()=>{}},posthog:{get_distinct_id:()=>sdkDistinctId,reset:()=>{resets++;sdkDistinctId="new-anonymous";},capture:(event:string,properties:any,options:any)=>browserEvents.push({event,properties,options})},addEventListener:(key:string,fn:Function)=>windowListeners.set(key,fn),removeEventListener:(key:string)=>windowListeners.delete(key)},require:(id:string)=>{
+  vm.runInNewContext(browserSource+"\nexports.runIdentity=PostHogIdentity;exports.authenticated=trackAuthenticatedSignIn;exports.plan=(user,p)=>{currentPlanUserId=user;currentPlanProperties=p};exports.runViews=PostHogPageViews;exports.runBehavior=PostHogBehaviorSignals;",{requestAnimationFrame:(fn:Function)=>{fn();return 1},cancelAnimationFrame:()=>{},exports:browserModule.exports,Element:ElementDouble,URL,URLSearchParams,document:doc,navigator:{userAgent:"iPhone Safari",maxTouchPoints:1},performance:{now:()=>now},window:{crypto:{randomUUID:()=>crypto.randomUUID()},__posthogReady:true,sessionStorage:{getItem:(k:string)=>tabStorage.get(k),setItem:(k:string,v:string)=>tabStorage.set(k,v),removeItem:(k:string)=>tabStorage.delete(k)},location,innerWidth:390,innerHeight:844,localStorage:{getItem:()=>null,setItem:()=>{}},posthog:{get_distinct_id:()=>sdkDistinctId,reset:()=>{resets++;sdkDistinctId="new-anonymous";},capture:(event:string,properties:any,options:any)=>browserEvents.push({event,properties,options})},addEventListener:(key:string,fn:Function)=>windowListeners.set(key,fn),removeEventListener:(key:string)=>windowListeners.delete(key)},require:(id:string)=>{
     if(id==="react")return {useRef:(current:any)=>({current}),useEffect:(fn:()=>any)=>{const cleanup=fn();if(cleanup)effects.push(cleanup);}};
     if(id==="@clerk/nextjs")return {useUser:()=>({isLoaded:true,user:null})};
     if(id==="next/navigation")return {usePathname:()=>pathname};
@@ -177,9 +177,32 @@ async function main() {
   browserModule.exports.runIdentity();
   assert.equal(resets, 1, "logout clears a previous identity exactly once");
   browserModule.exports.trackSignInSubmission("password", "form");
+  pathname="/home";
+  browserModule.exports.SignInHomeDataReady(); // Home can hydrate before identity classification.
+  browserModule.exports.plan("customer-one",{analytics_audience:"customer"});
   browserModule.exports.authenticated();
+  browserModule.exports.SignInHomeDataReady(); // Re-render after completion.
+  const stages = browserEvents.splice(0);
+  assert.deepEqual(stages.map(e => e.properties.stage), ["submitted", "authenticated", "home_data_ready"]);
+  assert.equal(new Set(stages.map(e=>e.properties.signin_attempt_id)).size,1);
+  browserModule.exports.trackSignInSubmission("oauth_google","form");
   browserModule.exports.authenticated();
-  assert.deepEqual(browserEvents.splice(0).map(e => e.properties.stage), ["submitted", "authenticated"]);
+  doc.visibilityState="hidden";
+  browserModule.exports.SignInHomeDataReady();
+  assert.deepEqual(browserEvents.map(e=>e.properties.stage),["submitted","authenticated"]);
+  doc.visibilityState="visible";
+  listeners.get("visibilitychange")!();
+  listeners.get("visibilitychange")!();
+  const redirected=browserEvents.splice(0);
+  assert.deepEqual(redirected.map(e=>e.properties.stage),["submitted","authenticated","home_data_ready"]);
+  assert.notEqual(redirected[0].properties.signin_attempt_id,stages[0].properties.signin_attempt_id);
+  browserModule.exports.trackSignInSubmission("password","form");
+  browserModule.exports.plan("test-account",{analytics_audience:"test",analytics_excluded:true});
+  browserModule.exports.authenticated();
+  browserModule.exports.SignInHomeDataReady();
+  assert.deepEqual(browserEvents.splice(0).map(e=>e.properties.stage),["submitted"]);
+  browserModule.exports.plan(null,{});
+  pathname="/help/imports/receipts";
   browserModule.exports.runViews();browserModule.exports.runBehavior();
   assert.equal(browserEvents[0].properties.is_public_website,true);
   assert.equal(browserEvents[0].properties.public_resource_path,"/help/imports/receipts");

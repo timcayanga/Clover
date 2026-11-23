@@ -1,0 +1,31 @@
+-- Complete Manila submission days only. Read later stages across midnight.
+-- Unclassified submissions include anonymous QA, telemetry loss and failed sign-ins.
+-- Customer readiness uses only positively classified authenticated attempts.
+WITH attempts AS (
+  SELECT toString(properties.signin_attempt_id) AS attempt,
+    minIf(timestamp, properties.stage = 'submitted') AS submitted_at,
+    minIf(timestamp, properties.stage = 'authenticated' AND properties.analytics_audience = 'customer') AS auth_at,
+    maxIf(timestamp, properties.stage = 'home_data_ready' AND properties.analytics_audience = 'customer') AS ready_at
+  FROM events
+  WHERE event = 'web_signin_stage'
+    AND properties.analytics_environment = 'production'
+    AND properties.$host IN ('clover.ph', 'www.clover.ph')
+    AND coalesce(toString(properties.analytics_excluded), '') NOT IN ('true','1')
+    AND coalesce(toString(properties.$virt_is_bot), '') NOT IN ('true','1')
+    AND notEmpty(coalesce(toString(properties.signin_attempt_id), ''))
+    AND timestamp >= toStartOfDay(toTimeZone(now(), 'Asia/Manila')) - INTERVAL 7 DAY
+  GROUP BY attempt
+  HAVING countIf(properties.stage = 'submitted') > 0
+    AND submitted_at < toStartOfDay(toTimeZone(now(), 'Asia/Manila'))
+    AND submitted_at <= now() - INTERVAL 30 MINUTE
+)
+SELECT toDate(toTimeZone(submitted_at, 'Asia/Manila')) AS submission_day,
+  count() AS observed_submissions,
+  countIf(auth_at >= submitted_at AND auth_at < submitted_at + INTERVAL 30 MINUTE) AS customer_authenticated,
+  countIf(auth_at >= submitted_at AND ready_at >= auth_at AND ready_at < submitted_at + INTERVAL 30 MINUTE) AS customer_home_ready,
+  observed_submissions - customer_authenticated AS submission_without_customer_auth_signal,
+  customer_authenticated - customer_home_ready AS authenticated_without_ready_signal,
+  round(100.0 * customer_home_ready / nullIf(customer_authenticated, 0), 1) AS customer_ready_pct
+FROM attempts
+GROUP BY submission_day
+ORDER BY submission_day
