@@ -6,8 +6,9 @@ import { getR2Client, getLocalImportObjectPath, uploadObject } from "./s3";
 import { getEnv } from "./env";
 import { getBoundedImportImagePreview } from "./import-image-validation.server";
 import { readLocalReceiptImage } from "./local-receipt-ocr.server";
-import { hasReconciledOpticalSettlement, parseReceiptPhotoText, type ReceiptPreviewResult } from "./split-bill";
+import { assessReceiptPreviewQuality, hasReconciledOpticalSettlement, parseReceiptPhotoText, type ReceiptPreviewResult } from "./split-bill";
 import { readLocalReceiptOcrText, receiptDateDisagreements, readReceiptOpticalEvidence } from "./local-receipt-ocr-envelope";
+import { editableReceiptItems } from "../../shared/split-bill-experience";
 import { hasPrintedItemizedTotal } from "./receipt-item-table";
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
 import { getClearLocalPhotoRejection } from "./financial-upload-scope";
@@ -22,6 +23,16 @@ export type ReceiptDraft = {
   preview: ReceiptPreviewResult;
   reliableForScopedSplit: boolean;
 };
+
+/** A reconciled paper receipt may be saved as a reviewable Split Bill.
+ * Connected transactions and Circle expenses keep their existing confirmation rules. */
+export function canSaveReceiptForReview(preview: ReceiptPreviewResult) {
+  const text = readLocalReceiptOcrText(preview.receiptText);
+  if (!text || !preview.requiresReview || !preview.billDate || !preview.total || !preview.merchantName ||
+      preview.currencyWarning || preview.currency === "MIXED" || classifyUnsettledPurchaseDocument(text)) return false;
+  return assessReceiptPreviewQuality({...preview, requiresReview:false}).reliableForFastPath &&
+    hasPrintedItemizedTotal(text, preview.total) && editableReceiptItems(preview).length > 0;
+}
 
 export function receiptDraftId(bytes: Uint8Array, currency: string) {
   return createHash("sha256").update("receipt-v1:" + currency + ":").update(bytes).digest("hex");

@@ -328,6 +328,7 @@ async function main() {
     let receiptPreviewed = false;
     let reliableForScopedSplit = false;
     let progressive = false;
+    let draftId = "test-draft";
     let finishRefinement, interruptRefinement;
     let printedBillDate = "2026-11-20";
     let visible = true;
@@ -348,7 +349,7 @@ async function main() {
           assert.equal(file.name,"receipt.jpg");
           assert.deepEqual(new Uint8Array(await file.arrayBuffer()), photoBytes);
           receiptPreviewed=true;
-          return {...(progressive ? {draftId:"test-draft",refining:true,attemptId:"test-attempt"} : {}),reliableForScopedSplit,receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:printedBillDate,currency:"PHP",serviceCharge:"1.25",items:[{description:"Bread",amount:"10.75"}]}};
+          return {...(progressive ? {draftId,refining:true,attemptId:"test-attempt"} : {}),reliableForScopedSplit,receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:printedBillDate,currency:"PHP",serviceCharge:"1.25",items:[{description:"Bread",amount:"10.75"}]}};
         }
         saved.push(JSON.parse(opts.body)); return {bill:{id:"saved"}};}})},
       "./ui": {useTheme:()=>({colors:{}}),Field:"Field",Screen:"Screen",Body:"Body",CategoryMark:"CategoryMark"},
@@ -435,6 +436,20 @@ async function main() {
     assert.equal(render().find(n=>n.type==="Items").props.items[0].description,"Edited bread","Late refinement preserves item edits");
     assert.equal(saved.length,3);
 
+    delete context.circleId;
+    draftId = "group-receipt";
+    printedBillDate = "2026-11-20";
+    control("kind","split").props.onUploadSource("library");
+    await flush();
+    finishRefinement({draftId,refining:false,readyForReviewableBill:true,reliableForScopedSplit:false,
+      preview:{merchantName:"Bakery",currency:"PHP",total:"12.00",billDate:printedBillDate,requiresReview:true,
+        serviceCharge:"1.25",items:[{description:"Fresh bread",amount:"10.75"}]}});
+    await flush();render();await flush();
+    assert.equal(saved.length,4,"The reviewable receipt persists in its group after refinement");
+    assert.equal(saved[3].groupId,"group");
+    assert.equal(saved[3].expense.splitOnly,true);
+    assert.equal(saved[3].receipt.needsReview,true);
+    assert.deepEqual(saved[3].reviewedItems.map(r=>r.amount),["10.75","1.25"]);
     ui.stop();
   }
   const {receiptServiceChargeItem} = load("../shared/split-bill-experience.ts");

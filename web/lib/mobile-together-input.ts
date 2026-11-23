@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { editableReceiptItems } from "../../shared/split-bill-experience";
+import { hasPrintedItemizedTotal } from "./receipt-item-table";
+import { readLocalReceiptOcrText } from "./local-receipt-ocr-envelope";
+import { parseReceiptPhotoText } from "./split-bill";
 import { circleTypes } from "./circles";
 
 export const mobileCircleInput = z
@@ -194,6 +198,22 @@ export function mobileSplitBillPayload(
     id: randomUUID(),
     name: person.name,
   }));
+  // Older apps omitted reviewed rows when they lost a separately printed service charge.
+  // Recover only when the recorded scan agrees with the submitted total and currency.
+  let recovered: ReturnType<typeof editableReceiptItems> = [];
+  if (input.expense?.splitOnly && !input.reviewedItems && input.receipt?.items.length && input.total) {
+    const parsed = parseReceiptPhotoText(input.receipt.text, input.currency);
+    if (parsed.currency === input.currency && parsed.total && Number(parsed.total) === Number(input.total) &&
+        hasPrintedItemizedTotal(readLocalReceiptOcrText(input.receipt.text) ?? input.receipt.text, parsed.total) &&
+        parsed.items.length === input.receipt.items.length && parsed.items.every((row, index) =>
+          row.description === input.receipt!.items[index].description && row.amount === input.receipt!.items[index].amount)) {
+      recovered = editableReceiptItems(parsed);
+    }
+  }
+  const unitemized = Boolean(!input.reviewedItems && !recovered.length && input.receipt?.items.length);
+  const needsReview = input.receipt?.needsReview === true || unitemized || recovered.length > 0;
+  const items: NonNullable<typeof input.reviewedItems> = input.reviewedItems ??
+    (recovered.length ? recovered : input.total ? [{description:unitemized ? "Unitemized amount" : input.title,amount:input.total}] : []);
   return {
     ...(input.transactionId ? { transactionId: input.transactionId } : {}),
     ...(input.expense?{expense:input.expense}:{}),
@@ -220,16 +240,14 @@ export function mobileSplitBillPayload(
               items: input.receipt.items,
               confidence: input.receipt.confidence,
             },
-            receiptNeedsReview: input.receipt.needsReview === true,
-            allocationMethod: input.receipt.needsReview ? "receipt-review-pending" : input.reviewedItems
+            receiptNeedsReview: needsReview,
+            allocationMethod: needsReview ? "receipt-review-pending" : input.reviewedItems
               ? "user-reviewed-items"
               : "user-confirmed-equal-total",
           },
         }
       : {}),
-    items: (
-      input.reviewedItems ?? (input.total ? [{ description: input.title, amount: input.total }] : [])
-    ).map((item) => ({
+    items: items.map((item) => ({
       description: item.description,
       amount: item.amount,
       participantIds: ("participantIndexes" in item && item.participantIndexes

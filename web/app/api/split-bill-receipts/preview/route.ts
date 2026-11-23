@@ -19,7 +19,7 @@ import { assertRateLimit } from "@/lib/rate-limit";
 import { uploadObject } from "@/lib/s3";
 import { nativeUploadRequest, readReceiptUpload } from "@/lib/native-upload-store";
 import { isUploadPhoto, isUploadPdf, NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
-import { billAttemptForReceipt, cachedReceiptDraft, firstReceiptRead, readReceiptObject, receiptDraftId, storeReceiptDraft } from "@/lib/receipt-progressive.server";
+import { billAttemptForReceipt, cachedReceiptDraft, canSaveReceiptForReview, firstReceiptRead, readReceiptObject, receiptDraftId, storeReceiptDraft } from "@/lib/receipt-progressive.server";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -303,7 +303,7 @@ export async function POST(request: Request) {
         preview.merchantName !== early.preview.merchantName)) {
       return NextResponse.json({error:"Couldn’t verify more details. Your first draft is available."}, {status:422});
     }
-    const result = { preview, ...draftMeta, reliableForScopedSplit: Boolean(preview.billDate) && assessReceiptPreviewQuality(preview).reliableForFastPath };
+    const result = { preview, ...draftMeta, readyForReviewableBill:canSaveReceiptForReview(preview), reliableForScopedSplit: Boolean(preview.billDate) && assessReceiptPreviewQuality(preview).reliableForFastPath };
     if (prefix && draftId) {
       const draft = { ...result, draftId, attemptId:billAttemptForReceipt(draftId,scope), refining:false };
       await storeReceiptDraft(prefix, draft);

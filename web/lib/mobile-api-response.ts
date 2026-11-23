@@ -78,6 +78,7 @@ const splitSummary = (value: unknown) => pick(value, ["id", "title", "note", "bi
 const splitDetail = (value: unknown) => {
   const bill = record(value), settlement = record(bill.settlement);
   return { ...splitSummary(bill), ...pick(bill, ["recorder"]),
+    ...(record(bill.rawPayload).receiptNeedsReview === true ? {rawPayload:{receiptNeedsReview:true}} : {}),
     group: bill.group ? {...pick(bill.group, ["id","name"]),...("recorder" in bill ? {members:rows(record(bill.group).members,["name","previousNames"])}:{})} : null,
     categoryName: typeof record(record(bill.transaction).category).name === "string" ? record(record(bill.transaction).category).name : suggestBillCategory(String(bill.title??""))?.name ?? null,
     payments: rows(bill.payments, ["id", "participantId", "amount", "note"]),
@@ -101,7 +102,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "activation") return { activation: data.activation };
   if (operation === "split-group-create" || operation === "split-group-edit") return {group:{...pick(data.group,["id","name"]),members:rows(record(data.group).members,["id","name","previousNames"])},...pick(data,["ok"])};
   if (operation === "preview") return pick(data,["settlement"]);
-  if (operation === "split-receipt-preview") return { ...pick(data, ["draftId","attemptId","refining"]), reliableForScopedSplit: data.reliableForScopedSplit === true, receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "serviceCharge", "items"]) };
+  if (operation === "split-receipt-preview") return { ...pick(data, ["draftId","attemptId","refining","readyForReviewableBill"]), reliableForScopedSplit: data.reliableForScopedSplit === true, receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "serviceCharge", "items"]) };
   if (operation === "adviser-chat") return {
     ...pick(data, ["reply", "degraded", "scopeRejected", "answerSource"]),
     ...(parseAdviserChart(data.visualization) ? {visualization:parseAdviserChart(data.visualization)} : {}),
