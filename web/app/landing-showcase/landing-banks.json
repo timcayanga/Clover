@@ -1,0 +1,210 @@
+[
+  {
+    "name": "BDO",
+    "markets": {
+      "PH": "P"
+    },
+    "image": "bdo.webp"
+  },
+  {
+    "name": "OCBC",
+    "markets": {
+      "SG": "PB",
+      "MY": "B"
+    },
+    "image": "ocbc.webp"
+  },
+  {
+    "name": "Standard Chartered",
+    "markets": {
+      "HK": "PB",
+      "SG": "B",
+      "MY": "B",
+      "PH": "B",
+      "VN": "B"
+    },
+    "image": "standard-chartered.webp"
+  },
+  {
+    "name": "BIDV",
+    "markets": {
+      "VN": "P"
+    },
+    "image": "bidv.webp"
+  },
+  {
+    "name": "ACB",
+    "markets": {
+      "VN": "P"
+    },
+    "image": "acb.webp"
+  },
+  {
+    "name": "Saigon Hanoi Bank",
+    "markets": {
+      "VN": "P"
+    },
+    "image": "saigon-hanoi-bank.webp"
+  },
+  {
+    "name": "DBS",
+    "markets": {
+      "HK": "PB",
+      "SG": "PB",
+      "MY": "B",
+      "VN": "B"
+    },
+    "image": "dbs.webp"
+  },
+  {
+    "name": "Overseas Filipino Bank",
+    "markets": {
+      "PH": "P"
+    },
+    "image": "overseas-filipino-bank.webp"
+  },
+  {
+    "name": "UOB",
+    "markets": {
+      "SG": "PB",
+      "HK": "B",
+      "MY": "B",
+      "PH": "B",
+      "VN": "B"
+    },
+    "image": "uob.webp"
+  },
+  {
+    "name": "Security Bank",
+    "markets": {
+      "PH": "P"
+    },
+    "image": "security-bank.webp"
+  },
+  {
+    "name": "BPI",
+    "markets": {
+      "PH": "P"
+    },
+    "image": "bpi.webp"
+  },
+  {
+    "name": "Public Bank",
+    "markets": {
+      "MY": "P"
+    },
+    "image": "public-bank.webp"
+  },
+  {
+    "name": "CIMB",
+    "markets": {
+      "MY": "P"
+    },
+    "image": "cimb.webp"
+  },
+  {
+    "name": "Vietcombank",
+    "markets": {
+      "VN": "P"
+    },
+    "image": "vietcombank.webp"
+  },
+  {
+    "name": "VPBank",
+    "markets": {
+      "VN": "P"
+    },
+    "image": "vpbank.webp"
+  },
+  {
+    "name": "Maybank",
+    "markets": {
+      "MY": "P"
+    },
+    "image": "maybank.webp"
+  },
+  {
+    "name": "SCB",
+    "markets": {
+      "VN": "P"
+    },
+    "image": "scb.webp"
+  },
+  {
+    "name": "RCBC",
+    "markets": {
+      "PH": "P"
+    },
+    "image": "rcbc.webp"
+  },
+  {
+    "name": "Metrobank",
+    "markets": {
+      "PH": "P"
+    },
+    "image": "metrobank.webp"
+  },
+  {
+    "name": "Citibank",
+    "markets": {
+      "SG": "PB",
+      "HK": "B",
+      "MY": "B",
+      "PH": "B",
+      "VN": "B"
+    },
+    "image": "citibank.webp"
+  },
+  {
+    "name": "HSBC",
+    "markets": {
+      "HK": "PB",
+      "SG": "B",
+      "MY": "B",
+      "PH": "B"
+    },
+    "image": "hsbc.webp"
+  },
+  {
+    "name": "Techcom Bank",
+    "markets": {
+      "VN": "P"
+    },
+    "image": "techcom-bank.webp"
+  },
+  {
+    "name": "Bank of China",
+    "markets": {
+      "HK": "PB"
+    },
+    "image": "bank-of-china.webp"
+  },
+  {
+    "name": "Landbank",
+    "markets": {
+      "PH": "P"
+    },
+    "image": "landbank.webp"
+  },
+  {
+    "name": "Hang Seng",
+    "markets": {
+      "HK": "PB"
+    },
+    "image": "hang-seng.webp"
+  },
+  {
+    "name": "Bank of East Asia",
+    "markets": {
+      "HK": "PB"
+    },
+    "image": "bank-of-east-asia.webp"
+  },
+  {
+    "name": "Vietin Bank",
+    "markets": {
+      "VN": "P"
+    },
+    "image": "vietin-bank.webp"
+  }
+]
