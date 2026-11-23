@@ -1,3 +1,4 @@
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { classifyUnsettledPurchaseDocument } from "@/lib/purchase-document-payment";
 import { mergeReceiptBackup } from "@/lib/receipt-backup-preview";
 import { canUseLocalReceiptPreview } from "@/lib/receipt-item-table";
@@ -200,7 +201,7 @@ export async function POST(request: Request) {
       });
       if (rejection) throw rejection;
       localPreview = isReceiptImage(selectedFile) || isReceiptPdf(selectedFile)
-        ? parseReceiptPhotoText(receiptText) : parseReceiptText(receiptText);
+        ? parseReceiptPhotoText(receiptText, normalizeRegionalPreferences(user.regionalPreferences).baseCurrency) : parseReceiptText(receiptText);
     } catch (error) {
       if (isReceiptPdf(selectedFile) && isPdfPasswordError(error)) {
         return NextResponse.json({ error: "This receipt PDF needs a password. Choose an unlocked copy to add the bill.",
@@ -221,14 +222,22 @@ export async function POST(request: Request) {
       localPreview = parseReceiptText("");
     }
     const readingText = readLocalReceiptOcrText(receiptText) ?? receiptText;
-    const preview = classifyUnsettledPurchaseDocument(readingText) ? localPreview : await tryReceiptBackup({
-      consentUserId: user.id,
-      file: selectedFile,
-      bytes: validationInput.bytes,
-      receiptText: readingText,
-      preview: localPreview,
-      onUsage: recordUsage,
-    });
+    const receiptStorageKey = [
+      "split-bill-receipts",
+      user.id,
+      `${randomUUID()}-${sanitizeReceiptFileName(selectedFile.name)}`,
+    ].join("/");
+    const [preview] = await Promise.all([
+      classifyUnsettledPurchaseDocument(readingText) ? localPreview : tryReceiptBackup({
+        consentUserId: user.id,
+        file: selectedFile,
+        bytes: validationInput.bytes,
+        receiptText: readingText,
+        preview: localPreview,
+        onUsage: recordUsage,
+      }),
+      uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type || "application/octet-stream"),
+    ]);
     if (workspace) {
       const localParser = estimateLocalParserTokens(readingText);
       after(async () => {
@@ -249,17 +258,6 @@ export async function POST(request: Request) {
         }).catch(() => null);
       });
     }
-    const receiptStorageKey = [
-      "split-bill-receipts",
-      user.id,
-      `${randomUUID()}-${sanitizeReceiptFileName(selectedFile.name)}`,
-    ].join("/");
-    await uploadObject(
-      receiptStorageKey,
-      validationInput.bytes,
-      selectedFile.type || "application/octet-stream"
-    );
-
     return NextResponse.json({ preview, receiptStorageKey, reliableForScopedSplit: Boolean(preview.billDate) && assessReceiptPreviewQuality(preview).reliableForFastPath });
   } catch (error) {
     return NextResponse.json(

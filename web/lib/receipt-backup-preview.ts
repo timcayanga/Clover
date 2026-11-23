@@ -158,6 +158,7 @@ export const mergeReceiptBackup = (
     invoiceNumber: localPreview.invoiceNumber ?? asText(backup.invoice_number),
     bookingReference: localPreview.bookingReference ?? asText(backup.booking_reference),
     currency,
+    currencySource: backupCurrency && !localPreview.currencyMentions.length ? undefined : localPreview.currencySource,
     currencyWarning: backupCurrency && !localPreview.currencyMentions.length ? null : localPreview.currencyWarning,
     currencyMentions: localPreview.currencyMentions.length > 0
       ? localPreview.currencyMentions

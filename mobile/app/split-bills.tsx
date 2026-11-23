@@ -1,3 +1,4 @@
+import { SplitBillQuickActions } from "../src/split-bill-quick-actions";
 import { AddSplitPerson, type DirectoryPerson } from "../src/add-split-person";
 import {PaymentDetailsEditor} from "../src/payment-details-editor";
 import {SimplifyAction} from "../src/simplified-debts";
@@ -121,6 +122,12 @@ function BillAvatars({participants, people, ownName, ownPhoto}: {participants: {
     </View>)}
   </View>;
 }
+function billListStatus(bill: Bill) {
+  if (bill.resolved) return "resolved";
+  if (!Number(bill.total) || (bill.participants?.length ?? 0) < 2 || bill.rawPayload?.receiptNeedsReview) return "open";
+  return bill.settlementStatus || "open";
+}
+
 export default function SplitBills() {
   const params = useLocalSearchParams<{ billId?: string; transactionId?: string }>();
   const session = useSession();
@@ -424,6 +431,7 @@ export default function SplitBills() {
                       onChange={setStatusFilter}
                     />
                   ) : null}
+                  <SplitBillQuickActions onSelect={method => { setInitialMethod(method); setAdding(true); }} />
                   {data.bills.length ? (
                     data.bills
                       .filter(
@@ -435,9 +443,9 @@ export default function SplitBills() {
                             (statusFilter === "Resolved" && b.resolved) ||
                             (!b.resolved &&
                               (statusFilter === "Settled"
-                                ? b.settlementStatus === "settled"
+                                ? billListStatus(b) === "settled"
                                 : statusFilter === "Open" &&
-                                  b.settlementStatus !== "settled"))),
+                                  billListStatus(b) !== "settled"))),
                       )
                       .map((bill) => (
                         <SwipeDeleteRow key={bill.id} label={bill.title} disabled={session.demo} immediate onOpen={() => setSelected(bill)} onDelete={async () => {
@@ -459,13 +467,14 @@ export default function SplitBills() {
                             borderColor: colors.line,
                           }}
                         >
+                          {(bill.rawPayload?.receiptNeedsReview || !Number(bill.total) || (bill.participants?.length ?? 0) < 2) && <Text accessibilityLabel="Bill needs attention">⚠️</Text>}
                           <CategoryMark name={bill.categoryName || suggestBillCategory(bill.title)?.name} />
                           <View style={{ flex: 1 }}>
                             <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 14 }}>{bill.title}</Text>
                             <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
                               <Text style={{ color: colors.muted, fontSize: 12 }}>{bill.billDate.slice(0,10)}</Text>
-                              {bill.rawPayload?.receiptNeedsReview && <Text style={{color:colors.muted}}>⚠ Check receipt details</Text>}
-                              {(!Number(bill.total) || (bill.participants?.length ?? 0) < 2) && <Text style={{color:colors.muted}}>⚠ {Number(bill.total) ? "Add people" : (bill.participants?.length ?? 0) < 2 ? "Add amount and people" : "Add amount"}</Text>}
+                              {bill.rawPayload?.receiptNeedsReview && <Text style={{color:colors.muted}}>Check receipt details</Text>}
+                              {(!Number(bill.total) || (bill.participants?.length ?? 0) < 2) && <Text style={{color:colors.muted}}>{Number(bill.total) ? "Add people" : (bill.participants?.length ?? 0) < 2 ? "Add amount and people" : "Add amount"}</Text>}
                               <BillPeople participants={bill.participants ?? []} people={options.data?.people ?? []} demo={session.demo}/>
                             </View>
                           </View>
@@ -473,7 +482,7 @@ export default function SplitBills() {
                             <Body muted={false}>
                               {money(bill.total, bill.currency)}
                             </Body>
-                            {bill.resolved || bill.settlementStatus !== "open" ? <Body>{bill.resolved ? "Resolved" : bill.settlementStatus === "awaiting_payer" ? "Assign Payer" : bill.settlementStatus.replaceAll("_"," ").replace(/^./, c=>c.toUpperCase())}</Body> : null}
+                            <Body>{billListStatus(bill) === "awaiting_payer" ? "Assign Payer" : billListStatus(bill).replaceAll("_"," ").replace(/^./, c=>c.toUpperCase())}</Body>
                           </View>
                           <Text
                             style={{ fontSize: 26, color: colors.ink }}
@@ -502,44 +511,7 @@ export default function SplitBills() {
                         No bills yet
                       </Text>
                       <CloverEmptyState pose="circles">Upload a receipt or add a split bill.</CloverEmptyState>
-                      <View style={{ flexDirection: "row", gap: 12 }}>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Add bill manually"
-                          onPress={() => {setInitialMethod("manual");setAdding(true);}}
-                          style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 22,
-                            borderWidth: 1,
-                            borderColor: colors.line,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Icon line name="add" size={20} />
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Upload receipt"
-                          onPress={() => {setInitialMethod("upload");setAdding(true);}}
-                          style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 22,
-                            backgroundColor: colors.teal,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Icon
-                            line
-                            name="cloud-upload-outline"
-                            size={20}
-                            color="white"
-                          />
-                        </Pressable>
-                      </View>
+
                     </View>
                   )}
                   {page > 1 ? (

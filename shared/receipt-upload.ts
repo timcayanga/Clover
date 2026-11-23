@@ -1,7 +1,8 @@
-import { NATIVE_UPLOAD_MAX_SIZE, NATIVE_UPLOAD_PART_SIZE } from "./native-upload";
+import { NATIVE_UPLOAD_MAX_SIZE, NATIVE_UPLOAD_PART_SIZE, nativeUploadPartBytes } from "./native-upload";
 
 /** Small receipts can use multipart. Larger originals travel in verified parts. */
-export const receiptMultipartLimit = NATIVE_UPLOAD_PART_SIZE;
+// Leave room for multipart headers under the preview route's 4.5 MiB body limit.
+export const receiptMultipartLimit = 4 * 1024 * 1024;
 
 export async function stageReceipt(
   id: string,
@@ -13,9 +14,18 @@ export async function stageReceipt(
   if (file.size > NATIVE_UPLOAD_MAX_SIZE) throw new Error("Choose a receipt up to 25 MB.");
   await post("start", id, file);
   try {
-    for (let index = 0; index < Math.ceil(file.size / NATIVE_UPLOAD_PART_SIZE); index++) {
-      await post("part", id, { index, base64: await readPart(index) });
-      progress?.(Math.min(1,(index+1)*NATIVE_UPLOAD_PART_SIZE/file.size));
+    const count = Math.ceil(file.size / NATIVE_UPLOAD_PART_SIZE);
+    let uploaded = 0;
+    for (let start = 0; start < count; start += 2) {
+      // Bound native base64 memory and wait for both acknowledgements before cancellation.
+      const batch = Array.from({ length: Math.min(2, count - start) }, async (_, offset) => {
+        const index = start + offset;
+        await post("part", id, { index, base64: await readPart(index) });
+        uploaded += nativeUploadPartBytes(file.size, index);
+        progress?.(uploaded / file.size);
+      });
+      const results = await Promise.allSettled(batch);
+      for (const result of results) if (result.status === "rejected") throw result.reason;
     }
   } catch (error) {
     await post("cancel", id, {}).catch(() => {});
