@@ -1088,6 +1088,7 @@ async function recoverCountedReceiptQuantities(source: string, image: ImagePrevi
 
 const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   sourceBytes: Uint8Array;
+  firstOptical?: string | null;
   classificationContext?: ClassificationContext;
   fileType?: string | null;
   fileName?: string | null;
@@ -1115,7 +1116,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     frame = await getBoundedImportImagePreview(params.sourceBytes).catch(() => null);
   }
   const opticalPreview = frame && (receipt || cameraImage || hasPhotographicTexture(frame)) ? frame : null;
-  const firstOptical = opticalPreview ? await readLocalReceiptImage(opticalPreview) : null;
+  const firstOptical = params.firstOptical !== undefined ? params.firstOptical : opticalPreview ? await readLocalReceiptImage(opticalPreview) : null;
   const verifiedPurchase = async (source: string | null, image: ImagePreview | null) => {
     if (!source || !image) return null;
     const text = readLocalReceiptOcrText(source) ?? source;
@@ -3421,7 +3422,7 @@ export const renderReceiptPdfPagesForVision = async (bytes: Uint8Array) =>
 export const readUploadedFileText = async (
   file: File | ImportFileLike,
   password?: string,
-  options?: { importMode?: string | null; sourceBytes?: Uint8Array }
+  options?: { importMode?: string | null; sourceBytes?: Uint8Array; firstOptical?: string | null }
 ) => {
   const lowerName = String(file.name ?? "").toLowerCase();
   const lowerType = importMediaType(file.type);
@@ -3495,6 +3496,7 @@ export const readUploadedFileText = async (
     const originalBytes = options?.sourceBytes ?? new Uint8Array(await file.arrayBuffer!());
     return extractTextFromImageBufferWithReceiptAwareFallback({
       sourceBytes: originalBytes,
+      firstOptical: options?.firstOptical,
       fileType: lowerType,
       fileName: lowerName,
       importMode,

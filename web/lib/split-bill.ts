@@ -2564,13 +2564,14 @@ function parseReceiptSource(receiptText: string, photo: boolean, optics = receip
 
 // Some mobile recognizers return every label first and the entire price column
 // afterwards. Use box order when printed accounting agrees to the cent.
-function hasReconciledOpticalSettlement(layout: string) {
+export function hasReconciledOpticalSettlement(layout: string, expectedTotal?: string) {
   const subtotal = /^sub[ -]?total[ \t]*[:：]?[ \t]*([\d,]+\.\d{2})$/gim;
   const charge = /^(?:service charge|s\.[ \t]*charge)(?:[ \t]+\d+(?:\.\d+)?%)?[ \t]*[:：]?[ \t]*([\d,]+\.\d{2})$/gim;
   const payable = /^(?:grand total|total(?: amount| due| paid)?|amount due)[ \t]*[:：]?[ \t]*(?:PHP|₱)?[ \t]*([\d,]+\.\d{2})$/gim;
   const cents = (pattern: RegExp) => [...layout.matchAll(pattern)].map(match => Number(match[1].replace(/[,.]/g, "")));
   const totals = cents(payable);
   if (!totals.length || !Number.isSafeInteger(totals[0]) || totals[0] <= 0 || !totals.every(value => value === totals[0])) return false;
+  if (expectedTotal !== undefined && totals[0] !== Math.round(Number(expectedTotal) * 100)) return false;
   const paid = cents(/^(?:total paid|cash)[ \t]*[:：]?[ \t]*(?:PHP|₱)?[ \t]*([\d,]+\.\d{2})$/gim);
   if (paid.length === 1 && paid[0] === totals[0] &&
       /^(?:grand total|total|amount due)[ \t]*[:：]?[ \t]*(?:PHP|₱)?[ \t]*\d/im.test(layout) &&
