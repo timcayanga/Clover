@@ -23,7 +23,8 @@ assert.match(nextConfigSource, /node_modules\/heic-decode\/\*\*\/\*/);
 const importProcessSource = readFileSync(join(root, "app/api/imports/[importId]/process/route.ts"), "utf8");
 const receiptPreviewSource = readFileSync(join(root, "app/api/split-bill-receipts/preview/route.ts"), "utf8");
 assert.match(importProcessSource, /await validateImportImageDecode\(validationInput\)[\s\S]*?if \(byteValidationError\)[\s\S]*?return importJsonResponse[\s\S]*?const uploadPromise = uploadObject/);
-assert.match(receiptPreviewSource, /await validateImportImageDecode\(validationInput\)[\s\S]*?if \(byteValidationError\)[\s\S]*?return NextResponse\.json[\s\S]*?await readUploadedFileText/);
+assert.match(receiptPreviewSource, /validateImportFileBytes\(validationInput\);\s*if \(byteValidationError\)\s*\{\s*return NextResponse\.json[\s\S]*?cachedReceiptDraft\(prefix\)/);
+assert.match(receiptPreviewSource, /await validateImportImageDecode\(validationInput\);\s*if \(decodeError\)\s*return NextResponse\.json[\s\S]*?await firstReceiptRead[\s\S]*?await readUploadedFileText/);
 
 const fixture = process.env.CLOVER_HEIC_FIXTURE ??
   "/Users/TimCayanga1/Documents/Avocado/Resized Store Photos/Flares & Fragrances/Trevi Series - Gel candle/IMG_8408.HEIC";
