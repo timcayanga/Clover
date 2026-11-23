@@ -9,7 +9,7 @@ import { mergeSplitBillItemSplitMetadata } from "@/lib/split-bill";
 import { SplitItemGrid } from "./split-item-grid";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { containDialogFocus } from "@/lib/dialog-focus";
-import { receiptServiceChargeItem, type SplitItem } from "../../shared/split-bill-experience";
+import { editableReceiptItems, receiptScope, type SplitItem } from "../../shared/split-bill-experience";
 import type {
   SplitBillSerializedBill,
   ReceiptPreviewResult,
@@ -67,6 +67,13 @@ export function SplitBillEntry({
       { id: string; name: string; currency: string; type: string }[]
     >([]),
     [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const originalRows = useRef<SplitItem[]>([]);
+  const originalDate = useRef("");
+  const activeDraft = useRef("");
+  const refinementVersion = useRef(0);
+  const retryDetails = useRef<() => void>(() => {});
+  const [detailStatus, setDetailStatus] = useState<"idle" | "reading" | "retry">("idle");
+  const interacted = useRef(false);
   const scopedSave = useRef(false);
   const [background, setBackground] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -153,34 +160,65 @@ export function SplitBillEntry({
         throw Error("You can add this bill manually without AI processing.");
       setProgress(0);
       setBackground(true);
-      const r = await previewReceiptFile(file, undefined, setProgress);
+      setDetailStatus("idle");
+      const version = ++refinementVersion.current;
+      const url = "/api/split-bill-receipts/preview?progressive=1&scope=" + receiptScope(context.circleId,context.group?.id,context.person) +
+        (workspaceId ? "&workspaceId=" + encodeURIComponent(workspaceId) : "");
+      const r = await previewReceiptFile(file, url, setProgress);
       const p = await r.json();
       if (!r.ok) throw Error(p.error || "Unable to read receipt.");
       if (!alive.current) return;
       const v = p.preview as ReceiptPreviewResult;
-      setTitle(v.merchantName || "Receipt");
-      setAmount(String(v.total ?? ""));
-      if (v.currency && /^[A-Z]{3}$/.test(v.currency)) setCurrency(v.currency);
-      setDate(v.billDate?.slice(0, 10) || "");
-      setReceipt({
-        sourceType: "receipt",
-        receiptStorageKey: p.receiptStorageKey,
-        receiptFileName: file.name,
-        receiptMimeType: file.type,
-        receiptText: v.receiptText,
-        receiptConfidence: v.confidence,
-      });
-      const purchases = v.items ?? [];
-      const serviceItem = receiptServiceChargeItem(purchases, v.serviceCharge, v.total);
-      setItems(
-        (serviceItem ? [...purchases, serviceItem] : purchases).map((i, index) => ({
-          id: `receipt-${index}`,
-          description: i.description,
-          amount: i.amount ?? "",
-          participantIds: [],
-        })),
-      );
-      scopedSave.current = Boolean((context.group || context.person) && p.reliableForScopedSplit && !v.currencyWarning);
+      const rows = (preview:ReceiptPreviewResult) => editableReceiptItems(preview).map((item,index) =>
+        ({...item, id:"receipt-"+index, participantIds:[] as string[]}));
+      const initialItems = rows(v);
+      if (p.attemptId) key.current = p.attemptId;
+      if (!p.draftId || activeDraft.current !== p.draftId) {
+        activeDraft.current = p.draftId || "";
+        originalRows.current = initialItems;
+        originalDate.current = v.billDate?.slice(0,10) || "";
+        interacted.current = false;
+        setTitle(v.merchantName || "Receipt");
+        setAmount(String(v.total ?? ""));
+        if (v.currency && /^[A-Z]{3}$/.test(v.currency)) setCurrency(v.currency);
+        setDate(v.billDate?.slice(0, 10) || "");
+        setReceipt({
+          sourceType: "receipt",
+          receiptStorageKey: p.receiptStorageKey,
+          receiptFileName: file.name,
+          receiptMimeType: file.type,
+          receiptText: v.receiptText,
+          receiptConfidence: v.confidence,
+        });
+        setItems(initialItems);
+        scopedSave.current = Boolean(!p.refining && (context.group || context.person) && p.reliableForScopedSplit && !v.currencyWarning);
+      } else if (!p.refining) {
+        const previous = originalRows.current;
+        if (initialItems.length) setItems(current => current === previous ? initialItems : current);
+        setDate(current => current === originalDate.current ? v.billDate?.slice(0,10) || "" : current);
+      }
+      setBackground(false);
+      if (p.refining) {
+        const refine = () => {
+          setDetailStatus("reading");
+          return fetch(url + "&refine=" + p.draftId, {method:"POST"}).then(async response => {
+            if (!response.ok) throw Error("Receipt details unavailable");
+            const final = await response.json();
+            if (!alive.current || refinementVersion.current !== version || final.draftId !== p.draftId ||
+                final.preview.total !== v.total || final.preview.currency !== v.currency || final.preview.merchantName !== v.merchantName) return;
+            const refined = rows(final.preview);
+            if (refined.length) setItems(current => current === originalRows.current ? refined : current);
+            setDate(current => current === originalDate.current ? final.preview.billDate?.slice(0,10) || "" : current);
+            scopedSave.current = !interacted.current && Boolean((context.group || context.person) && final.reliableForScopedSplit && !final.preview.currencyWarning);
+            setReceipt(current => current && ({...current, receiptText:final.preview.receiptText, receiptConfidence:final.preview.confidence}));
+            setDetailStatus("idle");
+          }).catch(() => {
+            if (alive.current && refinementVersion.current === version) setDetailStatus("retry");
+          });
+        };
+        retryDetails.current = refine;
+        void refine();
+      }
       setMode("manual");
     } catch (e) {
       if (alive.current)
@@ -303,7 +341,7 @@ export function SplitBillEntry({
     }
   }, [receipt, busy]);
   if (background) return createPortal(<button type="button" className="receipt-draft-progress" onClick={() => setBackground(false)}>
-    <span role="status">{busy ? (progress === 1 ? "Preparing receipt draft…" : "Uploading receipt…") : error ? "Review upload issue" : "Review receipt draft ›"}</span>
+    <span role="status">{busy ? (progress > 0 && progress < 1 ? "Uploading receipt…" : "Extracting receipt details…") : error ? "Review upload issue" : "Review receipt draft ›"}</span>
     {busy && <progress max={1} value={progress || undefined} />}
   </button>, document.body);
   return createPortal(
@@ -314,6 +352,8 @@ export function SplitBillEntry({
       }}
     >
       <section
+        onInputCapture={() => {interacted.current = true;}}
+        onPointerDownCapture={() => {interacted.current = true;}}
         ref={dialog}
         className="split-bill-modal__card glass direct-bill-entry"
         role="dialog"
@@ -333,10 +373,12 @@ export function SplitBillEntry({
             ×
           </button>
         </header>
+        {detailStatus === "reading" && <p role="status">Checking the line items…</p>}
+        {detailStatus === "retry" && <button type="button" onClick={() => retryDetails.current()}>Retry line item check</button>}
         {error ? <p role="alert">{error}</p> : null}
         {busy ? (
           <p role="status">
-            {mode === "upload" ? "Preparing draft…" : "Saving…"}
+            {mode === "upload" ? "Extracting receipt details…" : "Saving…"}
           </p>
         ) : null}
           <AddEntryMethods

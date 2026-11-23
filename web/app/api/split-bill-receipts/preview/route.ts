@@ -19,6 +19,7 @@ import { assertRateLimit } from "@/lib/rate-limit";
 import { uploadObject } from "@/lib/s3";
 import { nativeUploadRequest, readReceiptUpload } from "@/lib/native-upload-store";
 import { isUploadPhoto, isUploadPdf, NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
+import { billAttemptForReceipt, cachedReceiptDraft, firstReceiptRead, readReceiptObject, receiptDraftId, storeReceiptDraft } from "@/lib/receipt-progressive.server";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -27,7 +28,7 @@ import { estimateLocalParserTokens } from "@/lib/import-token-usage";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 180;
 const MAX_RECEIPT_REQUEST_BYTES = 4.5 * 1024 * 1024;
 const sanitizeReceiptFileName = (value: string) =>
   value
@@ -116,7 +117,8 @@ export async function POST(request: Request) {
     assertContentLengthWithin(request, MAX_RECEIPT_REQUEST_BYTES);
     const user = await getSplitBillCurrentUser();
     const mobileContext = getMobileRequestContext();
-    const selectedWorkspaceId = mobileContext ? new URL(mobileContext.request.url).searchParams.get("workspaceId") ?? "" : (await cookies()).get(selectedWorkspaceKey)?.value ?? "";
+    const params = new URL(request.url).searchParams;
+    const selectedWorkspaceId = mobileContext ? new URL(mobileContext.request.url).searchParams.get("workspaceId") ?? "" : params.get("workspaceId") ?? (await cookies()).get(selectedWorkspaceKey)?.value ?? "";
     const workspace =
       (selectedWorkspaceId
         ? await prisma.workspace.findFirst({
@@ -129,7 +131,6 @@ export async function POST(request: Request) {
         select: { id: true },
         orderBy: { createdAt: "asc" },
       });
-    const params = new URL(request.url).searchParams;
     const uploadId = params.get("uploadId");
     const action = params.get("action");
     if (action) {
@@ -159,9 +160,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Too many receipt previews. Please try again shortly." }, { status: 429 });
     }
 
-    const file = uploadId && workspace
+    const progressive = params.get("progressive") === "1" && workspace !== null;
+    const scope = JSON.stringify([workspace?.id, params.get("scope") || "main"]);
+    const currency = normalizeRegionalPreferences(user.regionalPreferences).baseCurrency;
+    const refineId = params.get("refine");
+    const prefixFor = (id: string) => `receipt-drafts/${user.id}/${workspace!.id}/${id}`;
+    const attachmentFor = (id: string) => `split-bill-receipts/${user.id}/${workspace!.id}/${id}.${billAttemptForReceipt(id,scope)}.source`;
+    let firstOptical: string | null | undefined;
+    let early: Awaited<ReturnType<typeof cachedReceiptDraft>> = null;
+    let restored: File | null = null;
+    if (refineId) {
+      if (!progressive || !/^[a-f0-9]{64}$/.test(refineId)) return NextResponse.json({error:"Invalid receipt draft."}, {status:400});
+      const cached = await cachedReceiptDraft(prefixFor(refineId));
+      if (!cached) return NextResponse.json({error:"Receipt draft unavailable."}, {status:404});
+      if (!cached.refining) return NextResponse.json({...cached, receiptStorageKey:attachmentFor(refineId), attemptId:billAttemptForReceipt(refineId,scope)});
+      const bytes = await readReceiptObject(attachmentFor(refineId));
+      if (!bytes) return NextResponse.json({error:"Receipt photo unavailable."}, {status:404});
+      restored = new File([new Uint8Array(bytes)], cached.fileName, {type:cached.mimeType});
+      firstOptical = cached.preview.receiptText;
+      early = cached;
+    }
+    const file = restored ?? (uploadId && workspace
       ? await readReceiptUpload(uploadId, user.clerkUserId, workspace.id)
-      : (await request.formData()).get("file");
+      : (await request.formData()).get("file"));
     if (uploadId && workspace) {
       after(() => nativeUploadRequest(request, uploadId, user.clerkUserId, workspace.id, "cancel").then(() => {}));
     }
@@ -185,15 +206,40 @@ export async function POST(request: Request) {
       contentType: selectedFile.type,
       bytes: "sourceBytes" in selectedFile ? selectedFile.sourceBytes : new Uint8Array(await selectedFile.arrayBuffer()),
     };
-    const byteValidationError = validateImportFileBytes(validationInput) ??
-      await validateImportImageDecode(validationInput);
+    const byteValidationError = validateImportFileBytes(validationInput);
     if (byteValidationError) {
       return NextResponse.json({ error: byteValidationError, code: "I-101", retryable: false }, { status: 400 });
     }
+    const draftId = progressive ? receiptDraftId(validationInput.bytes, currency) : null;
+    const prefix = draftId ? prefixFor(draftId) : null;
+    const receiptStorageKey = draftId ? attachmentFor(draftId) : [
+      "split-bill-receipts", user.id, randomUUID() + "-" + sanitizeReceiptFileName(selectedFile.name),
+    ].join("/");
+    const draftMeta = {fileName:selectedFile.name, mimeType:selectedFile.type, receiptStorageKey};
+    if (prefix && draftId && !refineId) {
+      const cached = await cachedReceiptDraft(prefix);
+      if (cached) {
+        if (cached.receiptStorageKey !== receiptStorageKey) await uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type);
+        return NextResponse.json({...cached, ...draftMeta, attemptId:billAttemptForReceipt(draftId,scope)});
+      }
+    }
+    const decodeError = await validateImportImageDecode(validationInput);
+    if (decodeError) return NextResponse.json({error:decodeError, code:"I-101", retryable:false}, {status:400});
     let receiptText = "";
     let localPreview: ReceiptPreviewResult;
     try {
-      receiptText = await readUploadedFileText(selectedFile, undefined, {importMode:"receipt", sourceBytes:validationInput.bytes});
+      if (prefix && draftId && !refineId && isReceiptImage(selectedFile)) {
+        const first = await firstReceiptRead(validationInput.bytes, selectedFile.name, selectedFile.type, currency);
+        firstOptical = first.source;
+        if (first.preview) {
+          const draft = { ...draftMeta, draftId, attemptId:billAttemptForReceipt(draftId,scope), refining:true,
+            preview:first.preview, reliableForScopedSplit:false };
+          await uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type);
+          await storeReceiptDraft(prefix, draft);
+          return NextResponse.json(draft);
+        }
+      }
+      receiptText = await readUploadedFileText(selectedFile, undefined, {importMode:"receipt", sourceBytes:validationInput.bytes, firstOptical});
       const rejection = getClearLocalPhotoRejection({
         text: readLocalReceiptOcrText(receiptText) ?? receiptText,
         fileName: selectedFile.name,
@@ -222,11 +268,6 @@ export async function POST(request: Request) {
       localPreview = parseReceiptText("");
     }
     const readingText = readLocalReceiptOcrText(receiptText) ?? receiptText;
-    const receiptStorageKey = [
-      "split-bill-receipts",
-      user.id,
-      `${randomUUID()}-${sanitizeReceiptFileName(selectedFile.name)}`,
-    ].join("/");
     const [preview] = await Promise.all([
       classifyUnsettledPurchaseDocument(readingText) ? localPreview : tryReceiptBackup({
         consentUserId: user.id,
@@ -236,7 +277,7 @@ export async function POST(request: Request) {
         preview: localPreview,
         onUsage: recordUsage,
       }),
-      uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type || "application/octet-stream"),
+      restored ? undefined : uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type || "application/octet-stream"),
     ]);
     if (workspace) {
       const localParser = estimateLocalParserTokens(readingText);
@@ -258,7 +299,17 @@ export async function POST(request: Request) {
         }).catch(() => null);
       });
     }
-    return NextResponse.json({ preview, receiptStorageKey, reliableForScopedSplit: Boolean(preview.billDate) && assessReceiptPreviewQuality(preview).reliableForFastPath });
+    if (early && (preview.total !== early.preview.total || preview.currency !== early.preview.currency ||
+        preview.merchantName !== early.preview.merchantName)) {
+      return NextResponse.json({error:"Couldn’t verify more details. Your first draft is available."}, {status:422});
+    }
+    const result = { preview, ...draftMeta, reliableForScopedSplit: Boolean(preview.billDate) && assessReceiptPreviewQuality(preview).reliableForFastPath };
+    if (prefix && draftId) {
+      const draft = { ...result, draftId, attemptId:billAttemptForReceipt(draftId,scope), refining:false };
+      await storeReceiptDraft(prefix, draft);
+      return NextResponse.json(draft);
+    }
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       {

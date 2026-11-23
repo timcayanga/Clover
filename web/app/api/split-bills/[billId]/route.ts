@@ -560,6 +560,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     });
 
     if (existing.receiptStorageKey?.startsWith(`split-bill-receipts/${user.id}/`)) {
+      const draft = /^split-bill-receipts\/([^/]+)\/([^/]+)\/([a-f0-9]{64})\.[a-f0-9-]{36}\.source$/.exec(existing.receiptStorageKey);
+      if (draft) {
+        const prefix = `receipt-drafts/${draft[1]}/${draft[2]}/${draft[3]}`;
+        await Promise.all([".early.json", ".final.json"].map(suffix => deleteImportObject(prefix + suffix).catch(() => undefined)));
+      }
       await deleteImportObject(existing.receiptStorageKey).catch(() => undefined);
     }
 

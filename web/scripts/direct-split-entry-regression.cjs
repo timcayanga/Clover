@@ -327,6 +327,8 @@ async function main() {
     const captured = {uri:"file:///cache/123.jpg",fileName:"receipt.jpg",mimeType:"image/jpeg"};
     let receiptPreviewed = false;
     let reliableForScopedSplit = false;
+    let progressive = false;
+    let finishRefinement, interruptRefinement;
     let printedBillDate = "2026-11-20";
     let visible = true;
     const {HostedBillEditor} = load("../mobile/src/direct-bill-editor.tsx", {
@@ -339,13 +341,14 @@ async function main() {
       "./ai-consent": {useCloudAiConsent:()=>({ensure:async()=>true,prompt:null})},
       "./upload-selected-file": load("../mobile/src/upload-selected-file.ts", {"expo-crypto":{}, "./offline/file-storage":{}, "../../shared/receipt-upload":{receiptMultipartLimit:1572864}, "react-native":{Platform:{OS:platform}}, "./upload":loadPhotoUpload(platform)}),
       "./session": {useSession:()=>({profileId:"profile",request:async (_path, opts)=>{if (_path.startsWith("split-bill-receipts/preview")) {
+          if (_path.includes("&refine=")) return new Promise((resolve,reject) => { finishRefinement = resolve; interruptRefinement = reject; });
           const {body,boundary} = await convertFormDataAsync(opts.body);
           const req = new Request("https://example.invalid", {method:"POST",body,headers:{"content-type":"multipart/form-data; boundary="+boundary}});
           const file = (await req.formData()).get("file");
           assert.equal(file.name,"receipt.jpg");
           assert.deepEqual(new Uint8Array(await file.arrayBuffer()), photoBytes);
           receiptPreviewed=true;
-          return {reliableForScopedSplit,receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:printedBillDate,currency:"PHP",serviceCharge:"1.25",items:[{description:"Bread",amount:"10.75"}]}};
+          return {...(progressive ? {draftId:"test-draft",refining:true,attemptId:"test-attempt"} : {}),reliableForScopedSplit,receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:printedBillDate,currency:"PHP",serviceCharge:"1.25",items:[{description:"Bread",amount:"10.75"}]}};
         }
         saved.push(JSON.parse(opts.body)); return {bill:{id:"saved"}};}})},
       "./ui": {useTheme:()=>({colors:{}}),Field:"Field",Screen:"Screen",Body:"Body",CategoryMark:"CategoryMark"},
@@ -412,6 +415,26 @@ async function main() {
     assert.equal(saved.length,3,"A missing date must not inherit the preceding receipt date");
     render().find(n=>n.props.accessibilityRole==="button").props.onPress();
     assert.equal(control("label","Date (YYYY-MM-DD)").props.value,"");
+    progressive = true;
+    control("kind","split").props.onUploadSource("camera");
+    await flush();
+    assert.equal(visible,true,"A reconciled preview opens while refinement is pending");
+    control("label","Name").props.onChangeText("Edited bakery");
+    const editedItems = [{description:"Edited bread",amount:"12.00",participantIds:["Alex"]}];
+    render().find(n=>n.type==="Items").props.onChange(editedItems);
+    control("kind","split").props.onUploadSource("file");
+    await flush();
+    assert.equal(control("label","Name").props.value,"Edited bakery","Retry reuses the edited draft");
+    interruptRefinement(Error("network disconnected"));
+    await flush();
+    render().find(n => n.props.accessibilityRole === "button" && text(n) === "Retry line item check").props.onPress();
+    finishRefinement({draftId:"test-draft",refining:false, preview:{merchantName:"Bakery",currency:"PHP",total:"12.00",
+      billDate:"2026-11-20", items:[{description:"Fresh bread",amount:"12.00"}]}});
+    await flush();
+    assert.equal(control("label","Date (YYYY-MM-DD)").props.value,"2026-11-20");
+    assert.equal(render().find(n=>n.type==="Items").props.items[0].description,"Edited bread","Late refinement preserves item edits");
+    assert.equal(saved.length,3);
+
     ui.stop();
   }
   const {receiptServiceChargeItem} = load("../shared/split-bill-experience.ts");
@@ -541,9 +564,7 @@ async function main() {
     await flush();
     await flush();
     t = render();
-    assert.equal(nodes(t).some(n=>n.props.role==="dialog"), false);
-    nodes(t).find(n=>n.props.className==="receipt-draft-progress").props.onClick();
-    t = render();
+    assert(nodes(t).some(n=>n.props.role==="dialog"), "The completed upload opens the editable draft automatically");
     assert(
       nodes(t).find(
         (n) => n.type === "input" && n.props.value === "Receipt cafe",

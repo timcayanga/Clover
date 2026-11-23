@@ -25,6 +25,23 @@ export function receiptServiceChargeItem(
   return Number.isSafeInteger(payable) && sum + feeCents === payable
     ? { description: "Service Charge", amount: (feeCents / 100).toFixed(2) } : null;
 }
+/** Only offer rows whose amounts together account for the printed payable. */
+export function editableReceiptItems(preview: {
+  items: readonly { description: string; amount: string | null }[];
+  serviceCharge?: string | null; total: string | null; currencyWarning?: string | null;
+}) {
+  const rows = preview.items.filter(i => i.description && Number(i.amount) > 0)
+    .map(i => ({description:i.description, amount:i.amount!}));
+  const charge = receiptServiceChargeItem(rows, preview.serviceCharge, preview.total);
+  if (charge) rows.push(charge);
+  const sum = rows.reduce((n,row) => n + Math.round(Number(row.amount)*100),0);
+  return sum === Math.round(Number(preview.total)*100) && !/mixed currencies|multiple currencies/i.test(preview.currencyWarning ?? "") ? rows : [];
+}
+
+export function receiptScope(circle?: string, group?: string, person?: string) {
+  return encodeURIComponent(JSON.stringify([circle || "", group || "", person || ""]));
+}
+
 export const splitMethods = [
   { value: "equal", label: "Equally", icon: "＝" },
   { value: "exact", label: "By amount", icon: "₱" },

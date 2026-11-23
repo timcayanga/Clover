@@ -101,7 +101,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "activation") return { activation: data.activation };
   if (operation === "split-group-create" || operation === "split-group-edit") return {group:{...pick(data.group,["id","name"]),members:rows(record(data.group).members,["id","name","previousNames"])},...pick(data,["ok"])};
   if (operation === "preview") return pick(data,["settlement"]);
-  if (operation === "split-receipt-preview") return { reliableForScopedSplit: data.reliableForScopedSplit === true, receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "items"]) };
+  if (operation === "split-receipt-preview") return { ...pick(data, ["draftId","attemptId","refining"]), reliableForScopedSplit: data.reliableForScopedSplit === true, receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "serviceCharge", "items"]) };
   if (operation === "adviser-chat") return {
     ...pick(data, ["reply", "degraded", "scopeRejected", "answerSource"]),
     ...(parseAdviserChart(data.visualization) ? {visualization:parseAdviserChart(data.visualization)} : {}),
