@@ -279,7 +279,8 @@ async function main() {
         title:preview.merchantName, total:preview.total, note:"", currency:"PHP",billDate:"2026-11-19",groupId:group.id,
         participants:[{name:"Alex"},{name:"Bea"}],paidByIndex:0,receipt:{storageKey:"split-bill-receipts/"+user.id+"/qa.jpg",
           fileName:"test.jpg",mimeType:"image/jpeg",text:source,confidence:preview.confidence,needsReview:true,
-          items:preview.items.map(({description,amount})=>({description,amount}))}});
+          items:preview.items.map(item=>({...item, quantity:1, wrapped:false}))}});
+      assert.deepEqual(Object.keys(input.receipt!.items[0]).sort(), ["amount","description"]);
       const saved = await post(mobileSplitBillPayload(input));
       assert.equal(saved.status,201,JSON.stringify(await saved.clone().json()));
       const id = (await saved.json()).bill.id;

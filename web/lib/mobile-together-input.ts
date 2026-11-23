@@ -100,7 +100,9 @@ export const mobileSplitBillInput = z
                 description: z.string().max(500),
                 amount: z.string().max(40),
               })
-              .strict(),
+              // The editor sends OCR metadata on background refinement. Persist
+              // only the description and amount of each source line.
+              .strip(),
           )
           .max(500),
       })

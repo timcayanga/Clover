@@ -17,3 +17,5 @@ web/*.traineddata
 
 # Private original-image diagnostic index; portable synthetic cases stay tracked.
 web/scripts/fixtures/financial-photo-scope/manifest.json
+
+/web/.receipt-ocr-models/
