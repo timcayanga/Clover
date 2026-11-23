@@ -258,6 +258,42 @@ async function main() {
       }
     }
     assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),initialCount);
+    // Reopen the group ledger after a real receipt save. The mobile projection
+    // must preserve every purchase and the separate service charge.
+    {
+      const {encodeLocalReceiptOcr} = await import("../lib/local-receipt-ocr-envelope");
+      const {parseReceiptPhotoText} = await import("../lib/split-bill");
+      const {canSaveReceiptForReview} = await import("../lib/receipt-progressive.server");
+      const {mobileApiResponse} = await import("../lib/mobile-api-response");
+      const {withMobileRequestContext} = await import("../lib/mobile-request-context");
+      const {GET} = await import("../app/api/split-bills/route");
+      const source = process.env.CLOVER_QA_OPTICAL_TRANSCRIPT
+        ? require("node:fs").readFileSync(process.env.CLOVER_QA_OPTICAL_TRANSCRIPT, "utf8")
+        : encodeLocalReceiptOcr({text:["THE SPIRITS LIBRARY INC.", "MAKATI", "11/19/26 10:12 PM",
+          "Qty Item Description Amount", "1 Mocktail 350.00", "1 Cavinti Fizz 480.00", "1 Punch from the Past 520.00",
+          "Sub-total: 1350.00", "Service Charge: 120.54", "3 Item(s) Total Amount 1470.54", "Total Amount 1470.54"].join("\n")});
+      const preview = parseReceiptPhotoText(source, "PHP");
+      assert(canSaveReceiptForReview(preview), "A reconciled optical receipt can persist as a reviewable group bill");
+      assert(!canSaveReceiptForReview({...preview,total:"1480.54"}));
+      const input = mobileSplitBillInput.parse({expense:{workspaceId:workspace.id,attemptId:randomUUID(),splitOnly:true},
+        title:preview.merchantName, total:preview.total, note:"", currency:"PHP",billDate:"2026-11-19",groupId:group.id,
+        participants:[{name:"Alex"},{name:"Bea"}],paidByIndex:0,receipt:{storageKey:"split-bill-receipts/"+user.id+"/qa.jpg",
+          fileName:"test.jpg",mimeType:"image/jpeg",text:source,confidence:preview.confidence,needsReview:true,
+          items:preview.items.map(({description,amount})=>({description,amount}))}});
+      const saved = await post(mobileSplitBillPayload(input));
+      assert.equal(saved.status,201,JSON.stringify(await saved.clone().json()));
+      const id = (await saved.json()).bill.id;
+      assert.equal((await (await post(mobileSplitBillPayload(input))).json()).bill.id,id);
+      for (const query of ["?view=ledger&groupId="+group.id,"?page=1"]) {
+        const request = new Request("https://staging.clover.ph/api/split-bills"+query);
+        const response = await withMobileRequestContext(user.clerkUserId,request,()=>GET(request));
+        const payload = mobileApiResponse("split-bills",await response.json()) as {bills:{id:string;group:{id:string};items:{amount:string}[];rawPayload?:{receiptNeedsReview?:boolean}}[]};
+        const bill = payload.bills.find(row=>row.id===id);
+        assert.equal(bill?.group.id,group.id);
+        assert.deepEqual(bill.items.map(row=>Number(row.amount)),[350,480,520,120.54]);
+        assert.equal(bill.rawPayload?.receiptNeedsReview,true);
+      }
+    }
     const {linkStandaloneBillExpense} = await import("../lib/split-bill-direct-expense");
     const link = () => db.$transaction(tx => linkStandaloneBillExpense(tx,user.id,standaloneId,workspace.id));
     await Promise.all([link(),link()]);

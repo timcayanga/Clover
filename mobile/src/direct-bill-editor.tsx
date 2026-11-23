@@ -253,7 +253,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
       const path = `split-bill-receipts/preview?workspaceId=${encodeURIComponent(session.profileId)}&progressive=1&scope=${receiptScope(circleId,context?.group?.id,context?.person)}`;
       const result = await uploadSelectedFile<{
         draftId?:string; attemptId?:string; refining?:boolean;
-        reliableForScopedSplit?: boolean;
+        reliableForScopedSplit?: boolean; readyForReviewableBill?: boolean;
         receiptStorageKey: string;
         preview: {
           requiresReview?: boolean;
@@ -303,7 +303,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
         if (/^[A-Z]{3}$/.test(p.currency)) setCurrency(p.currency);
         setDate(p.billDate?.slice(0,10) ?? "");
         scopedSave.current = !result.refining && Boolean(p.billDate) && ((!result.draftId && !context?.group && !context?.person && !circleId) ||
-          Boolean((context?.group || context?.person || circleId) && result.reliableForScopedSplit && !p.currencyWarning));
+          Boolean((context?.group || context?.person || circleId) && (result.reliableForScopedSplit || (standalone && result.readyForReviewableBill)) && !p.currencyWarning));
         if (p.currencyWarning) setError(p.currencyWarning);
       } else if (!result.refining) {
         const previous = originalRows.current;
@@ -321,7 +321,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
             if (rows.length) setReviewedItems(current => current === originalRows.current ? rows : current);
             setDate(current => current === originalDate.current ? final.preview.billDate?.slice(0,10) || "" : current);
             scopedSave.current = !interacted.current && Boolean((circleId || context?.person || context?.group) &&
-              final.reliableForScopedSplit && !final.preview.currencyWarning);
+              (final.reliableForScopedSplit || (standalone && final.readyForReviewableBill)) && !final.preview.currencyWarning);
             setReceipt(current => current && ({...current, text:final.preview.receiptText, confidence:final.preview.confidence,
               needsReview:Boolean(final.preview.requiresReview || !final.preview.billDate || final.preview.currencyWarning),
               items:final.preview.items}));
