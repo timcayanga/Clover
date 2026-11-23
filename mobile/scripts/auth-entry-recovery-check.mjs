@@ -22,7 +22,7 @@ function harness(active, fails = false, bootstrapError = active, mode = "sign-in
     if (name === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ top: 50, bottom: 34 }) };
     if (name === 'expo-router') return { useLocalSearchParams: () => ({ mode }) };
     if (name === '@clerk/expo') return { useSignIn: () => ({ signIn: signInFixture ?? { password: async () => ({error:{errors:[{code:'session_exists',message:'Already signed in'}]}}) } }), useSignUp: () => ({ signUp: signUpFixture ?? {} }) };
-    if (name === '@clerk/expo/apple') return { useSignInWithApple: () => ({}) };
+    if (name === '@clerk/expo/apple') return { useSignInWithApple: () => ({startAppleAuthenticationFlow: startSSOFlow}) };
     if (name === '@clerk/expo/experimental') return { useSSO: () => ({startSSOFlow}) };
     if (name === '../src/access') return { useAccess: () => ({ active, welcomeAllowed: !active, beginAuthEntry() {}, duringAuthentication: action => action(), recoverSession: async () => { calls.push('recover'); return recovery; } }) };
     if (name === '../src/session-recovery') return {alreadySignedIn: error => error?.errors?.[0]?.code === 'session_exists'};
@@ -247,6 +247,15 @@ try {
     assert.equal(signup.telemetry.at(-1).outcome, status === 'complete' ? 'completed' : 'failed');
   }
 
+  for (const provider of ['Sign in with Apple', 'Continue with Google']) {
+    const h = harness(false, false, false, 'sign-up', undefined, undefined,
+      async () => ({ signUp: { status: 'missing_requirements' } }));
+    find(h, 'accessibilityLabel', 'Agree to terms and privacy policy').onValueChange(true);
+    await press(h, provider);
+    await tick();
+    assert(h.render().some(node => node.props.signup === true));
+    assert(!h.render().some(node => /verif/i.test(String(node.props.children))));
+  }
   let oauthCalls = 0;
   const google = harness(false, false, false, 'sign-in', undefined, {}, async () => {
     oauthCalls++;

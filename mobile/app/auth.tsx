@@ -25,6 +25,7 @@ type Step =
   | "reset-code"
   | "new-password"
   | "email-verification"
+  | "finish-sign-up"
   | "extra-verification"
   | "finish-sign-in";
 type AuthStage = Step | "password" | "send_email_code" | "verify_email_code" | "finalize_sign_in" | "google_oauth" | "prepare_password_reset" | "submit_new_password";
@@ -64,7 +65,7 @@ function AuthForm() {
   const [code, setCode] = useState("");
   const [remember, setRemember] = useState(true);
   const [terms, setTerms] = useState(false);
-  const [verificationSignup, setVerificationSignup] = useState(false);
+
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -240,6 +241,17 @@ function AuthForm() {
       await finishSignIn(setStage);
     }
   };
+  const continueSocialAuth = (signupIncomplete: boolean, signInStatus?: string | null) => {
+    if (needsSignInVerification(signInStatus)) {
+      setStep("extra-verification");
+      setMessage("Complete your account verification to continue.");
+    } else if (signupIncomplete) {
+      setStep("finish-sign-up");
+      setMessage("");
+    } else {
+      throw new Error("Sign-in couldn't continue. Try again or sign in with email.");
+    }
+  };
   const confirmSocialTerms = () => step !== "sign-up" || terms ? Promise.resolve(true) : new Promise<boolean>(resolve => {
     Alert.alert("Create your Clover account", "To continue, agree to Clover's Terms of Service and Privacy Policy. You can read both links on this screen.", [
       { text: "Not now", style: "cancel", onPress: () => resolve(false) },
@@ -258,6 +270,7 @@ function AuthForm() {
     reset: "Forgot password?",
     "reset-code": "Check your email",
     "new-password": "Reset password",
+    "finish-sign-up": "Finish creating your account",
     "extra-verification": "Verify your account",
     "email-verification": "Verify your account",
     "finish-sign-in": "Finish signing in",
@@ -437,7 +450,7 @@ function AuthForm() {
               </View>
             </>
           ) : null}
-          {step !== "extra-verification" ? (
+          {step !== "extra-verification" && step !== "finish-sign-up" ? (
             <Button
               fullWidth
               title={
@@ -457,7 +470,7 @@ function AuthForm() {
               onPress={() => void run(submit)}
             />
           ) : (
-            <AuthVerification signup={verificationSignup} />
+            <AuthVerification signup={step === "finish-sign-up"} />
           )}
           {initial ? (
             <>
@@ -466,7 +479,7 @@ function AuthForm() {
                 await setRememberSession(remember);
                 const result = await startAppleAuthenticationFlow();
                 if (result.createdSessionId && result.setActive) await result.setActive({ session: result.createdSessionId });
-                else if (result.signIn?.status === "needs_second_factor" || result.signUp?.status === "missing_requirements") { setVerificationSignup(result.signUp?.status === "missing_requirements"); setStep("extra-verification"); setMessage("Complete your account verification to continue."); }
+                else continueSocialAuth(result.signUp?.status === "missing_requirements", result.signIn?.status);
               }, "apple")} /> : null}
               {(["google"] as const).map((provider) => (
                 <Button
@@ -486,13 +499,7 @@ function AuthForm() {
                       if (result.authSessionResult?.type === "cancel" || result.authSessionResult?.type === "dismiss")
                         throw { code: "ERR_REQUEST_CANCELED" };
                       if (result.createdSessionId || result.signIn?.existingSession) return;
-                      const signupIncomplete = result.signUp?.status === "missing_requirements";
-                      if (!signupIncomplete && !needsSignInVerification(result.signIn?.status)) {
-                        throw new Error("Google sign-in couldn't continue. Try again or sign in with email.");
-                      }
-                      setVerificationSignup(signupIncomplete);
-                      setStep("extra-verification");
-                      setMessage("Complete your account verification to continue.");
+                      continueSocialAuth(result.signUp?.status === "missing_requirements", result.signIn?.status);
                     }, "google", "google_oauth")
                   }
                 />
