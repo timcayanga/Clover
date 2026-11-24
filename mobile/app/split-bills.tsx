@@ -5,7 +5,7 @@ import {SimplifyAction} from "../src/simplified-debts";
 import { TogetherToolbar } from "../src/together-toolbar";
 import { TogetherEntry } from "../src/together-entry";
 import { onContextBillEntry } from "../src/bill-entry-events";
-import { BillEditor } from "../src/direct-bill-editor";
+import { BillEditor, PendingBillRows, usePendingBillRows } from "../src/direct-bill-editor";
 import { usePageAskScope } from "../src/page-ask-context";
 import { useUser } from "@clerk/expo";
 import { type AccountCardPalette, accountCardPalette } from "../../shared/visual-identity";
@@ -14,7 +14,7 @@ import { paymentLines } from "../../shared/payment-display";
 import { suggestBillCategory, type SplitItem } from "../../shared/split-bill-experience";
 import { SwipeDeleteRow } from "../src/swipe-delete-row";
 import { AdaptiveGrid } from "../src/adaptive";
-import { CloverEmptyState } from "../src/clover-mascot";
+import { CloverEmptyState, CloverMascot } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import type { Transaction } from "../src/types";
 import { Text } from "../src/app-text";
@@ -129,6 +129,7 @@ function billListStatus(bill: Bill) {
 }
 
 export default function SplitBills() {
+  const pendingReceipts = usePendingBillRows();
   const params = useLocalSearchParams<{ billId?: string; transactionId?: string }>();
   const session = useSession();
   const { colors, dark } = useTheme();
@@ -164,7 +165,7 @@ export default function SplitBills() {
   const [adding, setAdding] = useState(false);
   const [initialMethod,setInitialMethod] = useState<"manual"|"upload">("manual");
   function openTabAdd() {
-    if (tab === "Bills") { setInitialMethod("manual"); setAdding(true); }
+    if (tab === "Bills") { setInitialMethod("upload"); setAdding(true); }
     else if (tab === "People") setAddingPerson(true);
     else setCreating(tab === "Groups" ? "Group" : "Payment");
   }
@@ -175,7 +176,7 @@ export default function SplitBills() {
     setSourceTransaction(null);
     if (!params.transactionId || !session.profileId) return;
     void session.request<{ transaction: Transaction }>(`transactions/${encodeURIComponent(params.transactionId)}?workspaceId=${encodeURIComponent(session.profileId)}`).then(({ transaction }) => {
-      if (active) { setSourceTransaction(transaction); setAdding(true); }
+      if (active) { setInitialMethod("manual"); setSourceTransaction(transaction); setAdding(true); }
     }).catch((e: Error) => { if (active) setDetailError(e.message); });
     return () => { active = false; };
   }, [params.transactionId, session.profileId, session.request]);
@@ -397,7 +398,7 @@ export default function SplitBills() {
                   <PlanAction title="Try again" onPress={reloadBills} />
                 </>
               ) : !data ? (
-                <Body>Loading bills…</Body>
+                <><Body>Loading bills…</Body><PendingBillRows /></>
               ) : (
                 <>
                   <View
@@ -431,7 +432,13 @@ export default function SplitBills() {
                       onChange={setStatusFilter}
                     />
                   ) : null}
+                  {!data.bills.length && !pendingReceipts.length && <View style={{alignItems:"center",gap:6}}>
+                    <CloverMascot pose="circles" size={88} />
+                    <Text style={{color:colors.ink,fontFamily:"Poppins-SemiBold"}}>No bills yet</Text>
+                    <Body>Upload a receipt or add a split bill.</Body>
+                  </View>}
                   <SplitBillQuickActions onSelect={method => { setInitialMethod(method); setAdding(true); }} />
+                  <PendingBillRows />
                   {data.bills.length ? (
                     data.bills
                       .filter(
@@ -493,27 +500,7 @@ export default function SplitBills() {
                         </Pressable>
                         </SwipeDeleteRow>
                       ))
-                  ) : (
-                    <View
-                      style={{
-                        alignItems: "center",
-                        gap: 14,
-                        paddingVertical: 8,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: colors.ink,
-                          fontFamily: "Poppins-SemiBold",
-                          fontSize: 18,
-                        }}
-                      >
-                        No bills yet
-                      </Text>
-                      <CloverEmptyState pose="circles">Upload a receipt or add a split bill.</CloverEmptyState>
-
-                    </View>
-                  )}
+                  ) : null}
                   {page > 1 ? (
                     <PlanAction
                       title="Previous bills"
@@ -527,7 +514,7 @@ export default function SplitBills() {
                     />
                   ) : null}
                   {page > 1 || data.hasMore ? <Body>Page {page}</Body> : null}
-                  <SimplifyAction/>
+                  {data.bills.length > 0 && <SimplifyAction/>}
                 </>
               )}
             </>

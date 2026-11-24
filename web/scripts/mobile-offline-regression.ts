@@ -1419,11 +1419,16 @@ test("cold Home snapshots stay warm after list caches expire and never survive f
  await e.init();await e.request("bootstrap");
  await e.request("home?workspaceId=p&currency=PHP&section=overview");
  now+=6*60_000;
+ await e.request("split-bill-receipts/preview?workspaceId=p",{method:"POST",body:"{}"});
+ const first=await e.homeOverviewSnapshot("p","PHP");assert.equal((first?.value as any)?.balance,123);
+ assert.equal(await e.homeOverviewSnapshot("p","USD"),null);
+ await assert.rejects(()=>e.homeOverviewSnapshot("other","PHP"),/not available offline/);
  const snapshot=await e.presentationCache("p");assert.equal(snapshot.length,1);assert.equal((snapshot[0].value as any).balance,123);
  await assert.rejects(()=>e.presentationCache("other"),/not available offline/);
  now++;await e.request("settings/preferences",{method:"PATCH",body:"{}"});
  assert.equal((await e.presentationCache("p")).length,0);
  await e.request("home?workspaceId=p&currency=PHP&section=overview");
+ assert.equal(await e.homeOverviewSnapshot("p","PHP"),null); // same timestamp as invalidation
  now+=31*60_000;assert.equal((await e.presentationCache("p")).length,0);
 });
 

@@ -18,6 +18,7 @@ import { AddEntryMethods } from "./add-entry-methods";
 
 import { removeUploadCopy } from "./upload";
 import { uploadSelectedFile } from "./upload-selected-file";
+import { refreshScreen } from "./screen-refresh";
 import { EntryOverlay } from "./entry-overlay";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "./session";
@@ -75,10 +76,31 @@ type BillEntryProps = {
 
 const OpenBillEditor = createContext<((props: BillEntryProps) => void) | null>(null);
 
+type PendingBill = { id:number; workspace:string; title:string; status:string; action?:()=>void };
+const PendingBills = createContext<PendingBill[]>([]);
+const UpdatePendingBills = createContext<React.Dispatch<React.SetStateAction<PendingBill[]>> | null>(null);
+
+export function usePendingBillRows() {
+  const {profileId} = useSession();
+  return useContext(PendingBills).filter(row => row.workspace === profileId);
+}
+
+export function PendingBillRows() {
+  const {colors} = useTheme();
+  const rows = usePendingBillRows();
+  return <>{rows.map(row =>
+    <Pressable key={row.id} disabled={!row.action} accessibilityRole={row.action ? "button" : undefined}
+      onPress={row.action} style={{padding:12,gap:4,borderBottomWidth:1,borderColor:colors.line}}>
+      <Text style={{color:colors.ink,fontFamily:"Poppins-SemiBold"}}>{row.title}</Text>
+      <Text accessibilityLiveRegion="polite" style={{color:row.action ? colors.teal : colors.muted}}>{row.status}</Text>
+    </Pressable>)}</>;
+}
+
 export function BillEntryProvider({ children }: {children: ReactNode}) {
   const [entries, setEntries] = useState<{id: number; props: BillEntryProps}[]>([]);
   const [active, setActive] = useState<number | null>(null);
   const sequence = useRef(0);
+  const [pending, setPending] = useState<PendingBill[]>([]);
   function open(props: BillEntryProps) {
     const id = ++sequence.current;
     setEntries(previous => [...previous, {id, props}]);
@@ -89,11 +111,11 @@ export function BillEntryProvider({ children }: {children: ReactNode}) {
     setEntries(previous => previous.filter(entry => entry.id !== id));
     setActive(previous => previous === id ? null : previous);
   }
-  return <OpenBillEditor.Provider value={open}>{children}
-    {entries.map(({id, props}, index) => <HostedBillEditor key={id} {...props} visible={active === id}
+  return <UpdatePendingBills.Provider value={setPending}><PendingBills.Provider value={pending}><OpenBillEditor.Provider value={open}>{children}
+    {entries.map(({id, props}, index) => <HostedBillEditor jobId={id} key={id} {...props} visible={active === id}
       offset={index * 54} setVisible={value => setActive(previous => value ? id : previous === id ? null : previous)}
-      onClose={() => close(id)} onSaved={bill => { close(id); props.onSaved(bill); }} />)}
-  </OpenBillEditor.Provider>;
+      onClose={() => close(id)} onSaved={bill => { close(id); props.onSaved(bill); void refreshScreen("/split-bills"); }} />)}
+  </OpenBillEditor.Provider></PendingBills.Provider></UpdatePendingBills.Provider>;
 }
 
 export function BillEditor(props: BillEntryProps) {
@@ -105,8 +127,8 @@ export function BillEditor(props: BillEntryProps) {
   return null;
 }
 
-export function HostedBillEditor({ sourceTransaction, context, initialMethod, onClose, onSaved, visible, setVisible, offset = 0 }: BillEntryProps & {
-  visible: boolean; offset?: number; setVisible: (value: boolean) => void;
+export function HostedBillEditor({ jobId, sourceTransaction, context, initialMethod, onClose, onSaved, visible, setVisible, offset = 0 }: BillEntryProps & {
+  jobId?:number; visible: boolean; offset?: number; setVisible: (value: boolean) => void;
 }) {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollViewInstance|null>(null);
@@ -196,14 +218,20 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
     confidence: number;
     items: { description: string; amount: string }[];
   } | null>(null);
+  type SelectedReceipt = {uri:string;name:string;mimeType?:string;size?:number};
+  const receiptRequest = useRef<AbortController | null>(null);
+  const [slowRead,setSlowRead] = useState(false);
+  const retryFile = useRef<SelectedReceipt | null>(null);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      receiptRequest.current?.abort();
+      if (retryFile.current) removeUploadCopy(retryFile.current.uri);
     };
   }, []);
-  const uploadReceipt = async (source: "file" | "camera" | "library" = "file") => {
+  const uploadReceipt = async (source: "file" | "camera" | "library" = "file", retry?:SelectedReceipt) => {
     if (inFlight.current) return;
     if (session.demo) {
       setError(
@@ -214,10 +242,11 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
     inFlight.current = true;
     setBusy(true);
     setError("");
-    let copiedUri = "";
+
     try {
       let file: { uri: string; name: string; mimeType?: string; size?: number };
-      if (source === "camera" || source === "library") {
+      if (retry) file = retry;
+      else if (source === "camera" || source === "library") {
         if (source === "camera" && !(await ImagePicker.requestCameraPermissionsAsync()).granted)
           throw Error(
             "Allow camera access to take a photo, or add the bill manually.",
@@ -241,7 +270,8 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
         if (picked.canceled || !alive.current) return;
         file = picked.assets[0];
       }
-      copiedUri = file.uri;
+      if (retryFile.current && retryFile.current.uri !== file.uri) removeUploadCopy(retryFile.current.uri);
+      retryFile.current = file;
 
       if (!alive.current) return;
       setUploaded(0);
@@ -251,6 +281,8 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
       setDetailStatus("idle");
       const version = ++refinementVersion.current;
       const path = `split-bill-receipts/preview?workspaceId=${encodeURIComponent(session.profileId)}&progressive=1&scope=${receiptScope(circleId,context?.group?.id,context?.person)}`;
+      const controller = new AbortController();
+      receiptRequest.current = controller;
       const result = await uploadSelectedFile<{
         draftId?:string; attemptId?:string; refining?:boolean;
         reliableForScopedSplit?: boolean; readyForReviewableBill?: boolean;
@@ -269,17 +301,20 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
         };
       }>(
         path,
-        session.request, file, setUploaded,
+        (url, options) => session.request(url,{...options,signal:controller.signal}), file, setUploaded,
       );
       if (!alive.current) return;
+      retryFile.current = null;
+      removeUploadCopy(file.uri);
       const p = result.preview;
       const same = Boolean(result.draftId && activeDraft.current === result.draftId);
       const initialItems = editableReceiptItems(p);
       if (result.attemptId) attemptId.current = result.attemptId;
+      const mainReceipt = standalone && !context?.group && !context?.person;
       if (!same) {
         activeDraft.current = result.draftId || "";
         originalRows.current = initialItems;
-        originalDate.current = p.billDate?.slice(0,10) || "";
+        originalDate.current = p.billDate?.slice(0,10) || (mainReceipt ? new Date().toLocaleDateString("en-CA", {timeZone:"Asia/Manila"}) : "");
         interacted.current = false;
         setEntryMode("manual");
         setReviewVersion(v => v + 1);
@@ -301,27 +336,31 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
         setTitle(p.merchantName || "Receipt");
         setTotal(conflictingCurrencies ? "" : p.total ?? "");
         if (/^[A-Z]{3}$/.test(p.currency)) setCurrency(p.currency);
-        setDate(p.billDate?.slice(0,10) ?? "");
-        scopedSave.current = !result.refining && Boolean(p.billDate) && ((!result.draftId && !context?.group && !context?.person && !circleId) ||
-          Boolean((context?.group || context?.person || circleId) && (result.reliableForScopedSplit || (standalone && result.readyForReviewableBill)) && !p.currencyWarning));
+        setDate(originalDate.current);
+        scopedSave.current = !result.refining && (mainReceipt || (Boolean(p.billDate) &&
+          Boolean((context?.group || context?.person || circleId) && (result.reliableForScopedSplit || (standalone && result.readyForReviewableBill)) && !p.currencyWarning)));
         if (p.currencyWarning) setError(p.currencyWarning);
       } else if (!result.refining) {
+        scopedSave.current = mainReceipt && !interacted.current;
         const previous = originalRows.current;
         if (initialItems.length) setReviewedItems(current => current === previous ? initialItems : current);
         setDate(current => current === originalDate.current ? p.billDate?.slice(0,10) || "" : current);
       }
-      if (result.draftId) setVisible(true);
+
       if (result.refining && result.draftId) {
         const refine = () => {
+          const controller = new AbortController();
+          receiptRequest.current = controller;
           setDetailStatus("reading");
-          return session.request<typeof result>(path + "&refine=" + result.draftId, {method:"POST"}).then(final => {
-            if (!alive.current || refinementVersion.current !== version || final.draftId !== result.draftId ||
-                final.preview.total !== p.total || final.preview.currency !== p.currency || final.preview.merchantName !== p.merchantName) return;
+          return session.request<typeof result>(path + "&refine=" + result.draftId, {method:"POST",signal:controller.signal}).then(final => {
+            if (!alive.current || refinementVersion.current !== version) return;
+            if (final.draftId !== result.draftId ||
+                final.preview.total !== p.total || final.preview.currency !== p.currency || final.preview.merchantName !== p.merchantName) throw Error("Receipt details changed. Retry the check.");
             const rows = editableReceiptItems(final.preview);
             if (rows.length) setReviewedItems(current => current === originalRows.current ? rows : current);
-            setDate(current => current === originalDate.current ? final.preview.billDate?.slice(0,10) || "" : current);
-            scopedSave.current = !interacted.current && Boolean((circleId || context?.person || context?.group) &&
-              (final.reliableForScopedSplit || (standalone && final.readyForReviewableBill)) && !final.preview.currencyWarning);
+            setDate(current => current === originalDate.current ? final.preview.billDate?.slice(0,10) || (mainReceipt ? current : "") : current);
+            scopedSave.current = !interacted.current && (mainReceipt || Boolean((circleId || context?.person || context?.group) &&
+              (final.reliableForScopedSplit || (standalone && final.readyForReviewableBill)) && !final.preview.currencyWarning));
             setReceipt(current => current && ({...current, text:final.preview.receiptText, confidence:final.preview.confidence,
               needsReview:Boolean(final.preview.requiresReview || !final.preview.billDate || final.preview.currencyWarning),
               items:final.preview.items}));
@@ -337,7 +376,7 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
       if (alive.current)
         setError(e instanceof Error ? e.message : "Receipt upload failed.");
     } finally {
-      if (copiedUri) removeUploadCopy(copiedUri);
+
       inFlight.current = false;
       if (alive.current) { setReading(false); setBusy(false); }
     }
@@ -524,9 +563,38 @@ export function HostedBillEditor({ sourceTransaction, context, initialMethod, on
       void save();
     }
   }, [receipt, reading, busy]);
+  const setPending = useContext(UpdatePendingBills);
+  const inline = Boolean(jobId && setPending && !visible && (receipt || retryFile.current || reading) && standalone && !context?.group && !context?.person);
+  const processing = reading || detailStatus === "reading";
+  useEffect(() => {
+    setSlowRead(false);
+    if (!inline || !processing) return;
+    const timer = setTimeout(()=>setSlowRead(true),30000);
+    return () => clearTimeout(timer);
+  },[inline,processing,uploaded,detailStatus]);
+  const canStop = processing && slowRead;
+  const needsAction = canStop || detailStatus === "retry" || Boolean(error && !reading && !busy);
+  const retryAction = useRef<()=>void>(()=>{});
+  retryAction.current = () => {
+    if (canStop) receiptRequest.current?.abort();
+    else if (detailStatus === "retry") retryDetails.current();
+    else if (retryFile.current) void uploadReceipt("file",retryFile.current);
+    else setVisible(true);
+  };
+  const status = canStop ? "Taking longer than usual · Stop reading" : reading ? (uploaded > 0 && uploaded < 1 ? `Uploading receipt · ${Math.round(uploaded*100)}%` : "Extracting receipt details…")
+    : detailStatus === "reading" ? "Checking receipt items…" : detailStatus === "retry" ? "Retry receipt check ›"
+    : needsAction ? error + (retryFile.current ? " · Retry ›" : " · Review ›") : "Saving bill…";
+  useEffect(() => {
+    if (!inline || !setPending || !jobId) return;
+    const row = {id:jobId,workspace:session.profileId,title:receipt && title ? [title,total && [currency,total].join(" ")].filter(Boolean).join(" · ") : "Receipt",status,
+      action:needsAction ? () => retryAction.current() : undefined};
+    setPending(rows=>[...rows.filter(r=>r.id!==jobId),row]);
+    return () => setPending(rows=>rows.filter(r=>r.id!==jobId));
+  },[inline,setPending,jobId,session.profileId,title,total,currency,receipt,status,needsAction]);
+  if (inline) return null;
   if (!visible) return <View style={{ position: "absolute", left: 12, right: 12, bottom: insets.bottom + 74 + offset, zIndex: 100 }}>
-    <Pressable accessibilityRole="button" onPress={() => setVisible(true)} style={{ backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 }}>
-      <Text style={{ color: error ? "#a31d35" : colors.ink }}>{reading ? (uploaded > 0 && uploaded < 1 ? "Uploading receipt…" : "Extracting receipt details…") : busy ? "Saving bill…" : error ? "Receipt needs attention ›" : "Review receipt draft ›"}</Text>
+    <Pressable accessibilityRole="button" disabled={reading || busy} onPress={() => detailStatus === "retry" ? retryDetails.current() : setVisible(true)} style={{ backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 }}>
+      <Text style={{ color: error ? "#a31d35" : colors.ink }}>{reading ? (uploaded > 0 && uploaded < 1 ? "Uploading receipt…" : "Extracting receipt details…") : detailStatus === "reading" ? "Checking receipt items…" : detailStatus === "retry" ? "Retry receipt check ›" : busy ? "Saving bill…" : error ? "Receipt needs attention ›" : "Review receipt draft ›"}</Text>
       {reading && <View accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:Math.round(uploaded*100)}} style={{ height:4,backgroundColor:colors.line }}>
         <View style={{height:4,width:`${Math.round(uploaded*100)}%`,backgroundColor:colors.teal}}/>
       </View>}

@@ -5,7 +5,7 @@ import type { ReceiptCaptureLocation } from "../../shared/receipt-capture-locati
 import { OnboardingPersistence } from "./onboarding-persistence";
 import { nativeImportIsComplete, needsNativeImportResume } from "../../shared/native-import-status";
 import { notifyImportQueued } from "./import-handoff";
-import { PageCache, isPageRead } from "./page-cache";
+import { PageCache, isPageRead, isReceiptPreview } from "./page-cache";
 import { selectRecentProfile } from "./profile-selection";
 
 import { updateNativePlanAnalytics } from "./analytics";
@@ -133,6 +133,8 @@ export function SessionProvider({
   const offlineReady = useRef<Promise<OfflineEngine | null>>(
     Promise.resolve(null),
   );
+  const [, showRestoredBalance] = useState(0);
+  const initializedEngine = useRef<OfflineEngine | null>(null);
   const [bootstrapRequests] = useState(() => new BootstrapRequests());
   const setupQueue = useRef<OnboardingPersistence | null>(null);
   const setupProfileRevision = useRef(0);
@@ -140,6 +142,8 @@ export function SessionProvider({
   const transport = useCallback(
     async <T,>(path: string, options?: RequestInit) => {
       if (demo) throw new Error("Sample mode never connects to your account.");
+      const homeSection = path.startsWith("home?") && ["overview","details"].includes(new URLSearchParams(path.split("?")[1]).get("section") ?? "");
+      const networkPath = homeSection ? path + "&deferReviews=1" : path;
       const load = async (signal?: AbortSignal) => {
         const token = async (fresh = false) => {
           try { return await boundedRequest(() => tokenRef.current(fresh ? { skipCache: true } : undefined), { signal, timeoutMs: 8000 }); }
@@ -147,13 +151,13 @@ export function SessionProvider({
         };
         let value = await token();
         if (!value) throw new ApiError("Your session expired. Please sign in again.", 401);
-        try { return await apiRequest<T>(value, path, { ...options, ...(signal ? { signal } : {}) }); }
+        try { return await apiRequest<T>(value, networkPath, { ...options, ...(signal ? { signal } : {}) }); }
         catch (error) {
           // Refresh only a rejected read, once. Never replay a financial mutation.
           if (!(error instanceof ApiError) || error.status !== 401 || (options?.method ?? "GET").toUpperCase() !== "GET") throw error;
           value = await token(true);
           if (!value) throw error;
-          return apiRequest<T>(value, path, { ...options, ...(signal ? { signal } : {}) });
+          return apiRequest<T>(value, networkPath, { ...options, ...(signal ? { signal } : {}) });
         }
       };
       return path === "bootstrap" && !options?.signal ? bootstrapRequests.read(load) : load(options?.signal ?? undefined);
@@ -190,23 +194,34 @@ export function SessionProvider({
           engine.init(),
           setupQueue.current.init(),
         ]);
+        if (active) initializedEngine.current = engine;
         preferredProfile.current = savedProfile ?? "";
         if (active && verifiedBootstrap.current && !manuallySelectedProfile.current) {
           setProfile(selectRecentProfile(verifiedBootstrap.current.profiles, preferredProfile.current, ""));
         }
-        if (active && cached && !verifiedBootstrap.current && !bootstrapDenied.current) {
+        if (active && cached && !bootstrapDenied.current) {
           try {
-            await engine.assertLocalAccess();
             if (active) {
               const selected = selectRecentProfile(cached.value.profiles, "", preferredProfile.current);
-              const entries = await engine.presentationCache(selected);
-              if (active && !bootstrapDenied.current && !verifiedBootstrap.current) for (const entry of entries) {
-                if (isPageRead(entry.path)) pageCache.current.seed(entry.path, entry.value, entry.savedAt);
+              if (!selected) throw Error("No cached Profile.");
+              const generation = pageCache.current.version;
+              const home = await engine.homeOverviewSnapshot(selected, cached.value.defaultCurrency ?? "PHP");
+              const verified = verifiedBootstrap.current;
+              const accessMatches = !verified || (verified.offlineEpoch === cached.value.offlineEpoch &&
+                verified.profiles.some(profile => profile.id === selected));
+              if (home && active && !bootstrapDenied.current && accessMatches && pageCache.current.version === generation &&
+                  !pageCache.current.home(home.path)) {
+                pageCache.current.seed(home.path, home.value, home.savedAt);
+                if (verified) showRestoredBalance(n=>n+1);
               }
               if (!active) { await engine.dispose(); return null; }
-              if (!bootstrapDenied.current) {
+              if (!bootstrapDenied.current && !verifiedBootstrap.current) {
                 setProfile(previous => previous || selected);
                 setData(previous => previous ?? (setupQueue.current?.pending ? { ...cached.value, needsOnboarding: false, defaultCurrency: setupQueue.current?.pending.currency } : cached.value));
+              }
+              const entries = verifiedBootstrap.current ? [] : await engine.presentationCache(selected);
+              if (active && !bootstrapDenied.current && !verifiedBootstrap.current) for (const entry of entries) {
+                if (isPageRead(entry.path)) pageCache.current.seed(entry.path, entry.value, entry.savedAt);
               }
             }
           } catch { /* Expired access waits for fresh authenticated bootstrap. */ }
@@ -324,6 +339,7 @@ export function SessionProvider({
     })();
     return () => {
       active = false;
+      initializedEngine.current = null;
       unsubscribe?.();
       network?.();
       void (async () => {
@@ -347,9 +363,12 @@ export function SessionProvider({
     async <T,>(path: string, options?: RequestInit, requireNetwork = false) => {
       if (path.startsWith("adviser/chat") && options?.method === "POST" && !demo && !(await transport<{allowed:boolean}>("settings/ai-consent")).allowed) throw new Error("AI permission was not granted. You can enable it in Privacy and Data Use.");
       if (path.startsWith("settings/ai-consent")) return transport<T>(path, options);
-      const engine = await offlineReady.current;
+      const overview = (!options?.method || options.method === "GET") && path.startsWith("home?") &&
+        new URLSearchParams(path.split("?")[1]).get("section") === "overview";
+      const engine = (overview && initializedEngine.current) || await offlineReady.current;
       const read = () => engine ? engine.request<T>(path, options, requireNetwork) : transport<T>(path, options);
       if ((options?.method ?? "GET").toUpperCase() !== "GET") {
+        if (isReceiptPreview(path)) return read();
         pageCache.current.clear();
         try { return await read(); } finally { pageCache.current.clear(); }
       }

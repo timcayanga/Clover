@@ -19,7 +19,7 @@ function load(file, deps = {}, extra = {}) {
       exports,
       console,
       URL,
-      AbortController,
+      AbortController, setTimeout, clearTimeout,
       Date,
       ...extra,
       require: (name) => {
@@ -326,15 +326,18 @@ async function main() {
     const saved = [];
     const captured = {uri:"file:///cache/123.jpg",fileName:"receipt.jpg",mimeType:"image/jpeg"};
     let receiptPreviewed = false;
+    let failUploadOnce = false;
     let reliableForScopedSplit = false;
     let progressive = false;
     let draftId = "test-draft";
     let finishRefinement, interruptRefinement;
     let printedBillDate = "2026-11-20";
     let visible = true;
+    let pendingRows=[];
+    const updateRows = updater => { pendingRows=updater(pendingRows); };
     const {HostedBillEditor} = load("../mobile/src/direct-bill-editor.tsx", {
       "../../shared/currency-mark": load("../shared/currency-mark.ts"),
-      react: {...ui.h,createContext:()=>({})}, "./entry-overlay":{EntryOverlay:"Overlay"}, "react-native-safe-area-context":{useSafeAreaInsets:()=>({bottom:0})}, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
+      "./screen-refresh":{refreshScreen:async()=>true}, react: {...ui.h,createContext:()=>({}),useContext:()=>updateRows}, "./entry-overlay":{EntryOverlay:"Overlay"}, "react-native-safe-area-context":{useSafeAreaInsets:()=>({bottom:0})}, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
       "@clerk/expo": {useUser:()=>({user:{fullName:"Personal profile name"}})},
       "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]}),launchImageLibraryAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {getDocumentAsync:async()=>({canceled:false,assets:[{...captured,name:"receipt.jpg"}]})},
       "./split-people-field": {...load("../mobile/src/split-people-field.tsx", {"react/jsx-runtime":jsx,"react-native":{},"./app-text":{},"./ui":{}}), PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": load("../shared/split-bill-experience.ts"),
@@ -343,6 +346,7 @@ async function main() {
       "./upload-selected-file": load("../mobile/src/upload-selected-file.ts", {"expo-crypto":{}, "./offline/file-storage":{}, "../../shared/receipt-upload":{receiptMultipartLimit:1572864}, "react-native":{Platform:{OS:platform}}, "./upload":loadPhotoUpload(platform)}),
       "./session": {useSession:()=>({profileId:"profile",request:async (_path, opts)=>{if (_path.startsWith("split-bill-receipts/preview")) {
           if (_path.includes("&refine=")) return new Promise((resolve,reject) => { finishRefinement = resolve; interruptRefinement = reject; });
+          if (failUploadOnce) { failUploadOnce=false; throw Error("Connection interrupted during upload"); }
           const {body,boundary} = await convertFormDataAsync(opts.body);
           const req = new Request("https://example.invalid", {method:"POST",body,headers:{"content-type":"multipart/form-data; boundary="+boundary}});
           const file = (await req.formData()).get("file");
@@ -358,7 +362,7 @@ async function main() {
     });
     const context = {circleId:"trip",currency:"PHP",group:{id:"group",name:"Trip",recorderName:"Alex",members:[
       {id:"m1",name:"Bea"},{id:"m2",name:"Alex"},{id:"m3",name:"Carlo"}]}};
-    const render = () => nodes(ui.render(() => HostedBillEditor({context, visible, setVisible:value=>visible=value, onSaved:()=>{}, onClose:()=>{}})));
+    const render = () => nodes(ui.render(() => HostedBillEditor({jobId:1, context, visible, setVisible:value=>visible=value, onSaved:()=>{}, onClose:()=>{}})));
     const control = (key,value) => render().find(n=>n.props[key]===value);
     assert.ok(control("title","Add Expense"));
     assert.ok(control("accessibilityLabel","Remove Bea"));
@@ -419,12 +423,15 @@ async function main() {
     progressive = true;
     control("kind","split").props.onUploadSource("camera");
     await flush();
-    assert.equal(visible,true,"A reconciled preview opens while refinement is pending");
+    assert.equal(visible,false,"A receipt preview must not reopen the entry sheet");
+    visible = true; // Explicitly open the scoped draft to exercise editing.
     control("label","Name").props.onChangeText("Edited bakery");
     const editedItems = [{description:"Edited bread",amount:"12.00",participantIds:["Alex"]}];
     render().find(n=>n.type==="Items").props.onChange(editedItems);
     control("kind","split").props.onUploadSource("file");
     await flush();
+    assert.equal(visible,false);
+    visible = true;
     assert.equal(control("label","Name").props.value,"Edited bakery","Retry reuses the edited draft");
     interruptRefinement(Error("network disconnected"));
     await flush();
@@ -450,6 +457,30 @@ async function main() {
     assert.equal(saved[3].expense.splitOnly,true);
     assert.equal(saved[3].receipt.needsReview,true);
     assert.deepEqual(saved[3].reviewedItems.map(r=>r.amount),["10.75","1.25"]);
+    delete context.group;
+    visible = true;
+    draftId = "main-receipt";
+    failUploadOnce=true;
+    control("kind","split").props.onUploadSource("file");
+    await flush();
+    assert.equal(visible,false);
+    render();
+    assert.match(pendingRows[0].status,/Retry/);
+    pendingRows[0].action();
+    await flush();render();
+    assert.equal(pendingRows.length,1);
+    assert.match(pendingRows[0].title,/Bakery/);
+    interruptRefinement(Error("Connection interrupted"));
+    await flush(); render();
+    assert.match(pendingRows[0].status,/Retry/);
+    pendingRows[0].action();
+    finishRefinement({draftId,refining:false,preview:{merchantName:"Bakery",currency:"PHP",
+      total:"12.00",billDate:printedBillDate,serviceCharge:"1.25",items:[{description:"Bread",amount:"10.75"}]}});
+    await flush();render();await flush();render();
+    assert.equal(visible,false);
+    assert.equal(saved.length,5,"Main Split Bills saves the progressive receipt without opening the editor");
+    assert.equal(saved[4].expense.splitOnly,true);
+    assert.deepEqual(saved[4].reviewedItems.map(r=>r.amount),["10.75","1.25"]);
     ui.stop();
   }
   const {receiptServiceChargeItem} = load("../shared/split-bill-experience.ts");

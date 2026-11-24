@@ -636,7 +636,8 @@ async function handle(
       const currency = z.string().regex(/^(ALL|[A-Z]{3})$/).parse(url.searchParams.get("currency") ?? normalizeRegionalPreferences(user.regionalPreferences).baseCurrency);
       const section = z.enum(["full", "overview", "details"]).parse(url.searchParams.get("section") ?? "full");
       const baseCurrency = normalizeRegionalPreferences(user.regionalPreferences).baseCurrency;
-      return reply(section === "details" ? await mobileHomeDetails(workspaceId, currency, baseCurrency) : await mobileHome(workspaceId, currency, baseCurrency, section === "overview"));
+      const deferReviews = url.searchParams.get("deferReviews") === "1";
+      return reply(section === "details" ? await mobileHomeDetails(workspaceId, currency, baseCurrency, deferReviews) : await mobileHome(workspaceId, currency, baseCurrency, section === "overview", deferReviews));
     }
     if (operation === "transaction") {
       const row = await prisma.transaction.findFirst({

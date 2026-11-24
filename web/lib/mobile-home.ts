@@ -24,7 +24,7 @@ import { resolveFinancialTransactionType } from "./transaction-directions";
 
 // Read-only native dashboard. Reuses Clover's balance/checkpoint and direction
 // rules; never totals a paginated list or mixes currencies without conversion.
-export async function mobileHome(workspaceId: string, selectedCurrency: string, profileCurrency = "PHP", overviewOnly = false) {
+export async function mobileHome(workspaceId: string, selectedCurrency: string, profileCurrency = "PHP", overviewOnly = false, deferReviews = false) {
   const { allCurrencies, displayCurrency: currency } = homeCurrencyScope(selectedCurrency, profileCurrency);
   const { day, tomorrow, month, previousMonth, rolling } = mobileHomePeriods();
   const since = new Date(+day - 90 * 86400000);
@@ -105,7 +105,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
       include: { occurrences: { select: { dueDate: true } } },
     }),
     overviewOnly ? Promise.resolve(null) : import("./budgeting-data").then(module => module.loadCachedBudgetWorkspaceData(workspaceId, { directory: true })),
-    actionableReviewIds({workspaceId,deletedAt:null,...(allCurrencies ? {} : {currency})}).then(ids=>ids.length),
+    overviewOnly && deferReviews ? null : actionableReviewIds({workspaceId,deletedAt:null,...(allCurrencies ? {} : {currency})}).then(ids=>ids.length),
     prisma.transaction.groupBy({
       by: ["currency"],
       where: buildActiveWorkspaceTransactionWhere(workspaceId),
@@ -284,7 +284,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
       monthNet: monthTotals.income - monthTotals.expense,
       hasRecentTransactions: transactions.some((t) => t.currency === currency && t.date >= rolling(7).from),
       // Conservatively suppress the all-clear card while any queue item remains.
-      recentReviewCount: reviewCount,
+      recentReviewCount: reviewCount ?? null,
   };
   return {
     ...(overviewOnly ? { insightInput, detailsPending: true } : {}),
@@ -320,15 +320,17 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
 }
 
 /** Secondary dashboard work is isolated from the first balance/chart response. */
-export async function mobileHomeDetails(workspaceId: string, selectedCurrency: string, profileCurrency = "PHP") {
+export async function mobileHomeDetails(workspaceId: string, selectedCurrency: string, profileCurrency = "PHP", includeReviews = false) {
   const { allCurrencies, displayCurrency: currency } = homeCurrencyScope(selectedCurrency, profileCurrency);
-  const [budgetData, allSuggestions] = await Promise.all([
+  const [budgetData, allSuggestions, reviewCount] = await Promise.all([
     import("./budgeting-data").then(module => module.loadCachedBudgetWorkspaceData(workspaceId, { directory: true })),
     import("./planned-payment-suggestions").then(module => module.getPlannedPaymentSuggestions(workspaceId)),
+    includeReviews ? actionableReviewIds({workspaceId,deletedAt:null,...(allCurrencies ? {} : {currency})}).then(ids=>ids.length) : undefined,
   ]);
   const suggestions = allSuggestions.filter(s => allCurrencies || s.currency === currency);
   const recurringCount = suggestions.filter(s => s.sourceKind === "recurring_transaction" || s.sourceKind === "installment").length;
   return {
+    ...(reviewCount !== undefined ? {reviewCount} : {}),
     paymentTitles: suggestions.filter(s => s.dueDate && +new Date(s.dueDate) <= Date.now() + 7 * 86400000).map(s => s.title),
     recurringCount,
     nextSteps: buildHomeNextSteps({ transactionCount: 0, recurringCount, statementCount: suggestions.filter(s => s.sourceKind === "statement_reminder").length }),

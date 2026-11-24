@@ -23,7 +23,7 @@ export function buildHomeAdviserInsights(input: {
   previousWeeklyExpense: number;
   monthNet: number;
   hasRecentTransactions: boolean;
-  recentReviewCount: number;
+  recentReviewCount: number | null;
 }): HomeInsight[] {
   const items: HomeInsight[] = [];
   const amount = (value: number) => ({ amount: value, currency: input.currency });

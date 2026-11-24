@@ -3,6 +3,7 @@
 export class PageCache {
   private entries = new Map<string, { value: unknown; savedAt: number }>();
   private generation = 0;
+  get version() { return this.generation; }
   private pending = new Map<string, Promise<unknown>>();
   private now: () => number;
   private maxAge: number;
@@ -56,3 +57,6 @@ export class PageCache {
   clear() { this.generation++; this.entries.clear(); this.pending.clear(); }
 }
 export const isPageRead = (path: string) => /^(home|accounts|transactions|reports(?:\/workspace)?|recurring|budgeting|budgets(?:\/options)?|circles|together-options|goals|investments|options|split-bills)(?:\?|$)/.test(path);
+
+// Receipt preview uploads stage files and OCR results. Only saving the bill changes financial views.
+export const isReceiptPreview = (path: string) => path.split("?")[0] === "split-bill-receipts/preview";

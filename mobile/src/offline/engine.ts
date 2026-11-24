@@ -1,6 +1,6 @@
 import { manualTransactionName, manualTransactionToday, validManualTransactionDate } from "../../../shared/manual-transaction-defaults";
 import { telemetry } from "../../../shared/analytics";
-import { isPageRead } from "../page-cache";
+import { isPageRead, isReceiptPreview } from "../page-cache";
 import { NetworkError } from "../api";
 import type {
   CacheEntry,
@@ -88,6 +88,18 @@ export class OfflineEngine {
     if (profile && !auth.value.profiles.some((p) => p.id === profile))
       throw new Error("This Profile is not available offline.");
   }
+  async homeOverviewSnapshot(profile:string, currency:string) {
+    await this.assertLocalAccess(profile);
+    const path = `home?workspaceId=${encodeURIComponent(profile)}&currency=${encodeURIComponent(currency)}&section=overview`;
+    const [entry, invalidatedAt] = await Promise.all([
+      this.store.get<CacheEntry<unknown>>("cache:" + pathKey(path)),
+      this.store.get<number>("presentation-invalidated-at"),
+    ]);
+    if (!entry || entry.savedAt <= (invalidatedAt ?? 0) || this.now() < entry.savedAt ||
+        this.now() - entry.savedAt > 30 * 60_000 ||
+        new Date(entry.savedAt).toDateString() !== new Date(this.now()).toDateString()) return null;
+    return {path, ...entry};
+  }
   async presentationCache(profile: string) {
     await this.assertLocalAccess(profile);
     const invalidatedAt = await this.store.get<number>("presentation-invalidated-at") ?? 0;
@@ -105,7 +117,7 @@ export class OfflineEngine {
     const method = options.method?.toUpperCase() ?? "GET",
       route = path.split("?")[0],
       profile = workspace(path);
-    if (method !== "GET") await this.store.set("presentation-invalidated-at", this.now());
+    if (method !== "GET" && !isReceiptPreview(path)) await this.store.set("presentation-invalidated-at", this.now());
     if (
       (method === "POST" && route === "transactions") ||
       (method === "PATCH" && /^transactions\/[^/]+$/.test(route))

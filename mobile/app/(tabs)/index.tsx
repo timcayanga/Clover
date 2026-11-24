@@ -41,7 +41,7 @@ type HomeData = HomeSections & {
   currencyReports?: { currency: string; weekly: HomeReport; monthly: HomeReport }[];
   heroTotals?: { current: {income: string | null; expense: string | null}; previous: {income: string | null; expense: string | null} };
   currencies?: string[];
-  reviewCount?: number;
+  reviewCount?: number | null;
   categories?: { name: string; amount: number }[];
   budgets?: {
     id: string;
@@ -106,7 +106,7 @@ export default function Home() {
   };
   const [snapshot, setSnapshot] = useState(() => ({ path: basePath, value: readSnapshot() }));
   // Never paint another currency/Profile's balances while the focus effect catches up.
-  const data = snapshot.path === basePath ? snapshot.value : readSnapshot();
+  const data = (snapshot.path === basePath ? snapshot.value : null) ?? readSnapshot();
   useEffect(() => {
     const landing = session.data?.preferences?.defaults.defaultLandingPage;
     if (landing && landing !== "dashboard") nativeStartup.cancel("non_home_destination");
@@ -504,7 +504,7 @@ export default function Home() {
             <Text style={styles.sectionTitle}>Things to review</Text>
             <Body muted={false}>Transactions</Body>
             <Body>
-              {data.reviewCount
+              {data.reviewCount === null ? (detailsError ? "Review count unavailable" : "Checking transactions…") : data.reviewCount
                 ? `${data.reviewCount} transactions need review`
                 : "No transactions need review"}
             </Body>
