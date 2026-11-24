@@ -115,3 +115,14 @@ await homeCache.read(homePath, async () => homeSnapshot);
 homeNow += 2 * 60_000;
 assert.equal(homeCache.home(homePath), null, 'Yesterday’s periods must not appear as today’s reports');
 console.log('PASS Home immediate revisit snapshots, background refresh/failure, scope isolation, mutation invalidation and day rollover');
+
+const launch = new PageCache(() => now);
+let reads = 0;
+const fetchBalance = async () => ++reads;
+launch.seed(path, 42, now);
+assert.equal(await launch.read(path, fetchBalance, true), 1, 'Revalidate restored data');
+assert.equal(await launch.read(path, fetchBalance, true), 1, 'Reuse startup response');
+launch.clearWorkspace('one');
+assert.equal(await launch.read(path, fetchBalance, true), 2, 'Invalidate on financial writes');
+now += 2001;
+assert.equal(await launch.read(path, fetchBalance, true), 3, 'Resume revalidation');

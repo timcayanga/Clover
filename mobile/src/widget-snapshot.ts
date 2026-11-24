@@ -40,9 +40,18 @@ export function useWidgetSnapshot({ profileId, demo, request, data }: ReturnType
     const query = `workspaceId=${encodeURIComponent(profileId)}`;
     const refresh = async () => {
       if (await SecureStore.getItemAsync(hiddenBalancesKey) === "true" || controller.signal.aborted) return;
+      // Let Home paint first. Its currency list includes every account currency.
+      // A single-currency Profile already has the exact widget balance.
+      const startsOnHome = (data?.preferences?.defaults.defaultLandingPage ?? "dashboard") === "dashboard";
+      const overview = startsOnHome ? await request<{ balance: number | null; currencies?: string[] }>(
+        `home?${query}&currency=${encodeURIComponent(currency)}&section=overview`,
+      ) : null;
+      if (controller.signal.aborted || generation !== snapshotGeneration) return;
       const [{ accounts }, home] = await Promise.all([
-        request<{ accounts: WidgetAccount[] }>(`accounts?${query}`, { signal: controller.signal }),
-        request<{ balance: number | null }>(`home?${query}&currency=ALL&section=overview`, { signal: controller.signal }),
+        request<{ accounts: WidgetAccount[] }>(`accounts?${query}`),
+        overview?.currencies?.length && overview.currencies.every(code => code === currency)
+          ? overview
+          : request<{ balance: number | null }>(`home?${query}&currency=ALL&section=overview`),
       ]);
       if (controller.signal.aborted || generation !== snapshotGeneration) return;
       const format = (value: number | null, code: string) => value !== null && Number.isFinite(value)

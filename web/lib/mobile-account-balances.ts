@@ -4,10 +4,12 @@ import { deriveReconciledBalance, type BalanceLikeTransaction } from "./account-
 import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from "./account-balance-projection";
 
 /** Add read-only current balances without replacing the stored opening balance. */
-export async function mobileAccountBalances(workspaceId: string, ids: string[]) {
+export async function mobileAccountBalances(workspaceId: string, ids: string[], knownBankBalances?: ReadonlyMap<string, string>) {
   if (!ids.length) return new Map<string, string | null>();
+  const projectionIds = knownBankBalances ? ids.filter(id => !knownBankBalances.has(id)) : ids;
+  if (!projectionIds.length) return new Map(knownBankBalances);
   const accountsQuery = prisma.account.findMany({
-    where: { workspaceId, id: { in: ids }, OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] },
+    where: { workspaceId, id: { in: projectionIds }, OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] },
     select: {
       id: true, source: true, type: true, currency: true, balance: true,
       transactions: {
@@ -20,7 +22,7 @@ export async function mobileAccountBalances(workspaceId: string, ids: string[]) 
       },
     },
   });
-  const [accounts, snapshots] = await Promise.all([accountsQuery, finverseBalances(workspaceId, ids)]);
+  const [accounts, snapshots] = await Promise.all([accountsQuery, knownBankBalances ? null : finverseBalances(workspaceId, ids)]);
   const result = new Map(accounts.map(account => {
     const checkpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
     const balance = deriveReconciledBalance({
@@ -34,6 +36,7 @@ export async function mobileAccountBalances(workspaceId: string, ids: string[]) 
     });
     return [account.id, resolveEffectiveAccountBalance({ cashBalanceProjected: account.type === "cash", accountType: account.type, liveBalance: balance, checkpointStatus: checkpoint?.status, checkpointBalance: checkpoint?.endingBalance })];
   }));
-  for (const [id, snapshot] of snapshots) result.set(id, snapshot.bankBalance);
+  for (const [id, balance] of knownBankBalances ?? []) result.set(id, balance);
+  for (const [id, snapshot] of snapshots ?? []) result.set(id, snapshot.bankBalance);
   return result;
 }

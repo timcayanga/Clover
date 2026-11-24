@@ -21,7 +21,7 @@ const pathKey = (path: string) => {
 const workspace = (path: string) =>
   new URLSearchParams(path.split("?")[1]).get("workspaceId");
 export type Transport = <T>(path: string, options?: RequestInit) => Promise<T>;
-type OfflineListener = (event?: "files-cleared") => void;
+type OfflineListener = (event?: "files-cleared" | "mutation-synced", workspaceId?: string) => void;
 export class OfflineEngine {
   status: OfflineStatus = {
     online: true,
@@ -46,8 +46,8 @@ export class OfflineEngine {
       this.listeners.delete(fn);
     };
   };
-  private emit(event?: "files-cleared") {
-    if (this.active) for (const fn of this.listeners) fn(event);
+  private emit(event?: "files-cleared" | "mutation-synced", workspaceId?: string) {
+    if (this.active) for (const fn of this.listeners) fn(event, workspaceId);
   }
   async init() {
     this.status.lastSync = await this.store.get<number>("last-sync");
@@ -383,6 +383,8 @@ export class OfflineEngine {
           // Persist acknowledgement before removing the queue entry. A crash replays safely.
           await this.store.set("receipt:" + id, result);
           await this.store.remove("mutation:" + id);
+          await this.store.set("presentation-invalidated-at", this.now());
+          this.emit("mutation-synced", item.workspaceId);
           // Keep downloaded pages available until refreshed. Patch acknowledged rows;
           // aggregate screens remain labelled as their last downloaded snapshot.
           const acknowledged = (result as { transaction?: Transaction })

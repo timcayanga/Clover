@@ -23,11 +23,12 @@ async function main() {
   const originalLinks = prisma.finverseAccountLink.findMany;
   let bankRows: any[] = [];
   prisma.finverseAccountLink.findMany = (async () => bankRows) as typeof originalLinks;
+  let projectedIds = ["bank", "cash", "usd"];
   const find=mock.fn(async(args:unknown)=>{
     const q=args as {where:unknown;select:{transactions:{where:unknown}}};
-    assert.deepEqual(q.where,{workspaceId:'qa-profile',id:{in:['bank','cash','usd']},OR:[{source:{in:['manual','adviser_manual']}},{type:'cash'}]});
+    assert.deepEqual(q.where,{workspaceId:'qa-profile',id:{in:projectedIds},OR:[{source:{in:['manual','adviser_manual']}},{type:'cash'}]});
     assert.deepEqual(q.select.transactions.where,{deletedAt:null,isExcluded:false});
-    return fixtures;
+    return fixtures.filter(row => projectedIds.includes(row.id));
   });
   prisma.account.findMany = find as typeof original;
   try {
@@ -48,6 +49,11 @@ async function main() {
     assert.equal((await mobileAccountBalances("qa-profile",["bank","cash","usd"])).get("bank"), "45000.00", "bank snapshot outranks replayed ledger without changing opening balance");
     bankRows.push({ accountId: "bank", unlinkedAt: new Date(), connection: { status: "disconnected" }, normalizedPayload: { balance: 1200 }, lastSeenAt: new Date("2026-09-20") });
     assert.equal((await mobileAccountBalances("qa-profile",["bank","cash","usd"])).get("bank"), "45000.00", "an older disconnected snapshot cannot replace the latest balance");
+    projectedIds = ["cash", "usd"];
+    prisma.finverseAccountLink.findMany = (() => { throw Error("Duplicate snapshot read"); }) as typeof originalLinks;
+    const reused = await mobileAccountBalances("qa-profile", ["bank","cash","usd"], new Map([["bank","45000.00"]]));
+    assert.equal(reused.get("bank"), "45000.00");
+    assert.equal(reused.get("cash"), "100.00");
     const account={id:'bank',balance:'10000',displayBalance:balances.get('bank'),rawPayload:'private'};
     assert.deepEqual(mobileApiResponse('accounts',{accounts:[account]}),{accounts:[{id:'bank',balance:'10000',displayBalance:'10500.00'}]});
     assert.deepEqual(mobileApiResponse('account',{account}),{account:{id:'bank',balance:'10000',displayBalance:'10500.00'}});

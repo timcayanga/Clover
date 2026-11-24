@@ -309,10 +309,11 @@ export function SessionProvider({
         void queue.reportUnseenReceipts().catch(() => {});
         setOffline(engine);
         setOfflineStatus({ ...engine.status });
-        unsubscribe = engine.subscribe(event => {
+        unsubscribe = engine.subscribe((event, workspaceId) => {
           if (active) {
             setOfflineStatus({ ...engine!.status });
-            if (event === "files-cleared") refreshQueuedFiles();
+            if (event === "files-cleared") { pageCache.current.clear(); refreshQueuedFiles(); }
+            if (event === "mutation-synced" && workspaceId) pageCache.current.clearWorkspace(workspaceId);
           }
         });
         network = NetInfo.addEventListener((state) => {
@@ -373,7 +374,7 @@ export function SessionProvider({
         try { return await read(); } finally { pageCache.current.clear(); }
       }
       try {
-        return !requireNetwork && isPageRead(path) ? await pageCache.current.read(path, read) : await read();
+        return !requireNetwork && isPageRead(path) ? await pageCache.current.read(path, read, true) : await read();
       } catch (error) {
         if (error instanceof ApiError && (error.status === 401 || error.status === 403)) pageCache.current.clear();
         throw error;
@@ -437,7 +438,7 @@ export function SessionProvider({
           return setupQueue.current?.pending || setupQueue.current?.completed ? { ...result, needsOnboarding: false, ...(setupQueue.current?.pending ? { defaultCurrency: setupQueue.current?.pending.currency } : {}) } : result;
         });
         const selected = selectRecentProfile(result.profiles, preferredProfile.current, preferredProfile.current);
-        if (selected && !result.needsOnboarding) void request(`home?workspaceId=${encodeURIComponent(selected)}&currency=${result.defaultCurrency}&section=overview`).catch(() => {});
+        if (selected && !result.needsOnboarding && (result.preferences?.defaults.defaultLandingPage ?? "dashboard") === "dashboard") void request(`home?workspaceId=${encodeURIComponent(selected)}&currency=${result.defaultCurrency}&section=overview`).catch(() => {});
         if (result.entitlement.analytics) updateNativePlanAnalytics(result.entitlement.analytics);
         setProfile((previous) =>
           selectRecentProfile(result.profiles, previous, preferredProfile.current),

@@ -114,7 +114,7 @@ async function handle(
     }
     const user = await prisma.user.findUnique({
       where: { clerkUserId: userId },
-      select: { id: true, firstName: true, lastName: true, email: true, environment: true, clerkUserId: true, planTier: true, accountLimit:true, monthlyUploadLimit:true, transactionLimit:true, dataWipedAt: true, onboardingCompletedAt: true, regionalPreferences: true },
+      select: { appPreferences: operation === "bootstrap", id: true, firstName: true, lastName: true, email: true, environment: true, clerkUserId: true, planTier: true, accountLimit:true, monthlyUploadLimit:true, transactionLimit:true, dataWipedAt: true, onboardingCompletedAt: true, regionalPreferences: true },
     });
     const catalog = operation === "bootstrap" ? await import("@/lib/currencies") : null;
     const currencyChoices = catalog ? catalog.getCurrencyCatalogOptions(catalog.getCurrencyCatalogCodes()) : undefined;
@@ -224,19 +224,19 @@ async function handle(
       });
     }
     if (operation === "bootstrap") {
-      const [profiles, access, preferences] = await Promise.all([
+      const [profiles, access, { parseAppPreferences }] = await Promise.all([
         prisma.workspace.findMany({
           where: { userId: user.id },
           select: { id: true, name: true },
           orderBy: { createdAt: "asc" },
         }),
         getProAccess(user.id),
-        (await import("@/lib/app-preferences")).getAppPreferences(user.id),
+        import("@/lib/app-preferences"),
       ]);
       return reply({
         apiVersion: 1,
         offlineEpoch: user.dataWipedAt?.toISOString()??null,
-        preferences,
+        preferences: parseAppPreferences(user.appPreferences),
         needsOnboarding: !user.onboardingCompletedAt,
         currencyChoices,
         defaultCurrency: normalizeRegionalPreferences(user.regionalPreferences).baseCurrency,
@@ -1005,7 +1005,12 @@ async function handle(
     if (response.ok && request.method === "GET" && (operation === "accounts" || operation === "account")) {
       const rows = operation === "accounts" ? responseData.accounts : [responseData.account];
       const { mobileAccountBalances } = await import("@/lib/mobile-account-balances");
-      const balances = await mobileAccountBalances(workspaceId, rows.map((row: { id: string }) => row.id));
+      // The Accounts list already resolved linked bank snapshots for this workspace.
+      const bankBalances = operation === "accounts" ? new Map<string, string>() : undefined;
+      if (bankBalances) for (const row of rows) {
+        if (typeof row.bankBalance === "string") bankBalances.set(row.id, row.bankBalance);
+      }
+      const balances = await mobileAccountBalances(workspaceId, rows.map((row: { id: string }) => row.id), bankBalances);
       const { getAccountWalletBrand: getAccountBrand, accountBrandPalette } = await import("@/lib/account-brand");
       for (const row of rows) {
         row.displayBalance = balances.has(row.id) ? balances.get(row.id) : row.balance;

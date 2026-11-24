@@ -188,6 +188,9 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
   type Flow = { income: number; expense: number; transfer: number };
   const emptyFlow = (): Flow => ({ income: 0, expense: 0, transfer: 0 });
   const dailyFlows = new Map<string, Map<number, Flow>>();
+  const thirty = rolling(30);
+  const categories = new Map<string, number>();
+  const categoryDeltas = new Map<string, { current: number; previous: number }>();
   for (const transaction of transactions) {
     const type = resolveFinancialTransactionType({ ...transaction, categoryName: transaction.category?.name });
     if (type !== "income" && type !== "expense" && type !== "transfer") continue;
@@ -198,7 +201,17 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     }
     const index = Math.floor((+transaction.date - +day) / dayLength);
     const flow = days.get(index) ?? emptyFlow();
-    flow[type] += Math.abs(Number(transaction.amount));
+    const amount = Math.abs(Number(transaction.amount));
+    if (type === "expense" && transaction.currency === currency) {
+      const name = transaction.category?.name ?? "Uncategorized";
+      if (transaction.date >= month) categories.set(name, (categories.get(name) ?? 0) + amount);
+      if (transaction.date >= thirty.previousFrom) {
+        const entry = categoryDeltas.get(name) ?? { current: 0, previous: 0 };
+        entry[transaction.date >= thirty.from ? "current" : "previous"] += amount;
+        categoryDeltas.set(name, entry);
+      }
+    }
+    flow[type] += amount;
     days.set(index, flow);
   }
   const totals = (from: Date, to: Date, reportCurrency = currency) => {
@@ -237,32 +250,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     ),
     homeDateKey(day),
   );
-  const categories = new Map<string, number>();
-  for (const t of transactions) {
-    if (
-      t.currency !== currency || t.date < month ||
-      resolveFinancialTransactionType({
-        ...t,
-        categoryName: t.category?.name,
-      }) !== "expense"
-    )
-      continue;
-    const name = t.category?.name ?? "Uncategorized";
-    categories.set(
-      name,
-      (categories.get(name) ?? 0) + Math.abs(Number(t.amount)),
-    );
-  }
   const recurringCount = suggestions.filter((s) => s.sourceKind === "recurring_transaction" || s.sourceKind === "installment").length;
-  const thirty = rolling(30);
-  const categoryDeltas = new Map<string, { current: number; previous: number }>();
-  for (const t of transactions) {
-    if (t.currency !== currency || t.date < thirty.previousFrom || resolveFinancialTransactionType({ ...t, categoryName: t.category?.name }) !== "expense") continue;
-    const name = t.category?.name ?? "Uncategorized";
-    const entry = categoryDeltas.get(name) ?? { current: 0, previous: 0 };
-    entry[t.date >= thirty.from ? "current" : "previous"] += Math.abs(Number(t.amount));
-    categoryDeltas.set(name, entry);
-  }
   const monthly = report(30);
   const weekly = report(7);
   const spike = [...categoryDeltas].map(([name, v]) => ({ name, delta: v.current - v.previous, ...v }))
@@ -270,9 +258,9 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     .sort((a, b) => b.delta - a.delta || b.current - a.current)[0] ?? null;
   const monthTotals = totals(month, tomorrow);
   const currencies = [...new Set([currency, ...accounts.map((a) => a.currency), ...reportCurrencies.map((t) => t.currency)])].sort();
-  const reportEntries = transactions.filter(t => t.currency === currency && t.date >= rolling(30).from);
+  const reportEntries = transactions.filter(t => t.currency === currency && t.date >= thirty.from);
   const insightInput = {
-      backfilledDate: recentEntry && recentEntry.date < rolling(30).from ? recentEntry.date.toISOString().slice(0,10) : undefined,
+      backfilledDate: recentEntry && recentEntry.date < thirty.from ? recentEntry.date.toISOString().slice(0,10) : undefined,
       reportEntries: reportEntries.length, importedEntries: reportEntries.filter(t => t.importFileId).length,
       currency,
       hasRecentTransactionActivity: Boolean(recentEntry) || transactions.some(t => t.date >= rolling(7).from),
