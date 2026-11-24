@@ -66,6 +66,7 @@ import {
   inAppNotificationsChangedEvent,
   inAppNotificationsReadEvent,
   loadInAppNotificationFeed,
+  loadInAppNotificationCount,
   markInAppNotificationsRead,
 } from "@/lib/in-app-notifications.client";
 import { TokenUsageDonut } from "@/components/token-usage-donut";
@@ -800,6 +801,7 @@ export function CloverShell({
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
+  const [notificationStatus, setNotificationStatus] = useState<"loading" | "ready" | "error">("loading");
   const [notificationCount, setNotificationCount] = useState(0);
   const [cachedProfileImage, setCachedProfileImage] = useState<string | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
@@ -1181,19 +1183,8 @@ export function CloverShell({
       });
     }
 
-    if (notificationCount > 0) {
-      setNotificationCount(0);
-      void markInAppNotificationsRead(notifications.map((item) => item.id)).catch(async () => {
-        const feed = await loadInAppNotificationFeed(searchWorkspaceId || null, true).catch(() => null);
-        if (feed) setNotificationCount(feed.count);
-      });
-    }
-    if (notifications.length === 0) {
-      void loadInAppNotificationFeed(searchWorkspaceId || null, true).then((feed) => {
-        setNotifications(feed.notifications);
-        setNotificationCount(feed.count);
-      }).catch(() => null);
-    }
+    setNotifications([]);
+    setNotificationStatus("loading");
     setOpenMenu("notifications");
   };
 
@@ -1517,28 +1508,54 @@ export function CloverShell({
   }, [searchWorkspaceId]);
 
   useEffect(() => {
-    let cancelled = false;
+    setNotificationCount(0);
+    setNotifications([]);
+  }, [searchWorkspaceId, user?.id]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    const userId = user.id;
+    let version = 0, countVersion = 0;
+    let markOnOpen = isNotificationsActive;
     const loadNotifications = async (fresh = false) => {
+      const run = ++version, countRun = ++countVersion;
       try {
+        if (!isNotificationsActive) {
+          const count = await loadInAppNotificationCount(userId, searchWorkspaceId || null, fresh);
+          if (countRun === countVersion) setNotificationCount(count);
+          return;
+        }
         const feed = await loadInAppNotificationFeed(searchWorkspaceId || null, fresh);
-        if (!cancelled) {
-          setNotifications(feed.notifications);
-          setNotificationCount(feed.count);
+        if (run !== version) return;
+        setNotifications(feed.notifications);
+        if (countRun === countVersion) setNotificationCount(feed.count);
+        setNotificationStatus("ready");
+        const markOpened = markOnOpen;
+        markOnOpen = false;
+        if (markOpened && feed.count) {
+          const read = new Set(feed.readIds);
+          const ids = feed.notifications.filter(item => !read.has(item.id)).map(item => item.id);
+          await markInAppNotificationsRead(ids);
         }
       } catch {
-        if (!cancelled) {
-          setNotifications([]);
-          setNotificationCount(0);
-        }
+        if (run === version && isNotificationsActive) setNotificationStatus("error");
       }
     };
 
-    void loadNotifications();
-    const refresh = () => void loadNotifications(true);
-    const markRead = () => setNotificationCount(0);
+    void loadNotifications(isNotificationsActive);
+    const refresh = () => { if (!document.hidden) void loadNotifications(true); };
+    const refreshReadCount = (event: Event) => {
+      const run = ++countVersion;
+      const update = (event as CustomEvent<{ count: number; workspaceId: string }>).detail;
+      if (update && searchWorkspaceId && update.workspaceId === searchWorkspaceId) {
+        setNotificationCount(update.count);
+        return;
+      }
+      void loadInAppNotificationCount(userId, searchWorkspaceId || null, true)
+        .then(count => { if (run === countVersion) setNotificationCount(count); }).catch(() => {});
+    };
     window.addEventListener(inAppNotificationsChangedEvent, refresh);
-    window.addEventListener(inAppNotificationsReadEvent, markRead);
+    window.addEventListener(inAppNotificationsReadEvent, refreshReadCount);
     window.addEventListener("focus", refresh);
     const usageRefreshTimer = window.setInterval(refresh, 60_000);
     let importRefreshTimer: number | null = null;
@@ -1547,15 +1564,15 @@ export function CloverShell({
       importRefreshTimer = window.setTimeout(refresh, 700);
     });
     return () => {
-      cancelled = true;
+      version++; countVersion++;
       window.removeEventListener(inAppNotificationsChangedEvent, refresh);
-      window.removeEventListener(inAppNotificationsReadEvent, markRead);
+      window.removeEventListener(inAppNotificationsReadEvent, refreshReadCount);
       window.removeEventListener("focus", refresh);
       window.clearInterval(usageRefreshTimer);
       if (importRefreshTimer) window.clearTimeout(importRefreshTimer);
       unsubscribeImportActivity();
     };
-  }, [searchWorkspaceId]);
+  }, [searchWorkspaceId, user?.id, isNotificationsActive]);
 
   useEffect(() => {
     document.body.dataset.cloverShellReady = "true";
@@ -2343,7 +2360,7 @@ export function CloverShell({
                   </div>
                 ))
               ) : (
-                <div className="sidebar-popover__empty">You’re all caught up. New product updates will show here.</div>
+                <div className="sidebar-popover__empty">{notificationStatus === "loading" ? "Loading notifications…" : notificationStatus === "error" ? "Couldn’t load notifications." : "You’re all caught up. New product updates will show here."}</div>
               )}
             </div>
           </div>,

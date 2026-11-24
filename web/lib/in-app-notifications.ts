@@ -53,8 +53,8 @@ export const notifyInAppNotificationsChanged = () => {
   }
 };
 
-export const notifyInAppNotificationsRead = () => {
+export const notifyInAppNotificationsRead = (feed?: Pick<InAppNotificationFeed, "workspaceId" | "count"> | null) => {
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(IN_APP_NOTIFICATIONS_READ_EVENT));
+    window.dispatchEvent(new CustomEvent(IN_APP_NOTIFICATIONS_READ_EVENT, { detail: feed && { count: feed.count, workspaceId: feed.workspaceId } }));
   }
 };

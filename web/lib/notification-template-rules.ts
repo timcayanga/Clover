@@ -239,30 +239,24 @@ export function notificationValues(
     actionUrl: path ? new URL(path, origin).toString() : "",
   };
 }
-export function applyInAppTemplates(
-  items: InAppNotification[],
-  templates: NotificationTemplateView[],
-) {
-  return items.flatMap((item) => {
-    const trigger = triggerForNotification(item);
-    if (!trigger) return [item];
-    return templates
-      .filter(
-        (t) => t.triggerKey === trigger && t.enabled && t.inApp && !t.archived,
-      )
-      .map((t) => {
-        const values = notificationValues(item);
-        return {
-          ...item,
-          id: t.key === trigger ? item.id : `${item.id}:template:${t.key}`,
-          title: renderNotificationText(t.title, values),
-          message: renderNotificationText(t.body, values),
-          ctaLabel: item.href
-            ? renderNotificationText(t.ctaLabel, values)
-            : null,
-        };
-      });
-  });
+export function inAppTemplateVariants(item: Pick<InAppNotification, "id">, templates: NotificationTemplateView[]) {
+  const trigger = triggerForNotification(item);
+  if (!trigger) return [{ id: item.id, template: null }];
+  return templates.filter(t => t.triggerKey === trigger && t.enabled && t.inApp && !t.archived)
+    .map(template => ({ id: template.key === trigger ? item.id : `${item.id}:template:${template.key}`, template }));
+}
+
+export function renderInAppVariant(item: InAppNotification, id: string, template: NotificationTemplateView | null) {
+  if (!template) return item;
+  const values = notificationValues(item);
+  return { ...item, id, title: renderNotificationText(template.title, values),
+    message: renderNotificationText(template.body, values),
+    ctaLabel: item.href ? renderNotificationText(template.ctaLabel, values) : null };
+}
+
+export function applyInAppTemplates(items: InAppNotification[], templates: NotificationTemplateView[]) {
+  return items.flatMap(item => inAppTemplateVariants(item, templates)
+    .map(({ id, template }) => renderInAppVariant(item, id, template)));
 }
 export function eligibleNotificationEmail(
   template: NotificationTemplateView,

@@ -613,9 +613,9 @@ async function handle(
         if (body.action === "dismiss") await prisma.inAppNotificationDismissal.createMany(records);
         else await prisma.inAppNotificationRead.createMany(records);
         const refreshed = await loadActiveInAppNotificationFeed(user, workspaceId);
-        return reply({ notifications: refreshed.notifications, count: refreshed.unreadCount, readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: user.id, notificationKey: { in: refreshed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(row => row.notificationKey) });
+        return reply({ notifications: refreshed.notifications, count: refreshed.unreadCount, readIds: refreshed.readIds });
       }
-      return reply({ notifications: feed.notifications, count: feed.unreadCount, readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: user.id, notificationKey: { in: feed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(row => row.notificationKey) });
+      return reply({ notifications: feed.notifications, count: feed.unreadCount, readIds: feed.readIds });
     }
     if (operation === "options") {
       const filtering = url.searchParams.get("context") === "filters";

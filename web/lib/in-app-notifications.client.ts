@@ -23,6 +23,16 @@ export const loadInAppNotificationFeed = async (workspaceId?: string | null, fre
   return response.json;
 };
 
+export async function loadInAppNotificationCount(userId: string, workspaceId?: string | null, fresh = false) {
+  const key = `${notificationCachePrefix}count:${JSON.stringify([userId, workspaceId])}`;
+  if (fresh) clearJsonRequestCache(key);
+  const response = await fetchJsonOnce<{ count: number }>({
+    key, route: "/api/notifications/count", workspaceId, input: "/api/notifications/count", cacheTtlMs: 30_000,
+  });
+  if (!response.ok || !response.json) throw new Error("Unable to load notification count.");
+  return response.json.count;
+}
+
 export const dismissInAppNotifications = async (input: { ids?: string[]; dismissAll?: boolean }) => {
   const response = await fetch("/api/notifications", {
     method: "POST",
@@ -46,7 +56,7 @@ export const markInAppNotificationsRead = async (ids: string[]) => {
   const payload = (await response.json().catch(() => null)) as InAppNotificationFeed | { error?: unknown } | null;
   if (!response.ok) throw new Error("Unable to mark notifications as read.");
   clearJsonRequestCache(notificationCachePrefix);
-  notifyInAppNotificationsRead();
+  notifyInAppNotificationsRead(payload as InAppNotificationFeed);
   return payload as InAppNotificationFeed;
 };
 

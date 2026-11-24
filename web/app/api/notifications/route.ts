@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
+import { resolveContext } from "./context";
 import {
   buildInAppNotificationCandidates,
   loadActiveInAppNotificationFeed,
+  loadUnreadNotificationCount,
 } from "@/lib/in-app-notifications.server";
 import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
-import { isAdminOnlyDataError, isUnauthorizedDataError } from "@/lib/transient-data";
 
 export const dynamic = "force-dynamic";
 
@@ -27,16 +27,6 @@ const dismissPayloadSchema = z
     }
   });
 
-const resolveContext = async () => {
-  try {
-    return await resolveBudgetingWorkspace();
-  } catch (error) {
-    if (isUnauthorizedDataError(error)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (isAdminOnlyDataError(error)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    throw error;
-  }
-};
-
 export async function GET() {
   const context = await resolveContext();
   if (context instanceof NextResponse) return context;
@@ -47,7 +37,7 @@ export async function GET() {
   const feed = await loadActiveInAppNotificationFeed(context.user, context.workspaceId);
   return NextResponse.json({
     notifications: feed.notifications,
-    readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: context.user.id, notificationKey: { in: feed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(item => item.notificationKey),
+    readIds: feed.readIds,
     count: feed.unreadCount,
     workspaceId: context.workspaceId,
   });
@@ -88,11 +78,11 @@ export async function POST(request: Request) {
   }
 
   const feed = parsed.data.dismissAll || parsed.data.markRead
-    ? { notifications: [], unreadCount: 0 }
+    ? { notifications: [], unreadCount: parsed.data.dismissAll ? 0 : await loadUnreadNotificationCount(context.user, context.workspaceId), readIds: [] }
     : await loadActiveInAppNotificationFeed(context.user, context.workspaceId);
   return NextResponse.json({
     notifications: feed.notifications,
-    readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: context.user.id, notificationKey: { in: feed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(item => item.notificationKey),
+    readIds: feed.readIds,
     count: feed.unreadCount,
     workspaceId: context.workspaceId,
   });
