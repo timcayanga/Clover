@@ -1,3 +1,5 @@
+import {finishReceiptRead} from "../../shared/receipt-refinement";
+import {publishSavedBill} from "./bill-entry-events";
 import { mergePeople, PeopleSuggestions, type SavedPerson } from "./split-people-field";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
@@ -18,19 +20,19 @@ import { AddEntryMethods } from "./add-entry-methods";
 
 import { removeUploadCopy } from "./upload";
 import { uploadSelectedFile } from "./upload-selected-file";
-import { refreshScreen } from "./screen-refresh";
+
 import { EntryOverlay } from "./entry-overlay";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "./session";
 import { Body, Field, Notice, Screen, Icon, CategoryMark, useTheme } from "./ui";
-import { PlanAction, PlanHeader, usePlanData } from "./plan-ui";
+import { PlanAction, PlanHeader, Progress, usePlanData } from "./plan-ui";
 import { Text } from "./app-text";
 import { AccountTypeMark } from "./account-type-mark";
 import { ChoiceField } from "./transaction-entry";
 
 import { currencyMark } from "../../shared/currency-mark";
 
-type Bill = {
+export type SavedBill = {
   id: string;
   title: string;
   note: string;
@@ -68,7 +70,7 @@ const emptyGroupOptions = {circlePeople: [] as SavedPerson[], groups: [] as Spli
 
 type BillEntryProps = {
   onClose: () => void;
-  onSaved: (bill: Bill) => void;
+  onSaved: (bill: SavedBill) => void;
   sourceTransaction?: Transaction | null;
   initialMethod?: "manual" | "upload";
   context?: { circleId?: string; group?: SplitGroup; person?: string; currency?: string };
@@ -76,31 +78,11 @@ type BillEntryProps = {
 
 const OpenBillEditor = createContext<((props: BillEntryProps) => void) | null>(null);
 
-type PendingBill = { id:number; workspace:string; title:string; status:string; action?:()=>void };
-const PendingBills = createContext<PendingBill[]>([]);
-const UpdatePendingBills = createContext<React.Dispatch<React.SetStateAction<PendingBill[]>> | null>(null);
-
-export function usePendingBillRows() {
-  const {profileId} = useSession();
-  return useContext(PendingBills).filter(row => row.workspace === profileId);
-}
-
-export function PendingBillRows() {
-  const {colors} = useTheme();
-  const rows = usePendingBillRows();
-  return <>{rows.map(row =>
-    <Pressable key={row.id} disabled={!row.action} accessibilityRole={row.action ? "button" : undefined}
-      onPress={row.action} style={{padding:12,gap:4,borderBottomWidth:1,borderColor:colors.line}}>
-      <Text style={{color:colors.ink,fontFamily:"Poppins-SemiBold"}}>{row.title}</Text>
-      <Text accessibilityLiveRegion="polite" style={{color:row.action ? colors.teal : colors.muted}}>{row.status}</Text>
-    </Pressable>)}</>;
-}
-
 export function BillEntryProvider({ children }: {children: ReactNode}) {
+  const {profileId} = useSession();
   const [entries, setEntries] = useState<{id: number; props: BillEntryProps}[]>([]);
   const [active, setActive] = useState<number | null>(null);
   const sequence = useRef(0);
-  const [pending, setPending] = useState<PendingBill[]>([]);
   function open(props: BillEntryProps) {
     const id = ++sequence.current;
     setEntries(previous => [...previous, {id, props}]);
@@ -111,11 +93,11 @@ export function BillEntryProvider({ children }: {children: ReactNode}) {
     setEntries(previous => previous.filter(entry => entry.id !== id));
     setActive(previous => previous === id ? null : previous);
   }
-  return <UpdatePendingBills.Provider value={setPending}><PendingBills.Provider value={pending}><OpenBillEditor.Provider value={open}>{children}
-    {entries.map(({id, props}, index) => <HostedBillEditor jobId={id} key={id} {...props} visible={active === id}
-      offset={index * 54} setVisible={value => setActive(previous => value ? id : previous === id ? null : previous)}
-      onClose={() => close(id)} onSaved={bill => { close(id); props.onSaved(bill); void refreshScreen("/split-bills"); }} />)}
-  </OpenBillEditor.Provider></PendingBills.Provider></UpdatePendingBills.Provider>;
+  return <OpenBillEditor.Provider value={open}>{children}
+    {entries.map(({id, props}, index) => <HostedBillEditor key={id} {...props} visible={active === id}
+      offset={index * 66} setVisible={value => setActive(previous => value ? id : previous === id ? null : previous)}
+      onClose={() => close(id)} onSaved={bill => { close(id); publishSavedBill(profileId,bill); props.onSaved(bill); }} />)}
+  </OpenBillEditor.Provider>;
 }
 
 export function BillEditor(props: BillEntryProps) {
@@ -127,8 +109,8 @@ export function BillEditor(props: BillEntryProps) {
   return null;
 }
 
-export function HostedBillEditor({ jobId, sourceTransaction, context, initialMethod, onClose, onSaved, visible, setVisible, offset = 0 }: BillEntryProps & {
-  jobId?:number; visible: boolean; offset?: number; setVisible: (value: boolean) => void;
+export function HostedBillEditor({ sourceTransaction, context, initialMethod, onClose, onSaved, visible, setVisible, offset = 0 }: BillEntryProps & {
+  visible: boolean; offset?: number; setVisible: (value: boolean) => void;
 }) {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollViewInstance|null>(null);
@@ -274,6 +256,7 @@ export function HostedBillEditor({ jobId, sourceTransaction, context, initialMet
       retryFile.current = file;
 
       if (!alive.current) return;
+      receiptRequest.current?.abort();
       setUploaded(0);
       setReading(true);
       setVisible(false);
@@ -352,7 +335,11 @@ export function HostedBillEditor({ jobId, sourceTransaction, context, initialMet
           const controller = new AbortController();
           receiptRequest.current = controller;
           setDetailStatus("reading");
-          return session.request<typeof result>(path + "&refine=" + result.draftId, {method:"POST",signal:controller.signal}).then(final => {
+          return finishReceiptRead(
+            signal => session.request<typeof result>(path + "&refine=" + result.draftId, {method:"POST",signal}),
+            signal => session.request<typeof result>(path + "&status=" + result.draftId, {method:"POST",signal}),
+            controller.signal,
+          ).then(final => {
             if (!alive.current || refinementVersion.current !== version) return;
             if (final.draftId !== result.draftId ||
                 final.preview.total !== p.total || final.preview.currency !== p.currency || final.preview.merchantName !== p.merchantName) throw Error("Receipt details changed. Retry the check.");
@@ -545,12 +532,17 @@ export function HostedBillEditor({ jobId, sourceTransaction, context, initialMet
               settlementStatus: "open",
             },
           }
-        : await session.request<{ bill: Bill }>(
+        : await session.request<{ bill: SavedBill }>(
             `split-bills?workspaceId=${encodeURIComponent(session.profileId)}`,
             { method: "POST", body: JSON.stringify(payload) },
           );
       if (alive.current) onSaved(result.bill);
     } catch (e) {
+      if (receipt && !sourceTransaction && !session.demo) {
+        const path = `split-bills?workspaceId=${encodeURIComponent(session.profileId)}&receiptAttempt=${encodeURIComponent(attemptId.current)}`;
+        const recovered = await session.request<{bill:SavedBill|null}>(path,{},true).catch(() => null);
+        if (alive.current && recovered?.bill) { onSaved(recovered.bill); return; }
+      }
       setError(e instanceof Error ? e.message : "Unable to create bill.");
     } finally {
       inFlight.current = false;
@@ -563,15 +555,13 @@ export function HostedBillEditor({ jobId, sourceTransaction, context, initialMet
       void save();
     }
   }, [receipt, reading, busy]);
-  const setPending = useContext(UpdatePendingBills);
-  const inline = Boolean(jobId && setPending && !visible && (receipt || retryFile.current || reading) && standalone && !context?.group && !context?.person);
   const processing = reading || detailStatus === "reading";
   useEffect(() => {
     setSlowRead(false);
-    if (!inline || !processing) return;
+    if (visible || !processing) return;
     const timer = setTimeout(()=>setSlowRead(true),30000);
     return () => clearTimeout(timer);
-  },[inline,processing,uploaded,detailStatus]);
+  },[visible,processing,uploaded,detailStatus]);
   const canStop = processing && slowRead;
   const needsAction = canStop || detailStatus === "retry" || Boolean(error && !reading && !busy);
   const retryAction = useRef<()=>void>(()=>{});
@@ -584,20 +574,13 @@ export function HostedBillEditor({ jobId, sourceTransaction, context, initialMet
   const status = canStop ? "Taking longer than usual · Stop reading" : reading ? (uploaded > 0 && uploaded < 1 ? `Uploading receipt · ${Math.round(uploaded*100)}%` : "Extracting receipt details…")
     : detailStatus === "reading" ? "Checking receipt items…" : detailStatus === "retry" ? "Retry receipt check ›"
     : needsAction ? error + (retryFile.current ? " · Retry ›" : " · Review ›") : "Saving bill…";
-  useEffect(() => {
-    if (!inline || !setPending || !jobId) return;
-    const row = {id:jobId,workspace:session.profileId,title:receipt && title ? [title,total && [currency,total].join(" ")].filter(Boolean).join(" · ") : "Receipt",status,
-      action:needsAction ? () => retryAction.current() : undefined};
-    setPending(rows=>[...rows.filter(r=>r.id!==jobId),row]);
-    return () => setPending(rows=>rows.filter(r=>r.id!==jobId));
-  },[inline,setPending,jobId,session.profileId,title,total,currency,receipt,status,needsAction]);
-  if (inline) return null;
-  if (!visible) return <View style={{ position: "absolute", left: 12, right: 12, bottom: insets.bottom + 74 + offset, zIndex: 100 }}>
-    <Pressable accessibilityRole="button" disabled={reading || busy} onPress={() => detailStatus === "retry" ? retryDetails.current() : setVisible(true)} style={{ backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 }}>
-      <Text style={{ color: error ? "#a31d35" : colors.ink }}>{reading ? (uploaded > 0 && uploaded < 1 ? "Uploading receipt…" : "Extracting receipt details…") : detailStatus === "reading" ? "Checking receipt items…" : detailStatus === "retry" ? "Retry receipt check ›" : busy ? "Saving bill…" : error ? "Receipt needs attention ›" : "Review receipt draft ›"}</Text>
-      {reading && <View accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:Math.round(uploaded*100)}} style={{ height:4,backgroundColor:colors.line }}>
-        <View style={{height:4,width:`${Math.round(uploaded*100)}%`,backgroundColor:colors.teal}}/>
-      </View>}
+  if (!visible) return <View style={{ position:"absolute", left:12, right:12, bottom:insets.bottom + 74 + offset, zIndex:100 }}>
+    <Pressable accessibilityRole="button" disabled={!needsAction && (processing || busy)}
+      onPress={retryAction.current} style={{backgroundColor:colors.white,borderColor:colors.line,borderWidth:1,borderRadius:12,padding:12,gap:6}}>
+      <Text accessibilityLiveRegion="polite" style={{color:error ? "#a31d35" : colors.ink}}>
+        {processing || busy || needsAction ? status : "Review receipt draft ›"}
+      </Text>
+      {(processing || busy) && <Progress value={uploaded > 0 && uploaded < 1 ? uploaded * 100 : undefined}/>}
     </Pressable>
   </View>;
   return (

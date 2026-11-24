@@ -1,3 +1,4 @@
+import {homeActionRow, homeActionStyle} from "./home-action-style";
 import { useAccessibilityPreferences } from "./accessibility-preferences";
 import { useRef, useState } from "react";
 import { Pressable, ScrollView, type ScrollViewInstance, View } from "react-native";
@@ -94,7 +95,7 @@ export function HomeQuickAccess() {
           ))}
         </View>
       </Card>
-      <View style={{ flexDirection: "row", gap: 12 }}>
+      <View style={homeActionRow}>
         {(["expense", "income"] as const).map((type) => (
           <Pressable
             key={type}
@@ -106,10 +107,7 @@ export function HomeQuickAccess() {
               })
             }
             style={{
-              flex: 1,
-              padding: 14,
-              borderRadius: 20,
-              borderWidth: 1,
+              ...homeActionStyle,
               borderColor: type === "expense" ? "#f3acb6" : "#8fd8ad",
               backgroundColor:
                 type === "expense"

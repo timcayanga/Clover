@@ -15,3 +15,14 @@ export function onContextBillEntry(
     if (!group.size) listeners.delete(scope);
   };
 }
+
+
+type SavedBill = import("./direct-bill-editor").SavedBill;
+const savedListeners = new Set<(profileId:string,bill:SavedBill)=>void>();
+export function publishSavedBill(profileId:string,bill:SavedBill) {
+  for (const listener of savedListeners) listener(profileId,bill);
+}
+export function onBillSaved(listener:(profileId:string,bill:SavedBill)=>void) {
+  savedListeners.add(listener);
+  return () => { savedListeners.delete(listener); };
+}

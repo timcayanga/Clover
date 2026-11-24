@@ -233,12 +233,12 @@ export function PlanAction({
     </Pressable>
   );
 }
-export function Progress({ value }: { value: number }) {
+export function Progress({ value }: { value?: number }) {
   const { colors } = useTheme();
   return (
     <View
       accessibilityRole="progressbar"
-      accessibilityValue={{
+      accessibilityValue={value === undefined ? {text:"Processing"} : {
         min: 0,
         max: 100,
         now: Math.max(0, Math.min(100, value)),
@@ -257,7 +257,7 @@ export function Progress({ value }: { value: number }) {
         end={{ x: 1, y: 0 }}
         style={{
           height: 10,
-          width: `${Math.max(0, Math.min(100, value))}%`,
+          width: value === undefined ? "100%" : `${Math.max(0, Math.min(100, value))}%`,
         }}
       />
     </View>

@@ -4,8 +4,8 @@ import {PaymentDetailsEditor} from "../src/payment-details-editor";
 import {SimplifyAction} from "../src/simplified-debts";
 import { TogetherToolbar } from "../src/together-toolbar";
 import { TogetherEntry } from "../src/together-entry";
-import { onContextBillEntry } from "../src/bill-entry-events";
-import { BillEditor, PendingBillRows, usePendingBillRows } from "../src/direct-bill-editor";
+import { onContextBillEntry, onBillSaved } from "../src/bill-entry-events";
+import { BillEditor } from "../src/direct-bill-editor";
 import { usePageAskScope } from "../src/page-ask-context";
 import { useUser } from "@clerk/expo";
 import { type AccountCardPalette, accountCardPalette } from "../../shared/visual-identity";
@@ -129,7 +129,6 @@ function billListStatus(bill: Bill) {
 }
 
 export default function SplitBills() {
-  const pendingReceipts = usePendingBillRows();
   const params = useLocalSearchParams<{ billId?: string; transactionId?: string }>();
   const session = useSession();
   const { colors, dark } = useTheme();
@@ -151,6 +150,15 @@ export default function SplitBills() {
     reloadBills();
     balance.reload();
   };
+  useEffect(() => onBillSaved((profileId,bill) => {
+    if (profileId !== session.profileId) return;
+    setData(current => ({
+      ...(current ?? sample),
+      bills: [bill, ...(current?.bills ?? []).filter(row => row.id !== bill.id)]
+        .sort((a,b) => b.billDate.localeCompare(a.billDate)),
+    }));
+    if (!session.demo) balance.reload();
+  }), [session.profileId, session.demo, balance.reload, setData]);
   const options = usePlanData("together-options", optionsSample);
   const [paymentDetail, setPaymentDetail] = useState<
     (typeof optionsSample.profiles)[number] | null
@@ -260,15 +268,9 @@ export default function SplitBills() {
         initialMethod={initialMethod}
         sourceTransaction={sourceTransaction}
         onClose={() => { setAdding(false); setSourceTransaction(null); }}
-        onSaved={(bill) => {
+        onSaved={() => {
           setAdding(false);
           setSourceTransaction(null);
-          if (session.demo)
-            setData((current) => ({
-              ...sample,
-              bills: [bill, ...(current?.bills ?? [])],
-            }));
-          else { reload(); options.reload(); }
         }}
       />
   ) : null;
@@ -398,7 +400,7 @@ export default function SplitBills() {
                   <PlanAction title="Try again" onPress={reloadBills} />
                 </>
               ) : !data ? (
-                <><Body>Loading bills…</Body><PendingBillRows /></>
+                <><Body>Loading bills…</Body></>
               ) : (
                 <>
                   <View
@@ -432,13 +434,13 @@ export default function SplitBills() {
                       onChange={setStatusFilter}
                     />
                   ) : null}
-                  {!data.bills.length && !pendingReceipts.length && <View style={{alignItems:"center",gap:6}}>
+                  {!data.bills.length && <View style={{alignItems:"center",gap:6}}>
                     <CloverMascot pose="circles" size={88} />
                     <Text style={{color:colors.ink,fontFamily:"Poppins-SemiBold"}}>No bills yet</Text>
                     <Body>Upload a receipt or add a split bill.</Body>
                   </View>}
                   <SplitBillQuickActions onSelect={method => { setInitialMethod(method); setAdding(true); }} />
-                  <PendingBillRows />
+
                   {data.bills.length ? (
                     data.bills
                       .filter(

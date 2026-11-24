@@ -144,6 +144,14 @@ assert.equal(supportsReceiptCapture(null), false);
 for (const browser of [{userAgent:"Mozilla/5.0 (Macintosh; Intel Mac OS X)",platform:"MacIntel",maxTouchPoints:0},{userAgent:"Mozilla/5.0 (Windows NT 10.0)",platform:"Win32",maxTouchPoints:10}]) assert.equal(supportsReceiptCapture(browser),false,"Desktop, including touch laptops, uses files");
 for (const browser of [{userAgent:"Mozilla/5.0 (iPhone)"},{userAgent:"Mozilla/5.0 (Linux; Android 16)"},{userAgent:"Mozilla/5.0 (Macintosh)",platform:"MacIntel",maxTouchPoints:5}]) assert.equal(supportsReceiptCapture(browser),true,"Phones and iPads retain photo capture");
 async function main() {
+  const {finishReceiptRead} = load("../shared/receipt-refinement.ts");
+  let reads = 0;
+  const recovered = await finishReceiptRead(
+    signal => new Promise((_, reject) => signal.addEventListener("abort", () => reject(Error("closed")))),
+    async () => ({refining:++reads === 1, draftId:"same-receipt"}),
+    new AbortController().signal, 1);
+  assert.equal(reads,2);
+  assert.equal(recovered.draftId,"same-receipt");
   // Exercise the installed Expo FormData patch and fetch encoder, including its native bytes() path.
   const {installFormDataPatch} = load("../mobile/node_modules/expo/src/winter/FormData.ts", {}, {Blob});
   const NativeForm = installFormDataPatch(class {constructor(){this._parts=[];}});
@@ -327,17 +335,18 @@ async function main() {
     const captured = {uri:"file:///cache/123.jpg",fileName:"receipt.jpg",mimeType:"image/jpeg"};
     let receiptPreviewed = false;
     let failUploadOnce = false;
+    let loseSaveResponse = false;
+    let deliveredBill;
     let reliableForScopedSplit = false;
     let progressive = false;
     let draftId = "test-draft";
     let finishRefinement, interruptRefinement;
     let printedBillDate = "2026-11-20";
     let visible = true;
-    let pendingRows=[];
-    const updateRows = updater => { pendingRows=updater(pendingRows); };
+
     const {HostedBillEditor} = load("../mobile/src/direct-bill-editor.tsx", {
       "../../shared/currency-mark": load("../shared/currency-mark.ts"),
-      "./screen-refresh":{refreshScreen:async()=>true}, react: {...ui.h,createContext:()=>({}),useContext:()=>updateRows}, "./entry-overlay":{EntryOverlay:"Overlay"}, "react-native-safe-area-context":{useSafeAreaInsets:()=>({bottom:0})}, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
+      "../../shared/receipt-refinement":load("../shared/receipt-refinement.ts"), "./bill-entry-events":{publishSavedBill:()=>{}}, react: {...ui.h,createContext:()=>({}),useContext:()=>null}, "./entry-overlay":{EntryOverlay:"Overlay"}, "react-native-safe-area-context":{useSafeAreaInsets:()=>({bottom:0})}, "react/jsx-runtime": jsx, "react-native": {Platform:{OS:platform},View:"View",TextInput:"Input",Pressable:"Button"},
       "@clerk/expo": {useUser:()=>({user:{fullName:"Personal profile name"}})},
       "expo-crypto": {randomUUID:require("node:crypto").randomUUID}, "expo-image-picker": {requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:async()=>({canceled:false,assets:[captured]}),launchImageLibraryAsync:async()=>({canceled:false,assets:[captured]})}, "expo-document-picker": {getDocumentAsync:async()=>({canceled:false,assets:[{...captured,name:"receipt.jpg"}]})},
       "./split-people-field": {...load("../mobile/src/split-people-field.tsx", {"react/jsx-runtime":jsx,"react-native":{},"./app-text":{},"./ui":{}}), PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": load("../shared/split-bill-experience.ts"),
@@ -345,6 +354,7 @@ async function main() {
       "./ai-consent": {useCloudAiConsent:()=>({ensure:async()=>true,prompt:null})},
       "./upload-selected-file": load("../mobile/src/upload-selected-file.ts", {"expo-crypto":{}, "./offline/file-storage":{}, "../../shared/receipt-upload":{receiptMultipartLimit:1572864}, "react-native":{Platform:{OS:platform}}, "./upload":loadPhotoUpload(platform)}),
       "./session": {useSession:()=>({profileId:"profile",request:async (_path, opts)=>{if (_path.startsWith("split-bill-receipts/preview")) {
+          if (_path.includes("&status=")) return {refining:true};
           if (_path.includes("&refine=")) return new Promise((resolve,reject) => { finishRefinement = resolve; interruptRefinement = reject; });
           if (failUploadOnce) { failUploadOnce=false; throw Error("Connection interrupted during upload"); }
           const {body,boundary} = await convertFormDataAsync(opts.body);
@@ -355,14 +365,17 @@ async function main() {
           receiptPreviewed=true;
           return {...(progressive ? {draftId,refining:true,attemptId:"test-attempt"} : {}),reliableForScopedSplit,receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:printedBillDate,currency:"PHP",serviceCharge:"1.25",items:[{description:"Bread",amount:"10.75"}]}};
         }
-        saved.push(JSON.parse(opts.body)); return {bill:{id:"saved"}};}})},
+        if (_path.includes("receiptAttempt=")) return {bill:{id:"recovered"}};
+        saved.push(JSON.parse(opts.body));
+        if (loseSaveResponse) throw Error("Lost save response");
+        return {bill:{id:"saved"}};}})},
       "./ui": {useTheme:()=>({colors:{}}),Field:"Field",Screen:"Screen",Body:"Body",CategoryMark:"CategoryMark"},
-      "./plan-ui": {PlanHeader:"Header",PlanAction:"Action",usePlanData:()=>({})}, "./app-text":{Text:"Text"},
+      "./plan-ui": {PlanHeader:"Header",PlanAction:"Action",Progress:"Progress",usePlanData:()=>({})}, "./app-text":{Text:"Text"},
       "./account-type-mark": {AccountTypeMark:"Account"}, "./transaction-entry":{ChoiceField:"Choice"},
     });
     const context = {circleId:"trip",currency:"PHP",group:{id:"group",name:"Trip",recorderName:"Alex",members:[
       {id:"m1",name:"Bea"},{id:"m2",name:"Alex"},{id:"m3",name:"Carlo"}]}};
-    const render = () => nodes(ui.render(() => HostedBillEditor({jobId:1, context, visible, setVisible:value=>visible=value, onSaved:()=>{}, onClose:()=>{}})));
+    const render = () => nodes(ui.render(() => HostedBillEditor({jobId:1, context, visible, setVisible:value=>visible=value, onSaved:bill=>{deliveredBill=bill;}, onClose:()=>{}})));
     const control = (key,value) => render().find(n=>n.props[key]===value);
     assert.ok(control("title","Add Expense"));
     assert.ok(control("accessibilityLabel","Remove Bea"));
@@ -464,23 +477,24 @@ async function main() {
     control("kind","split").props.onUploadSource("file");
     await flush();
     assert.equal(visible,false);
-    render();
-    assert.match(pendingRows[0].status,/Retry/);
-    pendingRows[0].action();
+    const dock = () => render().find(n=>n.props.accessibilityRole==="button");
+    assert.match(text(dock()),/Retry/);
+    dock().props.onPress();
     await flush();render();
-    assert.equal(pendingRows.length,1);
-    assert.match(pendingRows[0].title,/Bakery/);
+    assert.ok(render().some(n=>n.type==="Progress"),"Refinement stays in the bottom progress dock");
     interruptRefinement(Error("Connection interrupted"));
     await flush(); render();
-    assert.match(pendingRows[0].status,/Retry/);
-    pendingRows[0].action();
+    assert.match(text(dock()),/Retry/);
+    dock().props.onPress();
+    loseSaveResponse=true;
     finishRefinement({draftId,refining:false,preview:{merchantName:"Bakery",currency:"PHP",
-      total:"12.00",billDate:printedBillDate,serviceCharge:"1.25",items:[{description:"Bread",amount:"10.75"}]}});
+      total:"12.00",billDate:printedBillDate,serviceCharge:"1.25",items:[{description:"Bread",amount:"5.00"},{description:"Coffee",amount:"5.75"}]}});
     await flush();render();await flush();render();
     assert.equal(visible,false);
     assert.equal(saved.length,5,"Main Split Bills saves the progressive receipt without opening the editor");
+    assert.equal(deliveredBill.id,"recovered","Lost save response recovers the single committed receipt");
     assert.equal(saved[4].expense.splitOnly,true);
-    assert.deepEqual(saved[4].reviewedItems.map(r=>r.amount),["10.75","1.25"]);
+    assert.deepEqual(saved[4].reviewedItems.map(r=>r.amount),["5.00","5.75","1.25"]);
     ui.stop();
   }
   const {receiptServiceChargeItem} = load("../shared/split-bill-experience.ts");
