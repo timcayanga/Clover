@@ -162,7 +162,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     const amount = cleanAmount ?? (amountWithEdgeNoise ? readAmount(amountWithEdgeNoise[1]) : null);
     recoveredEdgeNoise ||= cleanAmount === null && amount !== null;
     if (amount === null) {
-      unreadableFinal ||= final;
+      unreadableFinal ||= final || Boolean(posLabel && !inTaxSummary);
       garbledFinalAmount ||= final && /^\/\s*\d/u.test(amountText) && /\p{L}/u.test(amountText);
       continue;
     }

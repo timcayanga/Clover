@@ -106,3 +106,5 @@ assert.deepEqual(readReceiptSettlementEvidence(afterRounding.replace("0.05", "0.
 assert.deepEqual(readReceiptSettlementEvidence(receipt("Amount To Be Paid 26.80", "Cash received 50.00", "Change 23.20")), {kind:"payable",amount:26.80});
 assert.deepEqual(readReceiptSettlementEvidence(receipt("Total (Eat In) RM24.00", "Cash RM30.00", "Change RM6.00", "Total-Excl-GST RM22.65")), {kind:"payable",amount:24});
 assert.deepEqual(readReceiptSettlementEvidence(afterRounding + "\nGrand Total 79.00"), {kind:"conflict"});
+
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Total 72.93", "TTL ATF RND ?", "Cash 72.93", "Change 0.00")), { kind: "conflict" });

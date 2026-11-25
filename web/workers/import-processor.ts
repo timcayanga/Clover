@@ -12199,11 +12199,13 @@ const processImportFileTextImpl = async (
       if (source) await checkMultipleReceipts(source);
     }
   }
-  const purchaseEvidence = [
+  // OCR and the backup extractor can return the exact same transcript.
+  // Keep every distinct reading and every repeated line inside it.
+  const purchaseEvidence = [...new Set([
     opticalPurchaseText,
     ...purchaseTranscripts,
     openAiParsed?.receiptDetails?.parser_evidence?.source_text,
-  ].filter(Boolean).join("\n");
+  ].filter(Boolean))].join("\n");
   await checkBankingScreenshot(purchaseEvidence);
   // A completed bank proof can print an invoice reference for its recipient.
   // Require independent source-to-row verification; the word "successful"
