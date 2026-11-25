@@ -3,12 +3,13 @@ import { z } from "zod";
 import { requireAdminAuth } from "@/lib/admin";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { learningVerificationResponse } from "@/lib/learning-verification-response.server";
-import { assertLearningVerificationEnvironment, startLearningVerification, prepareLearningVerificationCheckpoints, repairLearningVerificationReference, inspectLearningVerification, inspectLearningVerificationStatus, inspectLearningVerificationDigest, repairVerificationBpiCheckpoint, previewLearningBatchPreservation, startLearningVerificationBatch } from "@/lib/staging-learning-verification";
+import { stagingManifestTables, assertLearningVerificationEnvironment, startLearningVerification, prepareLearningVerificationCheckpoints, repairLearningVerificationReference, inspectLearningVerification, inspectLearningVerificationStatus, inspectLearningVerificationDigest, repairVerificationBpiCheckpoint, previewLearningBatchPreservation, startLearningVerificationBatch } from "@/lib/staging-learning-verification";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
-const input = z.object({ runId: z.string().uuid(), action: z.enum(["start", "start-batch", "inspect", "inspect-status", "inspect-digest", "inspect-own", "inspect-own-digest", "prepare-checkpoints", "repair-reference", "preview-bpi-checkpoint", "repair-bpi-checkpoint", "preview-batch-preservation"]), runIds: z.array(z.string().uuid()).min(1).max(32).optional(), expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict().superRefine((value, context) => {
-  if ((["start-batch", "preview-batch-preservation"].includes(value.action)) !== Boolean(value.runIds) || (value.runIds && new Set(value.runIds).size !== value.runIds.length)) context.addIssue({ code: "custom", message: "Only batch actions accept unique staging run IDs." });
+const input = z.object({ runId: z.string().uuid(), action: z.enum(["start", "start-batch", "inspect", "inspect-status", "inspect-digest", "inspect-own", "inspect-own-digest", "prepare-checkpoints", "repair-reference", "preview-bpi-checkpoint", "repair-bpi-checkpoint", "preview-batch-preservation", "preview-batch-preservation-table"]), table: z.enum(stagingManifestTables).optional(), runIds: z.array(z.string().uuid()).min(1).max(32).optional(), expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict().superRefine((value, context) => {
+  if ((["start-batch", "preview-batch-preservation", "preview-batch-preservation-table"].includes(value.action)) !== Boolean(value.runIds) || (value.runIds && new Set(value.runIds).size !== value.runIds.length)) context.addIssue({ code: "custom", message: "Only batch actions accept unique staging run IDs." });
+  if ((value.action === "preview-batch-preservation-table") !== Boolean(value.table)) context.addIssue({ code: "custom", message: "Single-table preservation requires a supported table." });
   if ((value.action === "repair-bpi-checkpoint") !== Boolean(value.expectedPlanHash)) context.addIssue({ code: "custom", message: "Only checkpoint repair requires the reviewed plan hash." });
 });
 export async function POST(request: Request) {
@@ -18,9 +19,9 @@ export async function POST(request: Request) {
     assertLearningVerificationEnvironment();
     assertTrustedRequestOrigin(request);
     const admin = await requireAdminAuth("operate");
-    const { runId, action, expectedPlanHash, runIds } = input.parse(await request.json());
+    const { runId, action, expectedPlanHash, runIds, table } = input.parse(await request.json());
     requestedAction = action;
-    const result = action === "start-batch" ? await startLearningVerificationBatch(runIds!, admin.userId) : action === "preview-batch-preservation" ? await previewLearningBatchPreservation(runIds!, admin.userId) : action === "start" ? await startLearningVerification(runId, admin.userId)
+    const result = action === "start-batch" ? await startLearningVerificationBatch(runIds!, admin.userId) : action === "preview-batch-preservation-table" ? await previewLearningBatchPreservation(runIds!, admin.userId, table) : action === "preview-batch-preservation" ? await previewLearningBatchPreservation(runIds!, admin.userId) : action === "start" ? await startLearningVerification(runId, admin.userId)
       : action === "prepare-checkpoints" ? await prepareLearningVerificationCheckpoints(runId, admin.userId)
       : action === "repair-reference" ? await repairLearningVerificationReference(runId, admin.userId)
       : action === "preview-bpi-checkpoint" || action === "repair-bpi-checkpoint" ? await repairVerificationBpiCheckpoint(runId, admin.userId, expectedPlanHash)

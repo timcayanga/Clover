@@ -20,7 +20,8 @@ const missingCategoryId = (runId: string) => `learning-verification-category-${r
 // Hash complete database rows, including timestamps, raw payloads, statuses and
 // rule counters. Only this run's newly allocated Profile is excluded. A change
 // by another session is reported, never reverted or silently accepted.
-const tables = ["Workspace", "Account", "AccountTombstone", "Category", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "MerchantRule", "AccountRule", "TrainingSignal", "StatementTemplate", "DataQaRun", "DataQaFinding", "ImportFileExtractionCache", "ImportEnrichmentJob", "LearningJob", "DocumentImportPage", "LearningJobAttempt"] as const;
+export const stagingManifestTables = ["Workspace", "Account", "AccountTombstone", "Category", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "MerchantRule", "AccountRule", "TrainingSignal", "StatementTemplate", "DataQaRun", "DataQaFinding", "ImportFileExtractionCache", "ImportEnrichmentJob", "LearningJob", "DocumentImportPage", "LearningJobAttempt"] as const;
+const tables = stagingManifestTables;
 type Manifest = Record<string, { count: number; sha256: string }>;
 const financialTables = new Set<string>(["Account", "AccountTombstone", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "DocumentImportPage"]);
 const readSnapshotTimeout = 240_000;
@@ -76,10 +77,11 @@ async function readManifest(db: Prisma.TransactionClient, selectedTables: readon
   return result;
 }
 
-export async function checkpointPreservationManifest(checkpointId: string, db: Prisma.TransactionClient, excludedWorkspaceIds: string[] = []): Promise<Manifest> {
+export async function checkpointPreservationManifest(checkpointId: string, db: Prisma.TransactionClient, excludedWorkspaceIds: string[] = [], table?: typeof tables[number]): Promise<Manifest> {
   const params: unknown[] = [checkpointId];
   if (excludedWorkspaceIds.length) params.push(excludedWorkspaceIds);
-  const predicates = tables.map(table => {
+  const selected = table ? tables.filter(name => name === table) : tables;
+  const predicates = selected.map(table => {
     const conditions: string[] = [];
     if (table === "AccountStatementCheckpoint") conditions.push('t."id" <> $1');
     if (excludedWorkspaceIds.length) {
@@ -88,7 +90,7 @@ export async function checkpointPreservationManifest(checkpointId: string, db: P
     }
     return conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
   });
-  return readManifest(db, tables, predicates, params);
+  return readManifest(db, selected, predicates, params);
 }
 export async function learningVerificationManifest(workspaceId: string, own = false, db: Prisma.TransactionClient = prisma): Promise<Manifest> {
   const selectedTables = tables.filter(table => !own || financialTables.has(table));
@@ -287,7 +289,7 @@ export async function repairVerificationBpiCheckpoint(runId: string, actor: stri
 }
 
 /** Read-only aggregate: only actor-owned staging QA runs can be excluded. */
-export async function previewLearningBatchPreservation(runIds: string[], actor: string) {
+export async function previewLearningBatchPreservation(runIds: string[], actor: string, table?: typeof tables[number]) {
   assertLearningVerificationEnvironment();
   const workspaces = batchWorkspaceIds(runIds);
   const runs = await Promise.all(runIds.map(id => loadRun(id, actor)));
@@ -296,10 +298,10 @@ export async function previewLearningBatchPreservation(runIds: string[], actor: 
     throw new Error("VERIFICATION_NOT_FOUND");
   }
   return prisma.$transaction(async db => {
-    const preservation = await checkpointPreservationManifest(retainedCheckpointId, db, workspaces);
+    const preservation = await checkpointPreservationManifest(retainedCheckpointId, db, workspaces, table);
     const retainedCheckpoint = await db.accountStatementCheckpoint.findUnique({ where: { id: retainedCheckpointId } });
     return { runIds, excludedProfiles: workspaces, preservation, retainedCheckpoint, ...(batch ? {
-      changedOutsideBatch: Object.keys(batch.baseline).filter(table =>
+      changedOutsideBatch: Object.keys(preservation).filter(table =>
         batch.baseline[table].count !== preservation[table]?.count || batch.baseline[table].sha256 !== preservation[table]?.sha256),
       retainedCheckpointUnchanged: isDeepStrictEqual(batch.retainedCheckpoint, json(retainedCheckpoint)),
     } : {}) };
