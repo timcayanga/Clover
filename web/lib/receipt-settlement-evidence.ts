@@ -2,7 +2,7 @@ import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
-const payable = /^(?:(?:net\s+)?total\s+rounded|(?:grand|bill|net)\s+total|grandtotal|bill amount|due|du|tl|(?:final\s+)?amount\s+(?:due|paid|payable|to\s+pay)|sale\s+amount|total(?:\s+(?:amount|paid|due|payable|bayar|tagihan))?|jumlah\s+bayar|합\s*계|결제금액|合計)(?![\p{L}])/iu;
+const payable = /^(?:(?:net\s+)?total\s+rounded|(?:grand|bill|net)\s+total|grandtotal|bill amount|due|du|tl|(?:final\s+)?amount\s+(?:due|paid|payable|to\s+pay)|sale\s+amount|total(?:\s+sales\s*\(inclusive(?: of)? gst\)|\s+(?:amount|paid|due|payable|bayar|tagihan))?|jumlah\s+bayar|합\s*계|결제금액|合計)(?![\p{L}])/iu;
 const subtotal = /^(?:sub\s*-?\s*total|gross amount)(?![\p{L}])/iu;
 const tender = /^(?:cash(?:\s+(?:tendered|received|paid))?|tendered|amount tendered|tunai|uang diterima)(?![\p{L}])/iu;
 const change = /^(?:change(?:\s+due)?|kembalian|kembali)(?![\p{L}])/iu;
@@ -18,6 +18,7 @@ function readAmount(raw: string) {
   let value = raw.trim().replace(/^(?:[:：=]\s*|\.\s+)/u, "").replace(currencyMark, "").trim();
   const negative = /^(?:-|−|\()/u.test(value);
   value = value.replace(/^(?:[-−+]\s*|\()/u, "").replace(/\)$/u, "").replace(currencyMark, "");
+  if (/^\.\d{2}$/.test(value)) value = "0" + value;
   if (!/^\d+(?:[., ]\s*\d+)*$/u.test(value)) return null;
   value = value.replace(/([.,])\s+(?=\d)/gu, "$1");
   if (value.includes(" ") && !/^\d{1,3}(?: \d{3})+(?:[.,]\d{1,2})?$/u.test(value)) return null;

@@ -69,6 +69,19 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
     if (expected && !outstanding && [...settled, ...billed].every(row => invoiceMoneyKey(row[1]) === expected)) return null;
     return amountPaid && outstanding ? "unpaid_invoice" : "unverified_invoice";
   }
+  // Some MYR tills print change below one ringgit without a leading zero.
+  // Require one explicitly denominated total, cash and change in that order.
+  if (/^total sales[ \t]*\(inclusive(?: of)? gst\)[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\nCASH[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\nCHANGE[ \t]*:?[ \t]*RM[ \t]*\.\d{2}$/im.test(text)) {
+    const settlement = readReceiptSettlementEvidence(text);
+    const tenders = readReceiptTenders(text);
+    const cash = tenders.find(entry => entry.method === "cash");
+    const change = tenders.find(entry => entry.method === "change");
+    if (!amountPaid && !hasPositiveAmount(text, "amount due") && settlement?.kind === "payable" &&
+        settlement.amount > 0 && tenders.length === 2 && cash && change &&
+        Math.round(cash.amount * 100) - Math.round(change.amount * 100) === Math.round(settlement.amount * 100) &&
+        readPrintedReceiptCurrency(text)?.kind !== "conflict") return null;
+    return "unverified_invoice";
+  }
   if (!amountPaid && !hasPositiveAmount(text, "amount due") && /^cash[ \t]*[:：]?[ \t]*\d/im.test(text)) {
     const settlement = readReceiptSettlementEvidence(text);
     const tenders = readReceiptTenders(text);

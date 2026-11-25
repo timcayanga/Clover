@@ -77,3 +77,9 @@ assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice), null);
 assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice.replace("Cash: 20.00", "Cash: 19.00")), "unverified_invoice");
 assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice + "\nOutstanding balance RM 1.00"), "unpaid_invoice");
 assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice.replace("Change: 0.00", "")), "unverified_invoice");
+
+const speedMartInvoice = "Invoice No: 18314/102/T0422\nTotal Sales (Inclusive GST) RM 9.90\nCASH RM 10.00\nCHANGE RM .10";
+assert.equal(classifyUnsettledPurchaseDocument(speedMartInvoice), null);
+assert.equal(classifyUnsettledPurchaseDocument(speedMartInvoice.replace(".10", ".20")), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(speedMartInvoice + "\nOutstanding balance RM 1.00"), "unpaid_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(speedMartInvoice + "\nVisa RM 1.00"), "unverified_invoice");
