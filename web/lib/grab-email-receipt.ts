@@ -112,20 +112,37 @@ function oneRegionalRide(text: string, fullText: string): ParsedImportRow {
     'Fare $1\n',
   ) : breakdown;
   const breakdownLines = orderedBreakdown.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  const items = breakdownLines.filter((line, index) =>
-    !(idr && /^To remove Ride Cover for future rides, opt out here\.$/i.test(line) && /^Ride Cover opt-in\s/i.test(breakdownLines[index - 1] ?? ''))
-  ).map(line => {
+  const items: Array<{ label: string; amount: number }> = [];
+  let includedStopAmount: number | null = null;
+  for (let i = 0; i < breakdownLines.length; i++) {
+    const line = breakdownLines[i];
+    if (idr && line === 'Includes:' && /^Fare\s/i.test(breakdownLines[i - 1] ?? '')) {
+      const stop = breakdownLines[i + 1]?.match(/^• Additional stop RP (\d{1,3}(?:\.\d{3})+)$/);
+      if (!stop || includedStopAmount !== null) fail('ambiguous included stop disclosure');
+      includedStopAmount = units(stop[1]);
+      if (includedStopAmount <= 0 || includedStopAmount > items[items.length - 1].amount) fail('invalid included stop amount');
+      i++;
+      continue;
+    }
+    if (idr && /^To remove Ride Cover for future rides, opt out here[ \t]*\.$/i.test(line) &&
+        /^Ride Cover opt-in\s/i.test(breakdownLines[i - 1] ?? '')) continue;
+    const green = idr && line.match(/^Green Programme ([1-9]\d{0,2})$/);
+    if (green && breakdownLines[i + 1] === 'Opt out anytime') {
+      items.push({ label: 'Green Programme', amount: units(green[1]) });
+      i++;
+      continue;
+    }
     const match = line.match(new RegExp(`^(${amountLabels})\\s+(-?${amountToken})$`, 'i'));
     if (!match) fail('unsupported regional fare component');
-    return { label: match[1], amount: (match[2].startsWith('-') ? -1 : 1) * units(match[2].replace(/^-/, '')) };
-  });
+    items.push({ label: match[1], amount: (match[2].startsWith('-') ? -1 : 1) * units(match[2].replace(/^-/, '')) });
+  }
   if (!items.length) fail('regional fare components are missing');
   const find = (label: string) => items.filter(i => i.label.toLowerCase() === label.toLowerCase());
   const fare = find('Fare'), metered = find('Metered fare');
   if (fare.length + metered.length < 1 || metered.length > 1 || (metered.length && fare.length) || fare.length > 2) fail('regional fare evidence is ambiguous');
   const discount = [...find('Discount'), ...find('Promo')];
   if (discount.length > 1 || discount.some(i => i.amount >= 0)) fail('regional discount is ambiguous');
-  const otherLabels = ['Toll', 'Platform Fee', 'Others', 'Ride Cover opt-in', 'Airport Surcharge'];
+  const otherLabels = ['Toll', 'Green Programme', 'Platform Fee', 'Others', 'Ride Cover opt-in', 'Airport Surcharge'];
   if (otherLabels.some(label => find(label).length > 1)) fail('duplicate regional component');
   if (['Ride Cover opt-in', 'Airport Surcharge'].some(label => find(label).some(item => item.amount <= 0))) fail('regional surcharge must be positive');
   let fareItem = metered[0] ?? fare[0];
@@ -141,10 +158,11 @@ function oneRegionalRide(text: string, fullText: string): ParsedImportRow {
   }
   const components = [fareItem, ...discount, ...otherLabels.flatMap(find)];
   if (components.some(i => !Number.isSafeInteger(i.amount)) || components.reduce((n, i) => n + i.amount, 0) !== total) fail('regional fare components do not reconcile');
+  const taxToken = idr ? '(?:\\d{1,3}|\\d{1,3}(?:\\.\\d{3})+)' : amountToken;
   const taxDisclosure = (label: string) => {
     const inBreakdown = find(label);
     if (inBreakdown.length) return inBreakdown;
-    return [...amountText.matchAll(new RegExp(`^${label}\\s+(${amountToken})$`, 'gim'))].map(match => ({ label, amount: units(match[1]) }));
+    return [...amountText.matchAll(new RegExp(`^${label}\\s+(${taxToken})$`, 'gim'))].map(match => ({ label, amount: units(match[1]) }));
   };
   const taxBase = taxDisclosure('Tax Base'), vat = taxDisclosure('VAT');
   const inclusive = amountText.match(new RegExp(`\\bInclusive of VAT\\s+(${amountToken})\\b`, 'i'));
@@ -152,14 +170,14 @@ function oneRegionalRide(text: string, fullText: string): ParsedImportRow {
   if (taxBase.length || vat.length || inclusive) {
     if (vat.length !== 1 || taxBase.length > 1) fail('regional tax disclosure is incomplete or contradictory');
     if (taxBase.length === 1 && (inclusive ? taxBase[0].amount + vat[0].amount !== units(inclusive[1]) : taxBase[0].amount + vat[0].amount !== find('Platform Fee')[0]?.amount)) fail('regional tax disclosure is incomplete or contradictory');
-    if (taxBase.length === 0 && (!inclusive || !idr || (!reversedSummary.length && !repeatedFareDisplay) || vat[0].amount <= 0 || vat[0].amount >= units(inclusive[1]))) fail('regional tax disclosure is incomplete or contradictory');
+    if (taxBase.length === 0 && (!inclusive || !idr || (!reversedSummary.length && !repeatedFareDisplay && !adjustedFareEvidence) || vat[0].amount <= 0 || vat[0].amount >= units(inclusive[1]) || units(inclusive[1]) > total)) fail('regional tax disclosure is incomplete or contradictory');
     taxEvidence = { taxBase: taxBase[0]?.amount ?? null, vat: vat[0].amount, inclusiveOfVat: inclusive ? units(inclusive[1]) : null };
   }
   const cash = thb;
   const accountName = cash ? 'Cash' : 'OVO Cash';
   return { date: date.date, amount: total.toFixed(2), currency, type: 'expense', merchantRaw: 'Grab', merchantClean: 'Grab',
     description: `Grab ride • ${refs[0]}`, categoryName: 'Transport', accountName, institution: cash ? null : accountName, confidence: 95,
-    rawPayload: { source: 'grab_email_receipt', kind: cash ? 'cash_transaction' : 'wallet_transaction', line: text, referenceNumber: refs[0], paymentMethod: accountName, accountType: cash ? 'cash' : 'wallet', payerAccountNumber: null, sourceTimestamp: null, sourceClock: null, components, adjustedFareEvidence, ...(repeatedFareDisplay ? { repeatedFareDisplay: fare[0].amount } : {}), taxEvidence, nativeAmountGlyphsNormalized: amountText !== text, totalAmount: total,
+    rawPayload: { source: 'grab_email_receipt', kind: cash ? 'cash_transaction' : 'wallet_transaction', line: text, referenceNumber: refs[0], paymentMethod: accountName, accountType: cash ? 'cash' : 'wallet', payerAccountNumber: null, sourceTimestamp: null, sourceClock: null, components, adjustedFareEvidence, ...(includedStopAmount !== null ? { includedStopAmount } : {}), ...(repeatedFareDisplay ? { repeatedFareDisplay: fare[0].amount } : {}), taxEvidence, nativeAmountGlyphsNormalized: amountText !== text, totalAmount: total,
       parserEvidence: { currency, reconciled: true, noBankBalanceAnchor: true, fullNativePages: true }, sourceDocumentText: fullText } };
 }
 
@@ -226,6 +244,10 @@ function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[]
       const delivery = [...text.matchAll(new RegExp(`\\bDelivery Fee\\s+${currencyPattern}\\s*${amountPattern}\\b`, 'gi'))];
       if (subtotal.length !== 1 || delivery.length !== 1 || /Priority Delivery|GrabVIP Benefit|GrabUnlimited|Promo|Promotion/i.test(text)) fail('food summary is incomplete or unsupported');
       components.push({ label: 'Subtotal', amount: cents(subtotal[0][1]) / 100 }, { label: 'Delivery Fee', amount: cents(delivery[0][1]) / 100 });
+      const discountRegion = text.slice(delivery[0].index! + delivery[0][0].length).split(/TOTAL\s*\(INCL\.\s*TAX\)/i)[0];
+      const coupons = [...discountRegion.matchAll(new RegExp(`^([A-Z][A-Z0-9]{3,30})[ \\t]+-[ \\t]*${currencyPattern}[ \\t]*${amountPattern}[ \\t]*$`, 'gm'))];
+      if (coupons.length > 1) fail('multiple food coupon lines require review');
+      if (coupons.length) components.push({ label: coupons[0][1], amount: -cents(coupons[0][2]) / 100 });
     }
   } else {
     const fareText = text.replace(/DATE\s*\|\s*TIME/gi, 'Pickup clock heading');
@@ -337,7 +359,7 @@ export function hasVerifiedGrabReceiptRows(text: string, rows: Array<{ amount?: 
       const expected = source.rows[i].rawPayload!;
       const components = raw?.components as Array<{ label?: unknown; amount?: unknown }> | undefined;
       const required = expected.components as Array<{ label: string; amount: number }>;
-      return Number(r.amount) === Number(source.rows[i].amount) && r.date === source.rows[i].date && r.currency === source.rows[i].currency && raw?.source === 'grab_email_receipt' && receiptEvidenceKey(raw.wordParts) === receiptEvidenceKey(expected.wordParts) && raw.sourceContainer === expected.sourceContainer && raw.referenceNumber === expected.referenceNumber && raw.paymentMethod === expected.paymentMethod && raw.kind === expected.kind && raw.paymentAccountSuffix === expected.paymentAccountSuffix && raw.paymentAccountSelectionRequired === expected.paymentAccountSelectionRequired && raw.payerAccountNumber === expected.payerAccountNumber && raw.sourceTimestamp === expected.sourceTimestamp && raw.repeatedFareDisplay === expected.repeatedFareDisplay && (expected.repeatedFareDisplay === undefined || receiptEvidenceKey(raw.taxEvidence) === receiptEvidenceKey(expected.taxEvidence)) && raw.line === expected.line && receiptEvidenceKey(raw.visualHeadlineEvidence) === receiptEvidenceKey(expected.visualHeadlineEvidence) && (raw.parserEvidence as { currency?: unknown } | undefined)?.currency === source.rows[i].currency && Array.isArray(components) && components.length === required.length && components.every((c, j) => c.label === required[j].label && Number(c.amount) === required[j].amount);
+      return Number(r.amount) === Number(source.rows[i].amount) && r.date === source.rows[i].date && r.currency === source.rows[i].currency && raw?.source === 'grab_email_receipt' && receiptEvidenceKey(raw.wordParts) === receiptEvidenceKey(expected.wordParts) && raw.sourceContainer === expected.sourceContainer && raw.referenceNumber === expected.referenceNumber && raw.paymentMethod === expected.paymentMethod && raw.kind === expected.kind && raw.paymentAccountSuffix === expected.paymentAccountSuffix && raw.paymentAccountSelectionRequired === expected.paymentAccountSelectionRequired && raw.payerAccountNumber === expected.payerAccountNumber && raw.sourceTimestamp === expected.sourceTimestamp && raw.includedStopAmount === expected.includedStopAmount && raw.repeatedFareDisplay === expected.repeatedFareDisplay && receiptEvidenceKey(raw.taxEvidence) === receiptEvidenceKey(expected.taxEvidence) && raw.line === expected.line && receiptEvidenceKey(raw.visualHeadlineEvidence) === receiptEvidenceKey(expected.visualHeadlineEvidence) && (raw.parserEvidence as { currency?: unknown } | undefined)?.currency === source.rows[i].currency && Array.isArray(components) && components.length === required.length && components.every((c, j) => c.label === required[j].label && Number(c.amount) === required[j].amount);
     }));
   } catch { return false; }
 }

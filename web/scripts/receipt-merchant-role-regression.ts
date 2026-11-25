@@ -38,3 +38,10 @@ assert.equal(reconcileReceiptMerchant({ ...model, merchant_raw: "Uptown Manila" 
 assert.equal(reconcileReceiptMerchant({ ...model, merchant_raw: "Unlabeled Seller" }, namedHeader, null).merchant_raw, "Unlabeled Seller",
   "An unrelated optical candidate does not replace a visual seller without role evidence");
 console.log("PASS receipt merchant roles, branch suffixes, provider exclusions, issuer fallback and ambiguous sellers");
+
+const misreadToll = { merchant_raw: "HANILA NORTH TOLLHAYS CORP.", merchant_clean: "HANILA NORTH TOLLHAYS CORP." };
+const tollHeader = "HANILA NORTH TOLLHAYS CORP.\nTIN: 004-984-946-000\nOFFICIAL RECEIPT";
+assert.deepEqual(reconcileReceiptMerchant(misreadToll, tollHeader, null),
+  { ...misreadToll, merchant_clean: "Manila North Tollways Corp." });
+assert.deepEqual(reconcileReceiptMerchant(misreadToll, tollHeader.replace("946", "945"), null), misreadToll);
+assert.deepEqual(reconcileReceiptMerchant(misreadToll, tollHeader.replace("HANILA", "OTHER"), null), misreadToll);

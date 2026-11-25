@@ -7,6 +7,10 @@ import { classifyUnsettledPurchaseDocument, type UnsettledPurchaseDocument } fro
 import { assessFinancialUploadScope } from "../lib/financial-upload-scope";
 
 const examples: [string, UnsettledPurchaseDocument | null][] = [
+  ["PREPAY CHIT NUMBER 17\nTHIS IS NOT A RECEIPT\nCASH RM 50.00", "provisional_fuel_slip"],
+  ["PRE-AUTHORISATION\nTotal RM 60.00\nThis is not the final fiscal receipt", "provisional_fuel_slip"],
+  ["Tax Invoice / Adjustment Note\nCash Inv No.: A18\nTotal payable: 32.10\nReceived above goods in good order", "unverified_invoice"],
+  ["Tax Invoice\nTotal RM 50.00\nCash tendered RM 50.00\nPrevious pre-authorisation released", null],
   [columnReceipt, null],
   ["Sales Invoice\nTotal PHP 120.00\nTotal Paid PHP120.00", null],
   ["Sales Invoice\nTotal PHP 120.00\nTotal Paid USD120.00", "unverified_invoice"],
@@ -71,3 +75,60 @@ for (const source of [unpaidSlip, encodeLocalReceiptOcr({ text: unpaidSlip })]) 
 }
 
 assert.equal(classifyUnsettledPurchaseDocument("Official Receipt\nPayment status: Pending\nTotal PHP 20.00"), "unpaid_receipt");
+
+const exactCashInvoice = "INVOICE\nGrand Total: 20.00\nCash: 20.00\nChange: 0.00";
+assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice), null);
+assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice.replace("Cash: 20.00", "Cash: 19.00")), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice + "\nOutstanding balance RM 1.00"), "unpaid_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice.replace("Change: 0.00", "")), "unverified_invoice");
+
+const speedMartInvoice = "Invoice No: 18314/102/T0422\nTotal Sales (Inclusive GST) RM 9.90\nCASH RM 10.00\nCHANGE RM .10";
+assert.equal(classifyUnsettledPurchaseDocument(speedMartInvoice), null);
+assert.equal(classifyUnsettledPurchaseDocument(speedMartInvoice.replace(".10", ".20")), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(speedMartInvoice + "\nOutstanding balance RM 1.00"), "unpaid_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(speedMartInvoice + "\nVisa RM 1.00"), "unverified_invoice");
+
+const exactGstCash = "Tax Invoice\nTotal (Inclusive of GST): 9.10\nTOTAL: 9.10\nCash: 9.10\nGST Summary Amount (RM) Tax(RM)";
+assert.equal(classifyUnsettledPurchaseDocument(exactGstCash), null);
+assert.equal(classifyUnsettledPurchaseDocument(exactGstCash.replace("Cash: 9.10", "Cash: 8.10")), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(exactGstCash.replace("TOTAL: 9.10", "TOTAL: 9.00")), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(exactGstCash + "\nWallet: 1.00"), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(exactGstCash + "\nBalance due: 2.00"), "unpaid_invoice");
+
+const roundedInvoice = "Tax Invoice\nTotal Sales (Inclusive GST) RM 13.58\nRounding Adjustment RM .02\nRounding RM 13.60\nCash RM 14.00\nChange RM .40";
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice), null);
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice.replace(".40", ".00").replace("14.00", "13.60")), null);
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice.replace("13.58", "13.57")), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice + "\nOutstanding balance RM 1.00"), "unpaid_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice + "\nVisa RM 1.00"), "unverified_invoice");
+
+const closedBill = "Tax Invoice\nTotal (Inclusive of GST): 65.72\nRounding Adj: -0.02\nTOTAL: 65.70\nClosed: 1 28-04-2018 21:08:20\nServer: 113 CASHIER\nCASH: 65.70\nGST Summary Amount (RM) Tax(RM)";
+assert.equal(classifyUnsettledPurchaseDocument(closedBill), null);
+for (const conflicting of [closedBill.replace("65.72", "65.70"), closedBill.replace("CASH: 65.70", "CASH: 50.00"), closedBill + "\nVisa RM 1.00"]) {
+  assert.equal(classifyUnsettledPurchaseDocument(conflicting), "unverified_invoice");
+}
+assert.equal(classifyUnsettledPurchaseDocument(closedBill + "\nOutstanding balance RM 2.00"), "unpaid_invoice");
+
+const nettInvoice = "TAX INVOICE\nTotal Amount: RM8.19\nGST @0%: RM0.00\nRounding: RM0.01\nNett Total: RM8.20\nPayment Mode Amount\nCASH RM8.20\nChange RM0.00\nGST Summary Amount(RM) Tax(RM)";
+assert.equal(classifyUnsettledPurchaseDocument(nettInvoice), null);
+for (const contradictory of [nettInvoice.replace("RM8.19", "RM7.19"), nettInvoice.replace("CASH RM8.20", "CASH RM8.25"), nettInvoice + "\nVisa RM1.00", nettInvoice + "\nGrand Total RM10.00"]) {
+  assert.equal(classifyUnsettledPurchaseDocument(contradictory), "unverified_invoice");
+}
+assert.equal(classifyUnsettledPurchaseDocument(nettInvoice + "\nOutstanding balance RM2.00"), "unpaid_invoice");
+
+const ringgitRegisters = [
+  "Tax Invoice\nRounded Total (RM): 46.65\nCash 51.65\nCash Change 5.00",
+  "Tax Invoice\nRM\nTotal Incl GST 56.00\nPay Cash 56.00\nChange 0.00",
+];
+for (const bill of ringgitRegisters) {
+  assert.equal(classifyUnsettledPurchaseDocument(bill), null);
+  assert.equal(classifyUnsettledPurchaseDocument(bill.replace(/Change [\d.]+$/, "Change 9.00")), "unverified_invoice");
+  assert.equal(classifyUnsettledPurchaseDocument(bill + "\nVisa 1.00"), "unverified_invoice");
+  assert.equal(classifyUnsettledPurchaseDocument(bill + "\nOutstanding balance 1.00"), "unpaid_invoice");
+}
+
+const myrNet = "Tax Invoice\nNet Total (MYR) : 14.63\nRounding Adj. : 0.02\nNet Total Rounded (MYR) : 14.65\nCash 15.00\nChange 0.35";
+assert.equal(classifyUnsettledPurchaseDocument(myrNet), null);
+for (const mismatch of [myrNet.replace("0.02","0.01"), myrNet.replace("0.35","0.34"), myrNet + "\nVisa 1.00"]) {
+  assert.equal(classifyUnsettledPurchaseDocument(mismatch), "unverified_invoice");
+}

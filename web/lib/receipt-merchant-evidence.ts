@@ -67,12 +67,24 @@ export function readReceiptMerchantEvidence(text: string) {
   };
 }
 
+// Require the operator name and its printed registration in the header.
+export function normalizedTollReceiptMerchant(name: string | null | undefined, source: string) {
+  const tollName = /^[mh]anila [nh]orth toll[whvu]ays corp\.?$/iu;
+  const header = source.split(/\r?\n/u).slice(0, 12);
+  return tollName.test(name?.trim() ?? "") &&
+    header.some(line => tollName.test(line.trim())) &&
+    header.some(line => /^TIN\s*:\s*004-984-946-000\s*$/iu.test(line.trim()))
+    ? "Manila North Tollways Corp." : null;
+}
+
 /** Resolve only disagreements for which the optical document identifies the role. */
 export function reconcileReceiptMerchant<T extends {
   merchant_raw?: string | null;
   merchant_clean?: string | null;
 }>(details: T, opticalText: string, localMerchant: string | null): T {
   const evidence = readReceiptMerchantEvidence(opticalText);
+  const clean = normalizedTollReceiptMerchant(details.merchant_clean ?? details.merchant_raw, opticalText);
+  if (!evidence.hasRoles && clean) return { ...details, merchant_clean: clean };
   if (!evidence.hasRoles) return details;
   const current = details.merchant_raw ?? details.merchant_clean;
   // A legal operator can identify the seller only when the receipt has no

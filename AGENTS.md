@@ -135,3 +135,7 @@ If `docs/product-spec.md` is added later, it should become the primary product s
 - Use `docs/releases/mobile-115-116-coverage.json` and the release tools to record requested behavior, web deployment IDs/commits, exact IPA/AAB hashes, embedded provenance and platform QA. A source check or one empty test account does not establish device coverage.
 - Full combined releases must pass exact-package coverage. Web-only releases can proceed with appropriate web/backend checks and backwards compatibility; do not describe them as updating installed native code.
 - Freeze store source with `mobile/scripts/release-provenance.cjs`, explicit versions/builds and the target API URL. Verify generated package provenance and runtime behavior before submission. Preserve archives and the release evidence directory.
+
+## Receipt training workload
+
+Run reviewed receipt corpora with the parser checkout's `npm --prefix web run qa:receipt-training -- <batch-directory> <new-results-directory>`. Use disposable local PostgreSQL for training, replay and full financial-record preservation checks. Keep the reviewed labels, byte hashes, corrected results and learned rules outside the disposable database. Historical staging batch scripts are evidence only. Live staging gets one small release smoke test with upload, processing, an interrupted save, an identical retry and a one-record check.

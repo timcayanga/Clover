@@ -1,6 +1,6 @@
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
 import { inferReceiptLocationCurrency, readPrintedReceiptCurrency } from "./receipt-currency-evidence";
-import { hasPrintedQuantityConflict, readCountedGrossTable, receiptNameFirstPriceHeader, readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
+import { hasPrintedQuantityConflict, readRinggitNettTable, readCountedGrossTable, receiptNameFirstPriceHeader, readPartialPriceColumn, hasUnpricedItemBody, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "./receipt-item-table";
 import { detectMultipleReceipts } from "./receipt-image-region";
 import { receiptReconciliationIssues } from "./receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, splitTenderDifference, type ReceiptTender } from "./receipt-settlement-evidence";
@@ -2598,10 +2598,15 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, { ordered
     ? joinReceiptSettlementLines(normalizeLocalReceiptOcrText(ordered))
     : settlementText;
   const layout = splitReceiptPromotionalFooter(layoutText);
-  const useOpticalRows = opticalText !== null && ordered !== opticalText &&
+  // A ringgit till may place its amount column after the entire receipt in
+  // the OCR transcript. Use spatial rows only when the printed nett total,
+  // tender, zero change and tax recap pass the same invoice evidence checks.
+  const nettTable = opticalText !== null && ordered !== opticalText && /^tax invoice$/im.test(ordered) &&
+    !classifyUnsettledPurchaseDocument(ordered) ? readRinggitNettTable(ordered) : null;
+  const useOpticalRows = Boolean(nettTable) || (opticalText !== null && ordered !== opticalText &&
     /^(?:[\d,]+\.\d{2})[ \t]*\r?\n[\d,]+\.\d{2}[ \t]*$/m.test(opticalText) &&
     (hasReconciledOpticalSettlement(ordered) || Boolean(readChargedReceiptTable(ordered) ?? readCountedGrossTable(ordered))) && !splitReceiptPromotionalFooter(settlementText).footer &&
-    !/^(?:grand total|bill (?:amount|total)|amount due|total(?: amount| due| paid)?)[ \t]*[:：]?[ \t]*[\d₱$]/im.test(opticalText);
+    !/^(?:grand total|bill (?:amount|total)|amount due|total(?: amount| due| paid)?)[ \t]*[:：]?[ \t]*[\d₱$]/im.test(opticalText));
   const { body, footer } = layoutText === settlementText || layout.footer || useOpticalRows
     ? layout : { body: settlementText, footer: null };
   const settlementEvidence = readReceiptSettlementEvidence(body);
@@ -2635,7 +2640,7 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, { ordered
     paymentMethod: hasSplitReceiptTender(tenders) ? "Mixed" : settled.paymentMethod,
   } : settled;
   const photoText = useOpticalRows ? ordered : opticalText ?? (photo ? receiptText : null);
-  const table = readReconciledItemTable(photoText ?? receiptText) ?? readChargedReceiptTable(photoText ?? receiptText, evidence);
+  const table = nettTable ?? readReconciledItemTable(photoText ?? receiptText) ?? readChargedReceiptTable(photoText ?? receiptText, evidence);
   if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
     return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || photoText !== null,
       confidence:photoText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};

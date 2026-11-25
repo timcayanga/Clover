@@ -4,6 +4,7 @@ import { coerceVisualImportAttempt } from "@/lib/import-visual-recovery";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
+import { RECEIPT_REVIEW_PHASE } from "@/lib/receipt-review";
 import { SOURCE_REVIEW_PHASE, SOURCE_REVIEW_CODE } from "@/lib/import-source-review";
 import { recoverFailedImportResume } from "@/lib/import-resume-recovery";
 import { isUnauthorizedDataError } from "@/lib/transient-data";
@@ -82,6 +83,31 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importFileId: importId, accountId: savedReceipt.transaction.accountId,
         receiptTransactionId: savedReceipt.transaction.id, importedRows: 1,
       });
+    }
+
+    // A worker can time out after storing its receipt but before publishing the
+    // review phase. Its intermediate OCR rows are not statement transactions.
+    if (savedReceipt && !savedReceipt.transaction && importFile.status === "processing" &&
+        importFile.processingPhase === "reconciling" && !importFile.confirmedAt && importFile.updatedAt &&
+        !importProcessingLooksActive({ status: importFile.status, processingPhase: importFile.processingPhase, updatedAt: importFile.updatedAt })) {
+      const workspaceId = String(importFile.workspaceId);
+      const message = "Review the saved receipt details to finish this import.";
+      const recovered = await prisma.$transaction(async tx => {
+        // Competes with a fresh worker claim and with receipt-draft confirmation.
+        await tx.$queryRaw`SELECT "id" FROM "ImportFile" WHERE "id" = ${importId} AND "workspaceId" = ${workspaceId} FOR UPDATE`;
+        if (await hasActiveImportAttempt(workspaceId, importId, tx)) return false;
+        const changed = await tx.importFile.updateMany({
+          where: { id: importId, workspaceId, status: "processing", processingPhase: "reconciling",
+            updatedAt: importFile.updatedAt!, confirmedAt: null, confirmedTransactionsCount: 0,
+            transactions: { none: {} }, documentImport: { is: { receiptDocument: { is: { transactionId: null } } } } },
+          data: { status: "failed", processingPhase: RECEIPT_REVIEW_PHASE, processingMessage: message },
+        });
+        return changed.count === 1;
+      });
+      if (!recovered) return alreadyProcessing();
+      return NextResponse.json({ ok: true, queued: false, resumedFromCheckpoint: true,
+        resumeStrategy: "saved_receipt_review", importFileId: importId, canResume: false,
+        requiresInput: true, telemetryMessage: message, processingPhase: RECEIPT_REVIEW_PHASE });
     }
 
     const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))

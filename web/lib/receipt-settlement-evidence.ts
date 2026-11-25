@@ -2,22 +2,23 @@ import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
-const payable = /^(?:(?:grand|bill|net)\s+total|grandtotal|bill amount|due|du|tl|(?:final\s+)?amount\s+(?:due|paid|payable|to\s+pay)|sale\s+amount|total(?:\s+(?:amount|paid|due|payable|bayar|tagihan))?|jumlah\s+bayar|합\s*계|결제금액|合計)(?![\p{L}])/iu;
+const payable = /^(?:(?:net\s+)?total\s+rounded|(?:grand|bill|net)\s+total|grandtotal|bill amount|due|du|tl|(?:final\s+)?amount\s+(?:due|paid|payable|to\s+pay)|sale\s+amount|total(?:\s+incl\.[ \t]+gst[ \t]*@[ \t]*6%|\s+sales\s*\(inclusive(?: of)? gst\)|\s+(?:amount|paid|due|payable|bayar|tagihan))?|jumlah\s+bayar|합\s*계|결제금액|合計)(?![\p{L}])/iu;
 const subtotal = /^(?:sub\s*-?\s*total|gross amount)(?![\p{L}])/iu;
-const tender = /^(?:cash(?:\s+(?:tendered|received|paid))?|tendered|amount tendered|tunai|uang diterima)(?![\p{L}])/iu;
-const change = /^(?:change(?:\s+due)?|kembalian|kembali)(?![\p{L}])/iu;
+const tender = /^(?:cash(?!\s+changed\b)(?:\s+(?:tendered|received|paid))?|tendered|amount tendered|tunai|uang diterima)(?![\p{L}])/iu;
+const change = /^(?:cash\s+changed|change(?:\s+due)?|kembalian|kembali)(?![\p{L}])/iu;
 const refund = /^(?:total refund|refund(?: amount| total| issued| approved| completed)?|amount refunded|refunded(?: amount)?|return total)(?![\p{L}])/iu;
 const refundHeading = /^(?:refund|return|credit note)(?:\s+(?:receipt|slip|confirmation|voucher))?\s*[:：]?$/iu;
 const taxHeading = /^(?:tax|vat|gst|ppn)(?:\s+(?:breakdown|summary|details|calculation))\s*[:：]?$/iu;
 const settlementHeading = /^(?:settlement|payment|tender)(?:\s+(?:summary|details|breakdown))?\s*[:：]?$/iu;
 const breakdownTotal = /^total\s+(?:vat\b|tax\b|gst\b|ppn\b|zero[- ]rated\b|(?:no\.?\s+of\s+)?(?:qty|quantity|items?|points?)\b|savings\b|discount\b|cash\b|tender(?:ed)?\b|change\b|refund\b)/iu;
-const saleLabels = /^(?:grand\s*total|bill total|bill amount|net total|due|du|tl|jumlah bayar|total bayar|total tagihan|결제금액|amount (?:due|paid|payable|to pay)|sale amount|total (?:paid|due|payable))$/iu;
+const saleLabels = /^(?:(?:net\s+)?total\s+rounded|grand\s*total|bill total|bill amount|net total|due|du|tl|jumlah bayar|total bayar|total tagihan|결제금액|amount (?:due|paid|payable|to pay)|sale amount|total (?:paid|due|payable))$/iu;
 const currencyMark = /^(?:(?:[A-Z]{3}|P(?=\s*\d)|Rp\.?|RM|(?:US|HK|S|A|C|NZ|NT)\$)\s*|[₱$€£¥฿₩₫₹]\s*)|\s*(?:[A-Z]{3}|[₱$€£¥฿₩₫₹원円元])$/giu;
 
 function readAmount(raw: string) {
   let value = raw.trim().replace(/^(?:[:：=]\s*|\.\s+)/u, "").replace(currencyMark, "").trim();
   const negative = /^(?:-|−|\()/u.test(value);
   value = value.replace(/^(?:[-−+]\s*|\()/u, "").replace(/\)$/u, "").replace(currencyMark, "");
+  if (/^\.\d{2}$/.test(value)) value = "0" + value;
   if (!/^\d+(?:[., ]\s*\d+)*$/u.test(value)) return null;
   value = value.replace(/([.,])\s+(?=\d)/gu, "$1");
   if (value.includes(" ") && !/^\d{1,3}(?: \d{3})+(?:[.,]\d{1,2})?$/u.test(value)) return null;
@@ -42,9 +43,24 @@ export type ReceiptTender = {
   evidence: string;
 };
 
+// Normalize only the three adjacent till rows. Preserve the original
+// transcript and require independent cash-minus-change evidence downstream.
+function normalizeRinggitRegister(source: string) {
+  // In this cash layout "Total Paid" is the tender before change.
+  // Keep all three printed amounts; the ordinary POS reconciliation checks them.
+  if (/^payment type:[ \t]*cash[ \t]*$/im.test(source)) {
+    source = source.replace(/^grand tota[l1][ \t]*RM[ \t]*(\d+\.\d{2})[ \t]*\r?\ntotal paid[ \t]+RM[ \t]*(\d+\.\d{2})[ \t]*\r?\nchange[ \t]+RM[ \t]*(\d+\.\d{2})[ \t]*$/gim,
+      "Amount to be paid RM $1\nCash RM $2\nChange RM $3");
+  }
+  return source.replace(/^total after rounding[ \t]+(\d+\.\d{2})\r?\ncash[ \t]+(\d+\.\d{2})\r?\nchange cash[ \t]+(\d+\.\d{2})$/gim,
+    "Amount to be paid $1\nCash $2\nChange $3").replace(/^(?:rounded total[ \t]*\(RM\)[ \t]*:|total incl gst)[ \t]*(\d+\.\d{2})[ \t]*\r?\n(?:pay[ \t]+)?cash[ \t]+(\d+\.\d{2})[ \t]*\r?\n(?:cash[ \t]+)?change[ \t]+(\d+\.\d{2})[ \t]*$/gim,
+    "Amount to be paid $1\nCash $2\nChange $3");
+}
+
 export function readReceiptTenders(source: string): ReceiptTender[] {
   const { body } = splitReceiptPromotionalFooter(joinReceiptColumnSettlement(source));
-  const lines = body.split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
+  const lines = normalizeRinggitRegister(body).split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
+  const originalLines = body.split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
   return lines.flatMap((line, index) => {
     const field = line.normalize("NFKC").replace(/^(?:paid (?:by|with|via)|payment by)\s+/iu, "");
     for (const [method, pattern] of tenderLabels) {
@@ -64,7 +80,7 @@ export function readReceiptTenders(source: string): ReceiptTender[] {
       if (amount === null || amount < 0) return [];
       return [{ method, label, amount: amount / 100,
         currency: currency?.kind === "printed" ? currency.currency : null,
-        evidence: wrapped ? `${line}\n${printedAmount}` : line,
+        evidence: wrapped ? `${originalLines[index]}\n${printedAmount}` : originalLines[index],
       }];
     }
     return [];
@@ -109,9 +125,10 @@ type Settlement =
 
 export function readReceiptSettlementEvidence(source: string): Settlement | null {
   const { body } = splitReceiptPromotionalFooter(joinReceiptColumnSettlement(source.normalize("NFKC")));
-  const lines = body.split(/\r?\n/u).map(line => line.trim().replace(/^[*•]+\s*/u, "")).filter(Boolean);
+  const lines = normalizeRinggitRegister(body).split(/\r?\n/u).map(line => line.trim().replace(/^[*•]+\s*/u, "")).filter(Boolean);
   const totals = new Set<number>();
   const finalTotals = new Set<number>();
+  const contextualTotals = new Set<number>();
   const refunds = new Set<number>();
   const cash = new Set<number>();
   const changes = new Set<number>();
@@ -136,12 +153,78 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     if (refundHeading.test(line) || /^(?:환불\s*영수증|pengembalian dana)\s*$/iu.test(line)) isRefund = true;
     if ([cardTender, walletTender, otherTender].some(pattern => pattern.test(line)) ||
         /^paid (?:by|with|via) (?:card|wallet|visa|mastercard|gcash|maya)\b/iu.test(line)) hasOtherTender = true;
+    // This register prints the currency in the label, before its colon.
+    // Bind the pre-rounding net to its adjustment and final cash amount.
+    if (!inTaxSummary && /^net total[ \t]*\(MYR\)/i.test(line) &&
+        /^net total rounded[ \t]*\(MYR\)/i.test(lines[index + 2] ?? "")) {
+      const before = /^net total[ \t]*\(MYR\)[ \t]*:[ \t]*(\d+\.\d{2})$/i.exec(line);
+      const adjustment = /^rounding adj\.?[ \t]*:[ \t]*([-+]?\d+\.\d{2})$/i.exec(lines[index + 1]);
+      const after = /^net total rounded[ \t]*\(MYR\)[ \t]*:[ \t]*(\d+\.\d{2})$/i.exec(lines[index + 2]);
+      const gross = before && readAmount(before[1]);
+      const delta = adjustment && readAmount(adjustment[1]);
+      const net = after && readAmount(after[1]);
+      if (gross == null || delta == null || net == null || Math.abs(delta) > 2 || gross + delta !== net) {
+        unreadableFinal = true;
+      } else {
+        contextualTotals.add(net);
+        settlementCurrencies.add("MYR");
+      }
+      continue;
+    }
+    if (/^net total rounded[ \t]*\(MYR\)/i.test(line) &&
+        /^net total[ \t]*\(MYR\)/i.test(lines[index - 2] ?? "") && !inTaxSummary) continue;
+    // Some ringgit tills use "Rounding" for the final amount and print the
+    // signed adjustment separately. Require both calculations to reconcile.
+    const rounded = /^rounding[ \t]+RM[ \t]*([\d,.]+)$/iu.exec(line);
+    if (rounded && !inTaxSummary && index >= 2) {
+      const adjustment = /^rounding adjustment[ \t]+RM[ \t]*([-+]?[\d.]+)$/iu.exec(lines[index - 1]);
+      const gross = /^total sales[ \t]*\(inclusive(?: of)? GST\)[ \t]*RM[ \t]*([\d,.]+)$/iu.exec(lines[index - 2]);
+      if (adjustment && gross) {
+        const delta = readAmount(adjustment[1]);
+        const before = readAmount(gross[1]);
+        const after = readAmount(rounded[1]);
+        if (delta === null || before === null || after === null || Math.abs(delta) > 2 || before + delta !== after) {
+          unreadableFinal = true;
+        } else {
+          contextualTotals.add(after);
+          settlementCurrencies.add("MYR");
+        }
+      }
+    }
+    // This terminal prints its payable as “Nett Total” after a zero-tax
+    // calculation. The contextual amount also has to reconcile with tender.
+    const nett = /^nett total:[ \t]*RM[ \t]*(\d+\.\d{2})$/iu.exec(line);
+    if (nett && !inTaxSummary) {
+      const delta = /^rounding:[ \t]*([-+]?)RM[ \t]*(0\.\d{2})$/iu.exec(lines[index - 1] ?? "");
+      const taxIndex = index - (delta ? 2 : 1);
+      const gross = /^total amount:[ \t]*RM[ \t]*(\d+\.\d{2})$/iu.exec(lines[taxIndex - 1] ?? "");
+      const adjustment = delta ? readAmount(delta[1] + delta[2]) : 0;
+      const value = readAmount(nett[1]);
+      const before = gross && readAmount(gross[1]);
+      if (/^gst[ \t]*@[ \t]*0%:[ \t]*RM[ \t]*0\.00$/iu.test(lines[taxIndex] ?? "") &&
+          before != null && value != null && adjustment != null && Math.abs(adjustment) <= 2 && before + adjustment === value) {
+        contextualTotals.add(value);
+        settlementCurrencies.add("MYR");
+      } else {
+        unreadableFinal = true;
+      }
+    }
+    const finalCashTotal = /^final total\s+(\d+\.\d{2})$/iu.exec(line);
+    if (!inTaxSummary && finalCashTotal && /^cash\s+\d+\.\d{2}$/iu.test(lines[index + 1] ?? "") &&
+        /^change\s+\d+\.\d{2}$/iu.test(lines[index + 2] ?? "") && /\b(?:amount|amt|tax)\s*\(RM\)/iu.test(body)) {
+      const value = readAmount(finalCashTotal[1]);
+      if (value !== null) finalTotals.add(value);
+    }
     const refundLabel = line.match(refund)?.[0];
     if (breakdownTotal.test(line) && !refundLabel) {
       hasSupportingAmounts = true;
       continue;
     }
-    const totalLabel = /^due\s+date\b/iu.test(line) ? undefined : line.match(payable)?.[0];
+    // These POS labels identify a rounded or dine-in amount. Require the
+    // independent cash/change arithmetic before preferring it to a subtotal.
+    const ringgitInclusiveLabel = line.match(/^total incl\.[ \t]+GST[ \t]*0?6%(?=[ \t]+RM[ \t]*\d+[.]\d{2}$)/iu)?.[0];
+    const posLabel = ringgitInclusiveLabel ?? line.match(/^(?:ttl atf rnd|amount to be paid|total amount paid(?=[ \t]+PHP\b)|total \(eat in\))(?=$|[ \t:：])/iu)?.[0];
+    const totalLabel = posLabel ?? (/^due\s+date\b/iu.test(line) ? undefined : line.match(payable)?.[0]);
     const cashLabel = line.match(tender)?.[0];
     const changeLabel = line.match(change)?.[0];
     const subtotalLabel = line.match(subtotal)?.[0];
@@ -157,7 +240,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     const amount = cleanAmount ?? (amountWithEdgeNoise ? readAmount(amountWithEdgeNoise[1]) : null);
     recoveredEdgeNoise ||= cleanAmount === null && amount !== null;
     if (amount === null) {
-      unreadableFinal ||= final;
+      unreadableFinal ||= final || Boolean(posLabel && !inTaxSummary);
       garbledFinalAmount ||= final && /^\/\s*\d/u.test(amountText) && /\p{L}/u.test(amountText);
       continue;
     }
@@ -167,6 +250,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
       if (currency?.kind === "printed") settlementCurrencies.add(currency.currency);
     }
 
+    if (posLabel && !inTaxSummary) contextualTotals.add(amount);
     if (refundLabel) refunds.add(Math.abs(amount));
     else if (final) finalTotals.add(amount);
     else if (totalLabel && !inTaxSummary) totals.add(amount);
@@ -188,6 +272,11 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
   const payableCandidates = finalTotals.size ? finalTotals : totals;
   const cashNet = !hasOtherTender && settlementCurrencies.size <= 1 && cash.size === 1 && changes.size === 1
     ? [...cash][0] - [...changes][0] : null;
+  if (contextualTotals.size) {
+    if (cashNet === null || cashNet <= 0 || contextualTotals.size !== 1 || !contextualTotals.has(cashNet) ||
+        (finalTotals.size && !finalTotals.has(cashNet))) return { kind: "conflict" };
+    return { kind: "payable", amount: cashNet / 100 };
+  }
   if (payableCandidates.size > 1) {
     // An unlabeled settlement duplicate can be disambiguated by independently
     // printed cash and change. Never manufacture a total from that difference.

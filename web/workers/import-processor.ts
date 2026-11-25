@@ -4,7 +4,7 @@ import { parseReceiptLineItemsFromPayload } from "@/lib/receipt-line-items";
 import { linkReceiptToExistingExpense } from "@/lib/transaction-source-matches";
 import { receiptReconciliationIssues } from "@/lib/receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, reconcileReceiptSettlement, splitTenderDifference, type ReceiptTender } from "@/lib/receipt-settlement-evidence";
-import { reconcileReceiptMerchant } from "@/lib/receipt-merchant-evidence";
+import { normalizedTollReceiptMerchant, reconcileReceiptMerchant } from "@/lib/receipt-merchant-evidence";
 import type { ImportDispatchSource } from "@/lib/import-dispatch";
 import { isUploadPhoto, isUploadPdf } from "../../shared/native-upload";
 import { pdfStatementReviewMessage } from "@/lib/pdf-statement-review";
@@ -34,7 +34,7 @@ import { assessBpiStatementReconciliation, isBpiCardMetadata } from "@/lib/bpi-s
 import { readAppMigration, createMigrationOverlapMatcher, summarizeAppMigration } from "@/lib/app-migration-import";
 import { persistMigrationTags } from "@/lib/app-migration-persistence";
 import { isGCryptoHistorySource, overlappingGCryptoTradeIndices } from "@/lib/gcrypto-screenshot-overlap";
-import { qualifyDeviceReceiptReading } from "@/lib/device-receipt-reading";
+import { conflictingDeviceReceiptFields, qualifyDeviceReceiptReading } from "@/lib/device-receipt-reading";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalEvidence } from "@/lib/local-receipt-ocr-envelope";
 import { applyReceiptDefaultCurrency, hasCompleteReceiptCore, hasReceiptPhotoEvidence, selectSavedStatementReceiptText, receiptCacheQualityPercent } from "@/lib/receipt-intake";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
@@ -2341,7 +2341,8 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
   return {
     receipt_type: preview.receiptType,
     merchant_raw: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
-    merchant_clean: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
+    merchant_clean: isSuspiciousReceiptMerchantName(preview.merchantName) ? null :
+      normalizedTollReceiptMerchant(preview.merchantName, preview.receiptText) ?? preview.merchantName ?? null,
     document_number: null,
     invoice_number: null,
     booking_reference: null,
@@ -9667,6 +9668,22 @@ const processImportFileTextImpl = async (
   if (nativeStatementProof && nativeStatementProof.rows.length === 0) {
     throw new SourceReviewRequiredError("Clover needs the complete statement or native bank proof to verify these amounts. Nothing was added; review the source pages and fields before retrying.");
   }
+  // The same complete Grab PDF can arrive through the receipt picker.
+  // Select its structured import path only after matching the original PDF.
+  if (isPdfStatementSource && importMode === "receipt" && previouslyVisibleRows === 0 &&
+      !importFile.confirmedAt && text.includes("GRAB_RECEIPT_NATIVE ")) {
+    const bytes = await readSourceBytes();
+    if (bytes) {
+      const coverage = await verifyPdfStatementPageCoverage(bytes, text, options.password, options.pdfJsBaseUrl);
+      const native = readPdfStatementEvidencePages(bytes, text).grabReceiptSource;
+      if (coverage.complete && native && hasVerifiedGrabReceiptRows(native, parseImportText(text, fileName, fileType))) {
+        importMode = "statement";
+        chosenRoute = importMode;
+        isDocumentImport = false;
+        text = native;
+      }
+    }
+  }
   if (isPdfStatementSource && importMode === "statement" && previouslyVisibleRows === 0 && !importFile.confirmedAt && text.trim()) {
     const source = await readSourceBytes();
     if (source) {
@@ -12183,11 +12200,13 @@ const processImportFileTextImpl = async (
       if (source) await checkMultipleReceipts(source);
     }
   }
-  const purchaseEvidence = [
+  // OCR and the backup extractor can return the exact same transcript.
+  // Keep every distinct reading and every repeated line inside it.
+  const purchaseEvidence = [...new Set([
     opticalPurchaseText,
     ...purchaseTranscripts,
     openAiParsed?.receiptDetails?.parser_evidence?.source_text,
-  ].filter(Boolean).join("\n");
+  ].filter(Boolean))].join("\n");
   await checkBankingScreenshot(purchaseEvidence);
   // A completed bank proof can print an invoice reference for its recipient.
   // Require independent source-to-row verification; the word "successful"
@@ -13508,6 +13527,12 @@ const processImportFileTextImpl = async (
   // template promotion, or a retry that cannot restore missing source details.
   const missingReceiptFields = effectiveImportMode === "receipt" && receiptDetails
     ? [...incompleteReceiptFields(receiptDetails), ...(paymentAccount?.review ? ["payment account"] : [])] : [];
+  if (imageImport && effectiveImportMode === "receipt" && receiptDetails && !receiptRegion &&
+      receiptDetails.receipt_type !== "wallet_transfer" && receiptDetails.receipt_type !== "travel_ticket") {
+    for (const field of conflictingDeviceReceiptFields(deviceText, receiptDetails)) {
+      if (!missingReceiptFields.includes(field)) missingReceiptFields.push(field);
+    }
+  }
   if (missingReceiptFields.length > 0 && documentImportRecord && await countTransactionsByImportFileCompat(importFileId) === 0) {
     const retake = getImageQualityRetake(imageQuality, missingReceiptFields);
     const reviewMessage = receiptReviewMessage(missingReceiptFields);

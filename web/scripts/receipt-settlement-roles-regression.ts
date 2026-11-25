@@ -10,6 +10,11 @@ const correct = receipt("Subtotal PHP 180.00", "Grand Total PHP 201.60", "Cash t
   "Change PHP 298.40", "VAT breakdown", "VATable amount PHP 180.00", "Total VAT PHP 21.60",
   "Total PHP 21.60", "Settlement", "Total PHP 201.60");
 assert.deepEqual(readReceiptSettlementEvidence(correct), { kind: "payable", amount: 201.6 });
+const philippineToll = "TOTAL AMOUNT PAID PHP 24.00\nCASH TENDERED : 50.00\nCASH CHANGED :\n26.00";
+assert.deepEqual(readReceiptSettlementEvidence(philippineToll), { kind: "payable", amount: 24 });
+assert.deepEqual(readReceiptSettlementEvidence(philippineToll.replace("26.00", "25.00")), { kind: "conflict" });
+assert.deepEqual(readReceiptSettlementEvidence(philippineToll.replace("50.00", "USD 50.00")), { kind: "conflict" });
+assert.equal(readReceiptTenders(philippineToll).find(row => row.method === "change")?.amount, 26);
 const parsed = parseReceiptText(correct);
 assert.equal(parsed.total, "201.60");
 assert.equal(parsed.subtotal, "180.00");
@@ -93,3 +98,57 @@ assert.equal(splitTenderDifference(preview.tenders!, 211.6, "PHP"), -10);
 assert.equal(splitTenderDifference([...preview.tenders!, preview.tenders![0]], 201.6, "PHP"), null);
 assert.equal(splitTenderDifference(preview.tenders!.map(tender => tender.method === "card" ? { ...tender, currency: "USD" } : tender), 201.6, "PHP"), null);
 assert.deepEqual(readReceiptTenders("Card 1234\nGCash reference 0555"), []);
+
+// The till prints the pre-rounding sale and the amount actually settled.
+const rounded = "Total RM 33.92\nRounding Adjustment -RM 0.02\nTotal Rounded RM 33.90\nCash RM 50.00\nChange RM 16.10";
+assert.deepEqual(readReceiptSettlementEvidence(rounded), { kind: "payable", amount: 33.90 });
+assert.deepEqual(readReceiptSettlementEvidence(rounded.replace("16.10", "16.00")), { kind: "conflict" });
+assert.deepEqual(readReceiptSettlementEvidence(rounded.replace("Rounded RM 33.90", "Rounded ?")), { kind: "conflict" });
+
+const afterRounding = receipt("Total 72.93", "RND ADJ 0.02", "TTL ATF RND 72.95", "Cash 73.00", "Change Due 0.05");
+assert.deepEqual(readReceiptSettlementEvidence(afterRounding), { kind: "payable", amount: 72.95 });
+assert.deepEqual(readReceiptSettlementEvidence(afterRounding.replace("0.05", "0.03")), { kind: "conflict" });
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Amount To Be Paid 26.80", "Cash received 50.00", "Change 23.20")), {kind:"payable",amount:26.80});
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Total (Eat In) RM24.00", "Cash RM30.00", "Change RM6.00", "Total-Excl-GST RM22.65")), {kind:"payable",amount:24});
+assert.deepEqual(readReceiptSettlementEvidence(afterRounding + "\nGrand Total 79.00"), {kind:"conflict"});
+
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Total 72.93", "TTL ATF RND ?", "Cash 72.93", "Change 0.00")), { kind: "conflict" });
+
+import { conflictingDeviceReceiptFields } from "../lib/device-receipt-reading";
+const tillLines = ["Coffee Shop", "Amount (RM)", "TOTAL 71.00", "Cash Received 101.00", "Change 30.00"];
+const tillScan = {
+  version: 1 as const, source: "apple_vision" as const, pagesRead: 1, totalPages: 1, complete: true, durationMs: 5,
+  text: tillLines.join("\n"), opticalLines: tillLines.map((text, i) => ({
+    text, box: [0.1, i / 6, 0.9, i / 6 + 0.05] as [number, number, number, number],
+  })),
+};
+assert.deepEqual(conflictingDeviceReceiptFields(tillScan, { total: 1, currency: "PHP" }), ["total", "currency"]);
+assert.deepEqual(conflictingDeviceReceiptFields(tillScan, { total: 71, currency: "MYR" }), []);
+assert.deepEqual(conflictingDeviceReceiptFields({ ...tillScan, complete: false }, { total: 1, currency: "PHP" }), []);
+
+const ringgitTill = ["Total Sales (Inclusive GST) RM 52.08", "Rounding Adjustment RM .02",
+  "Rounding RM 52.10", "Cash RM 60.00", "Change RM 7.90"].join("\n");
+assert.deepEqual(readReceiptSettlementEvidence(ringgitTill), { kind: "payable", amount: 52.1 });
+for (const conflict of [
+  ringgitTill.replace("7.90", "7.80"), ringgitTill.replace("RM .02", "RM .01"),
+  ringgitTill.replace("Cash RM", "Cash USD"), ringgitTill.replace("Change RM 7.90", ""),
+  ringgitTill + "\nCard RM 1.00",
+]) assert.deepEqual(readReceiptSettlementEvidence(conflict), { kind: "conflict" });
+
+const inclusiveTill = "Total Incl. GST@6% RM 48.10\nCash RM 50.20\nChange RM 2.10\nGST @6% included in total RM 2.72";
+assert.deepEqual(readReceiptSettlementEvidence(inclusiveTill), { kind: "payable", amount: 48.1 });
+assert.deepEqual(readReceiptSettlementEvidence(inclusiveTill.replace("Change RM 2.10", "Change RM 2.00")), { kind: "conflict" });
+
+const printedGstTill = "TOTAL INCL. GST06% RM 34.40\nCASH RM 50.40\nCHANGE RM 16.00";
+assert.deepEqual(readReceiptSettlementEvidence(printedGstTill), { kind: "payable", amount: 34.4 });
+for (const mismatch of [
+  printedGstTill.replace("16.00", "15.00"),
+  printedGstTill.replace("CASH RM", "CASH USD"),
+  printedGstTill.replace("\nCHANGE RM 16.00", ""),
+  printedGstTill + "\nCard RM 1.00",
+]) assert.deepEqual(readReceiptSettlementEvidence(mismatch), { kind: "conflict" });
+
+const cashBreadTill = "Payment Type: Cash\nGrand Tota1RM15.00\nTotal Paid RM20.00\nChange RM5.00";
+assert.deepEqual(readReceiptSettlementEvidence(cashBreadTill), { kind: "payable", amount: 15 });
+assert.deepEqual(readReceiptSettlementEvidence(cashBreadTill.replace("RM5.00", "RM4.50")), { kind: "conflict" });
+assert.deepEqual(readReceiptSettlementEvidence(cashBreadTill + "\nCard RM1.00"), { kind: "conflict" });

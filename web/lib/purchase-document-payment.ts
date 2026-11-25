@@ -1,13 +1,15 @@
+import { readReceiptSettlementEvidence, readReceiptTenders } from "./receipt-settlement-evidence";
+import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
-export type UnsettledPurchaseDocument = "unpaid_receipt" | "purchase_order" | "quote" | "unpaid_invoice" | "unverified_invoice";
+export type UnsettledPurchaseDocument = "provisional_fuel_slip" | "unpaid_receipt" | "purchase_order" | "quote" | "unpaid_invoice" | "unverified_invoice";
 
 export const purchaseInvoiceHeading = /^(?:(?:tax|sales|commercial|service|billing|unpaid|overdue)\s+)?invoice(?:\s+(?:no\.?|number|#)\s*[:#]?\s*[\w/-]+|\s*[:#]\s*[\w/-]+)?\s*$/im;
 const quoteHeading = /^(?:pro[ -]?forma invoice|(?:sales\s+|price\s+)?quot(?:e|ation)|(?:cost|price) estimate)(?:\s*(?:[:#]|no\.?\s+|number\s+)\s*[\w/-]+)?\s*$/im;
 const statementHeading = /^(?:(?:bank|credit card|account|billing) statement|statement of account|transaction history)\b|^statement[ \t]*$/im;
 const receiptHeading = /^(?:(?:official|sales|cash|payment|purchase|tax)\s+)?receipt(?:\s+(?:no\.?|number|#)\s*[:#]?\s*[\w/-]+)?\s*$/im;
-const printedAmount = "(?:(?:[A-Z]{3}|Rp|PHP|[₱$€£¥])\\s*)?([0-9][0-9,. ]*)";
+const printedAmount = "(?:(?:[A-Z]{3}|RM|Rp|PHP|[₱$€£¥])\\s*)?([0-9][0-9,. ]*)";
 
 function printedAmounts(text: string, label: string) {
   const pattern = new RegExp(`^(?:${label})[ \\t]*[:：]?[ \\t]*${printedAmount}`, "gim");
@@ -32,6 +34,14 @@ function invoiceMoneyKey(raw: string) {
 }
 
 export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurchaseDocument | null {
+  if (!statementHeading.test(source) &&
+      /\b(?:prepay chit|pre[- ]?authori[sz]ation)\b/i.test(source) &&
+      /\bthis is not (?:a receipt|the final fiscal receipt)\b/i.test(source)) return "provisional_fuel_slip";
+  // Delivery acceptance confirms the goods only. An invoice number prefixed
+  // with "cash" cannot establish tender on a supplier adjustment note.
+  if (/tax invoice\s*\/\s*adjustment note/i.test(source) && /received above goods/i.test(source) &&
+      /total payable/i.test(source) && !/^(?:cash (?:paid|received|tendered)|amount paid|payment received|change)\s*[:：]?\s*(?:RM\s*)?\d/im.test(source) &&
+      !statementHeading.test(source)) return "unverified_invoice";
   const labelledBalanceDue = /^payment[ \t]+status[ \t]*[:：][ \t]*(?:pending|outstanding|due)[ \t]*$/im;
   const unpaidStatus = /^(?:(?:payment[ \t]+)?status[ \t]*[:：]?[ \t]*)?(?:unpaid|overdue|past due|partially paid|payment pending|pending payment|awaiting payment)[ \t]*[.!]?[ \t]*$/im;
   if (!/\b(?:invoice|quot(?:e|ation)|estimate|purchase[ \t]+order)\b/i.test(source) && !unpaidStatus.test(source) && !labelledBalanceDue.test(source)) return null;
@@ -67,11 +77,74 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
     if (expected && !outstanding && [...settled, ...billed].every(row => invoiceMoneyKey(row[1]) === expected)) return null;
     return amountPaid && outstanding ? "unpaid_invoice" : "unverified_invoice";
   }
+  // A ringgit register can label change as “Cash Change”. Bind the final
+  // total to its own payment rows before accepting this invoice as settled.
+  const cashRegister = /^(?:rounded total[ \t]*\(RM\)[ \t]*:[ \t]*\d+\.\d{2}\ncash[ \t]+\d+\.\d{2}\ncash change[ \t]+\d+\.\d{2}|total incl gst[ \t]+\d+\.\d{2}\npay cash[ \t]+\d+\.\d{2}\nchange[ \t]+\d+\.\d{2})$/im.test(text);
+  const netRegister = /^net total rounded[ \t]*\(MYR\)[ \t]*:[ \t]*\d+\.\d{2}\ncash[ \t]*:?[ \t]+\d+\.\d{2}\nchange[ \t]*:?[ \t]+\d+\.\d{2}$/im.test(text);
+  if (cashRegister || netRegister) {
+    const settlement = readReceiptSettlementEvidence(text);
+    const tenders = readReceiptTenders(text);
+    if (settlement?.kind === "payable" && settlement.amount > 0 && tenders.length === 2 &&
+        tenders[0].method === "cash" && tenders[1].method === "change" &&
+        !amountPaid && !hasPositiveAmount(text, "amount due") && readPrintedReceiptCurrency(text)?.kind !== "conflict" &&
+        !/^(?:card|visa|mastercard|credit|debit|wallet|deposit|voucher|refund|balance|grand total)\b/im.test(text)) return null;
+    return "unverified_invoice";
+  }
+  // Malaysian POS invoices can omit the change row for exact cash. Bind
+  // the tax-inclusive total and tender to the immediately following GST recap.
+  const exactGstCash = /^total[ \t]+(?:\(inclusive of gst\)|inclusive gst)[ \t]*:[ \t]*(\d+\.\d{2})\n(?:total[ \t]*:[ \t]*\1\n)?cash[ \t]*:?[ \t]*\1\nGST summary\b/im.test(text);
+  // A closed restaurant bill may put the terminal timestamp and cashier
+  // between the final total and tender. Keep the payment and tax rows bound
+  // together and independently check any cash-rounding adjustment.
+  const closedCash = text.match(/^total \(inclusive of gst\)[ \t]*:[ \t]*(\d+\.\d{2})\n(?:rounding adj[ \t]*:?[ \t]*([-+]?\d+\.\d{2})\n)?total[ \t]*:[ \t]*(\d+\.\d{2})\nclosed:[ \t]*\d+[ \t]+\d{2}-\d{2}-\d{4}[ \t]+\d{2}:\d{2}:\d{2}\nserver:[ \t]*\d+[ \t]+cashier\ncash[ \t]*:[ \t]*\3\ngst summary[ \t]+amount[ \t]*\(rm\)[ \t]+tax[ \t]*\(rm\)/im);
+  const reconciledClosedCash = closedCash && Math.abs(Number(closedCash[2] ?? 0)) <= 0.02 &&
+    Math.round(Number(closedCash[1]) * 100) + Math.round(Number(closedCash[2] ?? 0) * 100) === Math.round(Number(closedCash[3]) * 100) &&
+    Number(closedCash[3]) > 0 && readPrintedReceiptCurrency(text)?.kind !== "conflict";
+  if ((exactGstCash || reconciledClosedCash) && !amountPaid && !hasPositiveAmount(text, "amount due") &&
+      !/^(?:card|credit|debit|visa|mastercard|wallet|gift card|voucher|change|refund|deposit|balance|amount due)\b/im.test(text) &&
+      text.match(/^cash[ \t]*:?[ \t]*\d/gim)?.length === 1 &&
+      !/^(?:grand total|net total|total payable|amount payable)\b/im.test(text)) return null;
+  // Bind the nett amount to the payment-mode table, exact cash, zero
+  // change and the tax recap. Preserve conflicting or incomplete evidence.
+  const nettCash = /^nett total:[ \t]*RM[ \t]*(\d+\.\d{2})\npayment mode[ \t]+amount\ncash[ \t]+RM[ \t]*\1\nchange[ \t]+RM[ \t]*0\.00\ngst[ \t]*summary\b/im.exec(text);
+  if (nettCash) {
+    const evidence = readReceiptSettlementEvidence(text);
+    const tenders = readReceiptTenders(text);
+    if (evidence?.kind === "payable" && evidence.amount === Number(nettCash[1]) && evidence.amount > 0 &&
+        !amountPaid && !hasPositiveAmount(text, "amount due") && readPrintedReceiptCurrency(text)?.kind !== "conflict" &&
+        tenders.length === 2 && tenders.every(tender => tender.method === "cash" || tender.method === "change") &&
+        !/^(?:card|credit|debit|visa|mastercard|wallet|voucher|deposit|balance|refund|grand total|amount payable)\b/im.test(text)) return null;
+    return "unverified_invoice";
+  }
+  // Some MYR tills print change below one ringgit without a leading zero.
+  // Require one explicitly denominated total, cash and change in that order.
+  if (/^total sales[ \t]*\(inclusive(?: of)? gst\)[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\n(?:rounding adjustment[ \t]+RM[ \t]*[-+]?(?:\d+)?\.\d{2}\nrounding[ \t]+RM[ \t]*\d+\.\d{2}\n)?CASH[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\nCHANGE[ \t]*:?[ \t]*RM[ \t]*\.\d{2}$/im.test(text)) {
+    const settlement = readReceiptSettlementEvidence(text);
+    const tenders = readReceiptTenders(text);
+    const cash = tenders.find(entry => entry.method === "cash");
+    const change = tenders.find(entry => entry.method === "change");
+    if (!amountPaid && !hasPositiveAmount(text, "amount due") && settlement?.kind === "payable" &&
+        settlement.amount > 0 && tenders.length === 2 && cash && change &&
+        Math.round(cash.amount * 100) - Math.round(change.amount * 100) === Math.round(settlement.amount * 100) &&
+        readPrintedReceiptCurrency(text)?.kind !== "conflict") return null;
+    return "unverified_invoice";
+  }
+  if (!amountPaid && !hasPositiveAmount(text, "amount due") && /^cash[ \t]*[:：]?[ \t]*\d/im.test(text)) {
+    const settlement = readReceiptSettlementEvidence(text);
+    const tenders = readReceiptTenders(text);
+    const currency = readPrintedReceiptCurrency(text);
+    if (settlement?.kind === "payable" && settlement.amount > 0 && tenders.length === 2 &&
+        tenders.some(entry => entry.method === "cash" && entry.amount === settlement.amount) &&
+        tenders.some(entry => entry.method === "change" && entry.amount === 0) &&
+        currency?.kind !== "conflict" && /^change[ \t]*[:：]?[ \t]*0[.,]00[ \t]*$/im.test(text) &&
+        !/^(?:credit card|debit card|visa|mastercard|wallet|gift card)[ \t]*[:：]?[ \t]*\d/im.test(text)) return null;
+  }
   if (paid || (amountPaid && !hasPositiveAmount(text, "amount due")) || receiptHeading.test(text)) return null;
   return amountPaid ? "unpaid_invoice" : "unverified_invoice";
 }
 
 export const unsettledPurchaseDocumentMessage: Record<UnsettledPurchaseDocument, string> = {
+  provisional_fuel_slip: "Fuel prepayment slip saved. Upload the final receipt to record the purchase.",
   unpaid_receipt: "This receipt shows an outstanding payment. Upload the payment confirmation to record the expense.",
   purchase_order: "Purchase order saved. Upload the receipt or payment confirmation to record the expense.",
   quote: "Quote saved. Clover did not add an expense. Upload the receipt after you pay.",
