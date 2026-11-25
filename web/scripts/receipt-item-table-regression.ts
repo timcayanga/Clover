@@ -52,6 +52,14 @@ assert.deepEqual(receiptDateDisagreements([timedDate])[0]?.candidates, ["11/19/2
 const timedSource = encodeLocalReceiptOcr({ text: timedDate.text, opticalLines: [timedDate] });
 assert.equal(readLocalReceiptOcrText(recordReceiptDateCheck(timedSource,timedDate,null)), "Date: [unclear date] 19:42");
 assert.equal(readLocalReceiptOcrText(recordReceiptDateCheck(timedSource,timedDate,"11/18/25")), "Date: 11/18/25 19:42");
+const blurred = sourceText.replace(/^Total Amount/gm, "Tota! Amount");
+const recovered = singleReadReceiptPreview(encodeLocalReceiptOcr({text:blurred,opticalLines:[dateLine]}), "PHP");
+assert.deepEqual(recovered.items, expected);
+assert.equal(recovered.total, "1470.54");
+assert.equal(recovered.serviceCharge, "120.54");
+assert.equal(recovered.billDate, null);
+assert.equal(readChargedReceiptTable(blurred.replace("3 Iten(s)", "2 Iten(s)")), null);
+assert.equal(readChargedReceiptTable(blurred.replace("Tota! Amount 1470.54", "Tota! Amount 1470.64")), null);
 const corrected = recordReceiptDateCheck(envelope,dateLine,"11/19/26");
 assert.equal(parseReceiptText(corrected).billDate?.slice(0,10),"2026-11-19");
 assert.ok(corrected.includes('"original":{"text":"11/19/25"'));
