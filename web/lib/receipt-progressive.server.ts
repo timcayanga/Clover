@@ -9,7 +9,7 @@ import { readLocalReceiptImage } from "./local-receipt-ocr.server";
 import { assessReceiptPreviewQuality, hasReconciledOpticalSettlement, parseReceiptPhotoText, type ReceiptPreviewResult } from "./split-bill";
 import { readLocalReceiptOcrText, receiptDateDisagreements, readReceiptOpticalEvidence } from "./local-receipt-ocr-envelope";
 import { editableReceiptItems } from "../../shared/split-bill-experience";
-import { hasPrintedItemizedTotal } from "./receipt-item-table";
+import { hasPrintedItemizedTotal, readChargedReceiptTable } from "./receipt-item-table";
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
 import { getClearLocalPhotoRejection } from "./financial-upload-scope";
 
@@ -34,6 +34,18 @@ export function canSaveReceiptForReview(preview: ReceiptPreviewResult) {
     hasPrintedItemizedTotal(text, preview.total) && editableReceiptItems(preview).length > 0;
 }
 
+// Only finish on the first pass when the printed purchase rows and fee
+// independently reconcile and the preview contains those exact amounts.
+export function completeChargedReceipt(preview: ReceiptPreviewResult) {
+  if (!preview.billDate || !preview.merchantName || preview.currencyWarning || !preview.total) return false;
+  const text = readLocalReceiptOcrText(preview.receiptText) ?? preview.receiptText;
+  const table = readChargedReceiptTable(text);
+  return Boolean(table && !classifyUnsettledPurchaseDocument(text) && hasPrintedItemizedTotal(text, preview.total) &&
+    table.total === preview.total && table.serviceCharge === preview.serviceCharge &&
+    table.items.length === preview.items.length && table.items.every((item,i) => item.amount === preview.items[i].amount) &&
+    editableReceiptItems(preview).length === table.items.length + 1);
+}
+
 export function receiptDraftId(bytes: Uint8Array, currency: string) {
   return createHash("sha256").update("receipt-v1:" + currency + ":").update(bytes).digest("hex");
 }
@@ -56,7 +68,16 @@ export async function readReceiptObject(key: string) {
 
 export async function cachedReceiptDraft(prefix: string) {
   const data = await readReceiptObject(prefix + ".final.json") ?? await readReceiptObject(prefix + ".early.json");
-  return data ? JSON.parse(data.toString()) as ReceiptDraft : null;
+  if (!data) return null;
+  const draft = JSON.parse(data.toString()) as ReceiptDraft;
+  if (draft.preview.items.length < 2 && draft.preview.receiptText && draft.preview.total) {
+    const parsed = parseReceiptPhotoText(draft.preview.receiptText, draft.preview.currency);
+    if (parsed.total === draft.preview.total && parsed.currency === draft.preview.currency &&
+        parsed.merchantName === draft.preview.merchantName && completeChargedReceipt(parsed)) {
+      draft.preview = {...draft.preview, items:parsed.items, subtotal:parsed.subtotal, serviceCharge:parsed.serviceCharge};
+    }
+  }
+  return draft;
 }
 
 export async function storeReceiptDraft(prefix: string, draft: ReceiptDraft) {
