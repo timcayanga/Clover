@@ -193,3 +193,17 @@ assert.ok(!agreedWordLine(clearWord, undefined));
 for (const text of ["125.00", "Tea 2"]) {
   assert.ok(!agreedWordLine({...clearWord, text}, {...clearWord, text}));
 }
+
+const { strongerDateReading } = require("../lib/receipt-ocr-worker.cjs");
+const faintDate = {text:"11/19/25",weakDigits:[7]};
+const clearDate = {text:"11/19/26",minConfidence:0.95};
+assert.equal(strongerDateReading(faintDate, faintDate, clearDate), clearDate);
+for (const candidate of [
+  {...clearDate,minConfidence:0.78}, {...clearDate,text:"11/18/26"},
+  {...clearDate,text:"11/19/2B"}, {...clearDate,characterAlternatives:[{index:7,text:"5"}]},
+]) assert.equal(strongerDateReading(faintDate, faintDate, candidate), null);
+assert.equal(strongerDateReading(faintDate,{...faintDate,weakDigits:[6]},clearDate),null);
+const amount = {text:"1470.54",weakDigits:[6]};
+assert.equal(strongerDateReading(amount,amount,{text:"1470.59",minConfidence:0.99}),null);
+const leapDate = {text:"02/29/24",weakDigits:[7]};
+assert.equal(strongerDateReading(leapDate,leapDate,{text:"02/29/25",minConfidence:0.99}),null);

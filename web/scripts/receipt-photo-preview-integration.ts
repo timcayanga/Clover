@@ -60,7 +60,7 @@ async function verify() {
       assert.equal(result.refining, false);
       assert.equal(result.preview.total, "1470.54");
       assert.equal(result.preview.currency, "PHP");
-      assert.ok(result.preview.billDate?.startsWith("2026-11-19") || (result.preview.billDate === null && result.preview.requiresReview));
+      assert.equal(result.preview.billDate?.slice(0,10), "2026-11-19");
       assert.match(result.preview.merchantName, /spirits library/i);
       assert.deepEqual(result.preview.items.map((row: {description:string; amount:string}) => [row.description,row.amount]),
         [["Mocktail REFRESHING","350.00"],["Cavinti Fizz","480.00"],["Punch from the Past","520.00"]]);
@@ -115,7 +115,7 @@ async function verify() {
     const result = await response.json();
     assert.equal(response.status, 200, result.error);
     assert.equal(result.preview.total, "1470.54");
-    assert.ok(result.preview.billDate?.startsWith("2026-11-19") || (result.preview.billDate === null && result.preview.requiresReview));
+    assert.equal(result.preview.billDate?.slice(0,10), "2026-11-19");
     assert.equal(result.preview.serviceCharge, "120.54");
     assert.equal(result.preview.subtotal, "1350.00");
     assert.deepEqual(result.preview.items.map((item: { description: string; amount: string }) => [item.description, item.amount]), expectedItems);

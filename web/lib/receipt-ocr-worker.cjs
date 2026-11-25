@@ -288,12 +288,14 @@ function decodeLine(probabilities, classes, model, numericGlyphs, box) {
     last = -1,
     min = 1;
   const characterAlternatives = [];
+  const weakDigits = [];
   let characterIndex = 0;
   for (let i = 0; i < probabilities.length; i += classes) {
     const best = mostLikelyClass(probabilities, i, classes);
     if (best !== 0 && best !== last) {
       const glyph = model.dictionary[best];
       const p = probabilities[i + best];
+      if (p < 0.85 && /^\d$/.test(glyph)) weakDigits.push(characterIndex);
       if (characterAlternatives.length < 8 && p < 0.85 && /^[0-9OoIlSBZ]$/.test(glyph)) {
         let next = -1;
         for (const c of numericGlyphs) {
@@ -314,6 +316,7 @@ function decodeLine(probabilities, classes, model, numericGlyphs, box) {
   if (!text.trim()) return null;
   return {
     text,
+    weakDigits,
     characterAlternatives: characterAlternatives.map(candidate => ({
       ...candidate, index: candidate.index - Array.from(text.match(/^\s*/u)?.[0] ?? "").length,
     })),
@@ -469,6 +472,31 @@ function agreedWordLine(line, witness) {
   return witness && line.text === witness.text && line.minConfidence >= 0.93 &&
     witness.minConfidence >= 0.93 && /^\p{Script=Latin}[\p{Script=Latin} '.,()-]*$/u.test(line.text);
 }
+// Each recognizer has already seen this same box. Only resolve a standalone
+// date when the two variants are weak at the exact disputed digit.
+function strongerDateReading(primary, variant, witness) {
+  if (!variant || !witness || !(witness.minConfidence >= 0.93) || witness.characterAlternatives?.length ||
+      primary.text !== variant.text || primary.text.length !== witness.text.length ||
+      !/^(?:\d{4}([/.-])\d{1,2}\1\d{1,2}|\d{1,2}([/.-])\d{1,2}\2(?:\d{2}|\d{4}))$/.test(primary.text)) return null;
+  let changed = -1;
+  for (let i = 0; i < primary.text.length; i++) {
+    if (primary.text[i] === witness.text[i]) continue;
+    if (changed !== -1 || !/\d/.test(witness.text[i]) || !primary.weakDigits?.includes(i) ||
+        !variant.weakDigits?.includes(i)) return null;
+    changed = i;
+  }
+  if (changed === -1) return null;
+  const [a, b, c] = witness.text.split(/[./-]/);
+  const yearFirst = a.length === 4;
+  const year = yearFirst ? Number(a) : Number(c) + (c.length === 2 ? 2000 : 0);
+  const isDay = (month, day) => {
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  };
+  if (yearFirst ? !isDay(Number(b),Number(c)) :
+      (!isDay(Number(a),Number(b)) && !isDay(Number(b),Number(a)))) return null;
+  return witness;
+}
 async function run(preview, timings) {
   const runtimeStarted = performance.now();
   if (!cvModule.Mat)
@@ -522,18 +550,29 @@ async function run(preview, timings) {
     }
   }
   const itemWordCorrections = [];
+  const dateCorrections = [];
   const lines = first.map((line) => {
     const other = alternateByBox.get(line.box);
     const best = other?.confidence > line.confidence ? other : line;
     const runnerUp = best === line ? other : line;
+    const witness = independentByBox.get(line.box);
+    const date = strongerDateReading(best, runnerUp, witness);
+    if (date) {
+      dateCorrections.push({ original: best.text, corrected: date.text, box: best.box,
+        primaryConfidence: best.confidence, witnessConfidence: date.confidence });
+      return { ...date, alternatives: [] };
+    }
     const supported = corroborateWords(best, runnerUp, language === "latin" ? independentByBox.get(line.box) : null, printedWords);
     if (supported !== best && best.confidence >= 0.5) {
       itemWordCorrections.push({ original: best.text.trim(), corrected: supported.text.trim() });
     }
     return {
       ...best,
-      alternatives: runnerUp && /\d/.test(best.text) && runnerUp.text.trim() !== best.text.trim()
-        ? [{ text: runnerUp.text, confidence: runnerUp.confidence }] : [],
+      alternatives: [runnerUp, witness].filter(candidate => candidate && /\d/.test(best.text) &&
+        candidate.text.trim() !== best.text.trim() && (candidate === runnerUp ||
+          (candidate.minConfidence >= 0.93 && best.minConfidence < 0.85 &&
+           best.text.replace(/\d/g, "#") === candidate.text.replace(/\d/g, "#"))))
+        .map(candidate => ({ text:candidate.text, confidence:candidate.confidence })),
     };
   });
   // Narrow single digits often sit by themselves in a quantity column.
@@ -562,11 +601,12 @@ async function run(preview, timings) {
     text,
     opticalLines,
     ...(itemWordCorrections.length ? { itemWordCorrections } : {}),
-    lines,
+    ...(dateCorrections.length ? {dateCorrections} : {}),
+    lines: lines.map(({weakDigits, ...line}) => line),
     confidence: score(lines),
   };
 }
-module.exports = { run, rows, modelDictionary, tensor, corroborateWords, mostLikelyClass, agreedWordLine };
+module.exports = { run, rows, modelDictionary, tensor, corroborateWords, mostLikelyClass, agreedWordLine, strongerDateReading };
 if (parentPort)
   parentPort.on("message", async (input) => {
     const timings = input.measure ? {} : undefined;

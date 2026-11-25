@@ -264,6 +264,9 @@ const quantityRows = [{description:"Cocoa 1",amount:"10.00"}, {description:"Tea 
 assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 3", opticalBlocks).map(item => item.description), ["Cocoa","Tea"]);
 assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 2", opticalBlocks), quantityRows);
 assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 3", opticalBlocks.slice(1)), quantityRows);
+const disputedQty = opticalBlocks.map(block => block.text === "2"
+  ? { ...block, alternatives:[{text:"7",confidence:0.96}] } : block);
+assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 3", disputedQty), quantityRows);
 const damagedColumn = "Orange Juice 25.00\nTea\nBeer\nSpring Roll 30.00\nNoodles 8.8\nSubtotal 120.00";
 assert.deepEqual(readPartialPriceColumn(damagedColumn), [
   { description: "Orange Juice", amount: "25.00" }, { description: "Spring Roll", amount: "30.00" },
