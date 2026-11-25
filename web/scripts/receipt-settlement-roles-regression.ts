@@ -120,3 +120,12 @@ const tillScan = {
 assert.deepEqual(conflictingDeviceReceiptFields(tillScan, { total: 1, currency: "PHP" }), ["total", "currency"]);
 assert.deepEqual(conflictingDeviceReceiptFields(tillScan, { total: 71, currency: "MYR" }), []);
 assert.deepEqual(conflictingDeviceReceiptFields({ ...tillScan, complete: false }, { total: 1, currency: "PHP" }), []);
+
+const ringgitTill = ["Total Sales (Inclusive GST) RM 52.08", "Rounding Adjustment RM .02",
+  "Rounding RM 52.10", "Cash RM 60.00", "Change RM 7.90"].join("\n");
+assert.deepEqual(readReceiptSettlementEvidence(ringgitTill), { kind: "payable", amount: 52.1 });
+for (const conflict of [
+  ringgitTill.replace("7.90", "7.80"), ringgitTill.replace("RM .02", "RM .01"),
+  ringgitTill.replace("Cash RM", "Cash USD"), ringgitTill.replace("Change RM 7.90", ""),
+  ringgitTill + "\nCard RM 1.00",
+]) assert.deepEqual(readReceiptSettlementEvidence(conflict), { kind: "conflict" });

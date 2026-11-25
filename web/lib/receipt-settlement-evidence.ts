@@ -138,6 +138,24 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     if (refundHeading.test(line) || /^(?:환불\s*영수증|pengembalian dana)\s*$/iu.test(line)) isRefund = true;
     if ([cardTender, walletTender, otherTender].some(pattern => pattern.test(line)) ||
         /^paid (?:by|with|via) (?:card|wallet|visa|mastercard|gcash|maya)\b/iu.test(line)) hasOtherTender = true;
+    // Some ringgit tills use "Rounding" for the final amount and print the
+    // signed adjustment separately. Require both calculations to reconcile.
+    const rounded = /^rounding[ \t]+RM[ \t]*([\d,.]+)$/iu.exec(line);
+    if (rounded && !inTaxSummary && index >= 2) {
+      const adjustment = /^rounding adjustment[ \t]+RM[ \t]*([-+]?[\d.]+)$/iu.exec(lines[index - 1]);
+      const gross = /^total sales[ \t]*\(inclusive(?: of)? GST\)[ \t]*RM[ \t]*([\d,.]+)$/iu.exec(lines[index - 2]);
+      if (adjustment && gross) {
+        const delta = readAmount(adjustment[1]);
+        const before = readAmount(gross[1]);
+        const after = readAmount(rounded[1]);
+        if (delta === null || before === null || after === null || Math.abs(delta) > 2 || before + delta !== after) {
+          unreadableFinal = true;
+        } else {
+          contextualTotals.add(after);
+          settlementCurrencies.add("MYR");
+        }
+      }
+    }
     const refundLabel = line.match(refund)?.[0];
     if (breakdownTotal.test(line) && !refundLabel) {
       hasSupportingAmounts = true;
