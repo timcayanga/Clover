@@ -69,6 +69,13 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
     if (expected && !outstanding && [...settled, ...billed].every(row => invoiceMoneyKey(row[1]) === expected)) return null;
     return amountPaid && outstanding ? "unpaid_invoice" : "unverified_invoice";
   }
+  // Malaysian POS invoices can omit the change row for exact cash. Bind
+  // the tax-inclusive total and tender to the immediately following GST recap.
+  const exactGstCash = /^total[ \t]+(?:\(inclusive of gst\)|inclusive gst)[ \t]*:[ \t]*(\d+\.\d{2})\n(?:total[ \t]*:[ \t]*\1\n)?cash[ \t]*:?[ \t]*\1\nGST summary\b/im.test(text);
+  if (exactGstCash && !amountPaid && !hasPositiveAmount(text, "amount due") &&
+      !/^(?:card|credit|debit|visa|mastercard|wallet|gift card|voucher|change|refund|deposit|balance|amount due)\b/im.test(text) &&
+      text.match(/^cash[ \t]*:?[ \t]*\d/gim)?.length === 1 &&
+      !/^(?:grand total|net total|total payable|amount payable)\b/im.test(text)) return null;
   // Some MYR tills print change below one ringgit without a leading zero.
   // Require one explicitly denominated total, cash and change in that order.
   if (/^total sales[ \t]*\(inclusive(?: of)? gst\)[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\nCASH[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\nCHANGE[ \t]*:?[ \t]*RM[ \t]*\.\d{2}$/im.test(text)) {
