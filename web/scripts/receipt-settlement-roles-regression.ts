@@ -133,3 +133,12 @@ for (const conflict of [
 const inclusiveTill = "Total Incl. GST@6% RM 48.10\nCash RM 50.20\nChange RM 2.10\nGST @6% included in total RM 2.72";
 assert.deepEqual(readReceiptSettlementEvidence(inclusiveTill), { kind: "payable", amount: 48.1 });
 assert.deepEqual(readReceiptSettlementEvidence(inclusiveTill.replace("Change RM 2.10", "Change RM 2.00")), { kind: "conflict" });
+
+const printedGstTill = "TOTAL INCL. GST06% RM 34.40\nCASH RM 50.40\nCHANGE RM 16.00";
+assert.deepEqual(readReceiptSettlementEvidence(printedGstTill), { kind: "payable", amount: 34.4 });
+for (const mismatch of [
+  printedGstTill.replace("16.00", "15.00"),
+  printedGstTill.replace("CASH RM", "CASH USD"),
+  printedGstTill.replace("\nCHANGE RM 16.00", ""),
+  printedGstTill + "\nCard RM 1.00",
+]) assert.deepEqual(readReceiptSettlementEvidence(mismatch), { kind: "conflict" });

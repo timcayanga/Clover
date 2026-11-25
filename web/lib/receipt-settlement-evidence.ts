@@ -216,7 +216,8 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     }
     // These POS labels identify a rounded or dine-in amount. Require the
     // independent cash/change arithmetic before preferring it to a subtotal.
-    const posLabel = line.match(/^(?:ttl atf rnd|amount to be paid|total \(eat in\))(?=$|[ \t:：])/iu)?.[0];
+    const ringgitInclusiveLabel = line.match(/^total incl\.[ \t]+GST[ \t]*0?6%(?=[ \t]+RM[ \t]*\d+[.]\d{2}$)/iu)?.[0];
+    const posLabel = ringgitInclusiveLabel ?? line.match(/^(?:ttl atf rnd|amount to be paid|total \(eat in\))(?=$|[ \t:：])/iu)?.[0];
     const totalLabel = posLabel ?? (/^due\s+date\b/iu.test(line) ? undefined : line.match(payable)?.[0]);
     const cashLabel = line.match(tender)?.[0];
     const changeLabel = line.match(change)?.[0];
