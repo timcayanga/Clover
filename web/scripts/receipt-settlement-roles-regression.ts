@@ -129,3 +129,7 @@ for (const conflict of [
   ringgitTill.replace("Cash RM", "Cash USD"), ringgitTill.replace("Change RM 7.90", ""),
   ringgitTill + "\nCard RM 1.00",
 ]) assert.deepEqual(readReceiptSettlementEvidence(conflict), { kind: "conflict" });
+
+const inclusiveTill = "Total Incl. GST@6% RM 48.10\nCash RM 50.20\nChange RM 2.10\nGST @6% included in total RM 2.72";
+assert.deepEqual(readReceiptSettlementEvidence(inclusiveTill), { kind: "payable", amount: 48.1 });
+assert.deepEqual(readReceiptSettlementEvidence(inclusiveTill.replace("Change RM 2.10", "Change RM 2.00")), { kind: "conflict" });

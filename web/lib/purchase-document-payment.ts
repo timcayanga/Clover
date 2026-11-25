@@ -72,7 +72,14 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
   // Malaysian POS invoices can omit the change row for exact cash. Bind
   // the tax-inclusive total and tender to the immediately following GST recap.
   const exactGstCash = /^total[ \t]+(?:\(inclusive of gst\)|inclusive gst)[ \t]*:[ \t]*(\d+\.\d{2})\n(?:total[ \t]*:[ \t]*\1\n)?cash[ \t]*:?[ \t]*\1\nGST summary\b/im.test(text);
-  if (exactGstCash && !amountPaid && !hasPositiveAmount(text, "amount due") &&
+  // A closed restaurant bill may put the terminal timestamp and cashier
+  // between the final total and tender. Keep the payment and tax rows bound
+  // together and independently check any cash-rounding adjustment.
+  const closedCash = text.match(/^total \(inclusive of gst\)[ \t]*:[ \t]*(\d+\.\d{2})\n(?:rounding adj[ \t]*:?[ \t]*([-+]?\d+\.\d{2})\n)?total[ \t]*:[ \t]*(\d+\.\d{2})\nclosed:[ \t]*\d+[ \t]+\d{2}-\d{2}-\d{4}[ \t]+\d{2}:\d{2}:\d{2}\nserver:[ \t]*\d+[ \t]+cashier\ncash[ \t]*:[ \t]*\3\ngst summary[ \t]+amount[ \t]*\(rm\)[ \t]+tax[ \t]*\(rm\)/im);
+  const reconciledClosedCash = closedCash && Math.abs(Number(closedCash[2] ?? 0)) <= 0.02 &&
+    Math.round(Number(closedCash[1]) * 100) + Math.round(Number(closedCash[2] ?? 0) * 100) === Math.round(Number(closedCash[3]) * 100) &&
+    Number(closedCash[3]) > 0 && readPrintedReceiptCurrency(text)?.kind !== "conflict";
+  if ((exactGstCash || reconciledClosedCash) && !amountPaid && !hasPositiveAmount(text, "amount due") &&
       !/^(?:card|credit|debit|visa|mastercard|wallet|gift card|voucher|change|refund|deposit|balance|amount due)\b/im.test(text) &&
       text.match(/^cash[ \t]*:?[ \t]*\d/gim)?.length === 1 &&
       !/^(?:grand total|net total|total payable|amount payable)\b/im.test(text)) return null;
