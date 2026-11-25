@@ -302,21 +302,23 @@ async function loadPreservationBatch(runIds: string[], actor: string) {
 
 // Return only ordered fixed-length row hashes. Their concatenation across pages has
 // precisely the same SHA-256 as readManifest, regardless of the page boundaries.
-export async function previewPreservationHashPage(runIds: string[], actor: string, table: typeof tables[number], after?: string) {
+export async function previewPreservationHashPage(runIds: string[], actor: string, table: typeof tables[number], after?: string, pageSize = 512) {
   const { workspaces } = await loadPreservationBatch(runIds, actor);
   if (!tables.includes(table)) throw new Error("VERIFICATION_NOT_FOUND");
   const scope = manifestWorkspaceExpression(table);
   const checkpoint = table === "AccountStatementCheckpoint" ? 'AND t."id" <> $3' : '';
   const params: unknown[] = [workspaces, after ?? null];
   if (checkpoint) params.push(retainedCheckpointId);
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 512) throw new Error("VERIFICATION_NOT_FOUND");
+  params.push(pageSize);
   const rows = await prisma.$queryRawUnsafe<{ id: string; digest: string }[]>(
     `SELECT t."id", encode(sha256(convert_to(to_jsonb(t)::text,'UTF8')), 'hex') AS digest
      FROM "${table}" t ${manifestParentJoin(table)}
      WHERE (${scope} IS NULL OR NOT (${scope} = ANY($1::text[])))
        AND ($2::text IS NULL OR t."id" > $2::text) ${checkpoint}
-     ORDER BY t."id" LIMIT 512`, ...params);
+     ORDER BY t."id" LIMIT $${params.length}::int`, ...params);
   return { table, count: rows.length, hashes: rows.map(row => row.digest).join(""),
-    next: rows.length === 512 ? rows[rows.length - 1].id : null };
+    next: rows.length === pageSize ? rows[rows.length - 1].id : null };
 }
 
 export async function previewLearningBatchPreservation(runIds: string[], actor: string, table?: typeof tables[number]) {
