@@ -34,7 +34,7 @@ import { assessBpiStatementReconciliation, isBpiCardMetadata } from "@/lib/bpi-s
 import { readAppMigration, createMigrationOverlapMatcher, summarizeAppMigration } from "@/lib/app-migration-import";
 import { persistMigrationTags } from "@/lib/app-migration-persistence";
 import { isGCryptoHistorySource, overlappingGCryptoTradeIndices } from "@/lib/gcrypto-screenshot-overlap";
-import { qualifyDeviceReceiptReading } from "@/lib/device-receipt-reading";
+import { conflictingDeviceReceiptFields, qualifyDeviceReceiptReading } from "@/lib/device-receipt-reading";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText, readReceiptOpticalLayout, readReceiptOpticalEvidence } from "@/lib/local-receipt-ocr-envelope";
 import { applyReceiptDefaultCurrency, hasCompleteReceiptCore, hasReceiptPhotoEvidence, selectSavedStatementReceiptText, receiptCacheQualityPercent } from "@/lib/receipt-intake";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
@@ -13526,6 +13526,12 @@ const processImportFileTextImpl = async (
   // template promotion, or a retry that cannot restore missing source details.
   const missingReceiptFields = effectiveImportMode === "receipt" && receiptDetails
     ? [...incompleteReceiptFields(receiptDetails), ...(paymentAccount?.review ? ["payment account"] : [])] : [];
+  if (imageImport && effectiveImportMode === "receipt" && receiptDetails && !receiptRegion &&
+      receiptDetails.receipt_type !== "wallet_transfer" && receiptDetails.receipt_type !== "travel_ticket") {
+    for (const field of conflictingDeviceReceiptFields(deviceText, receiptDetails)) {
+      if (!missingReceiptFields.includes(field)) missingReceiptFields.push(field);
+    }
+  }
   if (missingReceiptFields.length > 0 && documentImportRecord && await countTransactionsByImportFileCompat(importFileId) === 0) {
     const retake = getImageQualityRetake(imageQuality, missingReceiptFields);
     const reviewMessage = receiptReviewMessage(missingReceiptFields);

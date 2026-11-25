@@ -1,5 +1,6 @@
 import type { DeviceTextEvidence } from "../../shared/device-text-evidence";
 import { encodeLocalReceiptOcr, receiptDateDisagreements, hasConflictingReceiptTotalReading, readReceiptOpticalLayout, readReceiptOpticalLines } from "./local-receipt-ocr-envelope";
+import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { readReceiptSettlementEvidence } from "./receipt-settlement-evidence";
 import { findReceiptImageRegion } from "./receipt-image-region";
 import { hasReceiptPhotoEvidence } from "./receipt-intake";
@@ -43,4 +44,24 @@ export function qualifyDeviceReceiptReading(
   });
   if (!quality.reliableForFastPath) return null;
   return { source, layout, region, preview: candidate };
+}
+
+// Even a device reading that misses items can preserve the printed till total
+// or currency. A conflicting backup read needs review before creating a sale.
+export function conflictingDeviceReceiptFields(
+  device: DeviceTextEvidence | null,
+  details: { total?: number | null; currency?: string | null },
+) {
+  if (!device?.complete || device.pagesRead !== 1 || device.totalPages !== 1) return [];
+  const source = encodeLocalReceiptOcr(device);
+  const lines = readReceiptOpticalLines(source);
+  if (!lines.length) return [];
+  const layout = readReceiptOpticalLayout(source, lines);
+  const total = readReceiptSettlementEvidence(layout);
+  const currency = readPrintedReceiptCurrency(layout);
+  const conflicts: string[] = [];
+  if (total?.kind === "payable" && details.total != null &&
+      Math.round(total.amount * 100) !== Math.round(details.total * 100)) conflicts.push("total");
+  if (currency?.kind === "printed" && details.currency && currency.currency !== details.currency) conflicts.push("currency");
+  return conflicts;
 }

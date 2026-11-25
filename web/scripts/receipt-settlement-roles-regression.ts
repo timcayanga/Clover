@@ -108,3 +108,15 @@ assert.deepEqual(readReceiptSettlementEvidence(receipt("Total (Eat In) RM24.00",
 assert.deepEqual(readReceiptSettlementEvidence(afterRounding + "\nGrand Total 79.00"), {kind:"conflict"});
 
 assert.deepEqual(readReceiptSettlementEvidence(receipt("Total 72.93", "TTL ATF RND ?", "Cash 72.93", "Change 0.00")), { kind: "conflict" });
+
+import { conflictingDeviceReceiptFields } from "../lib/device-receipt-reading";
+const tillLines = ["Coffee Shop", "Amount (RM)", "TOTAL 71.00", "Cash Received 101.00", "Change 30.00"];
+const tillScan = {
+  version: 1 as const, source: "apple_vision" as const, pagesRead: 1, totalPages: 1, complete: true, durationMs: 5,
+  text: tillLines.join("\n"), opticalLines: tillLines.map((text, i) => ({
+    text, box: [0.1, i / 6, 0.9, i / 6 + 0.05] as [number, number, number, number],
+  })),
+};
+assert.deepEqual(conflictingDeviceReceiptFields(tillScan, { total: 1, currency: "PHP" }), ["total", "currency"]);
+assert.deepEqual(conflictingDeviceReceiptFields(tillScan, { total: 71, currency: "MYR" }), []);
+assert.deepEqual(conflictingDeviceReceiptFields({ ...tillScan, complete: false }, { total: 1, currency: "PHP" }), []);
