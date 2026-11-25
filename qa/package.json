@@ -1,0 +1,11 @@
+{
+  "name": "clover-daily-qa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.65.1"
+  }
+}
