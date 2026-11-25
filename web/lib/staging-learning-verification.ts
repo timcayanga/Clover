@@ -177,6 +177,41 @@ export async function startLearningVerificationBatch(runIds: string[], actor: st
   }, { isolationLevel: "RepeatableRead", timeout: readSnapshotTimeout });
 }
 
+/** Capture each protected table before any training in this isolated QA workspace.
+ * A committed table can be resumed. Only the final table unlocks the QA journal. */
+export async function prepareVersionBaselineTable(runId: string, actor: string, table: typeof tables[number]) {
+  assertLearningVerificationEnvironment();
+  const workspaces = batchWorkspaceIds([runId]);
+  if (!tables.includes(table)) throw new Error("VERIFICATION_NOT_FOUND");
+  const id = journalId(runId);
+  return prisma.$transaction(async db => {
+    let journal = await db.auditLog.findUnique({ where: { id } });
+    if (!journal) {
+      const user = await db.user.findFirst({ where: { clerkUserId: LEARNING_QA_USER, environment: "staging" } });
+      if (!user) throw new Error("VERIFICATION_QA_ACCOUNT_UNAVAILABLE");
+      const retainedCheckpoint = await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: retainedCheckpointId } });
+      await db.workspace.create({ data: { id: workspaces[0], userId: user.id, type: "personal", name: `Learning verification ${runId.slice(0, 8)}` } });
+      journal = await db.auditLog.create({ data: { id, workspaceId: workspaces[0], actorUserId: actor,
+        entity: "LearningVerification", entityId: runId, action: "learning.verification.preparing",
+        metadata: json({ baseline: {}, batchRunIds: [runId], rowVersions: true, perTable: true, retainedCheckpoint }) } });
+    }
+    const state = journal.metadata as unknown as RunState & { perTable?: boolean };
+    if (journal.actorUserId !== actor || journal.workspaceId !== workspaces[0] || journal.entityId !== runId ||
+        !["learning.verification.preparing", "learning.verification.started"].includes(journal.action) || !state.perTable) {
+      throw new Error("VERIFICATION_NOT_FOUND");
+    }
+    if (!state.baseline[table]) {
+      // Repeatable read makes concurrent journal updates conflict instead of losing a table.
+      Object.assign(state.baseline, await checkpointPreservationManifest(retainedCheckpointId, db, workspaces, table, true));
+      const complete = tables.every(name => Boolean(state.baseline[name]));
+      await db.auditLog.update({ where: { id }, data: { metadata: json(state),
+        action: complete ? "learning.verification.started" : "learning.verification.preparing" } });
+    }
+    return { runIds: [runId], excludedProfiles: workspaces, baseline: state.baseline,
+      retainedCheckpoint: state.retainedCheckpoint, complete: tables.every(name => Boolean(state.baseline[name])) };
+  }, { isolationLevel: "RepeatableRead", timeout: readSnapshotTimeout });
+}
+
 // Run only after the ordinary upload/edit/import flow. These three-item batches
 // exercise the deployed worker with a missing fixture reference and an expired
 // lease. They do not kill a live worker, delete a reference, or alter its input.
