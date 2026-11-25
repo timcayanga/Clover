@@ -1,7 +1,9 @@
 // Run against the supplied Spirits Library JPEG. No database, provider, or object store is contacted.
 import { statementPdf } from "./fixtures/synthetic-statement-pdf";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { withMobileRequestContext } from "../lib/mobile-request-context";
 import { readUploadedFileText, shutdownImportOcrWorkers } from "../lib/import-file-text.server";
@@ -12,6 +14,7 @@ const require = createRequire(import.meta.url);
 async function verify() {
   assert(process.argv[2], "Pass the original Spirits Library JPEG path");
   const bytes = Uint8Array.from(await readFile(process.argv[2]));
+  const cache = await mkdtemp(join(tmpdir(), "clover-single-read-"));
   let retained = 0;
   let expectedBytes: Uint8Array = bytes;
   let networkCalls = 0;
@@ -19,7 +22,7 @@ async function verify() {
   globalThis.fetch = async () => { networkCalls++; throw new Error("Unexpected network call"); };
   process.env.OPENAI_API_KEY = "offline-test-only";
   require("next/server").after = () => {};
-  let qaUserId = "qa";
+  let qaUserId = "qa-single-read";
   const mocks = {
     "../lib/native-upload-store": { readReceiptUpload: async (id: string, user: string, workspace: string) => {
       assert.deepEqual([id, user, workspace], ["receipt-fixture", "qa", "qa"]);
@@ -30,7 +33,7 @@ async function verify() {
     "../lib/split-bill-access": { getSplitBillCurrentUser: async () => ({ id: qaUserId, clerkUserId: "qa" }) },
     "../lib/clover-token-usage": { mayUseImportCloudAi: async () => { allowanceChecks++; return false; } },
     "../lib/prisma": { prisma: { workspace: { findFirst: async () => ({ id: "qa" }) } } },
-    "../lib/s3": { uploadObject: async (_key: string, original: Uint8Array) => {
+    "../lib/s3": { getLocalImportObjectPath: (key: string) => join(cache, key), uploadObject: async (_key: string, original: Uint8Array) => {
       assert.deepEqual(original, expectedBytes);
       retained++;
     } },
@@ -45,6 +48,46 @@ async function verify() {
   const request = new Request("https://clover.ph/api/split-bill-receipts/preview", {
     method: "POST", headers: { origin: "https://clover.ph" }, body: data,
   });
+  let cachedId: string | undefined;
+  try {
+    for (const label of ["fresh photo", "identical retry"]) {
+      const url = request.url + "?progressive=1&workspaceId=qa&scope=main";
+      const upload = new Request(url, { method:"POST", headers:{ origin:"https://clover.ph" }, body:data });
+      const start = performance.now();
+      const response = await withMobileRequestContext("qa", upload, () => POST(upload));
+      const result = await response.json();
+      assert.equal(response.status, 200, result.error);
+      assert.equal(result.refining, false);
+      assert.equal(result.preview.total, "1470.54");
+      assert.equal(result.preview.currency, "PHP");
+      assert.equal(result.preview.billDate?.slice(0,10), "2026-11-19");
+      assert.match(result.preview.merchantName, /spirits library/i);
+      assert.deepEqual(result.preview.items.map((row: {description:string; amount:string}) => [row.description,row.amount]),
+        [["Mocktail REFRESHING","350.00"],["Cavinti Fizz","480.00"],["Punch from the Past","520.00"]]);
+      assert.equal(result.preview.serviceCharge, "120.54");
+      assert.ok(result.draftId);
+      if (cachedId) assert.equal(result.draftId, cachedId);
+      cachedId = result.draftId;
+      assert.equal(retained, 1);
+      assert.equal(networkCalls, 0);
+      assert.equal(allowanceChecks, 0);
+      console.log("PASS single-read preview", label, Math.round(performance.now() - start), "ms");
+    }
+    const blank = await require("sharp")({create:{width:360,height:480,channels:3,background:"white"}}).jpeg().toBuffer();
+    const form = new FormData();
+    form.set("file",new File([blank],"receipt.jpg",{type:"image/jpeg"}));
+    const unreadable = new Request(request.url + "?progressive=1&workspaceId=qa", {
+      method:"POST", headers:{origin:"https://clover.ph"}, body:form,
+    });
+    const response = await withMobileRequestContext("qa", unreadable, () => POST(unreadable));
+    assert.equal(response.status,422);
+    assert.equal(allowanceChecks,0);
+    assert.equal(networkCalls,0);
+  } finally {
+    await rm(cache, {recursive:true, force:true});
+  }
+  qaUserId = "qa";
+  retained = 0;
   // A completed scan with no text must leave the worker available for the next upload.
   assert.equal(await readLocalReceiptImage({ data: Buffer.alloc(320 * 240 * 3, 255), width: 320, height: 240 }), null);
   // Generic Add and Transactions uploads can receive camera photos exported as PNG.
@@ -72,7 +115,7 @@ async function verify() {
     const result = await response.json();
     assert.equal(response.status, 200, result.error);
     assert.equal(result.preview.total, "1470.54");
-    assert.equal(result.preview.billDate.slice(0, 10), "2026-11-19");
+    assert.equal(result.preview.billDate?.slice(0,10), "2026-11-19");
     assert.equal(result.preview.serviceCharge, "120.54");
     assert.equal(result.preview.subtotal, "1350.00");
     assert.deepEqual(result.preview.items.map((item: { description: string; amount: string }) => [item.description, item.amount]), expectedItems);

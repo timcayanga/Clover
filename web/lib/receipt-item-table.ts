@@ -646,7 +646,10 @@ export function readOpticalItemQuantities<T extends { description: string; amoun
     const parts = item.description.match(/^(.+?)\s+([1-9]\d?)$/);
     if (!parts || item.quantity !== undefined) return null;
     const lastWord = parts[1].split(/\s+/).pop()!.toLowerCase();
-    const matches = blocks.filter(block => block.text.trim() === parts[2]).filter(block => {
+    const matches = blocks.filter(block => block.text.trim() === parts[2] &&
+      !block.characterAlternatives?.length && !block.alternatives?.some(other =>
+        /^\d+$/.test(other.text) && Number(other.text) !== Number(parts[2]) &&
+        (block.confidence ?? 1) - (other.confidence ?? 1) <= 0.2)).filter(block => {
       const [left, top, right, bottom] = block.box;
       const sameRow = blocks.filter(other => Math.min(bottom, other.box[3]) - Math.max(top, other.box[1]) >
         Math.min(bottom - top, other.box[3] - other.box[1]) * 0.45);

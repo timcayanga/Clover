@@ -7,9 +7,9 @@ import { getEnv } from "./env";
 import { getBoundedImportImagePreview } from "./import-image-validation.server";
 import { readLocalReceiptImage } from "./local-receipt-ocr.server";
 import { assessReceiptPreviewQuality, hasReconciledOpticalSettlement, parseReceiptPhotoText, type ReceiptPreviewResult } from "./split-bill";
-import { readLocalReceiptOcrText, receiptDateDisagreements, readReceiptOpticalEvidence } from "./local-receipt-ocr-envelope";
+import { readLocalReceiptOcrText, singleReceiptDate, receiptDateDisagreements, readReceiptOpticalEvidence } from "./local-receipt-ocr-envelope";
 import { editableReceiptItems } from "../../shared/split-bill-experience";
-import { hasPrintedItemizedTotal, readChargedReceiptTable } from "./receipt-item-table";
+import { reconcilesReviewedDiscountPhoto, hasPrintedItemizedTotal, readChargedReceiptTable } from "./receipt-item-table";
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
 import { getClearLocalPhotoRejection } from "./financial-upload-scope";
 
@@ -77,6 +77,14 @@ export async function cachedReceiptDraft(prefix: string) {
       draft.preview = {...draft.preview, items:parsed.items, subtotal:parsed.subtotal, serviceCharge:parsed.serviceCharge};
     }
   }
+  if (draft.preview.billDate && hasUncertainPhotoDate(draft.preview.receiptText)) {
+    return { ...draft, refining:false, preview:{...draft.preview, billDate:null, requiresReview:true,
+      confidence:Math.min(45, draft.preview.confidence)}, readyForReviewableBill:false, reliableForScopedSplit:false };
+  }
+  // Previous clients may poll a partial photo draft. Serve its saved evidence
+  // for manual review without scheduling another recognition or changing a bill.
+  if (draft.refining) return { ...draft, refining:false, preview:{...draft.preview, requiresReview:true},
+    readyForReviewableBill:false, reliableForScopedSplit:false };
   return draft;
 }
 
@@ -101,9 +109,25 @@ export async function firstReceiptRead(bytes: Uint8Array, name: string, type: st
   const text = readLocalReceiptOcrText(source) ?? source;
   const rejection = getClearLocalPhotoRejection({text, fileName:name, fileType:type});
   if (rejection) throw rejection;
+  return { source, preview: singleReadReceiptPreview(source, currency) };
+}
+
+function hasUncertainPhotoDate(source: string) {
+  const evidence = readReceiptOpticalEvidence(source);
+  return receiptDateDisagreements(evidence).length > 0 || evidence.some(line =>
+    singleReceiptDate(line.text) && line.minimumCharacterConfidence !== undefined && line.minimumCharacterConfidence < 0.85);
+}
+
+export function singleReadReceiptPreview(source: string, currency: string) {
+  const text = readLocalReceiptOcrText(source) ?? source;
   const preview = parseReceiptPhotoText(source, currency);
-  if (!preview.merchantName || !preview.total || preview.currency === "MIXED" || classifyUnsettledPurchaseDocument(text) ||
-      !(hasPrintedItemizedTotal(text, preview.total) || hasReconciledOpticalSettlement(text, preview.total))) return { source, preview:null };
-  const dateUncertain = receiptDateDisagreements(readReceiptOpticalEvidence(source)).length > 0;
-  return { source, preview: { ...preview, billDate:dateUncertain ? null : preview.billDate, receiptText:source } };
+  const reconciled = Boolean(preview.total && preview.currency !== "MIXED" &&
+    !classifyUnsettledPurchaseDocument(text) && (hasPrintedItemizedTotal(text, preview.total) ||
+      hasReconciledOpticalSettlement(text, preview.total) || reconcilesReviewedDiscountPhoto(text, preview)));
+  const dateUncertain = hasUncertainPhotoDate(source);
+  return { ...preview, billDate:dateUncertain ? null : preview.billDate,
+    total:reconciled ? preview.total : null,
+    confidence:reconciled && !dateUncertain ? preview.confidence : Math.min(45, preview.confidence),
+    requiresReview:Boolean(preview.requiresReview || !reconciled || dateUncertain || !preview.merchantName),
+    receiptText:source };
 }

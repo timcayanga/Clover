@@ -1,4 +1,4 @@
-import {completeChargedReceipt} from "../lib/receipt-progressive.server";
+import {completeChargedReceipt, singleReadReceiptPreview} from "../lib/receipt-progressive.server";
 import {editableReceiptItems} from "../../shared/split-bill-experience";
 import { splitBillDraftFromReceiptPreview } from "../lib/split-bill";
 import { mergeReceiptBackup } from "../lib/receipt-backup-preview";
@@ -264,6 +264,9 @@ const quantityRows = [{description:"Cocoa 1",amount:"10.00"}, {description:"Tea 
 assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 3", opticalBlocks).map(item => item.description), ["Cocoa","Tea"]);
 assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 2", opticalBlocks), quantityRows);
 assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 3", opticalBlocks.slice(1)), quantityRows);
+const disputedQty = opticalBlocks.map(block => block.text === "2"
+  ? { ...block, alternatives:[{text:"7",confidence:0.96}] } : block);
+assert.deepEqual(readOpticalItemQuantities(quantityRows, "Total Qty 3", disputedQty), quantityRows);
 const damagedColumn = "Orange Juice 25.00\nTea\nBeer\nSpring Roll 30.00\nNoodles 8.8\nSubtotal 120.00";
 assert.deepEqual(readPartialPriceColumn(damagedColumn), [
   { description: "Orange Juice", amount: "25.00" }, { description: "Spring Roll", amount: "30.00" },
@@ -652,3 +655,8 @@ assert.deepEqual(readRinggitNettTable(nettRows)?.items, [
 for (const damaged of [nettRows.replace("4 RM4.12","3 RM4.12"), nettRows.replace("CASH RM6.00","CASH RM5.00"), nettRows + "\nOutstanding RM2.00", nettRows.replace("RM1.88 RM1.88","Unreadable")]) {
   assert.equal(readRinggitNettTable(damaged), null);
 }
+
+const ambiguousPhoto = singleReadReceiptPreview(twoPurchasesAndFee + "\nTotal Amount: 999.00", "PHP");
+assert.equal(ambiguousPhoto.total, null);
+assert.equal(ambiguousPhoto.requiresReview, true);
+assert(ambiguousPhoto.confidence <= 45);
