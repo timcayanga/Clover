@@ -69,6 +69,18 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
     if (expected && !outstanding && [...settled, ...billed].every(row => invoiceMoneyKey(row[1]) === expected)) return null;
     return amountPaid && outstanding ? "unpaid_invoice" : "unverified_invoice";
   }
+  // A ringgit register can label change as “Cash Change”. Bind the final
+  // total to its own payment rows before accepting this invoice as settled.
+  const cashRegister = /^(?:rounded total[ \t]*\(RM\)[ \t]*:[ \t]*\d+\.\d{2}\ncash[ \t]+\d+\.\d{2}\ncash change[ \t]+\d+\.\d{2}|total incl gst[ \t]+\d+\.\d{2}\npay cash[ \t]+\d+\.\d{2}\nchange[ \t]+\d+\.\d{2})$/im.test(text);
+  if (cashRegister) {
+    const settlement = readReceiptSettlementEvidence(text);
+    const tenders = readReceiptTenders(text);
+    if (settlement?.kind === "payable" && settlement.amount > 0 && tenders.length === 2 &&
+        tenders[0].method === "cash" && tenders[1].method === "change" &&
+        !amountPaid && !hasPositiveAmount(text, "amount due") && readPrintedReceiptCurrency(text)?.kind !== "conflict" &&
+        !/^(?:card|visa|mastercard|credit|debit|wallet|deposit|voucher|refund|balance|grand total)\b/im.test(text)) return null;
+    return "unverified_invoice";
+  }
   // Malaysian POS invoices can omit the change row for exact cash. Bind
   // the tax-inclusive total and tender to the immediately following GST recap.
   const exactGstCash = /^total[ \t]+(?:\(inclusive of gst\)|inclusive gst)[ \t]*:[ \t]*(\d+\.\d{2})\n(?:total[ \t]*:[ \t]*\1\n)?cash[ \t]*:?[ \t]*\1\nGST summary\b/im.test(text);

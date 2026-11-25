@@ -43,9 +43,17 @@ export type ReceiptTender = {
   evidence: string;
 };
 
+// Normalize only the three adjacent till rows. Preserve the original
+// transcript and require independent cash-minus-change evidence downstream.
+function normalizeRinggitRegister(source: string) {
+  return source.replace(/^(?:rounded total[ \t]*\(RM\)[ \t]*:|total incl gst)[ \t]*(\d+\.\d{2})[ \t]*\r?\n(?:pay[ \t]+)?cash[ \t]+(\d+\.\d{2})[ \t]*\r?\n(?:cash[ \t]+)?change[ \t]+(\d+\.\d{2})[ \t]*$/gim,
+    "Amount to be paid $1\nCash $2\nChange $3");
+}
+
 export function readReceiptTenders(source: string): ReceiptTender[] {
   const { body } = splitReceiptPromotionalFooter(joinReceiptColumnSettlement(source));
-  const lines = body.split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
+  const lines = normalizeRinggitRegister(body).split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
+  const originalLines = body.split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
   return lines.flatMap((line, index) => {
     const field = line.normalize("NFKC").replace(/^(?:paid (?:by|with|via)|payment by)\s+/iu, "");
     for (const [method, pattern] of tenderLabels) {
@@ -65,7 +73,7 @@ export function readReceiptTenders(source: string): ReceiptTender[] {
       if (amount === null || amount < 0) return [];
       return [{ method, label, amount: amount / 100,
         currency: currency?.kind === "printed" ? currency.currency : null,
-        evidence: wrapped ? `${line}\n${printedAmount}` : line,
+        evidence: wrapped ? `${originalLines[index]}\n${printedAmount}` : originalLines[index],
       }];
     }
     return [];
@@ -110,7 +118,7 @@ type Settlement =
 
 export function readReceiptSettlementEvidence(source: string): Settlement | null {
   const { body } = splitReceiptPromotionalFooter(joinReceiptColumnSettlement(source.normalize("NFKC")));
-  const lines = body.split(/\r?\n/u).map(line => line.trim().replace(/^[*•]+\s*/u, "")).filter(Boolean);
+  const lines = normalizeRinggitRegister(body).split(/\r?\n/u).map(line => line.trim().replace(/^[*•]+\s*/u, "")).filter(Boolean);
   const totals = new Set<number>();
   const finalTotals = new Set<number>();
   const contextualTotals = new Set<number>();

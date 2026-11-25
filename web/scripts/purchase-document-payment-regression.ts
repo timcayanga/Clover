@@ -111,3 +111,14 @@ for (const contradictory of [nettInvoice.replace("RM8.19", "RM7.19"), nettInvoic
   assert.equal(classifyUnsettledPurchaseDocument(contradictory), "unverified_invoice");
 }
 assert.equal(classifyUnsettledPurchaseDocument(nettInvoice + "\nOutstanding balance RM2.00"), "unpaid_invoice");
+
+const ringgitRegisters = [
+  "Tax Invoice\nRounded Total (RM): 46.65\nCash 51.65\nCash Change 5.00",
+  "Tax Invoice\nRM\nTotal Incl GST 56.00\nPay Cash 56.00\nChange 0.00",
+];
+for (const bill of ringgitRegisters) {
+  assert.equal(classifyUnsettledPurchaseDocument(bill), null);
+  assert.equal(classifyUnsettledPurchaseDocument(bill.replace(/Change [\d.]+$/, "Change 9.00")), "unverified_invoice");
+  assert.equal(classifyUnsettledPurchaseDocument(bill + "\nVisa 1.00"), "unverified_invoice");
+  assert.equal(classifyUnsettledPurchaseDocument(bill + "\nOutstanding balance 1.00"), "unpaid_invoice");
+}
