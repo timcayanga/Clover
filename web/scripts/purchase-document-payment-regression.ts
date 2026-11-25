@@ -7,6 +7,10 @@ import { classifyUnsettledPurchaseDocument, type UnsettledPurchaseDocument } fro
 import { assessFinancialUploadScope } from "../lib/financial-upload-scope";
 
 const examples: [string, UnsettledPurchaseDocument | null][] = [
+  ["PREPAY CHIT NUMBER 17\nTHIS IS NOT A RECEIPT\nCASH RM 50.00", "provisional_fuel_slip"],
+  ["PRE-AUTHORISATION\nTotal RM 60.00\nThis is not the final fiscal receipt", "provisional_fuel_slip"],
+  ["Tax Invoice / Adjustment Note\nCash Inv No.: A18\nTotal payable: 32.10\nReceived above goods in good order", "unverified_invoice"],
+  ["Tax Invoice\nTotal RM 50.00\nCash tendered RM 50.00\nPrevious pre-authorisation released", null],
   [columnReceipt, null],
   ["Sales Invoice\nTotal PHP 120.00\nTotal Paid PHP120.00", null],
   ["Sales Invoice\nTotal PHP 120.00\nTotal Paid USD120.00", "unverified_invoice"],

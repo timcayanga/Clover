@@ -3,7 +3,7 @@ import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
-export type UnsettledPurchaseDocument = "unpaid_receipt" | "purchase_order" | "quote" | "unpaid_invoice" | "unverified_invoice";
+export type UnsettledPurchaseDocument = "provisional_fuel_slip" | "unpaid_receipt" | "purchase_order" | "quote" | "unpaid_invoice" | "unverified_invoice";
 
 export const purchaseInvoiceHeading = /^(?:(?:tax|sales|commercial|service|billing|unpaid|overdue)\s+)?invoice(?:\s+(?:no\.?|number|#)\s*[:#]?\s*[\w/-]+|\s*[:#]\s*[\w/-]+)?\s*$/im;
 const quoteHeading = /^(?:pro[ -]?forma invoice|(?:sales\s+|price\s+)?quot(?:e|ation)|(?:cost|price) estimate)(?:\s*(?:[:#]|no\.?\s+|number\s+)\s*[\w/-]+)?\s*$/im;
@@ -34,6 +34,14 @@ function invoiceMoneyKey(raw: string) {
 }
 
 export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurchaseDocument | null {
+  if (!statementHeading.test(source) &&
+      /\b(?:prepay chit|pre[- ]?authori[sz]ation)\b/i.test(source) &&
+      /\bthis is not (?:a receipt|the final fiscal receipt)\b/i.test(source)) return "provisional_fuel_slip";
+  // Delivery acceptance confirms the goods only. An invoice number prefixed
+  // with "cash" cannot establish tender on a supplier adjustment note.
+  if (/tax invoice\s*\/\s*adjustment note/i.test(source) && /received above goods/i.test(source) &&
+      /total payable/i.test(source) && !/^(?:cash (?:paid|received|tendered)|amount paid|payment received|change)\s*[:：]?\s*(?:RM\s*)?\d/im.test(source) &&
+      !statementHeading.test(source)) return "unverified_invoice";
   const labelledBalanceDue = /^payment[ \t]+status[ \t]*[:：][ \t]*(?:pending|outstanding|due)[ \t]*$/im;
   const unpaidStatus = /^(?:(?:payment[ \t]+)?status[ \t]*[:：]?[ \t]*)?(?:unpaid|overdue|past due|partially paid|payment pending|pending payment|awaiting payment)[ \t]*[.!]?[ \t]*$/im;
   if (!/\b(?:invoice|quot(?:e|ation)|estimate|purchase[ \t]+order)\b/i.test(source) && !unpaidStatus.test(source) && !labelledBalanceDue.test(source)) return null;
@@ -136,6 +144,7 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
 }
 
 export const unsettledPurchaseDocumentMessage: Record<UnsettledPurchaseDocument, string> = {
+  provisional_fuel_slip: "Fuel prepayment slip saved. Upload the final receipt to record the purchase.",
   unpaid_receipt: "This receipt shows an outstanding payment. Upload the payment confirmation to record the expense.",
   purchase_order: "Purchase order saved. Upload the receipt or payment confirmation to record the expense.",
   quote: "Quote saved. Clover did not add an expense. Upload the receipt after you pay.",

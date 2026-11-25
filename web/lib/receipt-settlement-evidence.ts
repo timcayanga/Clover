@@ -203,6 +203,12 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
         unreadableFinal = true;
       }
     }
+    const finalCashTotal = /^final total\s+(\d+\.\d{2})$/iu.exec(line);
+    if (!inTaxSummary && finalCashTotal && /^cash\s+\d+\.\d{2}$/iu.test(lines[index + 1] ?? "") &&
+        /^change\s+\d+\.\d{2}$/iu.test(lines[index + 2] ?? "") && /\b(?:amount|amt|tax)\s*\(RM\)/iu.test(body)) {
+      const value = readAmount(finalCashTotal[1]);
+      if (value !== null) finalTotals.add(value);
+    }
     const refundLabel = line.match(refund)?.[0];
     if (breakdownTotal.test(line) && !refundLabel) {
       hasSupportingAmounts = true;
