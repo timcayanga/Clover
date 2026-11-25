@@ -1,3 +1,5 @@
+import { readReceiptSettlementEvidence, readReceiptTenders } from "./receipt-settlement-evidence";
+import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
@@ -7,7 +9,7 @@ export const purchaseInvoiceHeading = /^(?:(?:tax|sales|commercial|service|billi
 const quoteHeading = /^(?:pro[ -]?forma invoice|(?:sales\s+|price\s+)?quot(?:e|ation)|(?:cost|price) estimate)(?:\s*(?:[:#]|no\.?\s+|number\s+)\s*[\w/-]+)?\s*$/im;
 const statementHeading = /^(?:(?:bank|credit card|account|billing) statement|statement of account|transaction history)\b|^statement[ \t]*$/im;
 const receiptHeading = /^(?:(?:official|sales|cash|payment|purchase|tax)\s+)?receipt(?:\s+(?:no\.?|number|#)\s*[:#]?\s*[\w/-]+)?\s*$/im;
-const printedAmount = "(?:(?:[A-Z]{3}|Rp|PHP|[₱$€£¥])\\s*)?([0-9][0-9,. ]*)";
+const printedAmount = "(?:(?:[A-Z]{3}|RM|Rp|PHP|[₱$€£¥])\\s*)?([0-9][0-9,. ]*)";
 
 function printedAmounts(text: string, label: string) {
   const pattern = new RegExp(`^(?:${label})[ \\t]*[:：]?[ \\t]*${printedAmount}`, "gim");
@@ -66,6 +68,16 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
     const outstanding = hasPositiveAmount(text, "amount due");
     if (expected && !outstanding && [...settled, ...billed].every(row => invoiceMoneyKey(row[1]) === expected)) return null;
     return amountPaid && outstanding ? "unpaid_invoice" : "unverified_invoice";
+  }
+  if (!amountPaid && !hasPositiveAmount(text, "amount due") && /^cash[ \t]*[:：]?[ \t]*\d/im.test(text)) {
+    const settlement = readReceiptSettlementEvidence(text);
+    const tenders = readReceiptTenders(text);
+    const currency = readPrintedReceiptCurrency(text);
+    if (settlement?.kind === "payable" && settlement.amount > 0 && tenders.length === 2 &&
+        tenders.some(entry => entry.method === "cash" && entry.amount === settlement.amount) &&
+        tenders.some(entry => entry.method === "change" && entry.amount === 0) &&
+        currency?.kind !== "conflict" && /^change[ \t]*[:：]?[ \t]*0[.,]00[ \t]*$/im.test(text) &&
+        !/^(?:credit card|debit card|visa|mastercard|wallet|gift card)[ \t]*[:：]?[ \t]*\d/im.test(text)) return null;
   }
   if (paid || (amountPaid && !hasPositiveAmount(text, "amount due")) || receiptHeading.test(text)) return null;
   return amountPaid ? "unpaid_invoice" : "unverified_invoice";

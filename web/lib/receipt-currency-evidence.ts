@@ -75,6 +75,12 @@ export function readPrintedReceiptCurrency(text: string, region: string | null =
   const lines = body.split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
   for (const [index, line] of lines.entries()) {
     if (secondaryAmount.test(line)) continue;
+    // Currency units above a printed price column also survive OCR as a
+    // separate line. Require a financial column heading adjacent to the unit.
+    if (/\b(?:amount|amt|price)[ \t]*\(RM\)(?=$|\s)/i.test(line) ||
+        (/^\(RM\)$/i.test(line) && /\b(?:amount|amt|price)\s*$/i.test(lines[index - 1] ?? ""))) {
+      amounts.set("MYR", "(RM)");
+    }
     const match = line.match(saleTotal) ?? line.match(declaredCurrency);
     if (match) {
       const value = line.slice(match[0].length).replace(/^\s*[:：=]\s*/u, "");

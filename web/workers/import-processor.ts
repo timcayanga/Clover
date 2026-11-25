@@ -9667,6 +9667,22 @@ const processImportFileTextImpl = async (
   if (nativeStatementProof && nativeStatementProof.rows.length === 0) {
     throw new SourceReviewRequiredError("Clover needs the complete statement or native bank proof to verify these amounts. Nothing was added; review the source pages and fields before retrying.");
   }
+  // The same complete Grab PDF can arrive through the receipt picker.
+  // Select its structured import path only after matching the original PDF.
+  if (isPdfStatementSource && importMode === "receipt" && previouslyVisibleRows === 0 &&
+      !importFile.confirmedAt && text.includes("GRAB_RECEIPT_NATIVE ")) {
+    const bytes = await readSourceBytes();
+    if (bytes) {
+      const coverage = await verifyPdfStatementPageCoverage(bytes, text, options.password, options.pdfJsBaseUrl);
+      const native = readPdfStatementEvidencePages(bytes, text).grabReceiptSource;
+      if (coverage.complete && native && hasVerifiedGrabReceiptRows(native, parseImportText(text, fileName, fileType))) {
+        importMode = "statement";
+        chosenRoute = importMode;
+        isDocumentImport = false;
+        text = native;
+      }
+    }
+  }
   if (isPdfStatementSource && importMode === "statement" && previouslyVisibleRows === 0 && !importFile.confirmedAt && text.trim()) {
     const source = await readSourceBytes();
     if (source) {
