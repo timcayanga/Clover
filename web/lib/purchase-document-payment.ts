@@ -72,7 +72,8 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
   // A ringgit register can label change as “Cash Change”. Bind the final
   // total to its own payment rows before accepting this invoice as settled.
   const cashRegister = /^(?:rounded total[ \t]*\(RM\)[ \t]*:[ \t]*\d+\.\d{2}\ncash[ \t]+\d+\.\d{2}\ncash change[ \t]+\d+\.\d{2}|total incl gst[ \t]+\d+\.\d{2}\npay cash[ \t]+\d+\.\d{2}\nchange[ \t]+\d+\.\d{2})$/im.test(text);
-  if (cashRegister) {
+  const netRegister = /^net total rounded[ \t]*\(MYR\)[ \t]*:[ \t]*\d+\.\d{2}\ncash[ \t]*:?[ \t]+\d+\.\d{2}\nchange[ \t]*:?[ \t]+\d+\.\d{2}$/im.test(text);
+  if (cashRegister || netRegister) {
     const settlement = readReceiptSettlementEvidence(text);
     const tenders = readReceiptTenders(text);
     if (settlement?.kind === "payable" && settlement.amount > 0 && tenders.length === 2 &&

@@ -122,3 +122,9 @@ for (const bill of ringgitRegisters) {
   assert.equal(classifyUnsettledPurchaseDocument(bill + "\nVisa 1.00"), "unverified_invoice");
   assert.equal(classifyUnsettledPurchaseDocument(bill + "\nOutstanding balance 1.00"), "unpaid_invoice");
 }
+
+const myrNet = "Tax Invoice\nNet Total (MYR) : 14.63\nRounding Adj. : 0.02\nNet Total Rounded (MYR) : 14.65\nCash 15.00\nChange 0.35";
+assert.equal(classifyUnsettledPurchaseDocument(myrNet), null);
+for (const mismatch of [myrNet.replace("0.02","0.01"), myrNet.replace("0.35","0.34"), myrNet + "\nVisa 1.00"]) {
+  assert.equal(classifyUnsettledPurchaseDocument(mismatch), "unverified_invoice");
+}

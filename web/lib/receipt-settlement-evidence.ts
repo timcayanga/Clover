@@ -46,7 +46,8 @@ export type ReceiptTender = {
 // Normalize only the three adjacent till rows. Preserve the original
 // transcript and require independent cash-minus-change evidence downstream.
 function normalizeRinggitRegister(source: string) {
-  return source.replace(/^(?:rounded total[ \t]*\(RM\)[ \t]*:|total incl gst)[ \t]*(\d+\.\d{2})[ \t]*\r?\n(?:pay[ \t]+)?cash[ \t]+(\d+\.\d{2})[ \t]*\r?\n(?:cash[ \t]+)?change[ \t]+(\d+\.\d{2})[ \t]*$/gim,
+  return source.replace(/^total after rounding[ \t]+(\d+\.\d{2})\r?\ncash[ \t]+(\d+\.\d{2})\r?\nchange cash[ \t]+(\d+\.\d{2})$/gim,
+    "Amount to be paid $1\nCash $2\nChange $3").replace(/^(?:rounded total[ \t]*\(RM\)[ \t]*:|total incl gst)[ \t]*(\d+\.\d{2})[ \t]*\r?\n(?:pay[ \t]+)?cash[ \t]+(\d+\.\d{2})[ \t]*\r?\n(?:cash[ \t]+)?change[ \t]+(\d+\.\d{2})[ \t]*$/gim,
     "Amount to be paid $1\nCash $2\nChange $3");
 }
 
@@ -146,6 +147,26 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     if (refundHeading.test(line) || /^(?:환불\s*영수증|pengembalian dana)\s*$/iu.test(line)) isRefund = true;
     if ([cardTender, walletTender, otherTender].some(pattern => pattern.test(line)) ||
         /^paid (?:by|with|via) (?:card|wallet|visa|mastercard|gcash|maya)\b/iu.test(line)) hasOtherTender = true;
+    // This register prints the currency in the label, before its colon.
+    // Bind the pre-rounding net to its adjustment and final cash amount.
+    if (!inTaxSummary && /^net total[ \t]*\(MYR\)/i.test(line) &&
+        /^net total rounded[ \t]*\(MYR\)/i.test(lines[index + 2] ?? "")) {
+      const before = /^net total[ \t]*\(MYR\)[ \t]*:[ \t]*(\d+\.\d{2})$/i.exec(line);
+      const adjustment = /^rounding adj\.?[ \t]*:[ \t]*([-+]?\d+\.\d{2})$/i.exec(lines[index + 1]);
+      const after = /^net total rounded[ \t]*\(MYR\)[ \t]*:[ \t]*(\d+\.\d{2})$/i.exec(lines[index + 2]);
+      const gross = before && readAmount(before[1]);
+      const delta = adjustment && readAmount(adjustment[1]);
+      const net = after && readAmount(after[1]);
+      if (gross == null || delta == null || net == null || Math.abs(delta) > 2 || gross + delta !== net) {
+        unreadableFinal = true;
+      } else {
+        contextualTotals.add(net);
+        settlementCurrencies.add("MYR");
+      }
+      continue;
+    }
+    if (/^net total rounded[ \t]*\(MYR\)/i.test(line) &&
+        /^net total[ \t]*\(MYR\)/i.test(lines[index - 2] ?? "") && !inTaxSummary) continue;
     // Some ringgit tills use "Rounding" for the final amount and print the
     // signed adjustment separately. Require both calculations to reconcile.
     const rounded = /^rounding[ \t]+RM[ \t]*([\d,.]+)$/iu.exec(line);
