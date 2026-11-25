@@ -104,3 +104,10 @@ for (const conflicting of [closedBill.replace("65.72", "65.70"), closedBill.repl
   assert.equal(classifyUnsettledPurchaseDocument(conflicting), "unverified_invoice");
 }
 assert.equal(classifyUnsettledPurchaseDocument(closedBill + "\nOutstanding balance RM 2.00"), "unpaid_invoice");
+
+const nettInvoice = "TAX INVOICE\nTotal Amount: RM8.19\nGST @0%: RM0.00\nRounding: RM0.01\nNett Total: RM8.20\nPayment Mode Amount\nCASH RM8.20\nChange RM0.00\nGST Summary Amount(RM) Tax(RM)";
+assert.equal(classifyUnsettledPurchaseDocument(nettInvoice), null);
+for (const contradictory of [nettInvoice.replace("RM8.19", "RM7.19"), nettInvoice.replace("CASH RM8.20", "CASH RM8.25"), nettInvoice + "\nVisa RM1.00", nettInvoice + "\nGrand Total RM10.00"]) {
+  assert.equal(classifyUnsettledPurchaseDocument(contradictory), "unverified_invoice");
+}
+assert.equal(classifyUnsettledPurchaseDocument(nettInvoice + "\nOutstanding balance RM2.00"), "unpaid_invoice");

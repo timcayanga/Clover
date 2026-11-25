@@ -83,6 +83,18 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
       !/^(?:card|credit|debit|visa|mastercard|wallet|gift card|voucher|change|refund|deposit|balance|amount due)\b/im.test(text) &&
       text.match(/^cash[ \t]*:?[ \t]*\d/gim)?.length === 1 &&
       !/^(?:grand total|net total|total payable|amount payable)\b/im.test(text)) return null;
+  // Bind the nett amount to the payment-mode table, exact cash, zero
+  // change and the tax recap. Preserve conflicting or incomplete evidence.
+  const nettCash = /^nett total:[ \t]*RM[ \t]*(\d+\.\d{2})\npayment mode[ \t]+amount\ncash[ \t]+RM[ \t]*\1\nchange[ \t]+RM[ \t]*0\.00\ngst[ \t]*summary\b/im.exec(text);
+  if (nettCash) {
+    const evidence = readReceiptSettlementEvidence(text);
+    const tenders = readReceiptTenders(text);
+    if (evidence?.kind === "payable" && evidence.amount === Number(nettCash[1]) && evidence.amount > 0 &&
+        !amountPaid && !hasPositiveAmount(text, "amount due") && readPrintedReceiptCurrency(text)?.kind !== "conflict" &&
+        tenders.length === 2 && tenders.every(tender => tender.method === "cash" || tender.method === "change") &&
+        !/^(?:card|credit|debit|visa|mastercard|wallet|voucher|deposit|balance|refund|grand total|amount payable)\b/im.test(text)) return null;
+    return "unverified_invoice";
+  }
   // Some MYR tills print change below one ringgit without a leading zero.
   // Require one explicitly denominated total, cash and change in that order.
   if (/^total sales[ \t]*\(inclusive(?: of)? gst\)[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\n(?:rounding adjustment[ \t]+RM[ \t]*[-+]?(?:\d+)?\.\d{2}\nrounding[ \t]+RM[ \t]*\d+\.\d{2}\n)?CASH[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\nCHANGE[ \t]*:?[ \t]*RM[ \t]*\.\d{2}$/im.test(text)) {

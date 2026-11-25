@@ -156,6 +156,24 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
         }
       }
     }
+    // This terminal prints its payable as “Nett Total” after a zero-tax
+    // calculation. The contextual amount also has to reconcile with tender.
+    const nett = /^nett total:[ \t]*RM[ \t]*(\d+\.\d{2})$/iu.exec(line);
+    if (nett && !inTaxSummary) {
+      const delta = /^rounding:[ \t]*([-+]?)RM[ \t]*(0\.\d{2})$/iu.exec(lines[index - 1] ?? "");
+      const taxIndex = index - (delta ? 2 : 1);
+      const gross = /^total amount:[ \t]*RM[ \t]*(\d+\.\d{2})$/iu.exec(lines[taxIndex - 1] ?? "");
+      const adjustment = delta ? readAmount(delta[1] + delta[2]) : 0;
+      const value = readAmount(nett[1]);
+      const before = gross && readAmount(gross[1]);
+      if (/^gst[ \t]*@[ \t]*0%:[ \t]*RM[ \t]*0\.00$/iu.test(lines[taxIndex] ?? "") &&
+          before != null && value != null && adjustment != null && Math.abs(adjustment) <= 2 && before + adjustment === value) {
+        contextualTotals.add(value);
+        settlementCurrencies.add("MYR");
+      } else {
+        unreadableFinal = true;
+      }
+    }
     const refundLabel = line.match(refund)?.[0];
     if (breakdownTotal.test(line) && !refundLabel) {
       hasSupportingAmounts = true;
