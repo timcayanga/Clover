@@ -78,7 +78,7 @@ export function classifyUnsettledPurchaseDocument(source: string): UnsettledPurc
       !/^(?:grand total|net total|total payable|amount payable)\b/im.test(text)) return null;
   // Some MYR tills print change below one ringgit without a leading zero.
   // Require one explicitly denominated total, cash and change in that order.
-  if (/^total sales[ \t]*\(inclusive(?: of)? gst\)[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\nCASH[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\nCHANGE[ \t]*:?[ \t]*RM[ \t]*\.\d{2}$/im.test(text)) {
+  if (/^total sales[ \t]*\(inclusive(?: of)? gst\)[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\n(?:rounding adjustment[ \t]+RM[ \t]*[-+]?(?:\d+)?\.\d{2}\nrounding[ \t]+RM[ \t]*\d+\.\d{2}\n)?CASH[ \t]*:?[ \t]*RM[ \t]*\d+\.\d{2}\nCHANGE[ \t]*:?[ \t]*RM[ \t]*\.\d{2}$/im.test(text)) {
     const settlement = readReceiptSettlementEvidence(text);
     const tenders = readReceiptTenders(text);
     const cash = tenders.find(entry => entry.method === "cash");

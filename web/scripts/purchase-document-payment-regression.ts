@@ -90,3 +90,10 @@ assert.equal(classifyUnsettledPurchaseDocument(exactGstCash.replace("Cash: 9.10"
 assert.equal(classifyUnsettledPurchaseDocument(exactGstCash.replace("TOTAL: 9.10", "TOTAL: 9.00")), "unverified_invoice");
 assert.equal(classifyUnsettledPurchaseDocument(exactGstCash + "\nWallet: 1.00"), "unverified_invoice");
 assert.equal(classifyUnsettledPurchaseDocument(exactGstCash + "\nBalance due: 2.00"), "unpaid_invoice");
+
+const roundedInvoice = "Tax Invoice\nTotal Sales (Inclusive GST) RM 13.58\nRounding Adjustment RM .02\nRounding RM 13.60\nCash RM 14.00\nChange RM .40";
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice), null);
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice.replace(".40", ".00").replace("14.00", "13.60")), null);
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice.replace("13.58", "13.57")), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice + "\nOutstanding balance RM 1.00"), "unpaid_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(roundedInvoice + "\nVisa RM 1.00"), "unverified_invoice");
