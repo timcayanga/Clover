@@ -7,7 +7,7 @@ import { assertLearningVerificationEnvironment, startLearningVerification, prepa
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
-const input = z.object({ runId: z.string().uuid(), action: z.enum(["start", "start-batch", "inspect", "inspect-status", "inspect-digest", "prepare-checkpoints", "repair-reference", "preview-bpi-checkpoint", "repair-bpi-checkpoint", "preview-batch-preservation"]), runIds: z.array(z.string().uuid()).min(1).max(32).optional(), expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict().superRefine((value, context) => {
+const input = z.object({ runId: z.string().uuid(), action: z.enum(["start", "start-batch", "inspect", "inspect-status", "inspect-digest", "inspect-own", "inspect-own-digest", "prepare-checkpoints", "repair-reference", "preview-bpi-checkpoint", "repair-bpi-checkpoint", "preview-batch-preservation"]), runIds: z.array(z.string().uuid()).min(1).max(32).optional(), expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict().superRefine((value, context) => {
   if ((["start-batch", "preview-batch-preservation"].includes(value.action)) !== Boolean(value.runIds) || (value.runIds && new Set(value.runIds).size !== value.runIds.length)) context.addIssue({ code: "custom", message: "Only batch actions accept unique staging run IDs." });
   if ((value.action === "repair-bpi-checkpoint") !== Boolean(value.expectedPlanHash)) context.addIssue({ code: "custom", message: "Only checkpoint repair requires the reviewed plan hash." });
 });
@@ -25,6 +25,8 @@ export async function POST(request: Request) {
       : action === "repair-reference" ? await repairLearningVerificationReference(runId, admin.userId)
       : action === "preview-bpi-checkpoint" || action === "repair-bpi-checkpoint" ? await repairVerificationBpiCheckpoint(runId, admin.userId, expectedPlanHash)
       : action === "inspect-status" ? await inspectLearningVerificationStatus(runId, admin.userId)
+      : action === "inspect-own" ? await inspectLearningVerification(runId, admin.userId, true)
+      : action === "inspect-own-digest" ? await inspectLearningVerificationDigest(runId, admin.userId, true)
       : action === "inspect-digest" ? await inspectLearningVerificationDigest(runId, admin.userId)
       : await inspectLearningVerification(runId, admin.userId);
     const response = learningVerificationResponse(result, request.headers.get("accept-encoding"));

@@ -207,11 +207,11 @@ export async function repairLearningVerificationReference(runId: string, actor: 
   return { repaired: true, jobId: run.state.failureJobId };
 }
 
-export async function inspectLearningVerification(runId: string, actor: string) {
+export async function inspectLearningVerification(runId: string, actor: string, ownOnly = false) {
   const run = await loadRun(runId, actor);
   const where = { workspaceId: run.workspace.id };
   const { outside, financial } = await prisma.$transaction(async db => ({
-    outside: run.state.batchRunIds ? null : await learningVerificationManifest(run.workspace.id, false, db),
+    outside: ownOnly || run.state.batchRunIds ? null : await learningVerificationManifest(run.workspace.id, false, db),
     financial: await learningVerificationManifest(run.workspace.id, true, db),
   }), { isolationLevel: "RepeatableRead", timeout: readSnapshotTimeout });
   const [accounts, transactions, files, parsedRows, rules, signals, accountRules, templates, jobs] = await Promise.all([
@@ -241,10 +241,10 @@ export async function inspectLearningVerificationStatus(runId: string, actor: st
 }
 
 /** Complete-row proof for repeat reads and final audits, with only hashes on the wire. */
-export async function inspectLearningVerificationDigest(runId: string, actor: string) {
+export async function inspectLearningVerificationDigest(runId: string, actor: string, ownOnly = false) {
   const run = await loadRun(runId, actor);
   const { outside, own } = await prisma.$transaction(async db => ({
-    outside: run.state.batchRunIds ? null : await learningVerificationManifest(run.workspace.id, false, db),
+    outside: ownOnly || run.state.batchRunIds ? null : await learningVerificationManifest(run.workspace.id, false, db),
     own: await learningVerificationOwnCompleteManifest(run.workspace.id, db),
   }), { isolationLevel: "RepeatableRead", timeout: readSnapshotTimeout });
   const changed = (before: Manifest, after: Manifest) => Object.keys(before).filter(table => before[table].count !== after[table]?.count || before[table].sha256 !== after[table]?.sha256);
