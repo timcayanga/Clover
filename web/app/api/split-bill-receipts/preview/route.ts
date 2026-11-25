@@ -2,13 +2,13 @@ import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { classifyUnsettledPurchaseDocument } from "@/lib/purchase-document-payment";
 import { mergeReceiptBackup } from "@/lib/receipt-backup-preview";
 import { canUseLocalReceiptPreview } from "@/lib/receipt-item-table";
-import { assessFinancialUploadScope, getClearLocalPhotoRejection, getUploadRejectionDetails, NonFinancialUploadError } from "@/lib/financial-upload-scope";
+import { getClearLocalPhotoRejection, getUploadRejectionDetails, NonFinancialUploadError } from "@/lib/financial-upload-scope";
 import { validateImportImageDecode } from "@/lib/import-image-validation.server";
 import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
 import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { after, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { isPdfPasswordError, normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
+import { isPdfPasswordError, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
 import { parseImportTextWithOpenAIFallback, type OpenAIImportModelUsage } from "@/lib/openai-import-parser";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { assessReceiptPreviewQuality, parseReceiptPhotoText, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
@@ -19,7 +19,7 @@ import { assertRateLimit } from "@/lib/rate-limit";
 import { uploadObject } from "@/lib/s3";
 import { nativeUploadRequest, readReceiptUpload } from "@/lib/native-upload-store";
 import { isUploadPhoto, isUploadPdf, NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
-import { billAttemptForReceipt, cachedReceiptDraft, corroboratedReceiptDraft, completeChargedReceipt, canSaveReceiptForReview, firstReceiptRead, readReceiptObject, receiptDraftId, storeReceiptDraft } from "@/lib/receipt-progressive.server";
+import { billAttemptForReceipt, cachedReceiptDraft, completeChargedReceipt, canSaveReceiptForReview, firstReceiptRead, receiptDraftId, storeReceiptDraft } from "@/lib/receipt-progressive.server";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -41,7 +41,7 @@ const isReceiptImage = (file: Pick<File, "name" | "type">) =>
   isUploadPhoto(file.name, file.type);
 const isReceiptPdf = (file: Pick<File, "name" | "type">) => isUploadPdf(file.name, file.type);
 
-const tryReceiptBackup = async (params: {
+const tryPdfReceiptBackup = async (params: {
   consentUserId: string;
   file: Pick<File, "name" | "type">;
   bytes: Uint8Array;
@@ -49,9 +49,8 @@ const tryReceiptBackup = async (params: {
   preview: ReceiptPreviewResult;
   onUsage?: (usage: OpenAIImportModelUsage) => void;
 }) => {
-  const isImage = isReceiptImage(params.file);
   const isPdf = isReceiptPdf(params.file);
-  if (!process.env.OPENAI_API_KEY?.trim() || (!isImage && !isPdf) || !assessReceiptPreviewQuality(params.preview).issues.length) {
+  if (!process.env.OPENAI_API_KEY?.trim() || !isPdf || !assessReceiptPreviewQuality(params.preview).issues.length) {
     return params.preview;
   }
   if ((params.preview.currency !== "MIXED" || !params.preview.currencyMentions.length) &&
@@ -62,12 +61,7 @@ const tryReceiptBackup = async (params: {
   try {
     if (!(await mayUseImportCloudAi(params.consentUserId))) return params.preview;
     const { bytes } = params;
-    const pageImages = isImage
-      ? [{
-          page: 1,
-          dataUrl: (await normalizeReceiptImageForVision({ bytes, fileType: params.file.type, fileName: params.file.name })).dataUrl,
-        }]
-      : await renderReceiptPdfPagesForVision(bytes);
+    const pageImages = await renderReceiptPdfPagesForVision(bytes);
     if (pageImages.length === 0) {
       return params.preview;
     }
@@ -75,7 +69,7 @@ const tryReceiptBackup = async (params: {
       consentUserId: params.consentUserId,
       text: params.receiptText,
       fileName: params.file.name,
-      fileType: isPdf ? "application/pdf" : params.file.type,
+      fileType: "application/pdf",
       detectedMetadata: null,
       parsedRows: [],
       pageImages,
@@ -84,17 +78,11 @@ const tryReceiptBackup = async (params: {
       timeoutMs: 25_000,
       onUsage: params.onUsage,
     });
-    const canUseAccountHint = !isImage || assessFinancialUploadScope({
-      text: [params.receiptText, result?.receiptDetails?.parser_evidence.source_text,
-        ...(result?.classificationVerdict?.evidence ?? [])].filter(Boolean).join("\n"),
-      fileName: params.file.name,
-      fileType: params.file.type,
-    }).decision === "financial";
     return result?.receiptDetails
       ? mergeReceiptBackup(
-          canUseAccountHint ? params.preview : { ...params.preview, receiptAccountMatch: null },
+          params.preview,
           result.receiptDetails as unknown as Record<string, unknown>,
-          canUseAccountHint ? result.receiptAccountMatch : null,
+          result.receiptAccountMatch,
           {
             ...result.audit,
             reason: typeof result.receiptDetails === "object" && result.receiptDetails
@@ -167,23 +155,15 @@ export async function POST(request: Request) {
     const refineId = statusOnly ? params.get("status") : params.get("refine");
     const prefixFor = (id: string) => `receipt-drafts/${user.id}/${workspace!.id}/${id}`;
     const attachmentFor = (id: string) => `split-bill-receipts/${user.id}/${workspace!.id}/${id}.${billAttemptForReceipt(id,scope)}.source`;
-    let firstOptical: string | null | undefined;
-    let early: Awaited<ReturnType<typeof cachedReceiptDraft>> = null;
-    let restored: File | null = null;
     if (refineId || statusOnly) {
       if (!refineId || !progressive || !/^[a-f0-9]{64}$/.test(refineId)) return NextResponse.json({error:"Invalid receipt draft."}, {status:400});
       const cached = await cachedReceiptDraft(prefixFor(refineId));
       if (!cached) return NextResponse.json({error:"Receipt draft unavailable."}, {status:404});
-      if (statusOnly || !cached.refining) return NextResponse.json({...cached, receiptStorageKey:attachmentFor(refineId), attemptId:billAttemptForReceipt(refineId,scope)});
-      const bytes = await readReceiptObject(attachmentFor(refineId));
-      if (!bytes) return NextResponse.json({error:"Receipt photo unavailable."}, {status:404});
-      restored = new File([new Uint8Array(bytes)], cached.fileName, {type:cached.mimeType});
-      firstOptical = readLocalReceiptOcrText(cached.preview.receiptText) ? cached.preview.receiptText : undefined;
-      early = cached;
+      return NextResponse.json({...cached, receiptStorageKey:attachmentFor(refineId), attemptId:billAttemptForReceipt(refineId,scope)});
     }
-    const file = restored ?? (uploadId && workspace
+    const file = uploadId && workspace
       ? await readReceiptUpload(uploadId, user.clerkUserId, workspace.id)
-      : (await request.formData()).get("file"));
+      : (await request.formData()).get("file");
     if (uploadId && workspace) {
       after(() => nativeUploadRequest(request, uploadId, user.clerkUserId, workspace.id, "cancel").then(() => {}));
     }
@@ -228,38 +208,27 @@ export async function POST(request: Request) {
     if (decodeError) return NextResponse.json({error:decodeError, code:"I-101", retryable:false}, {status:400});
     let receiptText = "";
     let localPreview: ReceiptPreviewResult;
-    const saveInitial = async (preview: ReceiptPreviewResult, id: string, key: string) => {
-      const complete = completeChargedReceipt(preview);
-      const draft = { ...draftMeta, draftId:id, attemptId:billAttemptForReceipt(id,scope), refining:!complete,
-        preview, readyForReviewableBill:complete && canSaveReceiptForReview(preview),
-        reliableForScopedSplit:complete && assessReceiptPreviewQuality(preview).reliableForFastPath };
-      await uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type);
-      await storeReceiptDraft(key, draft);
-      return NextResponse.json(draft);
-    };
     try {
-      let corroborated: ReceiptPreviewResult | null = null;
-      const initialImage = prefix && draftId && !refineId && isReceiptImage(selectedFile);
-      if (initialImage) {
-        const first = await firstReceiptRead(validationInput.bytes, selectedFile.name, selectedFile.type, currency);
-        firstOptical = first.source;
-        if (first.preview) return await saveInitial(first.preview, draftId, prefix);
+      if (isReceiptImage(selectedFile)) {
+        const {preview} = await firstReceiptRead(validationInput.bytes, selectedFile.name, selectedFile.type, currency);
+        if (!preview) return NextResponse.json({error:"Clover couldn’t read this photo. Try again or enter the bill manually."}, {status:422});
+        const result = { ...draftMeta, preview, readyForReviewableBill:completeChargedReceipt(preview) && canSaveReceiptForReview(preview),
+          reliableForScopedSplit:Boolean(preview.billDate && preview.total && !preview.requiresReview &&
+            assessReceiptPreviewQuality(preview).reliableForFastPath) };
+        await uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type || "application/octet-stream");
+        if (!prefix || !draftId) return NextResponse.json(result);
+        const draft = { ...result, draftId, attemptId:billAttemptForReceipt(draftId,scope), refining:false };
+        await storeReceiptDraft(prefix, draft);
+        return NextResponse.json(draft);
       }
-      receiptText = await readUploadedFileText(selectedFile, undefined, {
-        importMode:"receipt", sourceBytes:validationInput.bytes, firstOptical,
-        acceptReceiptFrame: initialImage && firstOptical ? text => {
-          corroborated = corroboratedReceiptDraft(firstOptical, text, currency);
-          return Boolean(corroborated);
-        } : undefined,
-      });
-      if (corroborated && draftId && prefix) return await saveInitial(corroborated, draftId, prefix);
+      receiptText = await readUploadedFileText(selectedFile, undefined, {importMode:"receipt", sourceBytes:validationInput.bytes});
       const rejection = getClearLocalPhotoRejection({
         text: readLocalReceiptOcrText(receiptText) ?? receiptText,
         fileName: selectedFile.name,
         fileType: selectedFile.type,
       });
       if (rejection) throw rejection;
-      localPreview = isReceiptImage(selectedFile) || isReceiptPdf(selectedFile)
+      localPreview = isReceiptPdf(selectedFile)
         ? parseReceiptPhotoText(receiptText, normalizeRegionalPreferences(user.regionalPreferences).baseCurrency) : parseReceiptText(receiptText);
     } catch (error) {
       if (isReceiptPdf(selectedFile) && isPdfPasswordError(error)) {
@@ -274,7 +243,7 @@ export async function POST(request: Request) {
         } }).catch(() => null);
         return NextResponse.json({ error: error.message, code: "I-108", ...getUploadRejectionDetails(error), retryable: false }, { status: 422 });
       }
-      if (!isReceiptImage(selectedFile) && !isReceiptPdf(selectedFile)) {
+      if (!isReceiptPdf(selectedFile)) {
         throw error;
       }
       console.warn("Local receipt extraction failed; trying backup parser", error);
@@ -282,7 +251,7 @@ export async function POST(request: Request) {
     }
     const readingText = readLocalReceiptOcrText(receiptText) ?? receiptText;
     const [preview] = await Promise.all([
-      classifyUnsettledPurchaseDocument(readingText) ? localPreview : tryReceiptBackup({
+      classifyUnsettledPurchaseDocument(readingText) ? localPreview : tryPdfReceiptBackup({
         consentUserId: user.id,
         file: selectedFile,
         bytes: validationInput.bytes,
@@ -290,7 +259,7 @@ export async function POST(request: Request) {
         preview: localPreview,
         onUsage: recordUsage,
       }),
-      restored ? undefined : uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type || "application/octet-stream"),
+      uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type || "application/octet-stream"),
     ]);
     if (workspace) {
       const localParser = estimateLocalParserTokens(readingText);
@@ -311,10 +280,6 @@ export async function POST(request: Request) {
           },
         }).catch(() => null);
       });
-    }
-    if (early && (preview.total !== early.preview.total || preview.currency !== early.preview.currency ||
-        preview.merchantName !== early.preview.merchantName)) {
-      return NextResponse.json({error:"Couldn’t verify more details. Your first draft is available."}, {status:422});
     }
     const result = { preview, ...draftMeta, readyForReviewableBill:canSaveReceiptForReview(preview), reliableForScopedSplit: Boolean(preview.billDate) && assessReceiptPreviewQuality(preview).reliableForFastPath };
     if (prefix && draftId) {

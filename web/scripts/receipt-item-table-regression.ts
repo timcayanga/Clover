@@ -1,4 +1,4 @@
-import {completeChargedReceipt, corroboratedReceiptDraft} from "../lib/receipt-progressive.server";
+import {completeChargedReceipt, singleReadReceiptPreview} from "../lib/receipt-progressive.server";
 import {editableReceiptItems} from "../../shared/split-bill-experience";
 import { splitBillDraftFromReceiptPreview } from "../lib/split-bill";
 import { mergeReceiptBackup } from "../lib/receipt-backup-preview";
@@ -653,9 +653,7 @@ for (const damaged of [nettRows.replace("4 RM4.12","3 RM4.12"), nettRows.replace
   assert.equal(readRinggitNettTable(damaged), null);
 }
 
-assert.equal(corroboratedReceiptDraft(twoPurchasesAndFee, twoPurchasesAndFee, "PHP")?.total, "220.00");
-for (const changed of [
-  twoPurchasesAndFee.replace("220.00", "221.00"),
-  twoPurchasesAndFee.replace("QA Cafe", "Other Cafe"),
-  twoPurchasesAndFee + "\nAmount paid: 199.00",
-]) assert.equal(corroboratedReceiptDraft(twoPurchasesAndFee, changed, "PHP"), null);
+const ambiguousPhoto = singleReadReceiptPreview(twoPurchasesAndFee + "\nTotal Amount: 999.00", "PHP");
+assert.equal(ambiguousPhoto.total, null);
+assert.equal(ambiguousPhoto.requiresReview, true);
+assert(ambiguousPhoto.confidence <= 45);

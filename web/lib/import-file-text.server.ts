@@ -1089,7 +1089,6 @@ async function recoverCountedReceiptQuantities(source: string, image: ImagePrevi
 const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   sourceBytes: Uint8Array;
   firstOptical?: string | null;
-  acceptReceiptFrame?: (text: string) => boolean;
   classificationContext?: ClassificationContext;
   fileType?: string | null;
   fileName?: string | null;
@@ -1163,7 +1162,6 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   // photo came through the receipt picker. Don't send it through receipt OCR.
   const positiveRoute = focusedPreview ? null : resolvePositiveImportDocumentRoute(firstPassText);
   if (originalProfile === "receipt" && positiveRoute?.mode === "statement") return firstPassText;
-  if (!focusedPreview && params.acceptReceiptFrame?.(firstPassText)) return firstPassText;
   // Generic image OCR can find a receipt before routing is known. Keep its
   // optical transcript when the receipt has enough evidence for extraction.
   if (positiveRoute?.mode === "receipt") {
@@ -1199,7 +1197,6 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
       const conflicts = (firstHasPrintedTotal && larger.total && first.total !== larger.total) ||
         (first.billDate && larger.billDate && first.billDate !== larger.billDate) ||
         (first.currency !== "MIXED" && larger.currency !== "MIXED" && first.currency !== larger.currency);
-      if (!rejection && !conflicts && params.acceptReceiptFrame?.(expandedText)) return expandedText;
       if (region || !conflicts) {
         // A crop is provisional. Once expanded, only full-frame evidence can
         // determine the result. A useful full-frame first pass stays eligible.
@@ -3425,7 +3422,7 @@ export const renderReceiptPdfPagesForVision = async (bytes: Uint8Array) =>
 export const readUploadedFileText = async (
   file: File | ImportFileLike,
   password?: string,
-  options?: { importMode?: string | null; sourceBytes?: Uint8Array; firstOptical?: string | null; acceptReceiptFrame?: (text: string) => boolean }
+  options?: { importMode?: string | null; sourceBytes?: Uint8Array; firstOptical?: string | null }
 ) => {
   const lowerName = String(file.name ?? "").toLowerCase();
   const lowerType = importMediaType(file.type);
@@ -3500,7 +3497,6 @@ export const readUploadedFileText = async (
     return extractTextFromImageBufferWithReceiptAwareFallback({
       sourceBytes: originalBytes,
       firstOptical: options?.firstOptical,
-      acceptReceiptFrame: options?.acceptReceiptFrame,
       fileType: lowerType,
       fileName: lowerName,
       importMode,
