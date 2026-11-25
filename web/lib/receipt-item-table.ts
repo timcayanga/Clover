@@ -415,6 +415,14 @@ function readMarginQuantities(items: PricedItem[], blocks: OpticalBlock[]) {
 // A partly damaged payable label can still carry reliable digits. Require the
 // purchase rows plus the separately printed service charge to prove every cent.
 export function readChargedReceiptTable(source: string, blocks: OpticalBlock[] = []) {
+  // Repair label glyphs only. The existing quantity table validates every
+  // purchase, item count, subtotal, fee and both independently printed totals.
+  if (/^tota! amount[ \t]+\d/im.test(source) && /^\d+ ite[mn]\(s\) tota[l!]? a(?:mou|ou)nt[ \t]+\d/im.test(source)) {
+    const labeled = source.replace(/^tota! amount(?=[ \t]+\d)/gim, "Total Amount")
+      .replace(/^(\d+) ite[mn]\(s\) tota[l!]? a(?:mou|ou)nt(?=[ \t]+\d)/gim, "$1 Item(s) Total Amount");
+    const table = !hasConflictingCashSettlement(labeled) && readQuantityTable(labeled);
+    if (table && table.serviceCharge) return {...table, serviceCharge:table.serviceCharge};
+  }
   const lines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const charge = lines.findIndex(line => /^(?:\d+(?:\.\d+)?%\s*)?service\s*ch(?:arge|rge)\s*:\s*\d[\d,]*\.\d{2}$/i.test(line) ||
     /^service\s+charge\s+\d[\d,]*\.\d{2}$/i.test(line));

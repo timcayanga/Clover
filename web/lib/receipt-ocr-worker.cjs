@@ -570,6 +570,8 @@ async function run(preview, timings) {
       ...best,
       alternatives: [runnerUp, witness].filter(candidate => candidate && /\d/.test(best.text) &&
         candidate.text.trim() !== best.text.trim() && (candidate === runnerUp ||
+          (/^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}$/.test(best.text) && candidate.minConfidence >= 0.85 &&
+           candidate.text.replace(/\d/g, "#") === best.text.replace(/\d/g, "#")) ||
           (candidate.minConfidence >= 0.93 && best.minConfidence < 0.85 &&
            best.text.replace(/\d/g, "#") === candidate.text.replace(/\d/g, "#"))))
         .map(candidate => ({ text:candidate.text, confidence:candidate.confidence })),

@@ -158,7 +158,7 @@ export async function POST(request: Request) {
     if (refineId || statusOnly) {
       if (!refineId || !progressive || !/^[a-f0-9]{64}$/.test(refineId)) return NextResponse.json({error:"Invalid receipt draft."}, {status:400});
       const cached = await cachedReceiptDraft(prefixFor(refineId));
-      if (!cached) return NextResponse.json({error:"Receipt draft unavailable."}, {status:404});
+      if (!cached || (params.has("sameScope") && cached.receiptStorageKey !== attachmentFor(refineId))) return NextResponse.json({error:"Receipt draft unavailable."}, {status:404});
       return NextResponse.json({...cached, receiptStorageKey:attachmentFor(refineId), attemptId:billAttemptForReceipt(refineId,scope)});
     }
     const file = uploadId && workspace

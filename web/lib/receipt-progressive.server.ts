@@ -70,6 +70,16 @@ export async function cachedReceiptDraft(prefix: string) {
   const data = await readReceiptObject(prefix + ".final.json") ?? await readReceiptObject(prefix + ".early.json");
   if (!data) return null;
   const draft = JSON.parse(data.toString()) as ReceiptDraft;
+  // Older drafts may have discarded the total when its printed label was
+  // damaged. Reconcile the stored transcript without starting another scan.
+  if (!draft.preview.total && readLocalReceiptOcrText(draft.preview.receiptText)) {
+    const repaired = singleReadReceiptPreview(draft.preview.receiptText, draft.preview.currency);
+    if (repaired.merchantName === draft.preview.merchantName && repaired.currency === draft.preview.currency &&
+        repaired.total && editableReceiptItems(repaired).length && readChargedReceiptTable(readLocalReceiptOcrText(repaired.receiptText)!)?.total === repaired.total) {
+      draft.preview = {...repaired, billDate:null, requiresReview:true, confidence:Math.min(45, repaired.confidence)};
+      return {...draft, refining:false, readyForReviewableBill:false, reliableForScopedSplit:false};
+    }
+  }
   if (draft.preview.items.length < 2 && draft.preview.receiptText && draft.preview.total) {
     const parsed = parseReceiptPhotoText(draft.preview.receiptText, draft.preview.currency);
     if (parsed.total === draft.preview.total && parsed.currency === draft.preview.currency &&
