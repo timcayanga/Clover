@@ -9,6 +9,33 @@ export function readReconciledItemTable(text: string) {
   return readQuantityTable(text) ?? readRegisterServiceTable(text) ?? readCountedGrossTable(text);
 }
 
+// These registers print each stock code and description above its ringgit
+// price row. Only return items when every row accounts for the gross total.
+export function readRinggitNettTable(text: string) {
+  const register = /^nett total:[ \t]*RM[ \t]*(\d+\.\d{2})\npayment mode[ \t]+amount\ncash[ \t]+RM[ \t]*\1\nchange[ \t]+RM[ \t]*0\.00\ngst[ \t]*summary/im.exec(text);
+  if (!register || text.match(/^nett total:/gim)?.length !== 1 || text.match(/^total amount:/gim)?.length !== 1 ||
+      /^(?:grand total|refund|visa|mastercard|wallet|outstanding|balance due|amount due)\b/im.test(text)) return null;
+  const evidence = readReceiptSettlementEvidence(text);
+  if (evidence?.kind !== "payable" || evidence.amount !== Number(register[1])) return null;
+  const table = /^item(?:[ \t]+qty)?[ \t]+total\n([\s\S]+?)\ntotal amount:[ \t]*RM[ \t]*(\d+\.\d{2})$/im.exec(text);
+  if (!table) return null;
+  const lines = table[1].split("\n");
+  const items: ReceiptPreviewResult["items"] = [];
+  let sum = 0;
+  for (let i = 0; i < lines.length; i += 2) {
+    const name = /^\*?SR[ \t]+[I1]?\d{8,}-[ \t]*(\S.*)$/i.exec(lines[i]);
+    const prices = /^RM(\d+\.\d{2})[ \t]+(?:(\d+)[ \t]+)?RM(\d+\.\d{2})$/i.exec(lines[i+1] ?? "");
+    if (!name || !prices) return null;
+    const unit = Math.round(Number(prices[1]) * 100), amount = Math.round(Number(prices[3]) * 100);
+    const quantity = prices[2] ? Number(prices[2]) : null;
+    if (amount <= 0 || unit <= 0 || (quantity === null ? unit !== amount : quantity * unit !== amount)) return null;
+    sum += amount;
+    items.push({description:name[1],quantity,unitPrice:prices[1],amount:prices[3]});
+  }
+  if (!items.length || sum !== Math.round(Number(table[2]) * 100)) return null;
+  return {items,subtotal:table[2],total:register[1],tax:"0.00",rounding:((Math.round(evidence.amount * 100)-sum)/100).toFixed(2)};
+}
+
 const purchaseHeader = /^(?:qty|quantity|description|item(?: description)?|product)[ \t]+.*\b(?:amount|total|price)[ \t]*\r?$/im;
 
 // Recognize explicit unit counts separately from counts of purchase rows.

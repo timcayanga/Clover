@@ -1,7 +1,7 @@
 import { splitBillDraftFromReceiptPreview } from "../lib/split-bill";
 import { mergeReceiptBackup } from "../lib/receipt-backup-preview";
 import assert from "node:assert/strict";
-import { hasPrintedQuantityConflict, reconcilesReviewedDiscountPhoto, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
+import { readRinggitNettTable, hasPrintedQuantityConflict, reconcilesReviewedDiscountPhoto, canPreviewLocalReceiptItems, hasPrintedItemizedTotal, readPartialPriceColumn, readOpticalItemQuantities, readChargedReceiptTable, readReconciledItemTable, readSubtotalItems } from "../lib/receipt-item-table";
 import { parseReceiptPhotoText, parseReceiptText } from "../lib/split-bill";
 import { locateDamagedReceiptPrices, recoverReceiptPrices } from "../lib/receipt-price-column";
 import { applyVerifiedMarginReadings, recordVerifiedMarginReadings, recordReceiptQuantityCrop, recordReceiptTableCrop, readReceiptOpticalEvidence, hasConflictingReceiptTotalReading, encodeLocalReceiptOcr, readLocalReceiptOcrText, receiptDateDisagreements, recordReceiptDateCheck } from "../lib/local-receipt-ocr-envelope";
@@ -622,4 +622,13 @@ assert.equal(readLocalReceiptOcrText(withMargin), "Milk 10.00");
 assert.deepEqual(applyVerifiedMarginReadings(withMargin, [marginItem]), [{ ...marginItem, quantity: 2 }]);
 for (const ambiguous of [[marginItem, marginItem], [{ ...marginItem, amount: "20.00" }], [{ ...marginItem, quantity: 3 }]]) {
   assert.deepEqual(applyVerifiedMarginReadings(withMargin, ambiguous), ambiguous);
+}
+
+const nettRows = "Tax Invoice\nItem Qty Total\nSR I00100000015- Vegetable\nRM1.03 4 RM4.12\nSR 100100000056-Fried Noodle\nRM1.88 RM1.88\nTotal Amount: RM6.00\nGST @0%: RM0.00\nNett Total: RM6.00\nPayment Mode Amount\nCASH RM6.00\nChange RM0.00\nGST Summary Amount(RM) Tax(RM)";
+assert.deepEqual(readRinggitNettTable(nettRows)?.items, [
+  {description:"Vegetable", quantity:4, unitPrice:"1.03", amount:"4.12"},
+  {description:"Fried Noodle", quantity:null, unitPrice:"1.88", amount:"1.88"},
+]);
+for (const damaged of [nettRows.replace("4 RM4.12","3 RM4.12"), nettRows.replace("CASH RM6.00","CASH RM5.00"), nettRows + "\nOutstanding RM2.00", nettRows.replace("RM1.88 RM1.88","Unreadable")]) {
+  assert.equal(readRinggitNettTable(damaged), null);
 }
