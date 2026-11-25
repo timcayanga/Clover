@@ -153,3 +153,18 @@ assert.equal(parseGrabEmailReceipt(ride({ headline: 'P', place: 'Sample Store, M
 assert.throws(() => parseGrabEmailReceipt(ride({ headline: 'P', place: 'Other Airport\nGrab HQ\nMoonwalk Paranaque', paid: 'Cash' })), /supported currency evidence is missing/);
 assert.throws(() => parseGrabEmailReceipt(ride({ headline: 'P', place: 'Cebu City\nhttps://mail.google.com/mail/u/0/?view=pt 1/2', paid: 'Cash' })), /Gmail print pages are missing/);
 assert.equal(parseGrabEmailReceipt(ride({ headline: 'P', place: 'Cebu City\nhttps://mail.google.com/mail/u/0/?view=pt 1/1', paid: 'Cash' }))?.rows.length, 1);
+
+const includedStopPages = [indoAdjusted[0].replace('Fare 184.000', 'Fare 184.000\nIncludes:\n• Additional stop RP 6.000')
+  .replace('Toll 20.000', 'Toll 19.500\nGreen Programme 500\nOpt out anytime'),
+  indoAdjusted[1].replace('Tax Base 19.640\nVAT 2.160', 'VAT 960')];
+const includedSource = buildGrabReceiptNativePages(includedStopPages)!;
+const includedRide = parseGrabEmailReceipt(includedSource)!;
+assert.equal(includedRide.rows[0].rawPayload?.includedStopAmount, 6000);
+assert.equal(includedRide.rows[0].amount, '189000.00');
+assert.deepEqual(includedRide.rows[0].rawPayload?.taxEvidence, { taxBase: null, vat: 960, inclusiveOfVat: 21800 });
+assert(hasVerifiedGrabReceiptRows(includedSource, includedRide.rows));
+for (const invalid of [
+  includedStopPages[0].replace('Additional stop RP 6.000','Additional stop RP 600.000'),
+  includedStopPages[0].replace('Includes:', 'Additional charge:'),
+  includedStopPages[0].replace('Green Programme 500','Green Programme 501'),
+]) assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([invalid, includedStopPages[1]])!), /source review/);

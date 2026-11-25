@@ -71,3 +71,9 @@ for (const source of [unpaidSlip, encodeLocalReceiptOcr({ text: unpaidSlip })]) 
 }
 
 assert.equal(classifyUnsettledPurchaseDocument("Official Receipt\nPayment status: Pending\nTotal PHP 20.00"), "unpaid_receipt");
+
+const exactCashInvoice = "INVOICE\nGrand Total: 20.00\nCash: 20.00\nChange: 0.00";
+assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice), null);
+assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice.replace("Cash: 20.00", "Cash: 19.00")), "unverified_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice + "\nOutstanding balance RM 1.00"), "unpaid_invoice");
+assert.equal(classifyUnsettledPurchaseDocument(exactCashInvoice.replace("Change: 0.00", "")), "unverified_invoice");

@@ -66,3 +66,6 @@ assert.equal(readPrintedReceiptCurrency("Amount Due P99.80", "PHP"), null);
 assert.equal(readPrintedReceiptCurrency("Philippines\nJapan\nAmount Due P99.80"), null);
 assert.equal(readPrintedReceiptCurrency("Philippines\nProduct P99.80"), null);
 assert.equal(readPrintedReceiptCurrency("Philippines\nAmount Due P99.80\nCurrency: USD")?.kind, "conflict");
+assert.deepEqual(readPrintedReceiptCurrency("Qty Price AMOUNT\n(RM)\nTotal 4.90"), { kind: "printed", currency: "MYR", evidence: "(RM)" });
+assert.equal(readPrintedReceiptCurrency("Merchant (RM)\nTotal 4.90"), null);
+assert.deepEqual(readPrintedReceiptCurrency("AMT (RM)\nTotal SGD 10.00"), { kind: "printed", currency: "SGD", evidence: "SGD" });
