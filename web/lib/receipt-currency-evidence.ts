@@ -42,6 +42,7 @@ const regions: [string, RegExp][] = [
   ["IDR", /\bIndonesia\b|\b(?:Jakarta|Surabaya|Bandung|Denpasar)\b.{0,60}\b\d{5}\b/i],
   ["KRW", /\b(?:South Korea|Republic of Korea)\b|(?:서울|부산|인천|대구|대전|광주|울산)(?:특별시|광역시)|대한민국/u],
   ["SGD", /\bSingapore\s+\d{6}\b/i],
+  ["MAD", /\b(?:Morocco|Maroc)\b|\b15000[ \t]+Kh[eé]misset\b/i],
   ["MYR", /\bMalaysia\b/i], ["THB", /\bThailand\b/i],
   ["VND", /\bViet\s*Nam\b/i], ["JPY", /\bJapan\b|日本国/u],
   ["HKD", /\bHong Kong\b/i], ["AUD", /\bAustralia\b/i], ["CAD", /\bCanada\b/i],

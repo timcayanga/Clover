@@ -99,3 +99,10 @@ const rounded = "Total RM 33.92\nRounding Adjustment -RM 0.02\nTotal Rounded RM 
 assert.deepEqual(readReceiptSettlementEvidence(rounded), { kind: "payable", amount: 33.90 });
 assert.deepEqual(readReceiptSettlementEvidence(rounded.replace("16.10", "16.00")), { kind: "conflict" });
 assert.deepEqual(readReceiptSettlementEvidence(rounded.replace("Rounded RM 33.90", "Rounded ?")), { kind: "conflict" });
+
+const afterRounding = receipt("Total 72.93", "RND ADJ 0.02", "TTL ATF RND 72.95", "Cash 73.00", "Change Due 0.05");
+assert.deepEqual(readReceiptSettlementEvidence(afterRounding), { kind: "payable", amount: 72.95 });
+assert.deepEqual(readReceiptSettlementEvidence(afterRounding.replace("0.05", "0.03")), { kind: "conflict" });
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Amount To Be Paid 26.80", "Cash received 50.00", "Change 23.20")), {kind:"payable",amount:26.80});
+assert.deepEqual(readReceiptSettlementEvidence(receipt("Total (Eat In) RM24.00", "Cash RM30.00", "Change RM6.00", "Total-Excl-GST RM22.65")), {kind:"payable",amount:24});
+assert.deepEqual(readReceiptSettlementEvidence(afterRounding + "\nGrand Total 79.00"), {kind:"conflict"});

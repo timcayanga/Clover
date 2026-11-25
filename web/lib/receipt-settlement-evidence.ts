@@ -113,6 +113,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
   const lines = body.split(/\r?\n/u).map(line => line.trim().replace(/^[*•]+\s*/u, "")).filter(Boolean);
   const totals = new Set<number>();
   const finalTotals = new Set<number>();
+  const contextualTotals = new Set<number>();
   const refunds = new Set<number>();
   const cash = new Set<number>();
   const changes = new Set<number>();
@@ -142,7 +143,10 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
       hasSupportingAmounts = true;
       continue;
     }
-    const totalLabel = /^due\s+date\b/iu.test(line) ? undefined : line.match(payable)?.[0];
+    // These POS labels identify a rounded or dine-in amount. Require the
+    // independent cash/change arithmetic before preferring it to a subtotal.
+    const posLabel = line.match(/^(?:ttl atf rnd|amount to be paid|total \(eat in\))(?=$|[ \t:：])/iu)?.[0];
+    const totalLabel = posLabel ?? (/^due\s+date\b/iu.test(line) ? undefined : line.match(payable)?.[0]);
     const cashLabel = line.match(tender)?.[0];
     const changeLabel = line.match(change)?.[0];
     const subtotalLabel = line.match(subtotal)?.[0];
@@ -168,6 +172,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
       if (currency?.kind === "printed") settlementCurrencies.add(currency.currency);
     }
 
+    if (posLabel && !inTaxSummary) contextualTotals.add(amount);
     if (refundLabel) refunds.add(Math.abs(amount));
     else if (final) finalTotals.add(amount);
     else if (totalLabel && !inTaxSummary) totals.add(amount);
@@ -189,6 +194,11 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
   const payableCandidates = finalTotals.size ? finalTotals : totals;
   const cashNet = !hasOtherTender && settlementCurrencies.size <= 1 && cash.size === 1 && changes.size === 1
     ? [...cash][0] - [...changes][0] : null;
+  if (contextualTotals.size) {
+    if (cashNet === null || cashNet <= 0 || contextualTotals.size !== 1 || !contextualTotals.has(cashNet) ||
+        (finalTotals.size && !finalTotals.has(cashNet))) return { kind: "conflict" };
+    return { kind: "payable", amount: cashNet / 100 };
+  }
   if (payableCandidates.size > 1) {
     // An unlabeled settlement duplicate can be disambiguated by independently
     // printed cash and change. Never manufacture a total from that difference.
