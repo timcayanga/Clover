@@ -58,9 +58,12 @@ async function readManifest(db: Prisma.TransactionClient, selectedTables: readon
   // Keep all tables in the caller's same repeatable-read snapshot. Bound each
   // statement's work as retained source evidence grows; do not shorten hashes,
   // drop tables or change the read/write transaction budgets.
-  for (let offset = 0; offset < statements.length; offset += 4) {
+  // Wide source and transaction rows can exceed the pooler statement limit when
+  // four full tables share a query. Keep each global table in its own statement.
+  const tablesPerQuery = params.some(Array.isArray) ? 1 : 4;
+  for (let offset = 0; offset < statements.length; offset += tablesPerQuery) {
     rows.push(...await db.$queryRawUnsafe<Array<{ table: string; count: number; sha256: string }>>(
-      bindings + statements.slice(offset, offset + 4).join(" UNION ALL "), ...params,
+      bindings + statements.slice(offset, offset + tablesPerQuery).join(" UNION ALL "), ...params,
     ));
   }
   const byTable = new Map(rows.map(row => [row.table, row]));
