@@ -10,6 +10,7 @@ import { assessReceiptPreviewQuality, hasReconciledOpticalSettlement, parseRecei
 import { readLocalReceiptOcrText, receiptDateDisagreements, readReceiptOpticalEvidence } from "./local-receipt-ocr-envelope";
 import { editableReceiptItems } from "../../shared/split-bill-experience";
 import { hasPrintedItemizedTotal, readChargedReceiptTable } from "./receipt-item-table";
+import { resolvePositiveImportDocumentRoute } from "./positive-import-route";
 import { classifyUnsettledPurchaseDocument } from "./purchase-document-payment";
 import { getClearLocalPhotoRejection } from "./financial-upload-scope";
 
@@ -106,4 +107,21 @@ export async function firstReceiptRead(bytes: Uint8Array, name: string, type: st
       !(hasPrintedItemizedTotal(text, preview.total) || hasReconciledOpticalSettlement(text, preview.total))) return { source, preview:null };
   const dateUncertain = receiptDateDisagreements(readReceiptOpticalEvidence(source)).length > 0;
   return { source, preview: { ...preview, billDate:dateUncertain ? null : preview.billDate, receiptText:source } };
+}
+
+// A second full-frame read can settle the amount while item refinement continues.
+// Only shorten the initial request when independent reads agree on the purchase.
+export function corroboratedReceiptDraft(first: string | null | undefined, fullFrame: string, currency: string) {
+  if (!first || !fullFrame || resolvePositiveImportDocumentRoute(first)?.mode === "statement" ||
+      resolvePositiveImportDocumentRoute(fullFrame)?.mode !== "receipt") return null;
+  const prior = parseReceiptPhotoText(first, currency);
+  const next = parseReceiptPhotoText(fullFrame, currency);
+  if (!prior.total || prior.total !== next.total || !next.merchantName ||
+      prior.merchantName?.trim().toLowerCase() !== next.merchantName.trim().toLowerCase() ||
+      prior.currency !== next.currency || next.currency === "MIXED" || prior.currencyWarning || next.currencyWarning ||
+      classifyUnsettledPurchaseDocument(readLocalReceiptOcrText(first) ?? first) ||
+      classifyUnsettledPurchaseDocument(fullFrame) || !hasPrintedItemizedTotal(fullFrame, prior.total)) return null;
+  const uncertainDate = (prior.billDate && next.billDate !== prior.billDate) ||
+    receiptDateDisagreements(readReceiptOpticalEvidence(first)).length > 0;
+  return { ...next, billDate: uncertainDate ? null : next.billDate, receiptText: fullFrame };
 }

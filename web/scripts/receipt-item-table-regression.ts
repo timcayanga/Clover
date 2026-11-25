@@ -1,4 +1,4 @@
-import {completeChargedReceipt} from "../lib/receipt-progressive.server";
+import {completeChargedReceipt, corroboratedReceiptDraft} from "../lib/receipt-progressive.server";
 import {editableReceiptItems} from "../../shared/split-bill-experience";
 import { splitBillDraftFromReceiptPreview } from "../lib/split-bill";
 import { mergeReceiptBackup } from "../lib/receipt-backup-preview";
@@ -652,3 +652,10 @@ assert.deepEqual(readRinggitNettTable(nettRows)?.items, [
 for (const damaged of [nettRows.replace("4 RM4.12","3 RM4.12"), nettRows.replace("CASH RM6.00","CASH RM5.00"), nettRows + "\nOutstanding RM2.00", nettRows.replace("RM1.88 RM1.88","Unreadable")]) {
   assert.equal(readRinggitNettTable(damaged), null);
 }
+
+assert.equal(corroboratedReceiptDraft(twoPurchasesAndFee, twoPurchasesAndFee, "PHP")?.total, "220.00");
+for (const changed of [
+  twoPurchasesAndFee.replace("220.00", "221.00"),
+  twoPurchasesAndFee.replace("QA Cafe", "Other Cafe"),
+  twoPurchasesAndFee + "\nAmount paid: 199.00",
+]) assert.equal(corroboratedReceiptDraft(twoPurchasesAndFee, changed, "PHP"), null);

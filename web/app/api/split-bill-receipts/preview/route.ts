@@ -19,7 +19,7 @@ import { assertRateLimit } from "@/lib/rate-limit";
 import { uploadObject } from "@/lib/s3";
 import { nativeUploadRequest, readReceiptUpload } from "@/lib/native-upload-store";
 import { isUploadPhoto, isUploadPdf, NATIVE_UPLOAD_MAX_SIZE } from "../../../../../shared/native-upload";
-import { billAttemptForReceipt, cachedReceiptDraft, completeChargedReceipt, canSaveReceiptForReview, firstReceiptRead, readReceiptObject, receiptDraftId, storeReceiptDraft } from "@/lib/receipt-progressive.server";
+import { billAttemptForReceipt, cachedReceiptDraft, corroboratedReceiptDraft, completeChargedReceipt, canSaveReceiptForReview, firstReceiptRead, readReceiptObject, receiptDraftId, storeReceiptDraft } from "@/lib/receipt-progressive.server";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -178,7 +178,7 @@ export async function POST(request: Request) {
       const bytes = await readReceiptObject(attachmentFor(refineId));
       if (!bytes) return NextResponse.json({error:"Receipt photo unavailable."}, {status:404});
       restored = new File([new Uint8Array(bytes)], cached.fileName, {type:cached.mimeType});
-      firstOptical = cached.preview.receiptText;
+      firstOptical = readLocalReceiptOcrText(cached.preview.receiptText) ? cached.preview.receiptText : undefined;
       early = cached;
     }
     const file = restored ?? (uploadId && workspace
@@ -228,21 +228,31 @@ export async function POST(request: Request) {
     if (decodeError) return NextResponse.json({error:decodeError, code:"I-101", retryable:false}, {status:400});
     let receiptText = "";
     let localPreview: ReceiptPreviewResult;
+    const saveInitial = async (preview: ReceiptPreviewResult, id: string, key: string) => {
+      const complete = completeChargedReceipt(preview);
+      const draft = { ...draftMeta, draftId:id, attemptId:billAttemptForReceipt(id,scope), refining:!complete,
+        preview, readyForReviewableBill:complete && canSaveReceiptForReview(preview),
+        reliableForScopedSplit:complete && assessReceiptPreviewQuality(preview).reliableForFastPath };
+      await uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type);
+      await storeReceiptDraft(key, draft);
+      return NextResponse.json(draft);
+    };
     try {
-      if (prefix && draftId && !refineId && isReceiptImage(selectedFile)) {
+      let corroborated: ReceiptPreviewResult | null = null;
+      const initialImage = prefix && draftId && !refineId && isReceiptImage(selectedFile);
+      if (initialImage) {
         const first = await firstReceiptRead(validationInput.bytes, selectedFile.name, selectedFile.type, currency);
         firstOptical = first.source;
-        if (first.preview) {
-          const complete = completeChargedReceipt(first.preview);
-          const draft = { ...draftMeta, draftId, attemptId:billAttemptForReceipt(draftId,scope), refining:!complete,
-            preview:first.preview, readyForReviewableBill:complete && canSaveReceiptForReview(first.preview),
-            reliableForScopedSplit:complete && assessReceiptPreviewQuality(first.preview).reliableForFastPath };
-          await uploadObject(receiptStorageKey, validationInput.bytes, selectedFile.type);
-          await storeReceiptDraft(prefix, draft);
-          return NextResponse.json(draft);
-        }
+        if (first.preview) return await saveInitial(first.preview, draftId, prefix);
       }
-      receiptText = await readUploadedFileText(selectedFile, undefined, {importMode:"receipt", sourceBytes:validationInput.bytes, firstOptical});
+      receiptText = await readUploadedFileText(selectedFile, undefined, {
+        importMode:"receipt", sourceBytes:validationInput.bytes, firstOptical,
+        acceptReceiptFrame: initialImage && firstOptical ? text => {
+          corroborated = corroboratedReceiptDraft(firstOptical, text, currency);
+          return Boolean(corroborated);
+        } : undefined,
+      });
+      if (corroborated && draftId && prefix) return await saveInitial(corroborated, draftId, prefix);
       const rejection = getClearLocalPhotoRejection({
         text: readLocalReceiptOcrText(receiptText) ?? receiptText,
         fileName: selectedFile.name,
