@@ -106,6 +106,11 @@ export function applyReceiptDefaultCurrency<T extends ReceiptCurrencyDetails>(de
   } else if (deviceCurrency && hint) {
     resolution = { source: "device_location", currency: deviceCurrency, requiresReview: false,
       evidence: `Optional capture country: ${hint.countryCode}`, countryCode: hint.countryCode, confidence: 0.7 };
+  } else if (/^(?:RM|MYR)$/iu.test(original?.trim() ?? "") && normalizeDefaultCurrency(defaultCurrency) !== "MYR" &&
+      /(?:^|[ \t(])RM(?:$|[ \t)])/imu.test(optical)) {
+    // A detached till unit corroborates the parser's reading but cannot by
+    // itself identify the purchase currency. Keep the original for review.
+    resolution = { source: "unresolved_currency", currency: null, requiresReview: true, evidence: "Detached RM unit on receipt" };
   } else {
     resolution = { source: "user_default", currency: normalizeDefaultCurrency(defaultCurrency), requiresReview: false,
       evidence: locations.length > 1 ? `Conflicting printed regions: ${locations.map(entry => entry.currency).sort().join(", ")}` : "Profile default currency" };

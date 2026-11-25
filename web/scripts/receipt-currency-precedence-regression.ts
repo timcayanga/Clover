@@ -72,3 +72,11 @@ assert.deepEqual(readPrintedReceiptCurrency("AMT (RM)\nTotal SGD 10.00"), { kind
 assert.deepEqual(readPrintedReceiptCurrency("TAX CODE AMOUNT TAX\n(RM) (RM)\nTotal 4.90"), { kind: "printed", currency: "MYR", evidence: "(RM)" });
 assert.equal(readPrintedReceiptCurrency("MEMBER COUPONS\n(RM) (RM)\nTotal 4.90"), null);
 assert.equal(readPrintedReceiptCurrency("AMOUNT TAX\nTAX CODE %\n(RM) (RM)")?.kind, "printed");
+
+const detachedUnit = "Bistro\nINV DATE 03/03/2018 10:58 PM RM\nQTY ITEM AMOUNT\nNet total 174.90";
+const ringgitDraft = { ...draft, currency: "RM" };
+const reviewedUnit = applyReceiptDefaultCurrency(ringgitDraft, "PHP", detachedUnit);
+assert.equal(reviewedUnit.currency, null);
+assert.equal(reviewedUnit.currency_resolution?.requiresReview, true);
+assert.deepEqual(applyReceiptDefaultCurrency(reviewedUnit, "PHP", detachedUnit), reviewedUnit);
+assert.equal(applyReceiptDefaultCurrency(ringgitDraft, "PHP", detachedUnit + "\nTotal USD 40.00").currency, "USD");
