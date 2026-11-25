@@ -1,3 +1,5 @@
+import {completeChargedReceipt} from "../lib/receipt-progressive.server";
+import {editableReceiptItems} from "../../shared/split-bill-experience";
 import { splitBillDraftFromReceiptPreview } from "../lib/split-bill";
 import { mergeReceiptBackup } from "../lib/receipt-backup-preview";
 import assert from "node:assert/strict";
@@ -623,6 +625,24 @@ assert.deepEqual(applyVerifiedMarginReadings(withMargin, [marginItem]), [{ ...ma
 for (const ambiguous of [[marginItem, marginItem], [{ ...marginItem, amount: "20.00" }], [{ ...marginItem, quantity: 3 }]]) {
   assert.deepEqual(applyVerifiedMarginReadings(withMargin, ambiguous), ambiguous);
 }
+
+const twoPurchasesAndFee = `QA Cafe
+2026-11-19
+Description Amount
+Coffee 75.00
+Toast 125.00
+Subtotal: 200.00
+Service Charge: 20.00
+Total Amount: 220.00`;
+const chargedTable = readChargedReceiptTable(twoPurchasesAndFee);
+assert.deepEqual(chargedTable?.items.map(row => [row.description,row.amount]), [["Coffee","75.00"],["Toast","125.00"]]);
+assert.equal(chargedTable?.serviceCharge,"20.00");
+assert.equal(readChargedReceiptTable(twoPurchasesAndFee.replace("220.00","221.00")),null);
+
+const threeLinePreview = parseReceiptPhotoText(twoPurchasesAndFee,"PHP");
+assert(completeChargedReceipt(threeLinePreview));
+assert.deepEqual(editableReceiptItems(threeLinePreview).map(row=>row.description),["Coffee","Toast","Service Charge"]);
+assert(!completeChargedReceipt({...threeLinePreview,items:[{description:"Total",amount:"220.00"}]}));
 
 const nettRows = "Tax Invoice\nItem Qty Total\nSR I00100000015- Vegetable\nRM1.03 4 RM4.12\nSR 100100000056-Fried Noodle\nRM1.88 RM1.88\nTotal Amount: RM6.00\nGST @0%: RM0.00\nNett Total: RM6.00\nPayment Mode Amount\nCASH RM6.00\nChange RM0.00\nGST Summary Amount(RM) Tax(RM)";
 assert.deepEqual(readRinggitNettTable(nettRows)?.items, [

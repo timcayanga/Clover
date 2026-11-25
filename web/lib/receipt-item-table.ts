@@ -419,13 +419,13 @@ export function readChargedReceiptTable(source: string, blocks: OpticalBlock[] =
   const charge = lines.findIndex(line => /^(?:\d+(?:\.\d+)?%\s*)?service\s*ch(?:arge|rge)\s*:\s*\d[\d,]*\.\d{2}$/i.test(line) ||
     /^service\s+charge\s+\d[\d,]*\.\d{2}$/i.test(line));
   if (charge < 2) return null;
-  const payable = lines[charge + 1]?.match(/^(?:bill\s+am(?:ount|a)|amo(?:unt)?(?: due)?)\s*[:：]?\s*(\d[\d,:=. ]*\d)$/i);
+  const payable = lines[charge + 1]?.match(/^(?:bill\s+am(?:ount|a)|(?:grand\s+)?total(?:\s+amount)?|amo(?:unt)?(?: due)?)\s*[:：]?\s*(\d[\d,:=. ]*\d)$/i);
   if (!payable || !/[.,= ]\d{2}$/.test(payable[1])) return null;
   const money = (value: string) => Math.round(Number(value.replace(/,/g, "")) * 100);
   const service = money(lines[charge].match(/\d[\d,]*\.\d{2}$/)![0]);
   let end = charge;
-  const printedGross = lines[end - 1].match(/^gross amount\s*[:：]?\s*(\d[\d,]*\.\d{2})$/i);
-  if (/^gross amount\b/i.test(lines[end - 1])) end--;
+  const printedGross = lines[end - 1].match(/^(?:gross amount|sub[ -]?total)\s*[:：]?\s*(\d[\d,]*\.\d{2})$/i);
+  if (printedGross || /^gross amount\b/i.test(lines[end - 1])) end--;
   const count = end ? lines[end - 1].match(/^total\s+(?:qty|aty|quantity)\s+(\d+)$/i) : null;
   if (count) end--;
   const hasLeadingQuantity = lines.slice(0, end).some(line => /^(?:qty|quantity)\b/i.test(line));

@@ -10,6 +10,11 @@ const correct = receipt("Subtotal PHP 180.00", "Grand Total PHP 201.60", "Cash t
   "Change PHP 298.40", "VAT breakdown", "VATable amount PHP 180.00", "Total VAT PHP 21.60",
   "Total PHP 21.60", "Settlement", "Total PHP 201.60");
 assert.deepEqual(readReceiptSettlementEvidence(correct), { kind: "payable", amount: 201.6 });
+const philippineToll = "TOTAL AMOUNT PAID PHP 24.00\nCASH TENDERED : 50.00\nCASH CHANGED :\n26.00";
+assert.deepEqual(readReceiptSettlementEvidence(philippineToll), { kind: "payable", amount: 24 });
+assert.deepEqual(readReceiptSettlementEvidence(philippineToll.replace("26.00", "25.00")), { kind: "conflict" });
+assert.deepEqual(readReceiptSettlementEvidence(philippineToll.replace("50.00", "USD 50.00")), { kind: "conflict" });
+assert.equal(readReceiptTenders(philippineToll).find(row => row.method === "change")?.amount, 26);
 const parsed = parseReceiptText(correct);
 assert.equal(parsed.total, "201.60");
 assert.equal(parsed.subtotal, "180.00");

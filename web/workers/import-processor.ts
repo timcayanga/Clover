@@ -4,7 +4,7 @@ import { parseReceiptLineItemsFromPayload } from "@/lib/receipt-line-items";
 import { linkReceiptToExistingExpense } from "@/lib/transaction-source-matches";
 import { receiptReconciliationIssues } from "@/lib/receipt-reconciliation";
 import { hasSplitReceiptTender, readReceiptRounding, readReceiptSettlementEvidence, readReceiptTenders, reconcileReceiptSettlement, splitTenderDifference, type ReceiptTender } from "@/lib/receipt-settlement-evidence";
-import { reconcileReceiptMerchant } from "@/lib/receipt-merchant-evidence";
+import { normalizedTollReceiptMerchant, reconcileReceiptMerchant } from "@/lib/receipt-merchant-evidence";
 import type { ImportDispatchSource } from "@/lib/import-dispatch";
 import { isUploadPhoto, isUploadPdf } from "../../shared/native-upload";
 import { pdfStatementReviewMessage } from "@/lib/pdf-statement-review";
@@ -2341,7 +2341,8 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
   return {
     receipt_type: preview.receiptType,
     merchant_raw: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
-    merchant_clean: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
+    merchant_clean: isSuspiciousReceiptMerchantName(preview.merchantName) ? null :
+      normalizedTollReceiptMerchant(preview.merchantName, preview.receiptText) ?? preview.merchantName ?? null,
     document_number: null,
     invoice_number: null,
     booking_reference: null,

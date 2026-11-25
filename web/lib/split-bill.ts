@@ -2640,7 +2640,7 @@ function parseReceiptSourceFields(receiptText: string, photo: boolean, { ordered
     paymentMethod: hasSplitReceiptTender(tenders) ? "Mixed" : settled.paymentMethod,
   } : settled;
   const photoText = useOpticalRows ? ordered : opticalText ?? (photo ? receiptText : null);
-  const table = nettTable ?? readReconciledItemTable(photoText ?? receiptText) ?? (photoText ? readChargedReceiptTable(photoText, evidence) : null);
+  const table = nettTable ?? readReconciledItemTable(photoText ?? receiptText) ?? readChargedReceiptTable(photoText ?? receiptText, evidence);
   if (table && !payment && !footer && (!settlement || (settlement.kind === "payable" && settlement.amount === Number(table.total)))) {
     return {...paymentDetails, ...table, receiptText, requiresReview:paymentDetails.requiresReview || photoText !== null,
       confidence:photoText === null ? paymentDetails.confidence : Math.min(45,paymentDetails.confidence)};

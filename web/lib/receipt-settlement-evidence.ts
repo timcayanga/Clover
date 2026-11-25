@@ -4,8 +4,8 @@ import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
 const payable = /^(?:(?:net\s+)?total\s+rounded|(?:grand|bill|net)\s+total|grandtotal|bill amount|due|du|tl|(?:final\s+)?amount\s+(?:due|paid|payable|to\s+pay)|sale\s+amount|total(?:\s+incl\.[ \t]+gst[ \t]*@[ \t]*6%|\s+sales\s*\(inclusive(?: of)? gst\)|\s+(?:amount|paid|due|payable|bayar|tagihan))?|jumlah\s+bayar|합\s*계|결제금액|合計)(?![\p{L}])/iu;
 const subtotal = /^(?:sub\s*-?\s*total|gross amount)(?![\p{L}])/iu;
-const tender = /^(?:cash(?:\s+(?:tendered|received|paid))?|tendered|amount tendered|tunai|uang diterima)(?![\p{L}])/iu;
-const change = /^(?:change(?:\s+due)?|kembalian|kembali)(?![\p{L}])/iu;
+const tender = /^(?:cash(?!\s+changed\b)(?:\s+(?:tendered|received|paid))?|tendered|amount tendered|tunai|uang diterima)(?![\p{L}])/iu;
+const change = /^(?:cash\s+changed|change(?:\s+due)?|kembalian|kembali)(?![\p{L}])/iu;
 const refund = /^(?:total refund|refund(?: amount| total| issued| approved| completed)?|amount refunded|refunded(?: amount)?|return total)(?![\p{L}])/iu;
 const refundHeading = /^(?:refund|return|credit note)(?:\s+(?:receipt|slip|confirmation|voucher))?\s*[:：]?$/iu;
 const taxHeading = /^(?:tax|vat|gst|ppn)(?:\s+(?:breakdown|summary|details|calculation))\s*[:：]?$/iu;
@@ -223,7 +223,7 @@ export function readReceiptSettlementEvidence(source: string): Settlement | null
     // These POS labels identify a rounded or dine-in amount. Require the
     // independent cash/change arithmetic before preferring it to a subtotal.
     const ringgitInclusiveLabel = line.match(/^total incl\.[ \t]+GST[ \t]*0?6%(?=[ \t]+RM[ \t]*\d+[.]\d{2}$)/iu)?.[0];
-    const posLabel = ringgitInclusiveLabel ?? line.match(/^(?:ttl atf rnd|amount to be paid|total \(eat in\))(?=$|[ \t:：])/iu)?.[0];
+    const posLabel = ringgitInclusiveLabel ?? line.match(/^(?:ttl atf rnd|amount to be paid|total amount paid(?=[ \t]+PHP\b)|total \(eat in\))(?=$|[ \t:：])/iu)?.[0];
     const totalLabel = posLabel ?? (/^due\s+date\b/iu.test(line) ? undefined : line.match(payable)?.[0]);
     const cashLabel = line.match(tender)?.[0];
     const changeLabel = line.match(change)?.[0];

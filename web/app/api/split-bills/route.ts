@@ -589,6 +589,18 @@ export async function GET(request: Request) {
   let code: SplitBillReadErrorCode = "split_bills_user_context_failed";
   try {
     const user = await getSplitBillCurrentUser();
+    if (native && query.has("receiptAttempt")) {
+      const attempt = z.string().uuid().safeParse(query.get("receiptAttempt"));
+      const workspaceId = query.get("workspaceId");
+      if (!attempt.success || !workspaceId) return NextResponse.json({error:"Invalid receipt lookup."},{status:400});
+      const bill = await prisma.splitBill.findFirst({where:{userId:user.id,sourceType:"receipt",AND:[
+        {rawPayload:{path:["directEntryAttemptId"],equals:attempt.data}},
+        {rawPayload:{path:["directEntryWorkspaceId"],equals:workspaceId}},
+      ]},include:getBillInclude});
+      const transferSettlements = bill ? await loadSplitBillTransferSettlementsForBill(bill.id) : [];
+      return NextResponse.json({bill:bill ? serializeSplitBillRecord({...bill,transferSettlements,rawPayload:bill.rawPayload && typeof bill.rawPayload === "object" && !Array.isArray(bill.rawPayload) ? bill.rawPayload : null}) : null},
+        {headers:{"Cache-Control":"private, no-store"}});
+    }
     if (surface === "home_split_bills_summary" || (native && surface === "split_bills_balance_summary")) {
       code = "split_bills_summary_load_failed";
       const { bills, groups, people } = await loadSplitBillWorkspaceData(user.id);

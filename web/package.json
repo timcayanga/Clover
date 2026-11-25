@@ -19,6 +19,7 @@
     "postinstall": "tsx scripts/sync-public-assets.ts && prisma generate",
     "worker:imports": "tsx workers/imports-worker.ts",
     "db:seed": "tsx prisma/seed.ts",
+    "qa:receipt-training": "node scripts/receipt-training-local.cjs",
     "qa:parsers": "node scripts/parser-release-gate.cjs",
     "qa:parsers:private": "tsx scripts/parser-regression.ts && tsx scripts/chinabank-deep-qa.ts",
     "qa:parsers:corpus": "tsx scripts/reviewed-parser-corpus.ts",
