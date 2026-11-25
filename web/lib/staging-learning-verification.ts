@@ -40,15 +40,18 @@ function manifestParentJoin(table: string) {
     : "";
 }
 
-async function readManifest(db: Prisma.TransactionClient, selectedTables: readonly string[], predicates: string[], params: unknown[]): Promise<Manifest> {
+async function readManifest(db: Prisma.TransactionClient, selectedTables: readonly string[], predicates: string[], params: unknown[], rowVersions = false): Promise<Manifest> {
   if (db === prisma) return prisma.$transaction(
-    tx => readManifest(tx, selectedTables, predicates, params),
+    tx => readManifest(tx, selectedTables, predicates, params, rowVersions),
     { isolationLevel: "RepeatableRead", timeout: readSnapshotTimeout },
   );
   // The table list and predicates are built only from the fixed diagnostic lists.
   // Keep the original complete-row PostgreSQL hashes; batch round trips, not evidence.
+  // PostgreSQL assigns a new xmin to an updated tuple. Combining it with the
+  // primary key checks for inserts, deletes and updates without detoasting source images.
+  const rowText = rowVersions ? 'jsonb_build_array(t."id", t.xmin::text)::text' : 'to_jsonb(t)::text';
   const statements = selectedTables.map((table, index) => `SELECT '${table}'::text AS "table", count(*)::int AS count,
-    encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(to_jsonb(t)::text, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256
+    encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(${rowText}, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256
     FROM "${table}" t ${manifestParentJoin(table)} ${predicates[index]}`);
   const rows: Array<{ table: string; count: number; sha256: string }> = [];
   // Some groups do not reference the retained checkpoint parameter. Bind its
@@ -77,7 +80,7 @@ async function readManifest(db: Prisma.TransactionClient, selectedTables: readon
   return result;
 }
 
-export async function checkpointPreservationManifest(checkpointId: string, db: Prisma.TransactionClient, excludedWorkspaceIds: string[] = [], table?: typeof tables[number]): Promise<Manifest> {
+export async function checkpointPreservationManifest(checkpointId: string, db: Prisma.TransactionClient, excludedWorkspaceIds: string[] = [], table?: typeof tables[number], rowVersions = false): Promise<Manifest> {
   const params: unknown[] = [checkpointId];
   if (excludedWorkspaceIds.length) params.push(excludedWorkspaceIds);
   const selected = table ? tables.filter(name => name === table) : tables;
@@ -90,7 +93,7 @@ export async function checkpointPreservationManifest(checkpointId: string, db: P
     }
     return conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
   });
-  return readManifest(db, selected, predicates, params);
+  return readManifest(db, selected, predicates, params, rowVersions);
 }
 export async function learningVerificationManifest(workspaceId: string, own = false, db: Prisma.TransactionClient = prisma): Promise<Manifest> {
   const selectedTables = tables.filter(table => !own || financialTables.has(table));
@@ -106,7 +109,7 @@ export async function learningVerificationManifest(workspaceId: string, own = fa
 export async function learningVerificationOwnCompleteManifest(workspaceId: string, db: Prisma.TransactionClient = prisma): Promise<Manifest> {
   return readManifest(db, tables, tables.map(table => `WHERE ${manifestWorkspaceExpression(table)} = $1`), [workspaceId]);
 }
-type RunState = { baseline: Manifest; batchRunIds?: string[]; retainedCheckpoint?: unknown; protectedFinancial?: Manifest; failureJobId?: string; interruptionJobId?: string };
+type RunState = { rowVersions?: boolean; baseline: Manifest; batchRunIds?: string[]; retainedCheckpoint?: unknown; protectedFinancial?: Manifest; failureJobId?: string; interruptionJobId?: string };
 async function loadRun(runId: string, actor: string) {
   assertLearningVerificationEnvironment();
   const journal = await prisma.auditLog.findFirst({ where: { id: journalId(runId), actorUserId: actor, action: "learning.verification.started", entityId: runId } });
@@ -143,7 +146,7 @@ function batchWorkspaceIds(runIds: string[]) {
 }
 
 /** Allocate all QA Profiles behind one complete snapshot. */
-export async function startLearningVerificationBatch(runIds: string[], actor: string) {
+export async function startLearningVerificationBatch(runIds: string[], actor: string, rowVersions = false) {
   assertLearningVerificationEnvironment();
   const workspaceIds = batchWorkspaceIds(runIds);
   const orderedRunIds = [...runIds].sort();
@@ -152,6 +155,7 @@ export async function startLearningVerificationBatch(runIds: string[], actor: st
     if (journals.length) {
       if (journals.length !== runIds.length || journals.some(journal =>
         journal.actorUserId !== actor || journal.action !== "learning.verification.started" ||
+        Boolean((journal.metadata as unknown as RunState).rowVersions) !== rowVersions ||
         JSON.stringify((journal.metadata as unknown as RunState).batchRunIds) !== JSON.stringify(orderedRunIds))) {
         throw new Error("VERIFICATION_NOT_FOUND");
       }
@@ -160,14 +164,14 @@ export async function startLearningVerificationBatch(runIds: string[], actor: st
 
     const user = await db.user.findFirst({ where: { clerkUserId: LEARNING_QA_USER, environment: "staging" } });
     if (!user) throw new Error("VERIFICATION_QA_ACCOUNT_UNAVAILABLE");
-    const baseline = await checkpointPreservationManifest(retainedCheckpointId, db, workspaceIds);
+    const baseline = await checkpointPreservationManifest(retainedCheckpointId, db, workspaceIds, undefined, rowVersions);
     const retainedCheckpoint = await db.accountStatementCheckpoint.findUnique({ where: { id: retainedCheckpointId } });
     await db.workspace.createMany({ data: orderedRunIds.map(id => ({
       id: profileId(id), userId: user.id, name: `Learning verification ${id.slice(0, 8)}`, type: "personal",
     })) });
     await db.auditLog.createMany({ data: orderedRunIds.map(id => ({
       id: journalId(id), workspaceId: profileId(id), actorUserId: actor, action: "learning.verification.started",
-      entity: "LearningVerification", entityId: id, metadata: json({ baseline, batchRunIds: orderedRunIds, retainedCheckpoint }),
+      entity: "LearningVerification", entityId: id, metadata: json({ baseline, batchRunIds: orderedRunIds, retainedCheckpoint, ...(rowVersions ? { rowVersions: true } : {}) }),
     })) });
     return { runIds: orderedRunIds, excludedProfiles: workspaceIds, baseline, retainedCheckpoint: json(retainedCheckpoint) };
   }, { isolationLevel: "RepeatableRead", timeout: readSnapshotTimeout });
@@ -324,7 +328,7 @@ export async function previewPreservationHashPage(runIds: string[], actor: strin
 export async function previewLearningBatchPreservation(runIds: string[], actor: string, table?: typeof tables[number]) {
   const { workspaces, batch } = await loadPreservationBatch(runIds, actor);
   return prisma.$transaction(async db => {
-    const preservation = await checkpointPreservationManifest(retainedCheckpointId, db, workspaces, table);
+    const preservation = await checkpointPreservationManifest(retainedCheckpointId, db, workspaces, table, batch?.rowVersions);
     const retainedCheckpoint = await db.accountStatementCheckpoint.findUnique({ where: { id: retainedCheckpointId } });
     return { runIds, excludedProfiles: workspaces, preservation, retainedCheckpoint, ...(batch ? {
       changedOutsideBatch: Object.keys(preservation).filter(table =>
