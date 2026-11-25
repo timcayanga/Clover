@@ -142,3 +142,8 @@ for (const mismatch of [
   printedGstTill.replace("\nCHANGE RM 16.00", ""),
   printedGstTill + "\nCard RM 1.00",
 ]) assert.deepEqual(readReceiptSettlementEvidence(mismatch), { kind: "conflict" });
+
+const cashBreadTill = "Payment Type: Cash\nGrand Tota1RM15.00\nTotal Paid RM20.00\nChange RM5.00";
+assert.deepEqual(readReceiptSettlementEvidence(cashBreadTill), { kind: "payable", amount: 15 });
+assert.deepEqual(readReceiptSettlementEvidence(cashBreadTill.replace("RM5.00", "RM4.50")), { kind: "conflict" });
+assert.deepEqual(readReceiptSettlementEvidence(cashBreadTill + "\nCard RM1.00"), { kind: "conflict" });

@@ -46,6 +46,12 @@ export type ReceiptTender = {
 // Normalize only the three adjacent till rows. Preserve the original
 // transcript and require independent cash-minus-change evidence downstream.
 function normalizeRinggitRegister(source: string) {
+  // In this cash layout "Total Paid" is the tender before change.
+  // Keep all three printed amounts; the ordinary POS reconciliation checks them.
+  if (/^payment type:[ \t]*cash[ \t]*$/im.test(source)) {
+    source = source.replace(/^grand tota[l1][ \t]*RM[ \t]*(\d+\.\d{2})[ \t]*\r?\ntotal paid[ \t]+RM[ \t]*(\d+\.\d{2})[ \t]*\r?\nchange[ \t]+RM[ \t]*(\d+\.\d{2})[ \t]*$/gim,
+      "Amount to be paid RM $1\nCash RM $2\nChange RM $3");
+  }
   return source.replace(/^total after rounding[ \t]+(\d+\.\d{2})\r?\ncash[ \t]+(\d+\.\d{2})\r?\nchange cash[ \t]+(\d+\.\d{2})$/gim,
     "Amount to be paid $1\nCash $2\nChange $3").replace(/^(?:rounded total[ \t]*\(RM\)[ \t]*:|total incl gst)[ \t]*(\d+\.\d{2})[ \t]*\r?\n(?:pay[ \t]+)?cash[ \t]+(\d+\.\d{2})[ \t]*\r?\n(?:cash[ \t]+)?change[ \t]+(\d+\.\d{2})[ \t]*$/gim,
     "Amount to be paid $1\nCash $2\nChange $3");
