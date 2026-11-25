@@ -2,7 +2,7 @@ import { readPrintedReceiptCurrency } from "./receipt-currency-evidence";
 import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
 import { splitReceiptPromotionalFooter } from "./receipt-promotional-footer";
 
-const payable = /^(?:(?:grand|bill|net)\s+total|grandtotal|bill amount|due|du|tl|(?:final\s+)?amount\s+(?:due|paid|payable|to\s+pay)|sale\s+amount|total(?:\s+(?:amount|paid|due|payable|bayar|tagihan))?|jumlah\s+bayar|합\s*계|결제금액|合計)(?![\p{L}])/iu;
+const payable = /^(?:(?:net\s+)?total\s+rounded|(?:grand|bill|net)\s+total|grandtotal|bill amount|due|du|tl|(?:final\s+)?amount\s+(?:due|paid|payable|to\s+pay)|sale\s+amount|total(?:\s+(?:amount|paid|due|payable|bayar|tagihan))?|jumlah\s+bayar|합\s*계|결제금액|合計)(?![\p{L}])/iu;
 const subtotal = /^(?:sub\s*-?\s*total|gross amount)(?![\p{L}])/iu;
 const tender = /^(?:cash(?:\s+(?:tendered|received|paid))?|tendered|amount tendered|tunai|uang diterima)(?![\p{L}])/iu;
 const change = /^(?:change(?:\s+due)?|kembalian|kembali)(?![\p{L}])/iu;
@@ -11,7 +11,7 @@ const refundHeading = /^(?:refund|return|credit note)(?:\s+(?:receipt|slip|confi
 const taxHeading = /^(?:tax|vat|gst|ppn)(?:\s+(?:breakdown|summary|details|calculation))\s*[:：]?$/iu;
 const settlementHeading = /^(?:settlement|payment|tender)(?:\s+(?:summary|details|breakdown))?\s*[:：]?$/iu;
 const breakdownTotal = /^total\s+(?:vat\b|tax\b|gst\b|ppn\b|zero[- ]rated\b|(?:no\.?\s+of\s+)?(?:qty|quantity|items?|points?)\b|savings\b|discount\b|cash\b|tender(?:ed)?\b|change\b|refund\b)/iu;
-const saleLabels = /^(?:grand\s*total|bill total|bill amount|net total|due|du|tl|jumlah bayar|total bayar|total tagihan|결제금액|amount (?:due|paid|payable|to pay)|sale amount|total (?:paid|due|payable))$/iu;
+const saleLabels = /^(?:(?:net\s+)?total\s+rounded|grand\s*total|bill total|bill amount|net total|due|du|tl|jumlah bayar|total bayar|total tagihan|결제금액|amount (?:due|paid|payable|to pay)|sale amount|total (?:paid|due|payable))$/iu;
 const currencyMark = /^(?:(?:[A-Z]{3}|P(?=\s*\d)|Rp\.?|RM|(?:US|HK|S|A|C|NZ|NT)\$)\s*|[₱$€£¥฿₩₫₹]\s*)|\s*(?:[A-Z]{3}|[₱$€£¥฿₩₫₹원円元])$/giu;
 
 function readAmount(raw: string) {

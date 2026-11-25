@@ -93,3 +93,9 @@ assert.equal(splitTenderDifference(preview.tenders!, 211.6, "PHP"), -10);
 assert.equal(splitTenderDifference([...preview.tenders!, preview.tenders![0]], 201.6, "PHP"), null);
 assert.equal(splitTenderDifference(preview.tenders!.map(tender => tender.method === "card" ? { ...tender, currency: "USD" } : tender), 201.6, "PHP"), null);
 assert.deepEqual(readReceiptTenders("Card 1234\nGCash reference 0555"), []);
+
+// The till prints the pre-rounding sale and the amount actually settled.
+const rounded = "Total RM 33.92\nRounding Adjustment -RM 0.02\nTotal Rounded RM 33.90\nCash RM 50.00\nChange RM 16.10";
+assert.deepEqual(readReceiptSettlementEvidence(rounded), { kind: "payable", amount: 33.90 });
+assert.deepEqual(readReceiptSettlementEvidence(rounded.replace("16.10", "16.00")), { kind: "conflict" });
+assert.deepEqual(readReceiptSettlementEvidence(rounded.replace("Rounded RM 33.90", "Rounded ?")), { kind: "conflict" });
