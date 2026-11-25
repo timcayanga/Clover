@@ -77,7 +77,11 @@ export function readPrintedReceiptCurrency(text: string, region: string | null =
     if (secondaryAmount.test(line)) continue;
     // Currency units above a printed price column also survive OCR as a
     // separate line. Require a financial column heading adjacent to the unit.
-    if (/\b(?:amount|amt|price)[ \t]*\(RM\)(?=$|\s)/i.test(line) ||
+    const previousLine = lines[index - 1] ?? "";
+    const amountTaxHeader = /^tax code\s*%?$/i.test(previousLine) ? lines[index - 2] ?? "" : previousLine;
+    const pairedUnits = /^\(RM\)\s+\(RM\)$/i.test(line) &&
+      /\b(?:amount|amt)\s+tax\s*$/i.test(amountTaxHeader);
+    if (pairedUnits || /\b(?:amount|amt|price)[ \t]*\(RM\)(?=$|\s)/i.test(line) ||
         (/^\(RM\)$/i.test(line) && /\b(?:amount|amt|price)\s*$/i.test(lines[index - 1] ?? ""))) {
       amounts.set("MYR", "(RM)");
     }

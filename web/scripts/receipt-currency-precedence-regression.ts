@@ -69,3 +69,6 @@ assert.equal(readPrintedReceiptCurrency("Philippines\nAmount Due P99.80\nCurrenc
 assert.deepEqual(readPrintedReceiptCurrency("Qty Price AMOUNT\n(RM)\nTotal 4.90"), { kind: "printed", currency: "MYR", evidence: "(RM)" });
 assert.equal(readPrintedReceiptCurrency("Merchant (RM)\nTotal 4.90"), null);
 assert.deepEqual(readPrintedReceiptCurrency("AMT (RM)\nTotal SGD 10.00"), { kind: "printed", currency: "SGD", evidence: "SGD" });
+assert.deepEqual(readPrintedReceiptCurrency("TAX CODE AMOUNT TAX\n(RM) (RM)\nTotal 4.90"), { kind: "printed", currency: "MYR", evidence: "(RM)" });
+assert.equal(readPrintedReceiptCurrency("MEMBER COUPONS\n(RM) (RM)\nTotal 4.90"), null);
+assert.equal(readPrintedReceiptCurrency("AMOUNT TAX\nTAX CODE %\n(RM) (RM)")?.kind, "printed");
