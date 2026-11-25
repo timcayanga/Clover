@@ -4,7 +4,20 @@ const deadlines=[];
 const lifecycle={};vm.runInNewContext(compile('../src/request-lifecycle.ts'),{exports:lifecycle,AbortController,Promise,Error,setTimeout:(fn,ms)=>{deadlines.push(ms);return setTimeout(fn,Math.min(ms,15))},clearTimeout});
 const upload={};vm.runInNewContext(compile('../../shared/native-upload.ts'),{exports:upload});
 const events=[],api={};let fetchImpl;
-vm.runInNewContext(compile('../src/api.ts'),{exports:api,URL,Headers,AbortController,Date,Error,fetch:(...args)=>fetchImpl(...args),require:name=>{
+class ReceiptXHR {
+ upload={}; headers={};
+ open(method,url){this.method=method; this.url=url;}
+ setRequestHeader(k,v){this.headers[k]=v;}
+ send(body){
+   assert.equal(this.headers.authorization,"Bearer synthetic");
+   assert.equal(body.get("file"),"fixture");
+   this.upload.onprogress({loaded:1,total:4,lengthComputable:true});
+   this.upload.onload();
+   this.status=200; this.responseText='{"preview":{}}';
+   this.onload(); this.onloadend();
+ }
+}
+vm.runInNewContext(compile('../src/api.ts'),{exports:api,URL,Headers,FormData,Response,XMLHttpRequest:ReceiptXHR,AbortController,Date,Error,fetch:(...args)=>fetchImpl(...args),require:name=>{
  if(name==='./request-lifecycle')return lifecycle;
  if(name==='../../shared/native-upload')return upload;
  if(name==='./api-base')return {apiBase:()=> 'https://fixture.invalid'};
@@ -17,6 +30,13 @@ for (const [suffix, expected] of [['',315000],['&uploadId=fixture',315000],['&ac
  await api.apiRequest('synthetic','split-bill-receipts/preview?workspaceId=fixture'+suffix,{method:'POST'});
  assert.equal(deadlines.at(-1),expected);
 }
+const form = new FormData(); form.append("file","fixture");
+const percentages=[];
+const preview=await api.apiRequest("synthetic","split-bill-receipts/preview?workspaceId=qa",{
+ method:"POST",body:form,onUploadProgress:fraction=>percentages.push(fraction),
+});
+assert.ok(preview.preview);
+assert.deepEqual(percentages,[0.25,1]);
 const tick=()=>new Promise(r=>setImmediate(r));
 fetchImpl=()=>new Promise(()=>{});await assert.rejects(api.apiRequest('synthetic','bootstrap'),api.NetworkError);assert.equal(events.at(-1).reason,'timeout');
 let resolveBody;fetchImpl=async()=>({ok:true,status:200,json:()=>new Promise(r=>resolveBody=r)});

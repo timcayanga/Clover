@@ -233,6 +233,13 @@ export function PlanAction({
     </Pressable>
   );
 }
+export function ProgressLabel({ label, value }: { label: string; value: number }) {
+  const {colors} = useTheme();
+  return <>
+        <Text style={{ flex: 1, color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{label}</Text>
+        <Text accessibilityLabel={`${Math.round(value)} percent complete`} style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13, fontVariant: ["tabular-nums"] }}>{Math.round(value)}%</Text>
+  </>;
+}
 export function Progress({ value }: { value?: number }) {
   const { colors } = useTheme();
   return (

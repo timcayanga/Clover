@@ -14,10 +14,32 @@ export class ApiError extends Error {
     super(message);
   }
 }
+function receiptMultipartRequest(url: string, headers: Headers, body: FormData, signal: AbortSignal, progress: (fraction: number) => void): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const abort = () => xhr.abort();
+    if (signal.aborted) { reject(new Error("Upload cancelled.")); return; }
+    xhr.open("POST", url);
+    headers.forEach((value, key) => xhr.setRequestHeader(key, value));
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable && event.total > 0) progress(event.loaded / event.total);
+    };
+    xhr.upload.onload = () => progress(1);
+    xhr.onerror = () => reject(new Error("Receipt upload lost its connection."));
+    xhr.onabort = () => reject(new Error("Upload cancelled."));
+    xhr.onload = () => {
+      if (!xhr.status) { reject(new Error("Receipt upload lost its connection.")); return; }
+      resolve(new Response(xhr.responseText, {status: xhr.status}));
+    };
+    xhr.onloadend = () => signal.removeEventListener("abort", abort);
+    signal.addEventListener("abort", abort);
+    xhr.send(body);
+  });
+}
 export async function apiRequest<T>(
   token: string,
   path: string,
-  options: RequestInit = {},
+  options: RequestInit & { onUploadProgress?: (fraction: number) => void } = {},
   format: "json" | "text" = "json",
 ): Promise<T> {
   // Final receipt recognition can run for the endpoint's full five-minute budget.
@@ -39,13 +61,15 @@ export async function apiRequest<T>(
     headers.set("Authorization", `Bearer ${token}`);
     if (typeof options.body === "string")
       headers.set("Content-Type", "application/json");
-    const response = await fetch(url.toString(), {
+    const response = await (readingReceipt && options.onUploadProgress && options.body instanceof FormData
+      ? receiptMultipartRequest(url.toString(), headers, options.body, signal, options.onUploadProgress)
+      : fetch(url.toString(), {
       ...options,
       headers,
       signal,
       credentials: "omit",
       cache: "no-store",
-    }).catch((e: Error) => {
+    })).catch((e: Error) => {
       if (signal.aborted) throw e;
       throw new NetworkError(e.message || "Connection unavailable.");
     });

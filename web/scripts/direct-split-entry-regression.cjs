@@ -152,6 +152,26 @@ async function main() {
     new AbortController().signal, 1);
   assert.equal(reads,2);
   assert.equal(recovered.draftId,"same-receipt");
+  // An immediate second tap during a slow delete must not issue another write.
+  let finishDelete, failDelete, writes = 0, deleted = 0;
+  const {useBillDeletion} = load("../mobile/src/use-bill-deletion.ts", {
+    react: {useMemo: fn => fn(), useReducer: () => [0, () => {}]},
+    "./session":{useSession: () => ({profileId:"qa", request: () => {
+      writes++;
+      return new Promise((resolve,reject) => {finishDelete=resolve;failDelete=reject;});
+    }})},
+  });
+  const deletion = useBillDeletion();
+  const pending = deletion.remove("test", () => deleted++);
+  assert.ok(deletion.hidden.has("test"));
+  await deletion.remove("test", () => deleted++);
+  assert.equal(writes,1);
+  failDelete(Error("offline")); await pending;
+  assert.ok(!deletion.hidden.has("test"));
+  const retried = deletion.remove("test", () => deleted++);
+  finishDelete(); await retried;
+  assert.equal(deleted,1);
+  assert.ok(deletion.hidden.has("test"));
   // Exercise the installed Expo FormData patch and fetch encoder, including its native bytes() path.
   const {installFormDataPatch} = load("../mobile/node_modules/expo/src/winter/FormData.ts", {}, {Blob});
   const NativeForm = installFormDataPatch(class {constructor(){this._parts=[];}});
@@ -169,7 +189,7 @@ async function main() {
     return new Response(photoBytes, { headers: { "content-type": "image/jpeg" } });
   };
   const browserUpload = load("../mobile/src/upload-selected-file.ts", {
-    "expo-crypto": {}, "./offline/file-storage": {}, "../../shared/receipt-upload": {receiptMultipartLimit:1572864},
+    "expo-file-system":{}, "expo-crypto": {}, "./offline/file-storage": {}, "../../shared/receipt-upload": {receiptMultipartLimit:1572864},
     "react-native": { Platform: { OS: "web" } },
     "./upload": load("../mobile/src/upload.ts", {
       "expo-file-system": {}, "react-native": { Platform: { OS: "web" } },
@@ -352,16 +372,16 @@ async function main() {
       "./split-people-field": {...load("../mobile/src/split-people-field.tsx", {"react/jsx-runtime":jsx,"react-native":{},"./app-text":{},"./ui":{}}), PeopleSuggestions:"Suggestions"}, "./split-item-grid": {SplitItemGrid:"Items"}, "../../shared/split-bill-experience": load("../shared/split-bill-experience.ts"),
       "./add-entry-methods": {AddEntryMethods:"Methods"}, "./upload": loadPhotoUpload(platform),
       "./ai-consent": {useCloudAiConsent:()=>({ensure:async()=>true,prompt:null})},
-      "./upload-selected-file": load("../mobile/src/upload-selected-file.ts", {"expo-crypto":{}, "./offline/file-storage":{}, "../../shared/receipt-upload":{receiptMultipartLimit:1572864}, "react-native":{Platform:{OS:platform}}, "./upload":loadPhotoUpload(platform)}),
+      "./upload-selected-file": load("../mobile/src/upload-selected-file.ts", {"expo-file-system":{}, "expo-crypto":{}, "./offline/file-storage":{}, "../../shared/receipt-upload":{receiptMultipartLimit:1572864}, "react-native":{Platform:{OS:platform}}, "./upload":loadPhotoUpload(platform)}, {FormData:NativeForm}),
       "./session": {useSession:()=>({profileId:"profile",request:async (_path, opts)=>{if (_path.startsWith("split-bill-receipts/preview")) {
           if (_path.includes("&status=")) return {refining:true};
           if (_path.includes("&refine=")) return new Promise((resolve,reject) => { finishRefinement = resolve; interruptRefinement = reject; });
           if (failUploadOnce) { failUploadOnce=false; throw Error("Connection interrupted during upload"); }
-          const {body,boundary} = await convertFormDataAsync(opts.body);
-          const req = new Request("https://example.invalid", {method:"POST",body,headers:{"content-type":"multipart/form-data; boundary="+boundary}});
-          const file = (await req.formData()).get("file");
+          const file = opts.body.get("file");
           assert.equal(file.name,"receipt.jpg");
-          assert.deepEqual(new Uint8Array(await file.arrayBuffer()), photoBytes);
+          assert.equal(file.type,"image/jpeg");
+          assert.equal(file.uri,captured.uri);
+          opts.onUploadProgress(1);
           receiptPreviewed=true;
           return {...(progressive ? {draftId,refining:true,attemptId:"test-attempt"} : {}),reliableForScopedSplit,receiptStorageKey:"receipt",preview:{merchantName:"Bakery",total:"12.00",billDate:printedBillDate,currency:"PHP",serviceCharge:"1.25",items:[{description:"Bread",amount:"10.75"}]}};
         }
@@ -495,6 +515,17 @@ async function main() {
     assert.equal(deliveredBill.id,"recovered","Lost save response recovers the single committed receipt");
     assert.equal(saved[4].expense.splitOnly,true);
     assert.deepEqual(saved[4].reviewedItems.map(r=>r.amount),["5.00","5.75","1.25"]);
+    visible = true;
+    progressive = false;
+    loseSaveResponse = false;
+    printedBillDate = null;
+    control("kind","split").props.onUploadSource("file");
+    await flush(); render(); await flush();
+    assert.equal(saved.length,5,"An uncertain printed date must not silently create a dated main bill");
+    assert.match(text(dock()), /Check receipt date/);
+    dock().props.onPress();
+    assert.equal(control("label","Date (YYYY-MM-DD)").props.value,"");
+    assert.equal(control("label","Amount").props.value,"12.00");
     ui.stop();
   }
   const {receiptServiceChargeItem} = load("../shared/split-bill-experience.ts");

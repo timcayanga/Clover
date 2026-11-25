@@ -29,8 +29,8 @@ export function SwipeDeleteRow({ children, label, message, immediate = false, on
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const latest = useRef({ disabled, confirming, reduceMotion });
-  latest.current = { disabled, confirming, reduceMotion };
+  const latest = useRef({ disabled, confirming, reduceMotion, immediate });
+  latest.current = { disabled, confirming, reduceMotion, immediate };
   function settle(value: number) {
     offset.current = value;
     setOpen(value < 0);
@@ -42,7 +42,7 @@ export function SwipeDeleteRow({ children, label, message, immediate = false, on
     onPanResponderMove: (_, g) => { offset.current = Math.max(-WIDTH, Math.min(0, start.current + g.dx)); x.setValue(offset.current); },
     onPanResponderRelease: () => settle(offset.current <= -38 ? -WIDTH : 0),
     onPanResponderTerminate: () => settle(0),
-    onPanResponderTerminationRequest: () => true,
+    onPanResponderTerminationRequest: () => !latest.current.immediate,
   })).current;
   function confirm() { if (pending.current || disabled) return; if (immediate) { void remove(); return; } settle(0); setConfirming(true); setError(""); }
   async function remove() {
@@ -54,10 +54,10 @@ export function SwipeDeleteRow({ children, label, message, immediate = false, on
   }
   return <View style={{ minWidth: 0, marginBottom: 0 }}>
     <View style={{ overflow: "hidden", borderTopLeftRadius: wallet ? 16 : 12, borderTopRightRadius: wallet ? 16 : 12, borderBottomLeftRadius: wallet ? 0 : 12, borderBottomRightRadius: wallet ? 0 : 12 }} {...responder.panHandlers}
-      accessible={!disabled && !confirming} accessibilityLabel={label}
+      accessible={!disabled && !confirming && !open} accessibilityLabel={label}
       accessibilityActions={[...(onSelect ? [{name:"select",label:"Select transaction"}] : []), ...(onReview ? [{name:"review",label:"Keep or delete transaction"}] : []), ...(onOpen ? [{ name: "activate", label: "Open details" }] : []), { name: "delete", label: `Delete ${label}` }]}
       onAccessibilityAction={event => { if (event.nativeEvent.actionName === "delete") confirm(); else if (event.nativeEvent.actionName === "activate") onOpen?.(); else if(event.nativeEvent.actionName === "select") onSelect?.(); else if(event.nativeEvent.actionName === "review") onReview?.(); }}>
-      {!disabled ? <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${label}`} accessibilityElementsHidden={!open} importantForAccessibility={open ? "yes" : "no-hide-descendants"} onPress={confirm} disabled={busy || confirming} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: WIDTH, backgroundColor: "#C92B37", justifyContent: "center", alignItems: "center", padding: 8 }}><Text style={{ color: "white", fontFamily: "Poppins-SemiBold", fontSize: 13 }}>Delete</Text></Pressable> : null}
+      {!disabled ? <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${label}`} accessibilityElementsHidden={!open} importantForAccessibility={open ? "yes" : "no-hide-descendants"} onPress={confirm} disabled={busy || confirming} style={{ position: "absolute", zIndex: open ? 2 : 0, right: 0, top: 0, bottom: 0, width: WIDTH, backgroundColor: "#C92B37", justifyContent: "center", alignItems: "center", padding: 8 }}><Text style={{ color: "white", fontFamily: "Poppins-SemiBold", fontSize: 13 }}>Delete</Text></Pressable> : null}
       <Animated.View style={{ backgroundColor: wallet ? walletFinish[dark ? "dark" : "light"].shell : colors.white, transform: [{ translateX: x }] }}>
         <View accessibilityElementsHidden={open || confirming} importantForAccessibility={open || confirming ? "no-hide-descendants" : "auto"} pointerEvents={open || confirming ? "none" : "auto"}>{children}</View>
         {open ? <Pressable accessibilityLabel="Close delete action" onPress={() => settle(0)} style={{ position: "absolute", inset: 0 }} /> : null}

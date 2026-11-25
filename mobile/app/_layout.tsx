@@ -124,10 +124,10 @@ function Routes() {
               <Stack.Screen name="accounts" options={{ title: "Accounts", header: () => <AppHeader title="Accounts" /> }} />
               <Stack.Screen name="recurring" options={{ title: "Recurring", header: () => <AppHeader title="Recurring" /> }} />
               <Stack.Screen name="reports" options={{ headerShown: false }} />
-              <Stack.Screen name="circles" options={{ headerShown: false }} />
+              <Stack.Screen name="circles" options={{ headerShown: false, fullScreenGestureEnabled: false }} />
               <Stack.Screen
                 name="split-bills"
-                options={{ headerShown: false }}
+                options={{ headerShown: false, fullScreenGestureEnabled: false }}
               />
               <Stack.Screen
                 name="investments"

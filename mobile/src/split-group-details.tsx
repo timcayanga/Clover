@@ -1,3 +1,4 @@
+import { useBillDeletion } from "./use-bill-deletion";
 import { SplitBillQuickActions, type BillEntryMethod } from "./split-bill-quick-actions";
 import { PersonContactFields, type DirectoryPerson } from "./add-split-person";
 import { personLedger, netDebtLabel } from "../../shared/split-person-ledger";
@@ -38,6 +39,7 @@ export type SplitGroup = {
 
 export function SplitGroupDetails({
   group,
+  parentDeletion,
   savedPeople = [],
   onPersonSaved,
   entryScope = "split",
@@ -48,6 +50,7 @@ export function SplitGroupDetails({
   onBill,
   onChanged,
 }: {
+  parentDeletion?: ReturnType<typeof useBillDeletion>;
   group?: SplitGroup;
   circleId?: string;
   circleCurrency?: string;
@@ -89,9 +92,18 @@ export function SplitGroupDetails({
     `split-bills?view=ledger${group ? `&groupId=${encodeURIComponent(group.id)}` : ""}`,
     ledgerSample,
   );
-  const bills = (data?.bills ?? []).map((b) =>
+  const localDeletion = useBillDeletion();
+  const deletion = parentDeletion ?? localDeletion;
+  const bills = (data?.bills ?? []).filter(row => !deletion.hidden.has(row.id)).map((b) =>
     group ? { ...b, group: { ...group, name, members: roster } } : b,
   );
+  function deleteBill(id: string) {
+    return deletion.remove(id, () => {
+      setData(current => current && {...current, bills: current.bills.filter(row => row.id !== id)});
+      reload();
+      onChanged();
+    });
+  }
   const debts = remainingDebts(bills);
   const viewer = personKey(
     participantName({ group: { members: roster } }, data?.viewerName ?? ""),
@@ -199,6 +211,7 @@ export function SplitGroupDetails({
           back={selectedPerson ? () => setSelectedPerson(null) : onClose}
           add={() => setAdding("upload")}
         />
+        {deletion.error && <Notice>{deletion.error}</Notice>}
         {contact?.id && <PersonContactFields key={contact.id} person={{...contact,id:contact.id}} onSaved={updated=>{onPersonSaved?.(updated);onChanged();}}/>}
         {adding ? (
           <BillEditor initialMethod={adding}
@@ -222,14 +235,15 @@ export function SplitGroupDetails({
           <>
             <View>
               <View style={row}><Text style={{flex:1.7,color:colors.muted}}>Bill</Text><Text style={number}>Owed</Text><Text style={number}>Owes</Text><View style={{width:36}}/></View>
-              {ledger.rows.map(bill => <View key={bill.id} style={row}>
+              {ledger.rows.map(bill => <SwipeDeleteRow key={bill.id} label={bill.title} disabled={session.demo} immediate
+                onOpen={() => onBill(bill.id)} onDelete={() => deleteBill(bill.id)}><View style={row}>
                 <View style={{flex:1.7,flexDirection:"row",gap:5}}><CategoryMark name={bill.categoryName} size={18}/><View style={{flex:1,gap:3}}><Text style={{color:colors.ink,fontFamily:"Poppins-SemiBold"}}>{bill.title}</Text>
                   {bill.items.map((item,index)=><Text key={index} style={{color:colors.muted,fontSize:12}}>{item.name} · {money(String(item.amount),bill.currency)}</Text>)}
                 </View></View>
                 <Text style={number}>{bill.owed ? amount(bill.owed,bill.currency) : "—"}</Text>
                 <Text style={number}>{bill.owes ? amount(bill.owes,bill.currency) : "—"}</Text>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Open ${bill.title} details`} onPress={()=>onBill(bill.id)} style={{width:36,minHeight:44,justifyContent:"center"}}><Text style={{textAlign:"center",color:colors.teal}}>•••</Text></Pressable>
-              </View>)}
+              </View></SwipeDeleteRow>)}
               {ledger.totals.map(total=><View key={total.currency} style={row}><Text style={{flex:1.7,color:colors.ink}}>Total{ledger.totals.length>1 ? " · "+total.currency : ""}</Text><Text style={number}>{amount(total.owed,total.currency)}</Text><Text style={number}>{amount(total.owes,total.currency)}</Text><View style={{width:36}}/></View>)}
             </View>
             {ledger.totals.filter(t=>t.net).map(t=><Body key={t.currency}>{netDebtLabel(label,t.net,amount(Math.abs(t.net),t.currency))}</Body>)}
@@ -279,6 +293,7 @@ export function SplitGroupDetails({
         />
       ) : null}
       {loadError ? <Notice>{loadError}</Notice> : null}
+      {deletion.error && <Notice>{deletion.error}</Notice>}
       {error ? <Notice>{error}</Notice> : null}
       {tab === "Bills" || person ? (
         <>
@@ -289,7 +304,7 @@ export function SplitGroupDetails({
             <Body>Bill</Body>
             <Body>Total</Body>
           </View>
-          {data?.bills
+          {bills
             .filter((b) => b.title.toLowerCase().includes(search.toLowerCase()))
             .map((bill) => (
               <SwipeDeleteRow
@@ -298,24 +313,7 @@ export function SplitGroupDetails({
                 disabled={session.demo}
                 immediate
                 onOpen={() => onBill(bill.id)}
-                onDelete={async () => {
-                  await session.request(
-                    `split-bills/${bill.id}?workspaceId=${encodeURIComponent(session.profileId)}`,
-                    { method: "DELETE" },
-                  );
-                  setData((current) =>
-                    current
-                      ? {
-                          ...current,
-                          bills: current.bills.filter(
-                            (row) => row.id !== bill.id,
-                          ),
-                        }
-                      : current,
-                  );
-                  reload();
-                  onChanged();
-                }}
+                onDelete={() => deleteBill(bill.id)}
               >
                 <Pressable
                   accessibilityRole="button"
@@ -337,7 +335,7 @@ export function SplitGroupDetails({
                 </Pressable>
               </SwipeDeleteRow>
             ))}
-          {data && !data.bills.length ? (
+          {data && !bills.length ? (
             <Notice>No bills here yet.</Notice>
           ) : null}
           {data ? <SimplifyAction bills={bills} /> : null}

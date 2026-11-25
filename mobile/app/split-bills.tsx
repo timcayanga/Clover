@@ -12,6 +12,7 @@ import { type AccountCardPalette, accountCardPalette } from "../../shared/visual
 import { SplitItemGrid } from "../src/split-item-grid";
 import { paymentLines } from "../../shared/payment-display";
 import { suggestBillCategory, type SplitItem } from "../../shared/split-bill-experience";
+import { useBillDeletion } from "../src/use-bill-deletion";
 import { SwipeDeleteRow } from "../src/swipe-delete-row";
 import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState, CloverMascot } from "../src/clover-mascot";
@@ -140,7 +141,7 @@ export default function SplitBills() {
   } | null>(null);
   const [page, setPage] = useState(1);
   const {
-    data,
+    data: fetched,
     setData,
     error,
     reload: reloadBills,
@@ -150,13 +151,32 @@ export default function SplitBills() {
     reloadBills();
     balance.reload();
   };
+  const deletion = useBillDeletion();
+  // A read started before the receipt was saved may finish after the save event.
+  const [recent, setRecent] = useState<{profileId: string; bills: Bill[]}>({profileId: "", bills: []});
+  const fresh = recent.profileId === session.profileId && page === 1 ? recent.bills : [];
+  const data = fetched ?? (fresh.length ? { ...sample, bills: [] } : null);
+  const listed = data?.bills ?? [];
+  const missing = fresh.filter(bill => !listed.some(row => row.id === bill.id));
+  const visibleBills = (missing.length ? [...missing, ...listed].sort((a,b) => b.billDate.localeCompare(a.billDate)) : listed)
+    .filter(bill => !deletion.hidden.has(bill.id));
+  useEffect(() => {
+    if (!fetched || page !== 1) return;
+    setRecent(current => {
+      const bills = current.bills.filter(bill => !fetched.bills.some(row => row.id === bill.id));
+      return current.profileId === session.profileId && bills.length < current.bills.length ? {...current, bills} : current;
+    });
+  }, [fetched, page, session.profileId]);
+  function deleteBill(id: string) {
+    return deletion.remove(id, () => {
+      setData(current => current && ({...current, bills: current.bills.filter(bill => bill.id !== id)}));
+      reload();
+    });
+  }
   useEffect(() => onBillSaved((profileId,bill) => {
     if (profileId !== session.profileId) return;
-    setData(current => ({
-      ...(current ?? sample),
-      bills: [bill, ...(current?.bills ?? []).filter(row => row.id !== bill.id)]
-        .sort((a,b) => b.billDate.localeCompare(a.billDate)),
-    }));
+    setRecent(current => ({profileId, bills:[bill, ...(current.profileId === profileId ? current.bills.filter(row => row.id !== bill.id) : [])]}));
+    setPage(1);
     if (!session.demo) balance.reload();
   }), [session.profileId, session.demo, balance.reload, setData]);
   const options = usePlanData("together-options", optionsSample);
@@ -244,6 +264,7 @@ export default function SplitBills() {
       <SplitGroupDetails
         key={session.profileId}
         {...entity}
+        parentDeletion={deletion}
         group={options.data?.groups.find(g=>g.id===entity.group?.id)??entity.group}
         savedPeople={options.data?.people ?? []}
         onPersonSaved={updated=>options.setData(current=>current && ({...current,people:current.people.map(p=>p.id===updated.id ? updated : p)}))}
@@ -355,15 +376,16 @@ export default function SplitBills() {
                 options.reload();
                 reload();
               }}
-              onDeleted={() => {
+              onDelete={() => {
+                void deleteBill(selected.id);
                 setSelected(null);
-                reload();
               }}
             />
           )}
         </>
       ) : (
         <>
+          {deletion.error && <Notice>{deletion.error}</Notice>}
           <PlanTabs
             items={["Bills", "Groups", "People", "Payments"]}
             value={tab}
@@ -434,15 +456,15 @@ export default function SplitBills() {
                       onChange={setStatusFilter}
                     />
                   ) : null}
-                  {!data.bills.length && <View style={{alignItems:"center",gap:6}}>
+                  {!visibleBills.length && <View style={{alignItems:"center",gap:6}}>
                     <CloverMascot pose="circles" size={88} />
                     <Text style={{color:colors.ink,fontFamily:"Poppins-SemiBold"}}>No bills yet</Text>
                     <Body>Upload a receipt or add a split bill.</Body>
                   </View>}
                   <SplitBillQuickActions onSelect={method => { setInitialMethod(method); setAdding(true); }} />
 
-                  {data.bills.length ? (
-                    data.bills
+                  {visibleBills.length ? (
+                    visibleBills
                       .filter(
                         (b) =>
                           b.title
@@ -457,11 +479,7 @@ export default function SplitBills() {
                                   billListStatus(b) !== "settled"))),
                       )
                       .map((bill) => (
-                        <SwipeDeleteRow key={bill.id} label={bill.title} disabled={session.demo} immediate onOpen={() => setSelected(bill)} onDelete={async () => {
-                          await session.request(`split-bills/${bill.id}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
-                          setData(current => current ? { ...current, bills: current.bills.filter(row => row.id !== bill.id) } : current);
-                          reload();
-                        }}>
+                        <SwipeDeleteRow key={bill.id} label={bill.title} disabled={session.demo} immediate onOpen={() => setSelected(bill)} onDelete={() => deleteBill(bill.id)}>
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={`View ${bill.title}`}
@@ -476,7 +494,6 @@ export default function SplitBills() {
                             borderColor: colors.line,
                           }}
                         >
-                          {(bill.rawPayload?.receiptNeedsReview || !Number(bill.total) || (bill.participants?.length ?? 0) < 2) && <Text accessibilityLabel="Bill needs attention">⚠️</Text>}
                           <CategoryMark name={bill.categoryName || suggestBillCategory(bill.title)?.name} />
                           <View style={{ flex: 1 }}>
                             <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 14 }}>{bill.title}</Text>
@@ -485,6 +502,7 @@ export default function SplitBills() {
                               {bill.rawPayload?.receiptNeedsReview && <Text style={{color:colors.muted}}>Check receipt details</Text>}
                               {(!Number(bill.total) || (bill.participants?.length ?? 0) < 2) && <Text style={{color:colors.muted}}>{Number(bill.total) ? "Add people" : (bill.participants?.length ?? 0) < 2 ? "Add amount and people" : "Add amount"}</Text>}
                               <BillPeople participants={bill.participants ?? []} people={options.data?.people ?? []} demo={session.demo}/>
+                              {(bill.rawPayload?.receiptNeedsReview || !Number(bill.total) || (bill.participants?.length ?? 0) < 2) && <Text accessibilityLabel="Bill needs attention">⚠️</Text>}
                             </View>
                           </View>
                           <View style={{ alignItems: "flex-end" }}>
@@ -516,7 +534,7 @@ export default function SplitBills() {
                     />
                   ) : null}
                   {page > 1 || data.hasMore ? <Body>Page {page}</Body> : null}
-                  {data.bills.length > 0 && <SimplifyAction/>}
+                  {visibleBills.length > 0 && <SimplifyAction/>}
                 </>
               )}
             </>

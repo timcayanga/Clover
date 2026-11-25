@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "./session";
 import { Text } from "./app-text";
 import { Button, Field, Icon, useTheme } from "./ui";
-import { Progress } from "./plan-ui";
+import { Progress, ProgressLabel } from "./plan-ui";
 import { uploadProgress } from "./offline/upload-progress";
 import { isPhotoRetakeMessage } from "../../shared/import-photo-retake";
 import { launcherRoutes } from "./launcher-actions";
@@ -129,8 +129,7 @@ export function ImportActivity() {
       backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1, elevation: 6,
       shadowColor: "#07343d", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Text style={{ flex: 1, color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{step}</Text>
-        <Text accessibilityLabel={`${Math.round(progress)} percent complete`} style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13, fontVariant: ["tabular-nums"] }}>{Math.round(progress)}%</Text>
+        <ProgressLabel label={step} value={progress}/>
         {active ? <Pressable accessibilityRole="button" accessibilityLabel={paused ? "Resume import" : "Pause import"}
           accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void (paused ? resume() : run(() => session.fileQueue!.pause(file.id)))}
           style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: busy ? 0.45 : 1 }}>

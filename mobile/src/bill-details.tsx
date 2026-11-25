@@ -71,7 +71,7 @@ export type EditableBill = {
 export function BillDetails({
   bill,
   onSaved,
-  onDeleted,
+  onDelete,
   paymentProfiles,
   peopleProfiles = [],
   relatedBills = [],
@@ -89,7 +89,7 @@ export function BillDetails({
   }[];
   onManagePaymentOptions: () => void;
   onSaved: (bill: EditableBill) => void;
-  onDeleted: () => void;
+  onDelete: () => void;
 }) {
   const session = useSession();
   const { user } = useUser();
@@ -314,8 +314,7 @@ export function BillDetails({
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       if (!alive.current) return;
-      if (method === "DELETE") onDeleted();
-      else if (result.bill) {
+      if (result.bill) {
         setAddedParticipants([]);
         onSaved(result.bill);
       } else {
@@ -744,8 +743,8 @@ export function BillDetails({
       <PlanAction
         title="Delete bill"
         tone="delete"
-        disabled={busy}
-        onPress={() => void action(`split-bills/${bill.id}`, "DELETE")}
+        disabled={busy || session.demo}
+        onPress={onDelete}
       />
       {confirm ? (
         <Card>
